@@ -1,0 +1,68 @@
+# TasteMatcher Application
+
+Welcome to the TasteMatcher application! This project is structured to facilitate local development and execution of both the frontend and backend components. Below is an overview of the project structure and how to get started.
+
+## Project Structure
+
+```
+tastematcher
+├── common
+│   ├── package.json          # Configuration for shared types and utilities
+│   ├── tsconfig.json         # TypeScript configuration for common package
+│   ├── src
+│   │   ├── index.ts          # Entry point for shared code
+│   │   ├── types             # Type definitions
+│   │   │   ├── artwork.ts    # Types related to artwork
+│   │   │   ├── domain.ts     # Types related to domains
+│   │   │   ├── session.ts    # Types related to user sessions
+│   │   │   └── user.ts       # Types related to users
+│   │   └── test
+│   │       └── BaseTestClass.ts # Shared testing utilities
+│   └── README.md             # Documentation for the common package
+├── backend
+│   ├── package.json          # Configuration for backend package
+│   ├── tsconfig.json         # TypeScript configuration for backend package
+│   ├── src
+│   │   ├── main.ts           # Entry point for the backend application
+│   │   ├── app.module.ts     # Main application module
+│   │   ├── health
+│   │   │   └── health.controller.ts # Health check endpoint
+│   │   ├── test
+│   │   │   └── test.controller.ts   # Test endpoint
+│   └── prisma
+│       └── schema.prisma     # Prisma schema for the database
+│   └── README.md             # Documentation for the backend package
+├── frontend
+│   ├── package.json          # Configuration for frontend package
+│   ├── tsconfig.json         # TypeScript configuration for frontend package
+│   ├── index.html            # Main HTML file for the frontend application
+│   ├── src
+│   │   ├── main.tsx          # Entry point for the frontend application
+│   │   ├── App.tsx           # Main App component
+│   │   └── components
+│   │       └── HelloFetch.tsx # Component to fetch data from the backend
+│   └── README.md             # Documentation for the frontend package
+├── scripts
+│   └── dev.sh                # Shell script to run both applications concurrently
+├── pnpm-workspace.yaml       # Configuration for pnpm workspace
+├── package.json              # Root configuration file for the project
+├── .env.example               # Example environment configuration
+└── README.md                 # Main documentation for the entire project
+```
+
+## Getting Started
+
+To get started with the TasteMatcher application, follow these steps:
+
+1. **Clone the Repository**: Clone this repository to your local machine.
+2. **Install Dependencies**: Navigate to the root directory and run `pnpm install` to install all necessary dependencies for the project.
+3. **Set Up Environment Variables**: Copy `.env.example` to `.env` and configure your environment variables as needed.
+4. **Run the Application**: Use the provided `scripts/dev.sh` to start both the backend and frontend applications concurrently.
+
+## Contributing
+
+We welcome contributions to the TasteMatcher application! Please feel free to submit issues or pull requests.
+
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
