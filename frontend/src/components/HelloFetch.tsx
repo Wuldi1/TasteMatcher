@@ -8,6 +8,7 @@ const HelloFetch = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
+                console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL);
                 const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/test`);
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
@@ -30,7 +31,7 @@ const HelloFetch = () => {
     return (
         <div>
             <h1>Hello Fetch</h1>
-            <pre>{JSON.stringify(data, null, 2)}</pre>
+            <pre>{data.title}</pre>
         </div>
     );
 };
