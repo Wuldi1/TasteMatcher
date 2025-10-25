@@ -1,5 +1,5 @@
 # Node.js dependencies
-# node_modules/
+node_modules/
 pnpm-lock.yaml
 
 # Logs
@@ -10,7 +10,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Build output
-# dist/
+dist/
 build/
 
 # TypeScript

@@ -7,10 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      pnpm:
-        specifier: ^10.19.0
-        version: 10.19.0
     devDependencies:
       eslint:
         specifier: ^9.38.0
@@ -21,6 +17,9 @@ importers:
       lint-staged:
         specifier: ^16.2.6
         version: 16.2.6
+      pnpm:
+        specifier: ^10.19.0
+        version: 10.19.0
       prettier:
         specifier: ^3.6.2
         version: 3.6.2
@@ -39,9 +38,6 @@ importers:
       '@nestjs/platform-express':
         specifier: ^11.1.7
         version: 11.1.7(@nestjs/common@11.1.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.7)
-      common:
-        specifier: workspace:*
-        version: link:../common
       prisma:
         specifier: ^6.18.0
         version: 6.18.0(typescript@5.9.3)
