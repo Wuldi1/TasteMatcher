@@ -14,7 +14,6 @@ tastematcher
 │   │   ├── types             # Type definitions
 │   │   │   ├── artwork.ts    # Types related to artwork
 │   │   │   ├── domain.ts     # Types related to domains
-│   │   │   ├── session.ts    # Types related to user sessions
 │   │   │   └── user.ts       # Types related to users
 │   │   └── test
 │   │       └── BaseTestClass.ts # Shared testing utilities

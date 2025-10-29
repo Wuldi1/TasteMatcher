@@ -8,7 +8,6 @@ The `common` package contains shared types and utilities used across both the fr
 - **src/types/**: Contains TypeScript definitions for various entities:
   - **artwork.ts**: Types related to artwork.
   - **domain.ts**: Types related to domains.
-  - **session.ts**: Types related to user sessions.
   - **user.ts**: Types related to users.
 - **src/test/BaseTestClass.ts**: A base test class providing shared testing utilities.
 

@@ -105,7 +105,166 @@ fi
 
 # Build DB connection string
 POSTGRES_HOST="${POSTGRES_NAME}.postgres.database.azure.com"
-DATABASE_URL="postgresql://${POSTGRES_ADMIN_USER}@${POSTGRES_NAME}:${POSTGRES_ADMIN_PASS}@${POSTGRES_HOST}:5432/postgres?schema=public"
+DATABASE_URL="postgresql://${POSTGRES_ADMIN_USER}:${POSTGRES_ADMIN_PASS}@${POSTGRES_HOST}:5432/postgres?schema=public&sslmode=require"
+
+# Creating DBs
+# Function to setup database schema
+setup_database_schema() {
+  echo "Setting up database schema..."
+  
+  # Check if we have the webapi directory with Prisma schema
+  WEBAPI_DIR="../../webapi"
+  if [ ! -d "$WEBAPI_DIR" ]; then
+    echo "Warning: webapi directory not found at $WEBAPI_DIR. Skipping schema setup."
+    echo "Please run 'npx prisma db push' manually from the webapi directory after provisioning."
+    return 0
+  fi
+
+  # Check if Prisma schema exists
+  if [ ! -f "$WEBAPI_DIR/prisma/schema.prisma" ]; then
+    echo "Warning: Prisma schema not found. Skipping schema setup."
+    echo "Please ensure prisma/schema.prisma exists in webapi directory."
+    return 0
+  fi
+
+  # Temporarily set DATABASE_URL for schema deployment
+  echo "Deploying database schema to Azure PostgreSQL..."
+  
+  # Create a temporary .env file for Prisma
+  TEMP_ENV_FILE="$WEBAPI_DIR/.env.temp"
+  echo "DATABASE_URL=\"$DATABASE_URL\"" > "$TEMP_ENV_FILE"
+  
+  # Navigate to webapi directory and run Prisma commands
+  cd "$WEBAPI_DIR"
+  
+  # Check if npm/node is available
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "Warning: npm not found. Skipping automatic schema deployment."
+    echo "Please run the following commands manually from the webapi directory:"
+    echo "  export DATABASE_URL=\"$DATABASE_URL\""
+    echo "  npx prisma generate"
+    echo "  npx prisma db push"
+    cd - >/dev/null
+    rm -f "$TEMP_ENV_FILE"
+    return 0
+  fi
+
+  # Install dependencies if needed
+  if [ ! -d "node_modules" ] || [ ! -d "node_modules/@prisma" ]; then
+    echo "Installing Prisma dependencies..."
+    npm install @prisma/client prisma --save || {
+      echo "Warning: Failed to install dependencies. Please install manually."
+      cd - >/dev/null
+      rm -f "$TEMP_ENV_FILE"
+      return 0
+    }
+  fi
+
+  # Generate Prisma client
+  echo "Generating Prisma client..."
+  DATABASE_URL="$DATABASE_URL" npx prisma generate || {
+    echo "Warning: Prisma generate failed. Please run manually."
+    cd - >/dev/null
+    rm -f "$TEMP_ENV_FILE"
+    return 0
+  }
+
+  # Deploy schema to database
+  echo "Pushing schema to Azure PostgreSQL database..."
+  DATABASE_URL="$DATABASE_URL" npx prisma db push --accept-data-loss || {
+    echo "Warning: Schema deployment failed. Please run 'npx prisma db push' manually."
+    echo "Database URL: $DATABASE_URL"
+    cd - >/dev/null
+    rm -f "$TEMP_ENV_FILE"
+    return 0
+  }
+
+  # Clean up
+  cd - >/dev/null
+  rm -f "$TEMP_ENV_FILE"
+  
+  echo "✅ Database schema deployed successfully!"
+}
+
+# Function to create database tables manually (fallback)
+create_database_tables_sql() {
+  echo "Creating database tables using direct SQL..."
+
+  # SQL script to create tables based on Common types
+  SQL_SCRIPT=$(cat <<'EOF'
+  -- Create User table
+  CREATE TABLE IF NOT EXISTS "User" (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      email TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'customer',
+      "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Create Domain table
+  CREATE TABLE IF NOT EXISTS "Domain" (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      "adminEmail" TEXT UNIQUE NOT NULL,
+      "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Create Artwork table
+  CREATE TABLE IF NOT EXISTS "Artwork" (
+      id TEXT PRIMARY KEY,
+      "domainId" TEXT NOT NULL,
+      title TEXT,
+      artist TEXT,
+      "originalBlob" TEXT,
+      filename TEXT,
+      "contentType" TEXT,
+      size INTEGER,
+      checksum TEXT,
+      "metadataJson" TEXT,
+      "thumbnailJson" TEXT,
+      "isIndexed" BOOLEAN NOT NULL DEFAULT false,
+      "indexingError" TEXT,
+      "lastIndexedAt" TIMESTAMP,
+      "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY ("domainId") REFERENCES "Domain"(id) ON DELETE CASCADE
+  );
+
+  -- Create indexes for better performance
+  CREATE INDEX IF NOT EXISTS "idx_artwork_domain_id" ON "Artwork"("domainId");
+  CREATE INDEX IF NOT EXISTS "idx_artwork_is_indexed" ON "Artwork"("isIndexed");
+  CREATE INDEX IF NOT EXISTS "idx_domain_admin_email" ON "Domain"("adminEmail");
+  CREATE INDEX IF NOT EXISTS "idx_user_email" ON "User"(email);
+
+  -- Insert a default admin user if not exists
+  INSERT INTO "User" (id, name, email, role, "createdAt", "updatedAt")
+  SELECT 'galrubin-admin', 'System Admin', 'galrubin15@gmail.com', 'global_admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+  WHERE NOT EXISTS (SELECT 1 FROM "User" WHERE email = 'galrubin15@gmail.com');
+EOF
+)
+
+# Try to execute SQL using psql if available
+if command -v psql >/dev/null 2>&1; then
+  echo "Executing SQL schema creation..."
+  echo "$SQL_SCRIPT" | psql -h "$POSTGRES_HOST" -p 5432 -U "${POSTGRES_ADMIN_USER}@${POSTGRES_NAME}" -d postgres || {
+    echo "Warning: Direct SQL execution failed. Please run the schema creation manually."
+    echo "SQL script saved to schema-setup.sql for manual execution."
+    echo "$SQL_SCRIPT" > schema-setup.sql
+    return 1
+  }
+  echo "✅ Database tables created successfully via SQL!"
+else
+  echo "Warning: psql not found. Saving SQL script for manual execution."
+  echo "$SQL_SCRIPT" > schema-setup.sql
+  echo "Please run: psql -h $POSTGRES_HOST -p 5432 -U ${POSTGRES_ADMIN_USER}@${POSTGRES_NAME} -d postgres -f schema-setup.sql"
+  return 1
+fi
+}
+
+setup_database_schema
+create_database_tables_sql
 
 # Create Azure Cognitive Search service
 # Note: vector capabilities may require a certain SKUs or regions - check availability
