@@ -3,18 +3,17 @@ import {
   Logger,
   ConflictException,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { Domain } from 'common';
 import { DomainDto } from './dto/domain.dto';
-import { PrismaService } from '../prisma/prisma.service';
+import { CosmosService } from '../cosmos/cosmos.service';
 
 @Injectable()
 export class DomainsService {
   private readonly logger = new Logger(DomainsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly cosmos: CosmosService) {}
 
   async createDomain(domainDto: DomainDto): Promise<Domain> {
     const { name, adminEmail } = domainDto;
@@ -22,63 +21,112 @@ export class DomainsService {
     // Normalize email to lowercase for consistency
     const normalizedAdminEmail = adminEmail.toLowerCase().trim();
 
-    // Check if admin email is already used by another domain
-    const existingDomain = await this.prisma.domain.findUnique({
-      where: { adminEmail: normalizedAdminEmail }
-    });
-
-    if (existingDomain) {
-      throw new ConflictException(`Domain with admin email '${normalizedAdminEmail}' already exists`);
-    }
-
     try {
-      const domain = await this.prisma.domain.create({
-        data: {
-          id: uuidv4(),
-          name,
-          adminEmail: normalizedAdminEmail,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      });
+      const domainsContainer = await this.cosmos.getDomainsContainer();
+      const querySpec = {
+        query: 'SELECT * FROM c WHERE c.adminEmail = @adminEmail',
+        parameters: [{ name: '@adminEmail', value: normalizedAdminEmail }],
+      };
+      const { resources: existingDomains } = await domainsContainer.items.query(querySpec).fetchAll();
 
-      this.logger.log(`Created domain: ${domain.id} (${domain.name}) with admin email: ${domain.adminEmail}`);
+      if (existingDomains.length > 0) {
+        throw new ConflictException(`Domain with admin email '${normalizedAdminEmail}' already exists`);
+      }
+
+      const domainId = uuidv4();
+      const now = new Date().toISOString();
+
+      const domainItem = {
+        id: domainId,
+        name,
+        adminEmail: normalizedAdminEmail,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const { resource: createdDomain } = await domainsContainer.items.create(domainItem);
+
+      if (!createdDomain) {
+        throw new ConflictException('Failed to create domain');
+      }
+
+      this.logger.log(`Created domain: ${createdDomain.id} (${createdDomain.name}) with admin email: ${createdDomain.adminEmail}`);
 
       return {
-        id: domain.id,
-        name: domain.name,
-        adminEmail: domain.adminEmail,
-        createdAt: domain.createdAt.getTime(),
-        updatedAt: domain.updatedAt.getTime(),
+        id: createdDomain.id,
+        name: createdDomain.name,
+        adminEmail: createdDomain.adminEmail,
+        createdAt: new Date(createdDomain.createdAt).getTime(),
+        updatedAt: new Date(createdDomain.updatedAt).getTime(),
       };
     } catch (error) {
-      this.logger.error(`Failed to create domain:`, error);
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+      this.logger.error('Failed to create domain:', error);
       throw new ConflictException('Failed to create domain');
     }
   }
 
   async getDomainByEmail(adminEmail: string): Promise<Domain> {
     try {
-      const domain = await this.prisma.domain.findUnique({
-        where: { adminEmail },
-      });
+      const normalizedAdminEmail = adminEmail.toLowerCase().trim();
+      const domainsContainer = await this.cosmos.getDomainsContainer();
+      const querySpec = {
+        query: 'SELECT * FROM c WHERE c.adminEmail = @adminEmail',
+        parameters: [{ name: '@adminEmail', value: normalizedAdminEmail }],
+      };
 
-      if (!domain) {
+      const { resources: domains } = await domainsContainer.items.query(querySpec).fetchAll();
+
+      if (domains.length === 0) {
         throw new NotFoundException(`Domain that belongs to ${adminEmail} not found`);
       }
 
+      const domain = domains[0];
       return {
         id: domain.id,
         name: domain.name,
         adminEmail: domain.adminEmail,
-        createdAt: domain.createdAt.getTime(),
-        updatedAt: domain.updatedAt.getTime(),
+        createdAt: new Date(domain.createdAt).getTime(),
+        updatedAt: new Date(domain.updatedAt).getTime(),
       };
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
       this.logger.error(`Failed to fetch domain with email ${adminEmail}:`, error);
+      throw error;
+    }
+  }
+
+  async getDomainById(id: string): Promise<Domain> {
+    try {
+      const domainsContainer = await this.cosmos.getDomainsContainer();
+      const querySpec = {
+        query: 'SELECT * FROM c WHERE c.id = @id',
+        parameters: [{ name: '@id', value: id }],
+      };
+
+      const { resources: domains } = await domainsContainer.items.query(querySpec).fetchAll();
+
+      if (domains.length === 0) {
+        throw new NotFoundException(`Domain with ID ${id} not found`);
+      }
+
+      const domain = domains[0];
+      return {
+        id: domain.id,
+        name: domain.name,
+        adminEmail: domain.adminEmail,
+        createdAt: new Date(domain.createdAt).getTime(),
+        updatedAt: new Date(domain.updatedAt).getTime(),
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`Failed to fetch domain ${id}:`, error);
       throw error;
     }
   }

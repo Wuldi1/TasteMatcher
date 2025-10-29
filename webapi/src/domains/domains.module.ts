@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { DomainsController } from './domains.controller';
 import { DomainsService } from './domains.service';
-import { PrismaModule } from '../prisma/prisma.module';
+import { CosmosModule } from '../cosmos/cosmos.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [CosmosModule],
   controllers: [DomainsController],
   providers: [DomainsService],
   exports: [DomainsService],

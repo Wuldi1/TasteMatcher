@@ -2,7 +2,7 @@
 import { Injectable, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { BlobServiceClient, StorageSharedKeyCredential, BlockBlobClient } from '@azure/storage-blob';
 import { QueueServiceClient, StorageSharedKeyCredential as QueueCredential } from '@azure/storage-queue';
-import { PrismaService } from '../prisma/prisma.service';
+import { CosmosService } from '../cosmos/cosmos.service';
 import { v4 as uuidv4 } from 'uuid';
 import { IndexingJobMessage, ArtworkMetadata, Artwork, ProcessingStatus } from 'common';
 
@@ -22,7 +22,7 @@ export class UploadService {
   private readonly queueService: QueueServiceClient;
   private readonly config: UploadConfig;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(private readonly cosmos: CosmosService) {
     // Validate required environment variables
     this.config = {
       account: this.getRequiredEnv('AZURE_STORAGE_ACCOUNT'),
@@ -67,7 +67,7 @@ export class UploadService {
       await this.uploadToBlob(blobName, fileBuffer, contentType);
 
       // Create artwork record in database
-      await this.createArtworkRecord(artwork.id, domainId, filename, contentType, fileBuffer.length, blobName);
+      await this.createArtworkRecord(artwork);
 
       // Enqueue indexing job
       await this.enqueueIndexingJob(artwork, blobName);
@@ -162,32 +162,18 @@ export class UploadService {
   }
 
   private async createArtworkRecord(
-    artId: string,
-    domainId: string,
-    filename: string,
-    contentType: string,
-    fileSize: number,
-    blobName: string,
+    artwork: Artwork,
   ): Promise<void> {
     try {
-      // TODO : Add artwork metadata handling
-      await this.prisma.artwork.create({
-        data: {
-          id: artId,
-          domainId,
-          originalBlob: blobName,
-          contentType,
-          size: fileSize,
-          isIndexed: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      });
+      artwork.createdAt = Date.now();
 
-      this.logger.debug(`Created artwork record ${artId} in database`);
+      const artworksContainer = await this.cosmos.getArtworksContainer();
+      await artworksContainer.items.create(artwork);
+
+      this.logger.debug(`Created artwork record ${artwork.id} in Cosmos DB`);
       
     } catch (error) {
-      this.logger.error(`Failed to create artwork record ${artId}:`, error);
+      this.logger.error(`Failed to create artwork record ${artwork.id}:`, error);
       throw new InternalServerErrorException('Failed to create artwork record');
     }
   }

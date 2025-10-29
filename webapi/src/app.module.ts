@@ -1,13 +1,18 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { CosmosModule } from './cosmos/cosmos.module';
 import { DomainsModule } from './domains/domains.module';
 import { UploadModule } from './upload/upload.module';
-import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      expandVariables: true,
+    }),
+    CosmosModule,
     DomainsModule,
     UploadModule,
-    PrismaModule,
   ],
   controllers: [],
   providers: [],
