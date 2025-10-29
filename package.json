@@ -3,14 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-    "common",
-    "backend",
-    "frontend"
+    "webapi",
+    "workers",
+    "frontend",
+    "common"
   ],
   "scripts": {
-    "dev": "sh scripts/dev.sh",
-    "build": "pnpm --filter frontend build && pnpm --filter backend build",
-    "test": "pnpm --filter backend test && pnpm --filter frontend test"
+    "install:all": "npm install",
+    "build:common": "npm run build --workspace=common",
+    "build:webapi": "npm run build:common && npm run build --workspace=webapi",
+    "build:workers": "npm run build:common && npm run build --workspace=workers",
+    "dev:webapi": "npm run build:common && npm run dev --workspace=webapi",
+    "dev:workers": "npm run build:common && npm run dev --workspace=workers"
   },
   "devDependencies": {
     "eslint": "^9.38.0",

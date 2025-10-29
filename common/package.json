@@ -1,15 +1,17 @@
 {
   "name": "common",
   "version": "1.0.0",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "jest"
+    "watch": "tsc -w",
+    "clean": "rm -rf dist"
   },
   "devDependencies": {
-    "jest": "^30.2.0",
-    "node-fetch": "^3.3.2",
-    "ts-jest": "^29.4.5",
     "typescript": "^5.9.3"
-  }
+  },
+  "files": [
+    "dist/**/*"
+  ]
 }

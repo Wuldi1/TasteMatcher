@@ -85,7 +85,7 @@ fi
 # NOTE: postgres server name must be unique within azure region
 echo "Creating Azure Database for PostgreSQL Flexible Server: $POSTGRES_NAME ..."
 POSTGRES_ADMIN_USER="tastematcher_admin"
-POSTGRES_ADMIN_PASS=$(openssl rand -base64 18)
+POSTGRES_ADMIN_PASS="gyzmaj-bitpe0-dyvNuw"
 
 if az postgres flexible-server show --name "$POSTGRES_NAME" --resource-group "$RG_NAME" >/dev/null 2>&1; then
   echo "PostgreSQL server $POSTGRES_NAME already exists. Skipping creation."

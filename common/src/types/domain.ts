@@ -1,6 +1,7 @@
 export interface Domain {
-  id: string;
+  id: string; // UUID
   name: string;
-  createdAt: Date;
-  updatedAt: Date;
+  adminEmail: string;
+  createdAt?: number; // timestamp
+  updatedAt?: number; // timestamp
 }

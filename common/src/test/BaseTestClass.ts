@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 export interface TestConfig {
   defaultDomainId?: string;
 }

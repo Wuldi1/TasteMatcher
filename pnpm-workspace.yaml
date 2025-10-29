@@ -1,4 +1,5 @@
 packages:
   - "common"
-  - "backend"
+  - "webapi"
+  - "workers"
   - "frontend"

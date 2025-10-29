@@ -1,9 +1,7 @@
-export type UserId = string;
-
 export type Role = 'global_admin' | 'domain_owner' | 'dealer' | 'customer';
 
 export interface User {
-  id: UserId;
+  id: string;
   name: string;
   email: string;
   role: Role;
