@@ -3,131 +3,159 @@ import {
   Logger,
   ConflictException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { Domain } from 'common';
+import { createHash, randomInt } from 'crypto';
+import { sign } from 'jsonwebtoken';
+import {
+  Domain,
+  DomainVerificationResultResponse,
+} from 'common';
 import { DomainDto } from './dto/domain.dto';
 import { CosmosService } from '../cosmos/cosmos.service';
+import { EmailService } from '../email/email.service';
+
+const VERIFICATION_TTL_MS = 10 * 60 * 1000;
 
 @Injectable()
 export class DomainsService {
   private readonly logger = new Logger(DomainsService.name);
+  private readonly jwtSecret: string;
 
-  constructor(private readonly cosmos: CosmosService) {}
+  constructor(
+    private readonly cosmos: CosmosService,
+    private readonly emailService: EmailService,
+  ) {
+    this.jwtSecret = process.env.JWT_SECRET ?? '';
+    if (!this.jwtSecret) {
+      throw new Error('JWT_SECRET environment variable is required');
+    }
+  }
 
   async createDomain(domainDto: DomainDto): Promise<Domain> {
-    const { name, adminEmail } = domainDto;
+    const normalizedEmail = domainDto.adminEmail.toLowerCase().trim();
+    const container = await this.cosmos.getDomainsContainer();
 
-    // Normalize email to lowercase for consistency
-    const normalizedAdminEmail = adminEmail.toLowerCase().trim();
-
-    try {
-      const domainsContainer = await this.cosmos.getDomainsContainer();
-      const querySpec = {
+    const { resources: existingDomains } = await container.items
+      .query({
         query: 'SELECT * FROM c WHERE c.adminEmail = @adminEmail',
-        parameters: [{ name: '@adminEmail', value: normalizedAdminEmail }],
-      };
-      const { resources: existingDomains } = await domainsContainer.items.query(querySpec).fetchAll();
+        parameters: [{ name: '@adminEmail', value: normalizedEmail }],
+      })
+      .fetchAll();
 
-      if (existingDomains.length > 0) {
-        throw new ConflictException(`Domain with admin email '${normalizedAdminEmail}' already exists`);
-      }
-
-      const domainId = uuidv4();
-      const now = new Date().toISOString();
-
-      const domainItem = {
-        id: domainId,
-        name,
-        adminEmail: normalizedAdminEmail,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      const { resource: createdDomain } = await domainsContainer.items.create(domainItem);
-
-      if (!createdDomain) {
-        throw new ConflictException('Failed to create domain');
-      }
-
-      this.logger.log(`Created domain: ${createdDomain.id} (${createdDomain.name}) with admin email: ${createdDomain.adminEmail}`);
-
-      return {
-        id: createdDomain.id,
-        name: createdDomain.name,
-        adminEmail: createdDomain.adminEmail,
-        createdAt: new Date(createdDomain.createdAt).getTime(),
-        updatedAt: new Date(createdDomain.updatedAt).getTime(),
-      };
-    } catch (error) {
-      if (error instanceof ConflictException) {
-        throw error;
-      }
-      this.logger.error('Failed to create domain:', error);
-      throw new ConflictException('Failed to create domain');
+    if (existingDomains.length > 0) {
+      throw new ConflictException(`Domain with admin email '${normalizedEmail}' already exists`);
     }
+
+    const now = new Date().getTime();
+    const newDomain: Domain = {
+      id: uuidv4(),
+      name: domainDto.name,
+      adminEmail: normalizedEmail,
+      createdAt: now
+    };
+
+    const { resource } = await container.items.create(newDomain);
+    return resource as Domain;
   }
 
-  async getDomainByEmail(adminEmail: string): Promise<Domain> {
-    try {
-      const normalizedAdminEmail = adminEmail.toLowerCase().trim();
-      const domainsContainer = await this.cosmos.getDomainsContainer();
-      const querySpec = {
-        query: 'SELECT * FROM c WHERE c.adminEmail = @adminEmail',
-        parameters: [{ name: '@adminEmail', value: normalizedAdminEmail }],
-      };
-
-      const { resources: domains } = await domainsContainer.items.query(querySpec).fetchAll();
-
-      if (domains.length === 0) {
-        throw new NotFoundException(`Domain that belongs to ${adminEmail} not found`);
-      }
-
-      const domain = domains[0];
-      return {
-        id: domain.id,
-        name: domain.name,
-        adminEmail: domain.adminEmail,
-        createdAt: new Date(domain.createdAt).getTime(),
-        updatedAt: new Date(domain.updatedAt).getTime(),
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      this.logger.error(`Failed to fetch domain with email ${adminEmail}:`, error);
-      throw error;
-    }
+  async sendVerificationCode(adminEmail: string): Promise<Domain> {
+    const doc = await this.fetchDomainByEmail(adminEmail);
+    return this.issueVerificationCode(doc);
   }
 
-  async getDomainById(id: string): Promise<Domain> {
-    try {
-      const domainsContainer = await this.cosmos.getDomainsContainer();
-      const querySpec = {
-        query: 'SELECT * FROM c WHERE c.id = @id',
-        parameters: [{ name: '@id', value: id }],
-      };
+  async verifyDomainCode(
+    adminEmail: string,
+    code: string,
+  ): Promise<DomainVerificationResultResponse> {
+    const domain = await this.fetchDomainByEmail(adminEmail);
 
-      const { resources: domains } = await domainsContainer.items.query(querySpec).fetchAll();
-
-      if (domains.length === 0) {
-        throw new NotFoundException(`Domain with ID ${id} not found`);
-      }
-
-      const domain = domains[0];
-      return {
-        id: domain.id,
-        name: domain.name,
-        adminEmail: domain.adminEmail,
-        createdAt: new Date(domain.createdAt).getTime(),
-        updatedAt: new Date(domain.updatedAt).getTime(),
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      this.logger.error(`Failed to fetch domain ${id}:`, error);
-      throw error;
+    if (!domain.verificationCodeHash || !domain.verificationCodeExpiresAt) {
+      throw new BadRequestException('No verification code requested for this domain');
     }
+
+    if (domain.verificationCodeExpiresAt < new Date().getTime()) {
+      throw new BadRequestException('Verification code expired');
+    }
+
+    const submittedHash = this.hashCode(code);
+    if (submittedHash !== domain.verificationCodeHash) {
+      throw new BadRequestException('Invalid verification code');
+    }
+
+    const container = await this.cosmos.getDomainsContainer();
+    const updatedDomain: Domain = {
+      ...domain,
+      verificationCodeHash: undefined,
+      verificationCodeExpiresAt: undefined
+    };
+
+    await container.item(updatedDomain.id, updatedDomain.adminEmail).replace(updatedDomain);
+
+    const token = sign(
+      { sub: updatedDomain.id, email: updatedDomain.adminEmail },
+      this.jwtSecret,
+      { expiresIn: '4h' },
+    );
+
+    return { token };
+  }
+
+  async findDomainByEmail(adminEmail: string): Promise<Domain> {
+    return await this.fetchDomainByEmail(adminEmail);
+  }
+
+  private async issueVerificationCode(domain: Domain): Promise<Domain> {
+    const container = await this.cosmos.getDomainsContainer();
+    const code = this.generateVerificationCode();
+    const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MS).getTime();
+
+    const updatedDomain: Domain = {
+      ...domain,
+      verificationCodeHash: this.hashCode(code),
+      verificationCodeExpiresAt: expiresAt,
+    };
+
+    await container.item(updatedDomain.id, updatedDomain.adminEmail).replace(updatedDomain);
+
+    await this.emailService.sendVerificationEmail({
+      recipient: updatedDomain.adminEmail,
+      domainName: updatedDomain.name,
+      code,
+      expiresAt,
+    });
+
+    return updatedDomain;
+  }
+
+  private async fetchDomainByEmail(adminEmail: string): Promise<Domain> {
+    const normalizedEmail = adminEmail.toLowerCase().trim();
+    const container = await this.cosmos.getDomainsContainer();
+
+    const { resources } = await container.items
+      .query({
+        query: 'SELECT * FROM c WHERE c.adminEmail = @adminEmail',
+        parameters: [{ name: '@adminEmail', value: normalizedEmail }],
+      })
+      .fetchAll();
+
+    if (resources.length === 0) {
+      throw new NotFoundException(`Domain that belongs to ${adminEmail} not found`);
+    }
+
+    return resources[0] as Domain;
+  }
+
+  private generateVerificationCode(): string {
+    return randomInt(0, 1_000_000).toString().padStart(6, '0');
+    }
+
+  private hashCode(code: string): string {
+    if (typeof code !== 'string' || code.trim().length === 0) {
+      throw new BadRequestException('Verification code must be a non-empty string');
+    }
+
+    return createHash('sha256').update(code.trim()).digest('hex');
   }
 }

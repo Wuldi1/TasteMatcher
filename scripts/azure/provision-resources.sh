@@ -6,6 +6,8 @@ set -euo pipefail
 
 ENV=${1:-dev}
 LOCATION=${2:-israelcentral}
+EMAIL_LOCATION=${3:-"global"}
+EMAIL_DATA_LOCATION=${4:-"UnitedStates"}
 
 if [ -z "$ENV" ]; then
   echo "Usage: $0 <env> <location>"
@@ -22,6 +24,7 @@ KV_NAME="tastematcher-${ENV}-kv"                   # key vault name (lowercase, 
 FUNCAPP_NAME="tastematcher-${ENV}-func"            # function app name (must be unique)
 APP_PLAN="tastematcher-${ENV}-plan"
 STORAGE_ACCOUNT_NAME="tastematcher${ENV}sa"  # <= 24 chars ideally, no hyphens
+COMMUNICATION_NAME="tastematcher-${ENV}-comm"
 
 
 echo "Environment: $ENV, Location: $LOCATION"
@@ -31,6 +34,7 @@ echo "Cognitive Search service: $SEARCH_NAME"
 echo "Cosmos DB account: $COSMOS_NAME"
 echo "Key Vault: $KV_NAME"
 echo "Function App: $FUNCAPP_NAME"
+echo "Communication resource: $COMMUNICATION_NAME"
 
 # Ensure az CLI logged in
 if ! az account show >/dev/null 2>&1; then
@@ -77,6 +81,26 @@ else
 fi
 
 
+# Create Azure Communication Services (Email)
+echo "Creating Azure Communication Services resource: $COMMUNICATION_NAME ..."
+if az communication show --name "$COMMUNICATION_NAME" --resource-group "$RG_NAME" >/dev/null 2>&1; then
+  echo "Communication resource $COMMUNICATION_NAME already exists. Skipping creation."
+else
+  az communication create \
+    --name "$COMMUNICATION_NAME" \
+    --resource-group "$RG_NAME" \
+    --data-location "$EMAIL_DATA_LOCATION" \
+    --location "$EMAIL_LOCATION" \
+    -o none
+fi
+
+COMMUNICATION_CONNECTION_STRING=$(az communication list-key \
+  --name "$COMMUNICATION_NAME" \
+  --resource-group "$RG_NAME" \
+  --query primaryConnectionString -o tsv)
+
+# TODO - need to create custom domain
+AZURE_EMAIL_SENDER_ADDRESS=${AZURE_EMAIL_SENDER_ADDRESS:-"donotreply@2fd3f94e-2fdf-4c93-80bd-b396997b5bdd.azurecomm.net"}
 
 # Create Azure Cosmos DB account
 echo "Creating Azure Cosmos DB account: $COSMOS_NAME ..."
@@ -149,12 +173,13 @@ az cosmosdb sql container create \
 # Get Cosmos DB connection string and keys
 COSMOS_CONNECTION_STRING=$(az cosmosdb keys list --name "$COSMOS_NAME" --resource-group "$RG_NAME" --type connection-strings --query "connectionStrings[0].connectionString" -o tsv)
 COSMOS_PRIMARY_KEY=$(az cosmosdb keys list --name "$COSMOS_NAME" --resource-group "$RG_NAME" --query primaryMasterKey -o tsv)
-
 # Build Cosmos DB endpoint URL
 COSMOS_DB_ENDPOINT="https://${COSMOS_NAME}.documents.azure.com:443/"
-
 # Build DATABASE_URL for Prisma Cosmos DB connector
 DATABASE_URL="mongodb://${COSMOS_NAME}:${COSMOS_PRIMARY_KEY}@${COSMOS_NAME}.mongo.cosmos.azure.com:10255/${COSMOS_DATABASE}?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@${COSMOS_NAME}@"
+
+# TODO : Make it a script that will create it securely
+JWT_SECRET="TXR1JkKj8zqz2qP6N2uQ0NraE4GgVfVdCuzkR3VxKQZ1CjSx2zgo8/J7Y4h9v1J7"
 
 # Function to setup Cosmos DB data
 setup_cosmos_data() {
@@ -256,10 +281,14 @@ az keyvault secret set --vault-name "$KV_NAME" --name "CosmosConnectionString" -
 az keyvault secret set --vault-name "$KV_NAME" --name "CosmosPrimaryKey" --value "$COSMOS_PRIMARY_KEY" -o none
 az keyvault secret set --vault-name "$KV_NAME" --name "CosmosEndpoint" --value "$COSMOS_DB_ENDPOINT" -o none
 az keyvault secret set --vault-name "$KV_NAME" --name "CosmosDatabase" --value "$COSMOS_DATABASE" -o none
+az keyvault secret set --vault-name "$KV_NAME" --name "CommunicationConnectionString" --value "$COMMUNICATION_CONNECTION_STRING" -o none
+az keyvault secret set --vault-name "$KV_NAME" --name "CommunicationEmailSender" --value "$AZURE_EMAIL_SENDER_ADDRESS" -o none
+az keyvault secret set --vault-name "$KV_NAME" --name "JwtSecret" --value "$JWT_SECRET" -o none
 az keyvault secret set --vault-name "$KV_NAME" --name "SearchAdminKey" --value "$SEARCH_KEY" -o none
 az keyvault secret set --vault-name "$KV_NAME" --name "ServicePrincipalAppId" --value "$SP_APP_ID" -o none
 az keyvault secret set --vault-name "$KV_NAME" --name "ServicePrincipalPassword" --value "$SP_PASSWORD" -o none
 az keyvault secret set --vault-name "$KV_NAME" --name "ServicePrincipalTenant" --value "$SP_TENANT" -o none
+
 
 # Build .env file for the backend local usage
 ENVFILE=".env.${ENV}"
@@ -288,6 +317,13 @@ COSMOS_DB_ENDPOINT=${COSMOS_DB_ENDPOINT}
 COSMOS_DB_KEY=${COSMOS_PRIMARY_KEY}
 COSMOS_DB_DATABASE=${COSMOS_DATABASE}
 
+# Azure Communication Services (Email)
+AZURE_COMMUNICATION_CONNECTION_STRING="${COMMUNICATION_CONNECTION_STRING}"
+AZURE_EMAIL_SENDER=${AZURE_EMAIL_SENDER_ADDRESS}
+
+# Auth
+JWT_SECRET=${JWT_SECRET}
+
 # Key Vault
 AZURE_KEYVAULT_NAME=${KV_NAME}
 
@@ -308,6 +344,8 @@ echo " - Cosmos DB endpoint: $COSMOS_DB_ENDPOINT"
 echo " - Cosmos DB primary key: ${COSMOS_PRIMARY_KEY:0:8}..."
 echo " - Key Vault name: $KV_NAME"
 echo " - Function App: $FUNCAPP_NAME"
+echo " - Communication resource: $COMMUNICATION_NAME"
+echo " - Azure Email sender address: $AZURE_EMAIL_SENDER_ADDRESS"
 echo " - Environment file: $ENVFILE"
 
 echo "Next steps:"

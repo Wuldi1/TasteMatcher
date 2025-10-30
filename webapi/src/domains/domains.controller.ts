@@ -8,30 +8,39 @@ import {
   Logger,
 } from '@nestjs/common';
 import { DomainsService } from './domains.service';
-import { Domain } from 'common';
-import { DomainDto } from './dto/domain.dto'
+import { Domain, DomainVerificationResultResponse } from 'common';
+import { DomainDto } from './dto/domain.dto';
 
-@Controller('domains')
+@Controller('domain')
 export class DomainsController {
   private readonly logger = new Logger(DomainsController.name);
 
   constructor(private readonly domainsService: DomainsService) {}
 
-  @Post()
-  async createDomain(
-    @Body(ValidationPipe) createDomainDto: DomainDto,
-  ): Promise<Domain> {
-    this.logger.log(
-      `Creating domain: ${createDomainDto.name} for admin: ${createDomainDto.adminEmail}`,
-    );
-    return this.domainsService.createDomain(createDomainDto);
-  }
-
   @Get(':adminEmail')
-  async getDomainByAdminEmail(
+  async requestVerificationForExisting(
     @Param('adminEmail') adminEmail: string,
   ): Promise<Domain> {
-    this.logger.log(`Fetching domain via email: ${adminEmail}`);
-    return this.domainsService.getDomainByEmail(adminEmail);
+    this.logger.debug({ route: 'GET /domain/:adminEmail', adminEmail });
+    return this.domainsService.sendVerificationCode(adminEmail);
+  }
+
+  @Post()
+  async createDomain(
+    @Body(ValidationPipe) domainDto: DomainDto,
+  ): Promise<Domain> {
+    this.logger.debug({ route: 'POST /domain', email: domainDto.adminEmail });
+    const domain = await this.domainsService.createDomain(domainDto);
+    await this.domainsService.sendVerificationCode(domainDto.adminEmail);
+    return domain;
+  }
+
+  @Post(':adminEmail/verify')
+  async verifyDomain(
+    @Param('adminEmail') adminEmail: string,
+    @Body(ValidationPipe) payload: { code: string },
+  ): Promise<DomainVerificationResultResponse> {
+    this.logger.debug({ route: 'POST /domain/:adminEmail/verify', adminEmail, payload });
+    return this.domainsService.verifyDomainCode(adminEmail, payload.code);
   }
 }

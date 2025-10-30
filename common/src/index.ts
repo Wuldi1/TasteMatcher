@@ -8,3 +8,4 @@ export * from './types/user';
 export type { ThumbnailSize, ArtworkMetadata } from './types/artwork';
 export type { UploadStatus  } from './types/queue';
 export type { Role } from './types/user';
+export type { DomainVerificationResultResponse } from './types/domain';

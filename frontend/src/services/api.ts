@@ -10,7 +10,7 @@
 // 9. CI-friendly: passes typecheck and lint.
 // -----------------------------------------------------------
 
-import { CreateDomainRequest, DomainResponse, DomainValidationResponse, UploadResponseDto, ArtworkMetadata } from 'common';
+import { Domain, DomainVerificationResultResponse } from 'common';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
@@ -68,78 +68,44 @@ class ApiClient {
   }
 
   /**
-   * Check if a domain exists by admin email
+   * Request an existing domain verification by admin email
    */
-  async validateDomain(adminEmail: string): Promise<DomainValidationResponse> {
+  async requestDomainVerification(adminEmail: string): Promise<Domain> {
     if (!adminEmail || !adminEmail.includes('@')) {
       throw new ApiError('Valid email is required', 400);
     }
 
     const encodedEmail = encodeURIComponent(adminEmail);
-    return this.request<DomainValidationResponse>(`/domains/${encodedEmail}`, {
-      method: 'GET',
-    });
+    return this.request<Domain>(`/domain/${encodedEmail}`, { method: 'GET' });
   }
 
   /**
    * Create a new domain
    */
-  async createDomain(request: CreateDomainRequest): Promise<DomainResponse> {
+  async createDomain(request: Domain): Promise<Domain> {
     if (!request.name || !request.adminEmail) {
       throw new ApiError('Name and admin email are required', 400);
     }
 
-    return this.request<DomainResponse>('/domains', {
+    return this.request<Domain>('/domain', {
       method: 'POST',
       body: JSON.stringify(request),
     });
   }
 
   /**
-   * Upload artwork to a domain
+   * Verify domain ownership with the provided code
    */
-  async uploadArtwork(
-    domainId: string,
-    file: File,
-    metadata?: ArtworkMetadata
-  ): Promise<UploadResponseDto> {
-    if (!domainId || !file) {
-      throw new ApiError('Domain ID and file are required', 400);
+  async verifyDomainCode(adminEmail: string, code: string): Promise<DomainVerificationResultResponse> {
+    if (!code || code.length !== 6) {
+      throw new ApiError('Verification code must be 6 digits', 400);
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    if (metadata?.title) formData.append('title', metadata.title);
-    if (metadata?.artist) formData.append('artist', metadata.artist);
-    if (metadata) formData.append('metadata', JSON.stringify(metadata));
-
-    const url = `${API_BASE_URL}/domains/${domainId}/uploads`;
-    
-    console.debug('Upload Request:', { domainId, fileName: file.name, fileSize: file.size });
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Upload Error:', { status: response.status, error: errorText });
-        throw new ApiError(errorText || `Upload failed`, response.status);
-      }
-
-      const data = await response.json();
-      console.info('Upload Success:', { domainId, artId: data.artId });
-      return data;
-    } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
-      }
-      console.error('Upload Network Error:', error);
-      throw new ApiError('Upload network error', 0);
-    }
+    const encodedEmail = encodeURIComponent(adminEmail);
+    return this.request<DomainVerificationResultResponse>(`/domain/${encodedEmail}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
   }
 }
 
