@@ -39,7 +39,7 @@ export class UploadController {
       throw new BadRequestException('File is required');
     }
 
-    const artworkMetadata = this.parseArtworkPayload(body);
+    const artworkMetadata = this.parseArtworkPayload(body, domainId);
 
     try {
       const response = await this.uploadService.uploadFileAndEnqueue(domainId, file, artworkMetadata);
@@ -62,7 +62,7 @@ export class UploadController {
     }
   }
 
-  private parseArtworkPayload(body: Record<string, unknown>): Artwork {
+  private parseArtworkPayload(body: Record<string, unknown>, domainId: string): Artwork {
     const raw = body.artwork ?? body.metadata;
     let parsed: Partial<Artwork> = {};
 
@@ -78,7 +78,7 @@ export class UploadController {
 
      return {
       id: uuidv4(),
-      domainId: '', // to be filled in later
+      domainId,
       title: parsed.title!,
       artist: parsed.artist!,
       description: parsed.description!,
