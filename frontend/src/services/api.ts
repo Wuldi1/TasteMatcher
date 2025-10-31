@@ -10,7 +10,7 @@
 // 9. CI-friendly: passes typecheck and lint.
 // -----------------------------------------------------------
 
-import { Domain, DomainVerificationResultResponse } from 'common';
+import { Domain, DomainVerificationResultResponse, ProcessingStatus, Artwork } from 'common';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
@@ -106,6 +106,53 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ code }),
     });
+  }
+  
+  /**
+   * Upload artwork along with optional metadata
+   */
+  async uploadArtwork(domainId: string, file: File, artworkMetadata?: Partial<Artwork>): Promise<ProcessingStatus> {
+    if (!domainId) {
+      throw new ApiError('Domain ID is required', 400);
+    }
+    if (!file) {
+      throw new ApiError('File is required', 400);
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // TODO : add some validation for artworkMetadata fields
+    if (artworkMetadata) {
+        formData.append('artwork', JSON.stringify(artworkMetadata));
+    }
+
+    const url = `${API_BASE_URL}/domains/${domainId}/uploads`;
+
+    console.debug('Upload Request:', { domainId, fileName: file.name, fileSize: file.size });
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Upload Error:', { status: response.status, error: errorText });
+        throw new ApiError(errorText || `Upload failed`, response.status);
+      }
+
+      const data = (await response.json()) as ProcessingStatus;
+      console.info('Upload Success:', { domainId, artId: data.artId });
+      return data;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      console.error('Upload Network Error:', error);
+      throw new ApiError('Upload network error', 0);
+    }
   }
 }
 

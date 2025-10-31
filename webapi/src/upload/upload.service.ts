@@ -30,7 +30,7 @@ export class UploadService {
       originalsContainer: process.env.AZURE_BLOB_CONTAINER_ORIGINALS || 'originals',
       queueName: process.env.AZURE_QUEUE_NAME || 'tastematcher-dev-indexing-jobs',
       maxUploadBytes: parseInt(process.env.MAX_UPLOAD_BYTES || '26214400'), // 25MB default
-      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+      allowedMimeTypes: ['image/jpeg', 'image/jpeg', 'image/png'],
     };
 
     // Initialize Azure SDK clients
@@ -51,29 +51,40 @@ export class UploadService {
 
   async uploadFileAndEnqueue(
     domainId: string,
-    fileBuffer: Buffer,
-    filename: string,
-    contentType: string,
+    file: Express.Multer.File,
     artwork: Artwork
   ): Promise<ProcessingStatus> {
+    this.logger.log({
+      action: 'uploadFileAndEnqueue.start',
+      domainId,
+      artworkId: artwork.id,
+      filename: artwork.filename,
+      mimeType: file.mimetype,
+      artworkMetadata: JSON.stringify(artwork),
+    });
     // Validate input parameters
-    this.validateUploadRequest(fileBuffer, contentType, filename);
+    this.validateUploadRequest(file.buffer, file.mimetype);
 
-    const ext = this.extractFileExtension(filename);
+    const ext = this.extractFileExtension(file.mimetype);
     const blobName = `${domainId}/artworks/${artwork.id}/original.${ext}`;
+
+    this.logger.log(`Uploading artwork ${artwork.id} to blob storage ${blobName}`);
 
     try {
       // Upload to Azure Blob Storage
-      await this.uploadToBlob(blobName, fileBuffer, contentType);
+      await this.uploadToBlob(blobName, file.buffer, file.mimetype);
 
       // Create artwork record in database
       await this.createArtworkRecord(artwork);
 
-      // Enqueue indexing job
       await this.enqueueIndexingJob(artwork, blobName);
 
-      this.logger.log(`Successfully uploaded artwork ${artwork.id} for domain ${domainId}`);
-
+      this.logger.log({
+        action: 'uploadFileAndEnqueue.success',
+        domainId,
+        artworkId: artwork.id,
+        blobName,
+      });
       return {
         artId: artwork.id,
         status: 'enqueued',
@@ -83,6 +94,10 @@ export class UploadService {
     } catch (error) {
       this.logger.error(`Failed to upload artwork for domain ${domainId}:`, error);
       
+      this.logger.log({
+        action: 'uploadFileAndEnqueue.cleanup',
+        blobName,
+      });
       // Cleanup: attempt to delete blob if it was created
       try {
         await this.deleteBlobIfExists(blobName);
@@ -94,7 +109,12 @@ export class UploadService {
     }
   }
 
-  private validateUploadRequest(fileBuffer: Buffer, contentType: string, filename: string): void {
+  private validateUploadRequest(fileBuffer: Buffer, contentType: string): void {
+    this.logger.log({
+      action: 'validateUploadRequest',
+      fileSize: fileBuffer?.length ?? 0,
+      contentType
+    });
     if (!fileBuffer || fileBuffer.length === 0) {
       throw new BadRequestException('File buffer is empty');
     }
@@ -111,13 +131,19 @@ export class UploadService {
       );
     }
 
-    if (!filename || filename.trim().length === 0) {
-      throw new BadRequestException('Filename is required');
-    }
+    this.logger.log({
+      action: 'validateUploadRequest.success',
+      fileBufferSize: fileBuffer.length,
+      contentType,
+    });
   }
 
-  private extractFileExtension(filename: string): string {
-    const ext = filename.split('.').pop()?.toLowerCase();
+  private extractFileExtension(mimeType: string): string {
+    this.logger.log({
+      action: 'extractFileExtension',
+      mimeType,
+    });
+    const ext = mimeType.split('/').pop()?.toLowerCase();
     if (!ext) {
       throw new BadRequestException('File must have an extension');
     }
@@ -127,12 +153,18 @@ export class UploadService {
   }
 
   private async uploadToBlob(blobName: string, fileBuffer: Buffer, contentType: string): Promise<void> {
+    this.logger.log({
+      action: 'uploadToBlob.start',
+      blobName,
+      contentType,
+      size: fileBuffer.length,
+    });
     try {
       // Ensure container exists
       const containerClient = this.blobService.getContainerClient(this.config.originalsContainer);
-      await containerClient.createIfNotExists({
-        access: 'blob' // Allow public read access to blobs
-      });
+      this.logger.log(`Ensuring container ${this.config.originalsContainer} exists`);
+
+      await containerClient.createIfNotExists();
 
       // Upload the file
       const blockBlobClient: BlockBlobClient = containerClient.getBlockBlobClient(blobName);
@@ -153,7 +185,10 @@ export class UploadService {
         },
       });
 
-      this.logger.debug(`Successfully uploaded blob ${blobName}, ETag: ${uploadResponse.etag}`);
+      this.logger.log({
+        action: 'uploadToBlob.success',
+        blobName,
+      });
       
     } catch (error) {
       this.logger.error(`Failed to upload blob ${blobName}:`, error);
@@ -164,13 +199,21 @@ export class UploadService {
   private async createArtworkRecord(
     artwork: Artwork,
   ): Promise<void> {
+    this.logger.log({
+      action: 'createArtworkRecord.start',
+      artworkId: artwork.id,
+      domainId: artwork.domainId,
+    });
     try {
       artwork.createdAt = Date.now();
 
       const artworksContainer = await this.cosmos.getArtworksContainer();
       await artworksContainer.items.create(artwork);
 
-      this.logger.debug(`Created artwork record ${artwork.id} in Cosmos DB`);
+      this.logger.log({
+        action: 'createArtworkRecord.success',
+        artworkId: artwork.id,
+      });
       
     } catch (error) {
       this.logger.error(`Failed to create artwork record ${artwork.id}:`, error);
@@ -182,6 +225,12 @@ export class UploadService {
     artwork: Artwork,
     blobName: string,
   ): Promise<void> {
+    this.logger.log({
+      action: 'enqueueIndexingJob.start',
+      artworkId: artwork.id,
+      domainId: artwork.domainId,
+      blobName,
+    });
     const job: IndexingJobMessage = {
       messageId: uuidv4(),
       artId: artwork.id,
@@ -199,7 +248,11 @@ export class UploadService {
       const messageText = Buffer.from(JSON.stringify(job)).toString('base64');
       await queueClient.sendMessage(messageText);
 
-      this.logger.log(`Enqueued indexing job for artId=${artwork.id} (messageId=${job.messageId})`);
+      this.logger.log({
+        action: 'enqueueIndexingJob.success',
+        artworkId: artwork.id,
+        messageId: job.messageId,
+      });
       
     } catch (error) {
       this.logger.error(`Failed to enqueue indexing job for ${artwork.id}:`, error);
@@ -208,17 +261,28 @@ export class UploadService {
   }
 
   private async deleteBlobIfExists(blobName: string): Promise<void> {
+    this.logger.log({
+      action: 'deleteBlobIfExists.start',
+      blobName,
+    });
     try {
       const containerClient = this.blobService.getContainerClient(this.config.originalsContainer);
       const blockBlobClient = containerClient.getBlockBlobClient(blobName);
       await blockBlobClient.deleteIfExists();
-      this.logger.debug(`Cleaned up blob ${blobName}`);
+      this.logger.log({
+        action: 'deleteBlobIfExists.success',
+        blobName,
+      });
     } catch (error) {
       this.logger.warn(`Failed to delete blob ${blobName} during cleanup:`, error);
     }
   }
 
   private getRequiredEnv(key: string): string {
+    this.logger.log({
+      action: 'getRequiredEnv',
+      key,
+    });
     const value = process.env[key];
     if (!value) {
       throw new Error(`Required environment variable ${key} is not set`);

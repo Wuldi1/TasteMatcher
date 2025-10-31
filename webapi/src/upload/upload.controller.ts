@@ -6,13 +6,12 @@ import {
   Body,
   UploadedFile,
   UseInterceptors,
-  ParseUUIDPipe,
   BadRequestException,
   Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadService } from './upload.service';
-import { Artwork, ArtworkMetadata, ProcessingStatus } from 'common';
+import { Artwork, ProcessingStatus } from 'common';
 import { v4 as uuidv4 } from 'uuid';
 
 @Controller('domains/:domainId/uploads')
@@ -24,25 +23,70 @@ export class UploadController {
   @Post()
   @UseInterceptors(FileInterceptor('file'))
   async uploadArtwork(
-    @Param('domainId', ParseUUIDPipe) domainId: string,
+    @Param('domainId') domainId: string,
     @UploadedFile() file: Express.Multer.File,
-    @Body('artwork') artwork: Artwork,
+    @Body() body: Record<string, unknown>,
   ): Promise<ProcessingStatus> {
+    const start = Date.now();
+    this.logger.debug({
+      route: '/domains/:domainId/uploads',
+      method: 'POST',
+      domainId,
+      metadataKeys: Object.keys(body),
+    });
+
     if (!file) {
       throw new BadRequestException('File is required');
     }
 
-    this.logger.log(`Uploading artwork to domain ${domainId}: ${file.originalname}`);
+    const artworkMetadata = this.parseArtworkPayload(body);
 
-    artwork.id = uuidv4();
-    artwork.domainId = domainId;
+    try {
+      const response = await this.uploadService.uploadFileAndEnqueue(domainId, file, artworkMetadata);
+      this.logger.log({
+        route: '/domains/:domainId/uploads',
+        method: 'POST',
+        domainId,
+        durationMs: Date.now() - start,
+      });
+      return response;
+    } catch (error) {
+      this.logger.error({
+        route: '/domains/:domainId/uploads',
+        method: 'POST',
+        domainId,
+        errMessage: (error as Error).message,
+        stack: (error as Error).stack,
+      });
+      throw error;
+    }
+  }
 
-    return this.uploadService.uploadFileAndEnqueue(
-      domainId,
-      file.buffer,
-      file.originalname,
-      file.mimetype,
-      artwork
-    );
+  private parseArtworkPayload(body: Record<string, unknown>): Artwork {
+    const raw = body.artwork ?? body.metadata;
+    let parsed: Partial<Artwork> = {};
+
+    if (typeof raw === 'string') {
+      try {
+        parsed = JSON.parse(raw) as Partial<Artwork>;
+      } catch {
+        throw new BadRequestException('Invalid artwork metadata payload');
+      }
+    } else if (raw && typeof raw === 'object') {
+      parsed = raw as Partial<Artwork>;
+    }
+
+     return {
+      id: uuidv4(),
+      domainId: '', // to be filled in later
+      title: parsed.title!,
+      artist: parsed.artist!,
+      description: parsed.description!,
+      filename: parsed.filename ?? 'unknown',
+      tags: parsed.tags ?? [],
+      createdAt: new Date().getTime(),
+      metadata: parsed.metadata,
+      category: parsed.category ?? 'uncategorized',
+    } as Artwork;
   }
 }

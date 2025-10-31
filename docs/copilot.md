@@ -15,6 +15,7 @@
 9. **Idempotency** — for any background job or external side-effect operation, implement idempotency checks. Use DB flags or messageId checks.
 10. **Security** — never print secrets in logs. Never commit secrets. Use `.env` or Key Vault.
 11. **Documentation** — update README, endpoints docs, and the `CHANGELOG.md` for behavior changes or added features.
+12. **Frontend quality & accessibility** — every FE change must be clean and smooth (no janky UI/UX), must support mobile and desktop layouts responsively, and must meet Accessibility requirements (follow WCAG AA at minimum). Include accessibility attributes (aria-*) where relevant, keyboard navigation, focus states, semantic HTML, and automated/audited accessibility tests in the PR.
 
 ---
 
@@ -32,7 +33,8 @@ When generating code, **prepend** this checklist as a comment in the created fil
 // 6. No duplicate logic — reuse existing service/util or extract shared module.
 // 7. Adds or updates README or docs if public API changes.
 // 8. Adds meaningful JSDoc for exported functions/classes.
-// 9. CI-friendly: code passes lint, typecheck, and tests locally.
+// 9. CI-friendly: code passes lint, typecheck, and tests locally.\
+// 10. Frontend-specific: UI changes must be responsive (mobile + desktop) and smooth (no visual regressions). Include accessibility considerations (semantic markup, aria attributes, keyboard navigation, focus management) and automated accessibility checks (axe, Playwright/accessibility audit) where applicable.
 // -----------------------------------------------------------
 ```
 
@@ -53,6 +55,8 @@ When asked to implement a new endpoint or feature, **always** follow this order:
 3. Implement code until tests pass.
 4. Add E2E or Playwright smoke test if the change touches user flow.
 5. Add test coverage to ensure the changed module has >= 80% coverage; critical modules must be >= 90%.
+6. Include accessibility and basic responsive checks — add automated accessibility tests (axe or equivalent) and a Playwright/mobile-viewport smoke test that verifies critical flows render & function on both mobile and desktop viewports.
+
 
 **Test structure guidelines**
 

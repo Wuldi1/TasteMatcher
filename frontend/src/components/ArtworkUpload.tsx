@@ -10,438 +10,255 @@
 // 9. CI-friendly: passes typecheck and lint.
 // -----------------------------------------------------------
 
-import React, { useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Artwork } from 'common';
 import { useDomain } from '../contexts/DomainContext';
 import { apiClient, ApiError } from '../services/api';
-import { ArtworkMetadata } from 'common';
 
-interface UploadFormData {
-  title: string;
-  artist: string;
-  category: string;
-  tags: string;
-}
-
-interface UploadState {
-  file: File | null;
-  preview: string | null;
-  uploading: boolean;
-  progress: number;
-  success: boolean;
-  error: string | null;
-}
-
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
+type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
 /**
  * Professional artwork upload component with drag-and-drop
  * Handles file validation, preview, and upload to domain
  */
 export function ArtworkUpload() {
-  const navigate = useNavigate();
-  const { currentDomain, setCurrentDomain } = useDomain();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const [formData, setFormData] = useState<UploadFormData>({
-    title: '',
-    artist: '',
-    category: '',
-    tags: '',
-  });
+  const { currentDomain } = useDomain();
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [metadata, setMetadata] = useState<Partial<Artwork>>({});
+  const [status, setStatus] = useState<UploadStatus>('idle');
+  const [message, setMessage] = useState<string | null>(null);
 
-  const [uploadState, setUploadState] = useState<UploadState>({
-    file: null,
-    preview: null,
-    uploading: false,
-    progress: 0,
-    success: false,
-    error: null,
-  });
+  const isReadyToUpload = useMemo(() => Boolean(currentDomain && file), [currentDomain, file]);
 
-  const [dragActive, setDragActive] = useState(false);
-
-  // Redirect if no domain is authenticated
-  React.useEffect(() => {
-    if (!currentDomain) {
-      navigate('/');
-    }
-  }, [currentDomain, navigate]);
-
-  const validateFile = useCallback((file: File): string | null => {
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      return 'Please upload a JPEG, PNG, or WebP image';
-    }
-    
-    if (file.size > MAX_FILE_SIZE) {
-      return 'File size must be less than 25MB';
-    }
-
-    return null;
-  }, []);
-
-  const handleFileSelect = useCallback((file: File) => {
-    const error = validateFile(file);
-    
-    if (error) {
-      setUploadState(prev => ({ ...prev, error, file: null, preview: null }));
-      return;
-    }
-
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setUploadState(prev => ({
-        ...prev,
-        file,
-        preview: e.target?.result as string,
-        error: null,
-      }));
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
     };
-    reader.readAsDataURL(file);
+  }, [previewUrl]);
 
-    console.debug('File Selected:', { 
-      name: file.name, 
-      size: file.size, 
-      type: file.type 
-    });
-  }, [validateFile]);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragActive(false);
-
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      handleFileSelect(files[0]);
+  const resetForm = useCallback(() => {
+    setFile(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
     }
-  }, [handleFileSelect]);
+    setPreviewUrl(null);
+    setMetadata({});
+    setStatus('idle');
+    setMessage(null);
+  }, [previewUrl]);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragActive(true);
-  }, []);
+  const handleFileChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const chosenFile = event.target.files?.[0] ?? null;
+      setFile(chosenFile);
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragActive(false);
-  }, []);
-
-  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      handleFileSelect(files[0]);
-    }
-  }, [handleFileSelect]);
-
-  const handleFormChange = useCallback((field: keyof UploadFormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  }, []);
-
-  const handleUpload = useCallback(async () => {
-    if (!uploadState.file || !currentDomain) {
-      return;
-    }
-
-    setUploadState(prev => ({ ...prev, uploading: true, progress: 0, error: null }));
-
-    console.info('Upload Started:', { 
-      domainId: currentDomain.id,
-      fileName: uploadState.file.name,
-      fileSize: uploadState.file.size 
-    });
-
-    try {
-      const metadata: ArtworkMetadata = {
-        title: formData.title.trim() || undefined,
-        artist: formData.artist.trim() || undefined,
-        category: formData.category.trim() || undefined,
-        tags: formData.tags.trim() ? formData.tags.split(',').map(t => t.trim()) : undefined,
-      };
-
-      // Simulate progress (real implementation would use XMLHttpRequest with progress events)
-      const progressInterval = setInterval(() => {
-        setUploadState(prev => ({
-          ...prev,
-          progress: Math.min(prev.progress + 10, 90)
-        }));
-      }, 200);
-
-      const result = await apiClient.uploadArtwork(
-        currentDomain.id,
-        uploadState.file,
-        metadata
-      );
-
-      clearInterval(progressInterval);
-      
-      setUploadState(prev => ({
-        ...prev,
-        uploading: false,
-        progress: 100,
-        success: true,
-      }));
-
-      console.info('Upload Success:', { 
-        domainId: currentDomain.id,
-        artId: result.artId 
-      });
-
-      // Reset form after successful upload
-      setTimeout(() => {
-        setUploadState({
-          file: null,
-          preview: null,
-          uploading: false,
-          progress: 0,
-          success: false,
-          error: null,
-        });
-        setFormData({
-          title: '',
-          artist: '',
-          category: '',
-          tags: '',
-        });
-      }, 3000);
-
-    } catch (error) {
-      console.error('Upload Error:', error);
-      
-      let errorMessage = 'Upload failed. Please try again.';
-      if (error instanceof ApiError) {
-        if (error.status === 400) {
-          errorMessage = 'Invalid file or data. Please check your input.';
-        } else if (error.status === 413) {
-          errorMessage = 'File is too large. Please use a smaller file.';
-        }
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
       }
 
-      setUploadState(prev => ({
-        ...prev,
-        uploading: false,
-        progress: 0,
-        error: errorMessage,
-      }));
-    }
-  }, [uploadState.file, currentDomain, formData]);
+      if (chosenFile) {
+        setPreviewUrl(URL.createObjectURL(chosenFile));
+        setStatus('idle');
+        setMessage(null);
+      } else {
+        setPreviewUrl(null);
+      }
+    },
+    [previewUrl],
+  );
 
-  const handleLogout = useCallback(() => {
-    setCurrentDomain(null);
-    navigate('/');
-  }, [setCurrentDomain, navigate]);
+  const handleMetadataChange = useCallback(
+    (field: keyof Artwork) =>
+      (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const value = event.target.value.trim();
+        setMetadata((prev) => ({
+          ...prev,
+          [field]: value ? value : undefined,
+        }));
+      },
+    [],
+  );
 
-  if (!currentDomain) {
-    return null; // Will redirect via useEffect
-  }
+  const handleTagsChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setMetadata((prev) => ({
+      ...prev,
+      tags: value ? value.split(',').map((tag) => tag.trim()).filter(Boolean) : undefined,
+    }));
+  }, []);
+
+  const handleSubmit = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+
+      if (!currentDomain) {
+        setStatus('error');
+        setMessage('Please select a domain before uploading artwork.');
+        return;
+      }
+
+      if (!file) {
+        setStatus('error');
+        setMessage('Please choose a file to upload.');
+        return;
+      }
+
+      setStatus('uploading');
+      setMessage('Uploading artwork...');
+
+      try {
+        await apiClient.uploadArtwork(currentDomain.id, file, metadata);
+        setStatus('success');
+        setMessage('Artwork uploaded successfully!');
+        resetForm();
+      } catch (error) {
+        if (error instanceof ApiError) {
+          setStatus('error');
+          setMessage(error.message || 'Failed to upload artwork. Please try again.');
+        } else {
+          setStatus('error');
+          setMessage('Network error. Please check your connection and try again.');
+        }
+      }
+    },
+    [currentDomain, file, metadata, resetForm],
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {currentDomain.name}
-              </h1>
-              <p className="text-gray-600">{currentDomain.adminEmail}</p>
+    <div className="bg-white shadow-lg rounded-xl p-6">
+      <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload new artwork</h2>
+
+      {!currentDomain && (
+        <p className="text-sm text-red-600 mb-4">
+          Please select a domain before uploading artwork.
+        </p>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <label htmlFor="artwork-file" className="block text-sm font-medium text-gray-700 mb-2">
+            Artwork file
+          </label>
+          <input
+            id="artwork-file"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handleFileChange}
+            className="block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+            disabled={!currentDomain || status === 'uploading'}
+          />
+          {previewUrl && (
+            <div className="mt-4">
+              <p className="text-xs text-gray-500 mb-2">Preview</p>
+              <img
+                src={previewUrl}
+                alt="Artwork preview"
+                className="max-h-48 rounded-md border border-gray-200 object-contain"
+              />
             </div>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-            >
-              Switch Domain
-            </button>
-          </div>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Upload Area */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Upload Artwork
-            </h2>
-
-            {/* Drag and Drop Area */}
-            <div
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                dragActive
-                  ? 'border-blue-400 bg-blue-50'
-                  : uploadState.file
-                  ? 'border-green-400 bg-green-50'
-                  : 'border-gray-300 hover:border-gray-400'
-              }`}
-            >
-              {uploadState.preview ? (
-                <div className="space-y-4">
-                  <img
-                    src={uploadState.preview}
-                    alt="Preview"
-                    className="max-h-48 mx-auto rounded-lg shadow-sm"
-                  />
-                  <p className="text-sm text-gray-600">
-                    {uploadState.file?.name}
-                  </p>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-blue-600 hover:text-blue-800 text-sm"
-                  >
-                    Choose different file
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="text-4xl text-gray-400">📸</div>
-                  <div>
-                    <p className="text-lg text-gray-600 mb-2">
-                      Drag and drop your artwork here
-                    </p>
-                    <p className="text-sm text-gray-500 mb-4">
-                      or
-                    </p>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                    >
-                      Choose File
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    JPEG, PNG, or WebP • Max 25MB
-                  </p>
-                </div>
-              )}
-            </div>
-
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label htmlFor="metadata-title" className="block text-sm font-medium text-gray-700 mb-2">
+              Title
+            </label>
             <input
-              ref={fileInputRef}
-              type="file"
-              accept={ALLOWED_TYPES.join(',')}
-              onChange={handleFileInputChange}
-              className="hidden"
+              id="metadata-title"
+              type="text"
+              value={metadata.title ?? ''}
+              onChange={handleMetadataChange('title')}
+              placeholder="Untitled"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={status === 'uploading'}
             />
-
-            {/* Upload Progress */}
-            {uploadState.uploading && (
-              <div className="mt-4">
-                <div className="flex justify-between text-sm text-gray-600 mb-1">
-                  <span>Uploading...</span>
-                  <span>{uploadState.progress}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${uploadState.progress}%` }}
-                  ></div>
-                </div>
-              </div>
-            )}
-
-            {/* Success Message */}
-            {uploadState.success && (
-              <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
-                <p className="text-green-800 text-sm">
-                  ✅ Artwork uploaded successfully! Processing will begin shortly.
-                </p>
-              </div>
-            )}
-
-            {/* Error Message */}
-            {uploadState.error && (
-              <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-red-800 text-sm">{uploadState.error}</p>
-              </div>
-            )}
           </div>
-
-          {/* Metadata Form */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Artwork Details
-            </h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => handleFormChange('title', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Artwork title"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Artist
-                </label>
-                <input
-                  type="text"
-                  value={formData.artist}
-                  onChange={(e) => handleFormChange('artist', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Artist name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Category
-                </label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => handleFormChange('category', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select category</option>
-                  <option value="painting">Painting</option>
-                  <option value="sculpture">Sculpture</option>
-                  <option value="photography">Photography</option>
-                  <option value="digital">Digital Art</option>
-                  <option value="mixed-media">Mixed Media</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tags
-                </label>
-                <input
-                  type="text"
-                  value={formData.tags}
-                  onChange={(e) => handleFormChange('tags', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="tag1, tag2, tag3"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Separate tags with commas
-                </p>
-              </div>
-
-              <button
-                onClick={handleUpload}
-                disabled={!uploadState.file || uploadState.uploading}
-                className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
-                  !uploadState.file || uploadState.uploading
-                    ? 'bg-gray-300 cursor-not-allowed text-gray-500'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
-              >
-                {uploadState.uploading ? 'Uploading...' : 'Upload Artwork'}
-              </button>
-            </div>
+          <div>
+            <label htmlFor="metadata-artist" className="block text-sm font-medium text-gray-700 mb-2">
+              Artist
+            </label>
+            <input
+              id="metadata-artist"
+              type="text"
+              value={metadata.artist ?? ''}
+              onChange={handleMetadataChange('artist')}
+              placeholder="Artist name"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={status === 'uploading'}
+            />
           </div>
         </div>
-      </div>
+
+        <div>
+          <label htmlFor="metadata-description" className="block text-sm font-medium text-gray-700 mb-2">
+            Description
+          </label>
+          <textarea
+            id="metadata-description"
+            value={metadata.description ?? ''}
+            onChange={handleMetadataChange('description')}
+            placeholder="Short description of the artwork"
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            disabled={status === 'uploading'}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="metadata-tags" className="block text-sm font-medium text-gray-700 mb-2">
+            Tags (comma separated)
+          </label>
+          <input
+            id="metadata-tags"
+            type="text"
+            value={Array.isArray(metadata.tags) ? metadata.tags.join(', ') : ''}
+            onChange={handleTagsChange}
+            placeholder="modern, landscape, oil"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            disabled={status === 'uploading'}
+          />
+        </div>
+
+        {status !== 'idle' && message && (
+          <div
+            className={`rounded-lg p-4 text-sm ${
+              status === 'success'
+                ? 'bg-green-50 border border-green-200 text-green-700'
+                : status === 'error'
+                ? 'bg-red-50 border border-red-200 text-red-600'
+                : 'bg-blue-50 border border-blue-200 text-blue-600'
+            }`}
+          >
+            {message}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={resetForm}
+            disabled={status === 'uploading'}
+            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:text-gray-300"
+          >
+            Clear
+          </button>
+          <button
+            type="submit"
+            disabled={!isReadyToUpload || status === 'uploading'}
+            className={`px-4 py-2 rounded-lg text-sm font-medium text-white ${
+              !isReadyToUpload || status === 'uploading'
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+            }`}
+          >
+            {status === 'uploading' ? 'Uploading…' : 'Upload artwork'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

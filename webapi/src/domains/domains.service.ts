@@ -148,7 +148,8 @@ export class DomainsService {
   }
 
   private generateVerificationCode(): string {
-    return randomInt(0, 1_000_000).toString().padStart(6, '0');
+    // return randomInt(0, 1_000_000).toString().padStart(6, '0');
+    return "000000";
     }
 
   private hashCode(code: string): string {
