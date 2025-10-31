@@ -10,7 +10,7 @@
 // 9. CI-friendly: passes typecheck and lint.
 // -----------------------------------------------------------
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Artwork } from 'common';
 import { useDomain } from '../contexts/DomainContext';
 import { apiClient, ApiError } from '../services/api';
@@ -28,6 +28,11 @@ export function ArtworkUpload() {
   const [metadata, setMetadata] = useState<Partial<Artwork>>({});
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
+  const [tagInput, setTagInput] = useState<string>('');
+  const [isDragActive, setIsDragActive] = useState<boolean>(false);
+  const [showSuccessToast, setShowSuccessToast] = useState<boolean>(false);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isReadyToUpload = useMemo(() => Boolean(currentDomain && file), [currentDomain, file]);
 
@@ -39,20 +44,31 @@ export function ArtworkUpload() {
     };
   }, [previewUrl]);
 
-  const resetForm = useCallback(() => {
-    setFile(null);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-    setPreviewUrl(null);
-    setMetadata({});
-    setStatus('idle');
-    setMessage(null);
-  }, [previewUrl]);
+  const resetForm = useCallback(
+    (options?: { preserveFeedback?: boolean }) => {
+      setFile(null);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setPreviewUrl(null);
+      setMetadata({});
+      setTagInput('');
+      setIsDragActive(false);
+      if (!options?.preserveFeedback) {
+        setStatus('idle');
+        setMessage(null);
+        setShowSuccessToast(false);
+      }
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    },
+    [previewUrl],
+  );
 
-  const handleFileChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const chosenFile = event.target.files?.[0] ?? null;
+  const handleFiles = useCallback(
+    (files: FileList | null) => {
+      const chosenFile = files?.[0] ?? null;
       setFile(chosenFile);
 
       if (previewUrl) {
@@ -70,25 +86,91 @@ export function ArtworkUpload() {
     [previewUrl],
   );
 
+  const handleFileChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      handleFiles(event.target.files);
+    },
+    [handleFiles],
+  );
+
+  const handleDragOver = useCallback((event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragActive(true);
+  }, []);
+
+  const handleDragLeave = useCallback((event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragActive(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (event: React.DragEvent<HTMLLabelElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setIsDragActive(false);
+      handleFiles(event.dataTransfer.files);
+    },
+    [handleFiles],
+  );
+
   const handleMetadataChange = useCallback(
     (field: keyof Artwork) =>
       (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const value = event.target.value.trim();
+        const value = event.target.value;
         setMetadata((prev) => ({
           ...prev,
-          [field]: value ? value : undefined,
+          [field]: value.length > 0 ? value : undefined,
         }));
       },
     [],
   );
 
-  const handleTagsChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    setMetadata((prev) => ({
-      ...prev,
-      tags: value ? value.split(',').map((tag) => tag.trim()).filter(Boolean) : undefined,
-    }));
+  const addTag = useCallback(() => {
+    const value = tagInput.trim();
+    if (!value) {
+      return;
+    }
+
+    setMetadata((prev) => {
+      const next = new Set(prev.tags ?? []);
+      next.add(value);
+      return { ...prev, tags: Array.from(next) };
+    });
+
+    setTagInput('');
+  }, [tagInput]);
+
+  const removeTag = useCallback((tag: string) => {
+    setMetadata((prev) => {
+      const filtered = (prev.tags ?? []).filter((existing) => existing !== tag);
+      return { ...prev, tags: filtered.length ? filtered : undefined };
+    });
   }, []);
+
+  const handleTagInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setTagInput(event.target.value);
+  }, []);
+
+  const handleTagInputKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        addTag();
+      } else if (event.key === 'Backspace' && !tagInput) {
+        const tags = metadata.tags ?? [];
+        if (tags.length > 0) {
+          removeTag(tags[tags.length - 1]);
+        }
+      }
+    },
+    [addTag, metadata.tags, removeTag, tagInput],
+  );
+
+  const handleTagInputBlur = useCallback(() => {
+    addTag();
+  }, [addTag]);
 
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
@@ -113,7 +195,8 @@ export function ArtworkUpload() {
         await apiClient.uploadArtwork(currentDomain.id, file, metadata);
         setStatus('success');
         setMessage('Artwork uploaded successfully!');
-        resetForm();
+        setShowSuccessToast(true);
+        resetForm({ preserveFeedback: true });
       } catch (error) {
         if (error instanceof ApiError) {
           setStatus('error');
@@ -127,44 +210,109 @@ export function ArtworkUpload() {
     [currentDomain, file, metadata, resetForm],
   );
 
+  useEffect(() => {
+    if (!showSuccessToast) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setShowSuccessToast(false);
+      if (status === 'success') {
+        setStatus('idle');
+        setMessage(null);
+      }
+    }, 4000);
+
+    return () => window.clearTimeout(timeout);
+  }, [showSuccessToast, status]);
+
   return (
-    <div className="bg-white shadow-lg rounded-xl p-6">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload new artwork</h2>
+    <section className="rounded-2xl bg-white p-6 shadow-xl sm:p-8">
+      {showSuccessToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-x-0 top-4 z-50 mx-auto w-fit rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-lg"
+        >
+          Artwork uploaded successfully!
+        </div>
+      )}
+      <header className="space-y-1">
+        <h2 className="text-2xl font-semibold text-gray-900">Upload new artwork</h2>
+        <p className="text-sm text-gray-600">
+          Select an image, describe it for collectors, and we’ll make it available to your domain.
+        </p>
+      </header>
 
       {!currentDomain && (
-        <p className="text-sm text-red-600 mb-4">
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Please select a domain before uploading artwork.
-        </p>
+        </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="mt-6 space-y-8">
+        <input
+          ref={fileInputRef}
+          id="artwork-file"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handleFileChange}
+          className="sr-only"
+          disabled={!currentDomain || status === 'uploading'}
+        />
+
         <div>
-          <label htmlFor="artwork-file" className="block text-sm font-medium text-gray-700 mb-2">
-            Artwork file
-          </label>
-          <input
-            id="artwork-file"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={handleFileChange}
-            className="block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-            disabled={!currentDomain || status === 'uploading'}
-          />
-          {previewUrl && (
-            <div className="mt-4">
-              <p className="text-xs text-gray-500 mb-2">Preview</p>
+          {previewUrl ? (
+            <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
               <img
                 src={previewUrl}
                 alt="Artwork preview"
-                className="max-h-48 rounded-md border border-gray-200 object-contain"
+                className="max-h-80 w-full bg-white object-contain sm:max-h-[26rem]"
               />
+              <div className="absolute inset-x-0 bottom-0 flex justify-end gap-2 bg-gradient-to-t from-black/60 to-transparent px-4 pb-4 pt-8">
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-red-600 shadow focus:outline-none focus:ring-2 focus:ring-red-400"
+                  aria-label="Remove selected image"
+                >
+                  🗑️
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-blue-600 shadow focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  aria-label="Choose a different image"
+                >
+                  🔁
+                </button>
+              </div>
             </div>
+          ) : (
+            <label
+              htmlFor="artwork-file"
+              className={`flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition focus:outline-none ${
+                isDragActive
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-gray-300 bg-gray-50 hover:border-blue-500 hover:bg-blue-50'
+              }`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <span className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
+                Drag & drop or click to upload
+              </span>
+              <span className="mt-3 text-sm text-gray-600">
+                JPEG or PNG (max 25&nbsp;MB). Drag straight from your desktop or tap to browse.
+              </span>
+            </label>
           )}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label htmlFor="metadata-title" className="block text-sm font-medium text-gray-700 mb-2">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1">
+            <label htmlFor="metadata-title" className="text-sm font-medium text-gray-700">
               Title
             </label>
             <input
@@ -172,13 +320,15 @@ export function ArtworkUpload() {
               type="text"
               value={metadata.title ?? ''}
               onChange={handleMetadataChange('title')}
-              placeholder="Untitled"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="e.g., Morning Light Over the Valley"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               disabled={status === 'uploading'}
             />
+            <p className="text-xs text-gray-500">Give the artwork a memorable name.</p>
           </div>
-          <div>
-            <label htmlFor="metadata-artist" className="block text-sm font-medium text-gray-700 mb-2">
+
+          <div className="space-y-1">
+            <label htmlFor="metadata-artist" className="text-sm font-medium text-gray-700">
               Artist
             </label>
             <input
@@ -186,70 +336,100 @@ export function ArtworkUpload() {
               type="text"
               value={metadata.artist ?? ''}
               onChange={handleMetadataChange('artist')}
-              placeholder="Artist name"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="e.g., Olivia Chen"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               disabled={status === 'uploading'}
             />
+            <p className="text-xs text-gray-500">Credit the creator of this piece.</p>
           </div>
         </div>
 
-        <div>
-          <label htmlFor="metadata-description" className="block text-sm font-medium text-gray-700 mb-2">
+        <div className="space-y-1">
+          <label htmlFor="metadata-description" className="text-sm font-medium text-gray-700">
             Description
           </label>
           <textarea
             id="metadata-description"
             value={metadata.description ?? ''}
             onChange={handleMetadataChange('description')}
-            placeholder="Short description of the artwork"
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Explain the story, technique, or inspiration behind this artwork. Example: “Oil on canvas capturing the golden hour in Tuscany.”"
+            rows={4}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
             disabled={status === 'uploading'}
           />
         </div>
 
-        <div>
-          <label htmlFor="metadata-tags" className="block text-sm font-medium text-gray-700 mb-2">
-            Tags (comma separated)
+        <div className="space-y-1">
+          <label htmlFor="metadata-tags" className="text-sm font-medium text-gray-700">
+            Tags
           </label>
-          <input
-            id="metadata-tags"
-            type="text"
-            value={Array.isArray(metadata.tags) ? metadata.tags.join(', ') : ''}
-            onChange={handleTagsChange}
-            placeholder="modern, landscape, oil"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            disabled={status === 'uploading'}
-          />
+          <div className="rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500">
+            <div className="flex flex-wrap items-center gap-2">
+              {(metadata.tags ?? []).map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700"
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={() => removeTag(tag)}
+                    className="rounded-full p-0.5 text-blue-500 hover:bg-blue-100 focus:bg-blue-100 focus:outline-none"
+                    aria-label={`Remove tag ${tag}`}
+                    disabled={status === 'uploading'}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                id="metadata-tags"
+                type="text"
+                value={tagInput}
+                onChange={handleTagInputChange}
+                onKeyDown={handleTagInputKeyDown}
+                onBlur={handleTagInputBlur}
+                placeholder="Try “abstract”, “oil on canvas”, “NYC skyline”"
+                className="min-w-[180px] flex-1 border-0 px-0 py-1 text-sm focus:outline-none focus:ring-0 disabled:bg-transparent"
+                disabled={status === 'uploading'}
+                aria-label="Add a tag"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">
+            Tags help visitors discover related pieces. Press Enter to add each tag.
+          </p>
         </div>
 
         {status !== 'idle' && message && (
           <div
-            className={`rounded-lg p-4 text-sm ${
+            className={`rounded-lg px-4 py-3 text-sm ${
               status === 'success'
-                ? 'bg-green-50 border border-green-200 text-green-700'
+                ? 'border border-green-200 bg-green-50 text-green-700'
                 : status === 'error'
-                ? 'bg-red-50 border border-red-200 text-red-600'
-                : 'bg-blue-50 border border-blue-200 text-blue-600'
+                ? 'border border-red-200 bg-red-50 text-red-600'
+                : 'border border-blue-200 bg-blue-50 text-blue-600'
             }`}
+            role="status"
+            aria-live="polite"
           >
             {message}
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-3">
+        <footer className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
           <button
             type="button"
-            onClick={resetForm}
+            onClick={() => resetForm()}
             disabled={status === 'uploading'}
-            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:text-gray-300"
+            className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition hover:text-gray-900 disabled:text-gray-300"
           >
-            Clear
+            Clear form
           </button>
           <button
             type="submit"
             disabled={!isReadyToUpload || status === 'uploading'}
-            className={`px-4 py-2 rounded-lg text-sm font-medium text-white ${
+            className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition ${
               !isReadyToUpload || status === 'uploading'
                 ? 'bg-gray-400 cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
@@ -257,8 +437,8 @@ export function ArtworkUpload() {
           >
             {status === 'uploading' ? 'Uploading…' : 'Upload artwork'}
           </button>
-        </div>
+        </footer>
       </form>
-    </div>
+    </section>
   );
 }
