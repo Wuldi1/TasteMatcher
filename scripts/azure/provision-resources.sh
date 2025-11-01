@@ -6,8 +6,9 @@ set -euo pipefail
 
 ENV=${1:-dev}
 LOCATION=${2:-israelcentral}
-EMAIL_LOCATION=${3:-"global"}
-EMAIL_DATA_LOCATION=${4:-"UnitedStates"}
+EMAIL_LOCATION=${3:-"global"} # not supported in israelcentral as of now
+EMAIL_DATA_LOCATION=${4:-"UnitedStates"} # not supported in israelcentral as of now
+COMPUTER_VISION_LOCATION=${5:-"francecentral"} # not supported in israelcentral as of now
 
 if [ -z "$ENV" ]; then
   echo "Usage: $0 <env> <location>"
@@ -25,6 +26,7 @@ FUNCAPP_NAME="tastematcher-${ENV}-func"            # function app name (must be 
 APP_PLAN="tastematcher-${ENV}-plan"
 STORAGE_ACCOUNT_NAME="tastematcher${ENV}sa"  # <= 24 chars ideally, no hyphens
 COMMUNICATION_NAME="tastematcher-${ENV}-comm"
+VISION_NAME="tastematcher-${ENV}-vision"           # computer vision resource name
 
 
 echo "Environment: $ENV, Location: $LOCATION"
@@ -35,6 +37,7 @@ echo "Cosmos DB account: $COSMOS_NAME"
 echo "Key Vault: $KV_NAME"
 echo "Function App: $FUNCAPP_NAME"
 echo "Communication resource: $COMMUNICATION_NAME"
+echo "Computer Vision resource: $VISION_NAME"
 
 # Ensure az CLI logged in
 if ! az account show >/dev/null 2>&1; then
@@ -229,6 +232,27 @@ az search service create \
 # Get search admin key
 SEARCH_KEY=$(az search admin-key show --service-name "$SEARCH_NAME" --resource-group "$RG_NAME" --query primaryKey -o tsv)
 
+# Create Azure Computer Vision (AI Vision) resource
+echo "Creating Azure Computer Vision resource: $VISION_NAME (SKU: S1)..."
+if az cognitiveservices account show --name "$VISION_NAME" --resource-group "$RG_NAME" >/dev/null 2>&1; then
+  echo "Computer Vision resource $VISION_NAME already exists. Skipping creation."
+else
+  az cognitiveservices account create \
+    --name "$VISION_NAME" \
+    --resource-group "$RG_NAME" \
+    --location "$COMPUTER_VISION_LOCATION" \
+    --kind ComputerVision \
+    --sku S1 \
+    --yes \
+    -o none
+fi
+
+# Get Computer Vision endpoint and key
+VISION_ENDPOINT=$(az cognitiveservices account show --name "$VISION_NAME" --resource-group "$RG_NAME" --query properties.endpoint -o tsv)
+VISION_KEY=$(az cognitiveservices account keys list --name "$VISION_NAME" --resource-group "$RG_NAME" --query key1 -o tsv)
+
+echo "Computer Vision endpoint: $VISION_ENDPOINT"
+
 # Create an App Service plan (consumption) and Function App
 # Function App requires a storage account; we will reuse the storage account above
 echo "Creating App Service plan and Function App..."
@@ -285,6 +309,8 @@ az keyvault secret set --vault-name "$KV_NAME" --name "CommunicationConnectionSt
 az keyvault secret set --vault-name "$KV_NAME" --name "CommunicationEmailSender" --value "$AZURE_EMAIL_SENDER_ADDRESS" -o none
 az keyvault secret set --vault-name "$KV_NAME" --name "JwtSecret" --value "$JWT_SECRET" -o none
 az keyvault secret set --vault-name "$KV_NAME" --name "SearchAdminKey" --value "$SEARCH_KEY" -o none
+az keyvault secret set --vault-name "$KV_NAME" --name "ComputerVisionEndpoint" --value "$VISION_ENDPOINT" -o none
+az keyvault secret set --vault-name "$KV_NAME" --name "ComputerVisionKey" --value "$VISION_KEY" -o none
 az keyvault secret set --vault-name "$KV_NAME" --name "ServicePrincipalAppId" --value "$SP_APP_ID" -o none
 az keyvault secret set --vault-name "$KV_NAME" --name "ServicePrincipalPassword" --value "$SP_PASSWORD" -o none
 az keyvault secret set --vault-name "$KV_NAME" --name "ServicePrincipalTenant" --value "$SP_TENANT" -o none
@@ -304,12 +330,16 @@ AZURE_STORAGE_ACCOUNT=${STORAGE_ACCOUNT_NAME}
 AZURE_STORAGE_ACCOUNT_KEY=${STORAGE_KEY}
 AZURE_BLOB_CONTAINER_ORIGINALS=originals
 AZURE_BLOB_CONTAINER_DERIVATIVES=derivatives
-AZURE_QUEUE_NAME=${QUEUE_NAME}
+IMAGE_PROCESSING_QUEUE_NAME=${QUEUE_NAME}
 
 # Search
 AZURE_SEARCH_ENDPOINT=https://${SEARCH_NAME}.search.windows.net
 AZURE_SEARCH_ADMIN_KEY=${SEARCH_KEY}
 AZURE_SEARCH_INDEX_NAME=artworks-index
+
+# Computer Vision (AI Vision)
+AZURE_AI_VISION_ENDPOINT=${VISION_ENDPOINT}
+AZURE_AI_VISION_KEY=${VISION_KEY}
 
 # Cosmos DB
 DATABASE_URL="${DATABASE_URL}"
@@ -338,6 +368,8 @@ echo " - Storage account: $STORAGE_ACCOUNT_NAME"
 echo " - Blob endpoint: $STORAGE_BLOB_ENDPOINT"
 echo " - Queue name: $QUEUE_NAME"
 echo " - Cognitive Search name: $SEARCH_NAME"
+echo " - Computer Vision name: $VISION_NAME"
+echo " - Computer Vision endpoint: $VISION_ENDPOINT"
 echo " - Cosmos DB account: $COSMOS_NAME"
 echo " - Cosmos DB database: $COSMOS_DATABASE"
 echo " - Cosmos DB endpoint: $COSMOS_DB_ENDPOINT"
@@ -352,7 +384,8 @@ echo "Next steps:"
 echo " 1. Update Prisma schema to use MongoDB connector for Cosmos DB"
 echo " 2. Create the Cognitive Search index using scripts/azure/create-search-index.sh"
 echo " 3. Deploy your Azure Function code to $FUNCAPP_NAME and ensure it has access to Key Vault"
-echo " 4. Use .env.${ENV} in your backend for local testing (but prefer Key Vault in prod)"
+echo " 4. Configure Computer Vision for image vectorization in your Functions app"
+echo " 5. Use .env.${ENV} in your backend for local testing (but prefer Key Vault in prod)"
 
 
 
@@ -361,4 +394,5 @@ echo " 4. Use .env.${ENV} in your backend for local testing (but prefer Key Vaul
 # troubleshooting tips:
 # In case of registration issues, you can run "az provider register --namespace Microsoft.KeyVault" and similar for other services.
 # In case of registration issues, you can run "az provider register --namespace Microsoft.DocumentDB" and similar for other services.
+# In case of registration issues, you can run "az provider register --namespace Microsoft.CognitiveServices" for Computer Vision.
 ###

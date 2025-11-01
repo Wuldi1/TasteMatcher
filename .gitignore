@@ -11,12 +11,6 @@ build/
 # Testing
 coverage/
 
-# Environment
-.env
-.env.local
-.env.*.local
-local.settings.json
-
 # IDE
 .vscode/
 .idea/

@@ -1,6 +1,7 @@
 import { BlobServiceClient } from '@azure/storage-blob';
-import { createLogger } from '../lib/logger';
-import type { Config } from '../lib/config';
+import { createLogger } from '../../lib/logger';
+import type { Config } from '../../lib/config';
+import { retryWithBackoff } from '../../utils/retry';
 
 const logger = createLogger('BlobService');
 
@@ -12,7 +13,7 @@ export class BlobService {
 
   constructor(config: Config) {
     this.client = BlobServiceClient.fromConnectionString(
-      config.storageConnectionString
+      config.azure.storageConnectionString
     );
   }
 
@@ -20,16 +21,13 @@ export class BlobService {
    * Downloads a blob as a Buffer with exponential backoff retry
    */
   async downloadBlob(containerName: string, blobName: string): Promise<Buffer> {
-    const maxRetries = 3;
-    const baseDelay = 1000;
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
+    return await retryWithBackoff<Buffer>
+      (async () => {
         logger.debug({
           msg: 'Downloading blob',
           container: containerName,
           blob: blobName,
-          attempt: attempt + 1,
         });
 
         const containerClient = this.client.getContainerClient(containerName);
@@ -46,7 +44,7 @@ export class BlobService {
         }
 
         const buffer = Buffer.concat(chunks);
-        
+
         logger.debug({
           msg: 'Blob downloaded successfully',
           container: containerName,
@@ -55,34 +53,24 @@ export class BlobService {
         });
 
         return buffer;
-
-      } catch (error) {
-        const isLastAttempt = attempt === maxRetries;
-        
-        logger.warn({
-          msg: 'Blob download failed',
+      },
+        {
+          maxAttempts: 5,
+          initialDelayMs: 1000,
+          maxDelayMs: 10000,
+          backoffMultiplier: 2,
+        },
+        `downloadBlob-${containerName}-${blobName}`,
+        logger)
+      .catch((err: Error) => {
+        logger.error({
+          msg: 'Failed to download blob after retries',
           container: containerName,
           blob: blobName,
-          attempt: attempt + 1,
-          error: error instanceof Error ? error.message : 'Unknown',
-          willRetry: !isLastAttempt,
+          err,
         });
-
-        if (isLastAttempt) {
-          throw new Error(
-            `Failed to download blob after ${maxRetries + 1} attempts: ${
-              error instanceof Error ? error.message : 'Unknown error'
-            }`
-          );
-        }
-
-        // Exponential backoff
-        const delay = baseDelay * Math.pow(2, attempt);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-
-    throw new Error('Unexpected: retry loop completed without return or throw');
+        throw err;
+      });
   }
 
   /**
@@ -97,17 +85,37 @@ export class BlobService {
     const containerClient = this.client.getContainerClient(containerName);
     const blobClient = containerClient.getBlockBlobClient(blobName);
 
-    await blobClient.upload(buffer, buffer.length, {
-      blobHTTPHeaders: { blobContentType: contentType },
-    });
+    return retryWithBackoff<string>(
+      async () => {
+        logger.debug({
+          msg: 'Uploading blob',
+          container: containerName,
+          blob: blobName,
+          sizeBytes: buffer.length,
+        });
 
-    logger.debug({
-      msg: 'Blob uploaded',
-      container: containerName,
-      blob: blobName,
-      sizeBytes: buffer.length,
-    });
+        await blobClient.upload(buffer, buffer.length, {
+          blobHTTPHeaders: { blobContentType: contentType },
+        });
 
-    return blobClient.url;
+        return blobClient.url;
+      },
+      {
+        maxAttempts: 5,
+        initialDelayMs: 1000,
+        maxDelayMs: 10000,
+        backoffMultiplier: 2,
+      },
+      `uploadBlob-${containerName}-${blobName}`,
+      logger
+    ).catch((err: Error) => {
+      logger.error({
+        msg: 'Failed to upload blob after retries',
+        container: containerName,
+        blob: blobName,
+        err,
+      });
+      throw err;
+    });
   }
 }

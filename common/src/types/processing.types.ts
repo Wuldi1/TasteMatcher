@@ -11,6 +11,8 @@
 // 10. Frontend-specific: UI changes must be responsive (mobile + desktop) and smooth (no visual regressions). Include accessibility considerations (semantic markup, aria attributes, keyboard navigation, focus management) and automated accessibility checks (axe, Playwright/accessibility audit) where applicable.
 // -----------------------------------------------------------
 
+import { ThumbnailInfo } from "./artwork.types";
+
 /**
  * Message format for image processing queue
  */
@@ -28,28 +30,9 @@ export interface ImageProcessingQueueMessage {
   /** Original content type */
   contentType: string;
   /** Timestamp when uploaded */
-  uploadedAt: string;
+  uploadedAt: number;
   /** Optional correlation ID for tracing */
   correlationId?: string;
-}
-
-/**
- * Thumbnail size configuration
- */
-export interface ThumbnailSize {
-  name: 'small' | 'medium' | 'large';
-  width: number;
-  height: number;
-}
-
-/**
- * Result of thumbnail generation
- */
-export interface ThumbnailResult {
-  size: ThumbnailSize['name'];
-  blobUrl: string;
-  width: number;
-  height: number;
 }
 
 /**
@@ -67,7 +50,7 @@ export interface VectorEmbedding {
  */
 export interface ImageProcessingResult {
   artworkId: string;
-  thumbnails: ThumbnailResult[];
+  thumbnails: ThumbnailInfo[];
   vectorEmbedding: VectorEmbedding;
   processedAt: string;
   durationMs: number;

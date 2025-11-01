@@ -1,4 +1,4 @@
-import { Artwork, ThumbnailInfo } from "./artwork";
+import { Artwork, ThumbnailInfo } from "./artwork.types";
 
 export type UploadStatus = 'pending' | 'enqueued' | 'processing' | 'completed' | 'failed';
 

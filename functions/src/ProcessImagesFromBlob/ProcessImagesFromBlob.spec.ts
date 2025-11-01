@@ -1,9 +1,9 @@
 import { InvocationContext } from '@azure/functions';
-import { processImagesFromBlob } from './ProcessImagesFromBlob';
+import { processImagesFromBlob } from '.';
 import { ThumbnailService } from './services/ThumbnailService';
 import { VectorizationService } from './services/VectorizationService';
-import { SearchIndexService } from './services/SearchIndexService';
-import { BlobService } from './services/BlobService';
+import { SearchIndexService } from '../services/SearchIndexService';
+import { BlobService } from '../services/BlobService';
 import type { ImageProcessingQueueMessage } from '@tastematcher/common';
 
 jest.mock('./services/ThumbnailService');
@@ -52,8 +52,8 @@ describe('ProcessImagesFromBlob', () => {
 
     const mockImageBuffer = Buffer.from('fake-image-data');
     const mockThumbnails = [
-      { size: 'small' as const, blobUrl: 'https://blob/small.jpg', width: 150, height: 150 },
-      { size: 'medium' as const, blobUrl: 'https://blob/medium.jpg', width: 300, height: 300 },
+      { blobUrl: 'https://blob/small.jpg', width: 150, height: 150 },
+      { blobUrl: 'https://blob/medium.jpg', width: 300, height: 300 },
     ];
     const mockVector = { vector: new Array(1536).fill(0.1), model: 'ada-002' };
 
@@ -83,7 +83,7 @@ describe('ProcessImagesFromBlob', () => {
       containerName: 'uploads',
       blobName: 'missing.jpg',
       contentType: 'image/jpeg',
-      uploadedAt: new Date().toISOString(),
+      uploadedAt: new Date().getTime(),
     };
 
     mockBlobService.downloadBlob.mockRejectedValue(new Error('Blob not found'));

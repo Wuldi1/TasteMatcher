@@ -4,11 +4,10 @@
 // 3. Unit tests in config.spec.ts.
 // 4. Structured logging for missing config.
 // -----------------------------------------------------------
+import { ThumbnailSize } from '@tastematcher/common';
 import { config as loadEnv } from 'dotenv';
 import { resolve } from 'path';
-
 loadEnv({ path: resolve(__dirname, '..', '..', '.env') });
-
 
 /**
  * Application configuration loaded from environment variables.
@@ -29,7 +28,7 @@ export interface AppConfig {
     maxDequeueCount: number;
   };
   thumbnails: {
-    sizes: Array<{ width: number; height: number; suffix: string }>;
+    sizes: ThumbnailSize[];
   };
   retry: {
     maxAttempts: number;
@@ -50,7 +49,7 @@ export function loadConfig(): AppConfig {
   const required = [
     'AZURE_STORAGE_CONNECTION_STRING',
     'AZURE_SEARCH_ENDPOINT',
-    'AZURE_SEARCH_KEY',
+    'AZURE_SEARCH_ADMIN_KEY',
     'AZURE_SEARCH_INDEX_NAME',
     'AZURE_AI_VISION_ENDPOINT',
     'AZURE_AI_VISION_KEY',
@@ -65,8 +64,8 @@ export function loadConfig(): AppConfig {
     azure: {
       storageConnectionString: process.env.AZURE_STORAGE_CONNECTION_STRING!,
       searchEndpoint: process.env.AZURE_SEARCH_ENDPOINT!,
-      searchKey: process.env.AZURE_SEARCH_KEY!,
-      searchIndexName: process.env.AZURE_SEARCH_INDEX_NAME || 'artworks',
+      searchKey: process.env.AZURE_SEARCH_ADMIN_KEY!,
+      searchIndexName: process.env.AZURE_SEARCH_INDEX_NAME!,
       aiVisionEndpoint: process.env.AZURE_AI_VISION_ENDPOINT!,
       aiVisionKey: process.env.AZURE_AI_VISION_KEY!,
     },
@@ -77,9 +76,9 @@ export function loadConfig(): AppConfig {
     },
     thumbnails: {
       sizes: [
-        { width: 150, height: 150, suffix: 'thumb_sm' },
-        { width: 400, height: 400, suffix: 'thumb_md' },
-        { width: 800, height: 800, suffix: 'thumb_lg' },
+        { width: 150, height: 150 },
+        { width: 400, height: 400 },
+        { width: 800, height: 800 },
       ],
     },
     retry: {

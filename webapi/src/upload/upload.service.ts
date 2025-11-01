@@ -28,7 +28,7 @@ export class UploadService {
       account: this.getRequiredEnv('AZURE_STORAGE_ACCOUNT'),
       accountKey: this.getRequiredEnv('AZURE_STORAGE_ACCOUNT_KEY'),
       originalsContainer: process.env.AZURE_BLOB_CONTAINER_ORIGINALS || 'originals',
-      queueName: process.env.AZURE_QUEUE_NAME || 'tastematcher-dev-indexing-jobs',
+      queueName: process.env.IMAGE_PROCESSING_QUEUE_NAME || 'tastematcher-dev-indexing-jobs',
       maxUploadBytes: parseInt(process.env.MAX_UPLOAD_BYTES || '26214400'), // 25MB default
       allowedMimeTypes: ['image/jpeg', 'image/jpeg', 'image/png'],
     };

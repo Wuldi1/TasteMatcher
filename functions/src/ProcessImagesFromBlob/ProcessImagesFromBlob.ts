@@ -12,14 +12,16 @@
 // -----------------------------------------------------------
 
 import { app, InvocationContext } from '@azure/functions';
+import { AzureKeyCredential, SearchClient } from '@azure/search-documents';
 import type { ImageProcessingQueueMessage } from '@tastematcher/common';
-import { createLogger } from './lib/logger';
-import { BlobService } from './services/BlobService';
-import { ThumbnailService } from './services/ThumbnailService';
-import { VectorizationService } from './services/VectorizationService';
-import { SearchIndexService } from './services/SearchIndexService';
-import { config } from './lib/config';
-import { metrics } from './lib/metrics';
+import { createLogger } from '../lib/logger';
+import { BlobService } from '../services/Blob/BlobService';
+import { ThumbnailService } from '../services/Thumbnail/ThumbnailService';
+import { VectorizationService } from '../services/Vectorization/VectorizationService';
+import { SearchIndexService } from '../services/SearchIndex/SearchIndexService';
+import { loadConfig } from '../lib/config';
+import { metrics } from '../lib/metrics';
+import { retryWithBackoff } from '../utils/retry';
 
 const logger = createLogger('ProcessImagesFromBlob');
 
@@ -28,7 +30,7 @@ const logger = createLogger('ProcessImagesFromBlob');
  */
 function validateMessage(message: unknown): asserts message is ImageProcessingQueueMessage {
   const msg = message as Partial<ImageProcessingQueueMessage>;
-  
+
   if (!msg.messageId || typeof msg.messageId !== 'string') {
     throw new Error('Invalid message: messageId is required');
   }
@@ -83,6 +85,45 @@ export async function processImagesFromBlob(
       domainId: message.domainId,
     });
 
+    // Initialize search client for idempotency check
+    var config = loadConfig();
+
+    const searchClient = new SearchClient(
+      config.azure.searchEndpoint,
+      config.azure.searchIndexName,
+      new AzureKeyCredential(config.azure.searchKey)
+    );
+
+    /**
+     * Check if message was already processed (idempotency).
+    */
+
+    await retryWithBackoff(
+      async () => {
+        logger.debug({ artworkId: message.artworkId, messageId: message.messageId, correlationId: message.correlationId || correlationId }, 'Checking idempotency');
+        const doc = await searchClient.getDocument(message.artworkId);
+        const alreadyProcessed = doc && (doc as { processedMessageId?: string }).processedMessageId === message.messageId;
+
+        if (alreadyProcessed) {
+          logger.info({ artworkId: message.artworkId, messageId: message.messageId, correlationId: message.correlationId || correlationId }, 'Document already processed');
+          throw new Error('Document already processed');
+        }
+      }, {
+      maxAttempts: 3,
+      initialDelayMs: 1000,
+      maxDelayMs: 30000,
+      backoffMultiplier: 2,
+    }, message.artworkId, logger)
+      .catch(err => {
+        logger.error({
+          msg: 'Failed to check idempotency after retries',
+          artworkId: message.artworkId,
+          messageId: message.messageId,
+          err,
+        });
+        throw err;
+      });
+
     // Initialize services
     const blobService = new BlobService(config);
     const thumbnailService = new ThumbnailService(config);
@@ -131,10 +172,12 @@ export async function processImagesFromBlob(
       correlationId,
     });
 
-    const vectorEmbedding = await vectorizationService.generateEmbedding(imageBuffer);
+    const vectorEmbedding = await vectorizationService.generateEmbedding(imageBuffer, correlationId);
 
     metrics.increment('image_processing.vectorized', {
+      artworkId: message.artworkId,
       domainId: message.domainId,
+      correlationId,
     });
 
     // Step 4: Index in cognitive search
@@ -172,7 +215,7 @@ export async function processImagesFromBlob(
 
   } catch (error) {
     const durationMs = Date.now() - start;
-    
+
     logger.error({
       msg: 'Image processing failed',
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -190,9 +233,10 @@ export async function processImagesFromBlob(
   }
 }
 
+var config = loadConfig();
 // Register Azure Function with queue trigger
 app.storageQueue('ProcessImagesFromBlob', {
-  queueName: config.queueName,
-  connection: 'STORAGE_CONNECTION_STRING',
+  queueName: config.azure.imageProcessingQueueName,
+  connection: config.azure.storageConnectionString,
   handler: processImagesFromBlob,
 });

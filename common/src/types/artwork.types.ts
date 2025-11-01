@@ -1,4 +1,3 @@
-export type ThumbnailSize = 'small' | 'medium' | 'large';
 export type ArtworkMetadata = Record<string, unknown>;
 
 export interface Artwork {
@@ -15,9 +14,16 @@ export interface Artwork {
   metadata?: ArtworkMetadata; // allow additional metadata fields
 }
 
-export interface ThumbnailInfo {
-  size: ThumbnailSize;
-  url: string;
+export interface ThumbnailSize {
   width: number;
   height: number;
+}
+
+export interface ThumbnailInfo extends ThumbnailSize {
+  url: string;
+}
+
+export interface ThumbnailGenerationResult extends ThumbnailSize {
+  buffer: Buffer;
+  sizeBytes: number;
 }

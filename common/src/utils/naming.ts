@@ -11,6 +11,7 @@
 // -----------------------------------------------------------
 
 import assert from 'node:assert/strict';
+import { ThumbnailInfo } from '../types/artwork.types';
 
 /**
  * Ensures IDs follow UUID-like format for naming functions.
@@ -53,3 +54,17 @@ export const getQueueName = (env: string): string => {
 };
 
 export const getQueueDlqName = (env: string): string => `${getQueueName(env)}-dlq`;
+
+// Returns thumbnail size string based on dimensions - Small, Medium, Large
+export const getThumbnailSizeFromDimensions = (width: number, height: number): string => {
+  const size = Math.max(width, height);
+
+  switch (true) {
+    case size <= 150:
+      return 'Small';
+    case size <= 400:
+      return 'Medium';
+    default:
+      return 'Large';
+  }
+};

@@ -1,27 +1,42 @@
+import { config as loadEnv } from 'dotenv';
+import { resolve } from 'path';
+loadEnv({ path: resolve(__dirname, '..', '..', '..', '.env') });
+
 export interface Config {
-  storageConnectionString: string;
-  queueName: string;
-  searchEndpoint: string;
-  searchApiKey: string;
-  searchIndexName: string;
-  openaiApiKey: string;
-  openaiEmbeddingModel: string;
+  azure: {
+    storageConnectionString: string;
+    imageProcessingQueueName: string;
+    searchEndpoint: string;
+    searchKey: string;
+    searchIndexName: string;
+    aiVisionEndpoint: string;
+    aiVisionKey: string;
+  };
 }
 
-function getEnvVar(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
+export function loadConfig(): Config {
+  const required = [
+    'AzureWebJobsStorage',
+    'AZURE_SEARCH_ENDPOINT',
+    'AZURE_SEARCH_ADMIN_KEY',
+    'AZURE_AI_VISION_ENDPOINT',
+    'AZURE_AI_VISION_KEY',
+  ];
+
+  const missing = required.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
-  return value;
-}
 
-export const config: Config = {
-  storageConnectionString: getEnvVar('STORAGE_CONNECTION_STRING'),
-  queueName: getEnvVar('QUEUE_NAME'),
-  searchEndpoint: getEnvVar('SEARCH_ENDPOINT'),
-  searchApiKey: getEnvVar('SEARCH_API_KEY'),
-  searchIndexName: getEnvVar('SEARCH_INDEX_NAME'),
-  openaiApiKey: getEnvVar('OPENAI_API_KEY'),
-  openaiEmbeddingModel: getEnvVar('OPENAI_EMBEDDING_MODEL'),
-};
+  return {
+    azure: {
+      storageConnectionString: process.env.AzureWebJobsStorage!,
+      imageProcessingQueueName: process.env.IMAGE_PROCESSING_QUEUE_NAME!,
+      searchEndpoint: process.env.AZURE_SEARCH_ENDPOINT!,
+      searchKey: process.env.AZURE_SEARCH_ADMIN_KEY!,
+      searchIndexName: process.env.AZURE_SEARCH_INDEX_NAME!,
+      aiVisionEndpoint: process.env.AZURE_AI_VISION_ENDPOINT!,
+      aiVisionKey: process.env.AZURE_AI_VISION_KEY!,
+    },
+  };
+}
