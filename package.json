@@ -4,7 +4,7 @@
   "private": true,
   "workspaces": [
     "webapi",
-    "workers",
+    "functions",
     "frontend",
     "common"
   ],
@@ -12,9 +12,9 @@
     "install:all": "npm install",
     "build:common": "npm run build --workspace=common",
     "build:webapi": "npm run build:common && npm run build --workspace=webapi",
-    "build:workers": "npm run build:common && npm run build --workspace=workers",
+    "build:functions": "npm run build:common && npm run build --workspace=functions",
     "dev:webapi": "npm run build:common && npm run dev --workspace=webapi",
-    "dev:workers": "npm run build:common && npm run dev --workspace=workers"
+    "dev:functions": "npm run build:common && npm run dev --workspace=functions"
   },
   "devDependencies": {
     "eslint": "^9.38.0",
@@ -23,5 +23,14 @@
     "pnpm": "^10.20.0",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.8.0",
+    "@azure/search-documents": "^12.2.0",
+    "@azure/storage-blob": "^12.29.1",
+    "dotenv": "^17.2.3",
+    "functions": "^1.0.9",
+    "path": "^0.12.7",
+    "pino": "^10.1.0"
   }
 }

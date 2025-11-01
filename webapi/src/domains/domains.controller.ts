@@ -8,7 +8,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { DomainsService } from './domains.service';
-import { Domain, DomainVerificationResultResponse } from 'common';
+import { Domain, DomainVerificationResultResponse } from '@tastematcher/common';
 import { DomainDto } from './dto/domain.dto';
 
 @Controller('domain')

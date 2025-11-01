@@ -4,7 +4,7 @@ import { BlobServiceClient, StorageSharedKeyCredential, BlockBlobClient } from '
 import { QueueServiceClient, StorageSharedKeyCredential as QueueCredential } from '@azure/storage-queue';
 import { CosmosService } from '../cosmos/cosmos.service';
 import { v4 as uuidv4 } from 'uuid';
-import { IndexingJobMessage, ArtworkMetadata, Artwork, ProcessingStatus } from 'common';
+import { IndexingJobMessage, Artwork, ProcessingStatus } from '@tastematcher/common';
 
 interface UploadConfig {
   account: string;

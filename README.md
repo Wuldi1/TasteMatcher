@@ -1,8 +1,10 @@
-# TasteMatcher Application
+# TasteMatcher
 
-Welcome to the TasteMatcher application! This project is structured to facilitate local development and execution of both the frontend and backend components. Below is an overview of the project structure and how to get started.
+AI-powered art matching platform with semantic search and recommendation engine.
 
-## Project Structure
+## Monorepo Structure
+
+This project uses pnpm workspaces:
 
 ```
 tastematcher

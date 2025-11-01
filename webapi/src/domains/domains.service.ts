@@ -6,12 +6,12 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { createHash, randomInt } from 'crypto';
+import { createHash } from 'crypto';
 import { sign } from 'jsonwebtoken';
 import {
   Domain,
   DomainVerificationResultResponse,
-} from 'common';
+} from '@tastematcher/common';
 import { DomainDto } from './dto/domain.dto';
 import { CosmosService } from '../cosmos/cosmos.service';
 import { EmailService } from '../email/email.service';

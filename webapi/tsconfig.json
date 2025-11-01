@@ -16,8 +16,8 @@
     "emitDecoratorMetadata": true,
     "composite": true,
     "paths": {
-      "common": ["../common/src"],
-      "common/*": ["../common/src/*"]
+      "@tastematcher/common": ["../common/src"],
+      "@tastematcher/common/*": ["../common/src/*"]
     }
   },
   "include": ["src/**/*"],

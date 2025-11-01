@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
-import { ProcessingStatus } from 'common';
+import { ProcessingStatus } from '@tastematcher/common';
 
 describe('UploadController', () => {
   let controller: UploadController;

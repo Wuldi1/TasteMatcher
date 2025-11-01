@@ -1,0 +1,50 @@
+// ---------- CODEGEN CHECKLIST (must be satisfied) ----------
+// 1. Uses TypeScript strict types (no `any`). If any `any` present, justify with comment.
+// 2. Uses shared `common` types for API contracts where applicable.
+// 3. Includes unit tests written first (test file present next to implementation).
+// 4. Adds structured logging at function entry/exit and on errors.
+// 5. Adds at least one assertion or guard for input validation.
+// 6. No duplicate logic — reuse existing service/util or extract shared module.
+// 7. Adds or updates README or docs if public API changes.
+// 8. Adds meaningful JSDoc for exported functions/classes.
+// 9. CI-friendly: code passes lint, typecheck, and tests locally.
+// -----------------------------------------------------------
+
+import {
+  getDerivativeBlobPath,
+  getOriginalBlobPath,
+  getQueueDlqName,
+  getQueueName,
+  getSearchDocId,
+} from '../naming';
+
+describe('naming utils', () => {
+  const domainId = '11111111-1111-1111-1111-111111111111';
+  const artId = '22222222-2222-2222-2222-222222222222';
+
+  it('returns original blob path', () => {
+    expect(getOriginalBlobPath(domainId, artId, 'jpg')).toBe(
+      `${domainId}/artworks/${artId}/original.jpg`,
+    );
+  });
+
+  it('returns derivative path', () => {
+    expect(getDerivativeBlobPath(domainId, artId, 320)).toBe(
+      `${domainId}/artworks/${artId}/thumb-320.webp`,
+    );
+  });
+
+  it('returns search doc id', () => {
+    expect(getSearchDocId(domainId, artId)).toBe(`${domainId}::${artId}`);
+  });
+
+  it('returns queue name', () => {
+    expect(getQueueName('Dev')).toBe('tastematcher-dev-queue-indexing');
+    expect(getQueueDlqName('Dev')).toBe('tastematcher-dev-queue-indexing-dlq');
+  });
+
+  it('throws for invalid ids', () => {
+    expect(() => getOriginalBlobPath('', artId, 'jpg')).toThrow();
+    expect(() => getDerivativeBlobPath(domainId, artId, 0)).toThrow();
+  });
+});

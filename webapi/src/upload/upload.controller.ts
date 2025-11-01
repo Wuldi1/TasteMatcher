@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadService } from './upload.service';
-import { Artwork, ProcessingStatus } from 'common';
+import { Artwork, ProcessingStatus } from '@tastematcher/common';
 import { v4 as uuidv4 } from 'uuid';
 
 @Controller('domains/:domainId/uploads')
