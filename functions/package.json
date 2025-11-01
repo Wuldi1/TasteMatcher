@@ -2,9 +2,9 @@
   "name": "@tastematcher/functions",
   "version": "1.0.0",
   "description": "Azure Functions for TasteMatcher image processing",
-  "main": "dist/src/ProcessImagesFromBlob/index.js",
+  "main": "dist/src/ProcessImagesFromBlob/ProcessImagesFromBlob.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run copy-files",
     "watch": "tsc --watch",
     "clean": "rimraf dist",
     "prestart": "npm run build",
@@ -14,7 +14,8 @@
     "test:coverage": "jest --coverage",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
-    "dev": "npm run build && func start"
+    "dev": "npm run build && func start",
+    "copy-files": "cp host.json dist/ && cp package.json dist/ && cp package-lock.json dist/ 2>/dev/null || true"
   },
   "dependencies": {
     "@azure/functions": "^4.8.0",
