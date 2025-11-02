@@ -12,7 +12,7 @@ on:
 env:
   AZURE_FUNCTIONAPP_NAME: tastematcher-dev-func
   AZURE_FUNCTIONAPP_PACKAGE_PATH: 'functions'
-  NODE_VERSION: '20.x'
+  NODE_VERSION: '22.x' # Updated from 20.x
 
 jobs:
   build-and-deploy:
