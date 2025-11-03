@@ -1,8 +1,9 @@
 // webapi/src/upload/upload.service.ts
 import { Injectable, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
-import { BlobServiceClient, StorageSharedKeyCredential, BlockBlobClient } from '@azure/storage-blob';
+import { BlobService } from '../blob/blob.service';
 import { QueueServiceClient, StorageSharedKeyCredential as QueueCredential } from '@azure/storage-queue';
 import { CosmosService } from '../cosmos/cosmos.service';
+import { BlockBlobClient } from '@azure/storage-blob';
 import { v4 as uuidv4 } from 'uuid';
 import { IndexingJobMessage, Artwork, ProcessingStatus } from '@tastematcher/common';
 
@@ -18,11 +19,13 @@ interface UploadConfig {
 @Injectable()
 export class UploadService {
   private readonly logger = new Logger(UploadService.name);
-  private readonly blobService: BlobServiceClient;
   private readonly queueService: QueueServiceClient;
   private readonly config: UploadConfig;
 
-  constructor(private readonly cosmos: CosmosService) {
+  constructor(
+    private readonly blobService: BlobService, // Inject instead of importing singleton
+    private readonly cosmos: CosmosService
+  ) {
     // Validate required environment variables
     this.config = {
       account: this.getRequiredEnv('AZURE_STORAGE_ACCOUNT'),
@@ -34,12 +37,6 @@ export class UploadService {
     };
 
     // Initialize Azure SDK clients
-    const blobCredential = new StorageSharedKeyCredential(this.config.account, this.config.accountKey);
-    this.blobService = new BlobServiceClient(
-      `https://${this.config.account}.blob.core.windows.net`,
-      blobCredential
-    );
-
     const queueCredential = new QueueCredential(this.config.account, this.config.accountKey);
     this.queueService = new QueueServiceClient(
       `https://${this.config.account}.queue.core.windows.net`,
@@ -269,9 +266,7 @@ export class UploadService {
       blobName,
     });
     try {
-      const containerClient = this.blobService.getContainerClient(this.config.originalsContainer);
-      const blockBlobClient = containerClient.getBlockBlobClient(blobName);
-      await blockBlobClient.deleteIfExists();
+      await this.blobService.deleteBlobIfExists(this.config.originalsContainer, blobName);
       this.logger.log({
         action: 'deleteBlobIfExists.success',
         blobName,

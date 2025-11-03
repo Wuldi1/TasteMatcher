@@ -15,19 +15,16 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { Heart, X, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import type { Artwork } from '@tastematcher/common';
+import { fetchUntastedArtworks, saveArtworkPreference } from '../../api/artworks';
 import './TasterPage.css';
-
-interface Artwork {
-  id: string;
-  title: string;
-  imageUrl: string;
-}
 
 type SwipeDirection = 'left' | 'right' | null;
 
 /**
  * Taster page with Tinder-style swipe interface for artwork preferences.
  * Supports touch gestures, keyboard controls, and button clicks.
+ * Only shows artworks the user hasn't rated yet.
  */
 export function TasterPage() {
   const { user } = useAuth();
@@ -38,29 +35,38 @@ export function TasterPage() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // Fetch artworks for tasting
-  const { data: artworks = [], isLoading } = useQuery<Artwork[]>({
-    queryKey: ['taster-artworks', user?.domainId],
+  // Fetch untasted artworks for the user
+  const { data: artworksData, isLoading } = useQuery({
+    queryKey: ['untasted-artworks', user?.domainId, user?.id],
     queryFn: async () => {
-      // TODO: Replace with actual API call that fetches untasted artworks
-      return Array.from({ length: 20 }, (_, i) => ({
-        id: `artwork-taster-${i}`,
-        title: `Artwork ${i + 1}`,
-        imageUrl: `https://picsum.photos/seed/taster-${i}/800/1000`,
-      }));
+      if (!user?.domainId || !user?.id) throw new Error('User not authenticated');
+      return fetchUntastedArtworks(user.domainId, user.id, 20);
     },
-    enabled: !!user?.domainId,
+    enabled: !!user?.domainId && !!user?.id,
+    staleTime: 60000, // Cache for 1 minute
   });
+
+  const artworks = artworksData?.artworks || [];
 
   // Save preference mutation
   const savePreference = useMutation({
     mutationFn: async ({ artworkId, liked }: { artworkId: string; liked: boolean }) => {
-      // TODO: Replace with actual API call
+      if (!user?.domainId || !user?.id) throw new Error('User not authenticated');
+      
       console.log(`Saving preference: ${artworkId} - ${liked ? 'liked' : 'disliked'}`);
-      return { success: true };
+      
+      await saveArtworkPreference(user.domainId, user.id, {
+        artworkId,
+        liked,
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['domain-stats'] });
+      // Invalidate stats to update home page
+      queryClient.invalidateQueries({ queryKey: ['artwork-stats', user?.domainId] });
+    },
+    onError: (error) => {
+      console.error('Failed to save preference:', error);
+      // TODO: Show error toast to user
     },
   });
 
@@ -126,6 +132,8 @@ export function TasterPage() {
     setCurrentIndex(0);
     setSwipeDirection(null);
     setDragOffset({ x: 0, y: 0 });
+    // Refetch untasted artworks
+    queryClient.invalidateQueries({ queryKey: ['untasted-artworks', user?.domainId, user?.id] });
   };
 
   if (isLoading) {
@@ -141,9 +149,9 @@ export function TasterPage() {
       <div className="taster-page taster-page--empty">
         <div className="taster-empty">
           <Heart className="taster-empty__icon" aria-hidden="true" />
-          <h2 className="taster-empty__title">No Artworks Available</h2>
+          <h2 className="taster-empty__title">No Untasted Artworks</h2>
           <p className="taster-empty__description">
-            Upload some artworks to start building your taste profile!
+            You've already rated all available artworks! Upload more to continue building your taste profile.
           </p>
         </div>
       </div>
@@ -163,10 +171,10 @@ export function TasterPage() {
             type="button"
             className="taster-complete__button"
             onClick={handleReset}
-            aria-label="Start over"
+            aria-label="Check for new artworks"
           >
             <RotateCcw aria-hidden="true" />
-            Start Over
+            Check for New Artworks
           </button>
         </div>
       </div>
@@ -207,13 +215,16 @@ export function TasterPage() {
               aria-label={currentArtwork.title}
             >
               <img
-                src={currentArtwork.imageUrl}
+                src={currentArtwork.thumbnails?.[1]?.url || currentArtwork.filename}
                 alt={currentArtwork.title}
                 className="taster-card__image"
                 draggable="false"
               />
               <div className="taster-card__info">
                 <h2 className="taster-card__title">{currentArtwork.title}</h2>
+                {currentArtwork.artist && (
+                  <p className="taster-card__artist">by {currentArtwork.artist}</p>
+                )}
               </div>
 
               {/* Swipe indicators */}
@@ -232,7 +243,7 @@ export function TasterPage() {
           {hasMore && artworks[currentIndex + 1] && (
             <div className="taster-card taster-card--next">
               <img
-                src={artworks[currentIndex + 1].imageUrl}
+                src={artworks[currentIndex + 1].thumbnails?.[1]?.url || artworks[currentIndex + 1].filename}
                 alt=""
                 className="taster-card__image"
                 aria-hidden="true"

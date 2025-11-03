@@ -4,6 +4,7 @@ import { CosmosModule } from './cosmos/cosmos.module';
 import { DomainsModule } from './domains/domains.module';
 import { UploadModule } from './upload/upload.module';
 import { ArtworksModule } from './artworks/artworks.module';
+import { BlobModule } from './blob/blob.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { ArtworksModule } from './artworks/artworks.module';
     DomainsModule,
     UploadModule,
     ArtworksModule,
+    BlobModule,
   ],
   controllers: [],
   providers: [],

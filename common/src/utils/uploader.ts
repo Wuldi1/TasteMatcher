@@ -9,7 +9,7 @@
 // 8. Adds meaningful JSDoc for exported functions/classes.
 // 9. CI-friendly: code passes lint, typecheck, and tests locally.
 // -----------------------------------------------------------
-import { BlobServiceClient, StorageSharedKeyCredential } from '@azure/storage-blob';
+import { BlobServiceClient, StorageSharedKeyCredential, ContainerClient } from '@azure/storage-blob';
 import { DefaultAzureCredential } from '@azure/identity';
 import pRetry from 'p-retry';
 import { createHash } from 'node:crypto';
@@ -27,7 +27,7 @@ const defaultLogger: StructuredLogger = {
 };
 
 export interface BlobStorageClientOptions {
-  account?: string;
+  account: string; // Required
   accountKey?: string;
   logger?: StructuredLogger;
 }
@@ -45,18 +45,18 @@ export class BlobStorageClient {
     randomize: true,
   } as const;
 
-  constructor(private readonly options: BlobStorageClientOptions = {}) {
+  constructor(private readonly options: BlobStorageClientOptions) {
     this.logger = options.logger ?? defaultLogger;
     this.blobServiceClient = this.createBlobServiceClient();
   }
 
   private createBlobServiceClient(): BlobServiceClient {
-    const account = this.options.account ?? process.env.AZURE_STORAGE_ACCOUNT;
+    const account = this.options.account;
     if (!account) {
-      throw new Error('AZURE_STORAGE_ACCOUNT missing');
+      throw new Error('BlobStorageClientOptions.account is required');
     }
 
-    const key = this.options.accountKey ?? process.env.AZURE_STORAGE_ACCOUNT_KEY;
+    const key = this.options.accountKey;
     if (key) {
       this.logger.debug('Creating BlobServiceClient with shared key');
       return new BlobServiceClient(
@@ -144,12 +144,46 @@ export class BlobStorageClient {
     this.logger.debug({ action: 'blobExists', container, blobName, exists });
     return exists;
   }
+
+  /**
+   * Get container client for advanced operations
+   * Use this when you need direct access to Azure SDK methods
+   */
+  getContainerClient(containerName: string): ContainerClient {
+    return this.blobServiceClient.getContainerClient(containerName);
+  }
 }
 
-// Shared singleton used by most callers.
-const sharedBlobClient = new BlobStorageClient();
+let _sharedBlobClient: BlobStorageClient | null = null;
 
-export const blobClient = sharedBlobClient;
-export const downloadBlob = sharedBlobClient.downloadBlob.bind(sharedBlobClient);
-export const uploadBuffer = sharedBlobClient.uploadBuffer.bind(sharedBlobClient);
-export const blobExists = sharedBlobClient.blobExists.bind(sharedBlobClient);
+/**
+ * Get or create shared BlobStorageClient singleton
+ * Lazily initializes using environment variables
+ */
+export function getBlobClient(): BlobStorageClient {
+  if (!_sharedBlobClient) {
+    const account = process.env.AZURE_STORAGE_ACCOUNT;
+    const accountKey = process.env.AZURE_STORAGE_ACCOUNT_KEY;
+
+    if (!account) {
+      throw new Error('AZURE_STORAGE_ACCOUNT environment variable is required');
+    }
+
+    _sharedBlobClient = new BlobStorageClient({
+      account,
+      accountKey,
+    });
+  }
+
+  return _sharedBlobClient;
+}
+
+// Export convenience methods that use lazy singleton
+export const downloadBlob = (container: string, blobName: string) =>
+  getBlobClient().downloadBlob(container, blobName);
+
+export const uploadBuffer = (container: string, blobName: string, buffer: Buffer, contentType: string) =>
+  getBlobClient().uploadBuffer(container, blobName, buffer, contentType);
+
+export const blobExists = (container: string, blobName: string) =>
+  getBlobClient().blobExists(container, blobName);

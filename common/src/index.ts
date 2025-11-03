@@ -8,6 +8,7 @@ export * from './types/query.types';
 
 export * from './utils/naming';
 export * from './utils/uploader';
+export * from './utils/preference.utils';
 
 // Re-export commonly used types
 export type { ArtworkMetadata } from './types/artwork.types';

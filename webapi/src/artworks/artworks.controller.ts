@@ -3,6 +3,7 @@ import {
   Get,
   Patch,
   Delete,
+  Post,
   Param,
   Body,
   Query,
@@ -16,7 +17,9 @@ import { ArtworksService } from './artworks.service';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { QueryArtworksDto } from './dto/query-artworks.dto';
 import { LikeArtworkDto } from './dto/like-artwork.dto';
-import { Artwork, PaginatedResponse, ArtworkStats } from '@tastematcher/common';
+import { SavePreferenceDto } from './dto/save-preference.dto';
+import { Artwork, PaginatedResponse, ArtworkStats, UntastedArtworksResponse } from '@tastematcher/common';
+import { ArtworkPreference } from '@tastematcher/common';
 
 @ApiTags('artworks')
 @Controller('api/domains/:domainId/artworks')
@@ -88,5 +91,28 @@ export class ArtworksController {
     @Param('artworkId') artworkId: string,
   ): Promise<void> {
     return this.artworksService.remove(domainId, artworkId);
+  }
+
+  @Get('untasted/:userId')
+  @ApiOperation({ summary: 'Get untasted artworks for user (for Taster)' })
+  @ApiResponse({ status: 200, description: 'Untasted artworks retrieved successfully' })
+  async getUntasted(
+    @Param('domainId') domainId: string,
+    @Param('userId') userId: string,
+    @Query('limit') limit?: number,
+  ): Promise<UntastedArtworksResponse> {
+    return this.artworksService.getUntastedArtworks(domainId, userId, limit || 20);
+  }
+
+  @Post('preferences/:userId')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Save user preference for artwork' })
+  @ApiResponse({ status: 201, description: 'Preference saved successfully' })
+  async savePreference(
+    @Param('domainId') domainId: string,
+    @Param('userId') userId: string,
+    @Body() preferenceDto: SavePreferenceDto,
+  ): Promise<ArtworkPreference> {
+    return this.artworksService.savePreference(domainId, userId, preferenceDto);
   }
 }

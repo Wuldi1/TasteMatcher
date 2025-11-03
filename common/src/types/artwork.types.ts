@@ -36,3 +36,32 @@ export interface ArtworkStats {
   totalLiked: number;
   recentlyAdded: number; // Last 7 days
 }
+
+/**
+ * User preference for an artwork (like/dislike)
+ * Stored in Cosmos DB to track user-artwork interactions
+ */
+export interface ArtworkPreference {
+  id: string; // Format: `${userId}_${artworkId}` - generated via generatePreferenceId()
+  userId: string; // Partition key for efficient user-scoped queries
+  artworkId: string;
+  domainId: string;
+  liked: boolean; // true = like, false = dislike
+  createdAt: number; // Timestamp
+}
+
+/**
+ * Request to save artwork preference
+ */
+export interface SavePreferenceRequest {
+  artworkId: string;
+  liked: boolean;
+}
+
+/**
+ * Response with untasted artworks for user
+ */
+export interface UntastedArtworksResponse {
+  artworks: Artwork[];
+  total: number;
+}

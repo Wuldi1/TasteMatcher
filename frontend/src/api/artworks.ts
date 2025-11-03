@@ -1,4 +1,4 @@
-import type { Artwork, PaginatedResponse, ArtworkStats } from '@tastematcher/common';
+import type { Artwork, PaginatedResponse, ArtworkStats, UntastedArtworksResponse, SavePreferenceRequest } from '@tastematcher/common';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
@@ -185,4 +185,54 @@ export async function fetchArtworkStats(domainId: string): Promise<ArtworkStats>
   }
 
   return response.json();
+}
+
+/**
+ * Fetch untasted artworks for user (Taster page)
+ */
+export async function fetchUntastedArtworks(
+  domainId: string,
+  userId: string,
+  limit: number = 20
+): Promise<UntastedArtworksResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/domains/${domainId}/artworks/untasted/${userId}?limit=${limit}`,
+    {
+      headers: {
+        'Authorization': `Bearer ${getAuthToken()}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch untasted artworks');
+  }
+
+  return response.json();
+}
+
+/**
+ * Save user preference for artwork
+ */
+export async function saveArtworkPreference(
+  domainId: string,
+  userId: string,
+  preference: SavePreferenceRequest
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/domains/${domainId}/artworks/preferences/${userId}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getAuthToken()}`,
+      },
+      body: JSON.stringify(preference),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to save artwork preference');
+  }
 }

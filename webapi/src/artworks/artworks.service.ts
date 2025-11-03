@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { CosmosService } from '../cosmos/cosmos.service';
-import { Artwork, PaginatedResponse, QueryParams, ArtworkStats } from '@tastematcher/common';
+import { Artwork, PaginatedResponse, QueryParams, ArtworkStats, UntastedArtworksResponse, ArtworkPreference, generatePreferenceId } from '@tastematcher/common';
 import { executeCosmosQuery } from '../cosmos/cosmos-query.utils';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { LikeArtworkDto } from './dto/like-artwork.dto';
+import { SavePreferenceDto } from './dto/save-preference.dto';
 
 @Injectable()
 export class ArtworksService {
@@ -207,6 +208,153 @@ export class ArtworksService {
     } catch (error) {
       this.logger.error(`Failed to get stats for domain ${domainId}`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Get artworks that user hasn't tasted yet
+   * Uses efficient anti-join pattern with Cosmos DB
+   */
+  async getUntastedArtworks(
+    domainId: string,
+    userId: string,
+    limit: number = 20,
+  ): Promise<UntastedArtworksResponse> {
+    const artworksContainer = await this.cosmosService.getContainer('Artworks');
+    const preferencesContainer = await this.cosmosService.getContainer('ArtworkPreferences');
+
+    try {
+      // Step 1: Get all artwork IDs the user has already tasted
+      const tastedQuery = {
+        query: 'SELECT VALUE c.artworkId FROM c WHERE c.userId = @userId',
+        parameters: [{ name: '@userId', value: userId }],
+      };
+
+      const { resources: tastedArtworkIds } = await preferencesContainer.items
+        .query(tastedQuery, { partitionKey: userId })
+        .fetchAll();
+
+      this.logger.debug(`User ${userId} has tasted ${tastedArtworkIds.length} artworks`);
+
+      // Step 2: Query artworks NOT in the tasted list
+      let artworksQuery: string;
+      const parameters: Array<{ name: string; value: any }> = [
+        { name: '@domainId', value: domainId },
+        { name: '@limit', value: limit },
+      ];
+
+      if (tastedArtworkIds.length === 0) {
+        // User hasn't tasted anything yet - return first N artworks
+        artworksQuery = `
+          SELECT TOP @limit * 
+          FROM c 
+          WHERE c.domainId = @domainId 
+          ORDER BY c.createdAt DESC
+        `;
+      } else {
+        // Exclude already tasted artworks using NOT IN
+        // Note: For large lists, consider pagination or alternative patterns
+        artworksQuery = `
+          SELECT TOP @limit * 
+          FROM c 
+          WHERE c.domainId = @domainId 
+            AND NOT ARRAY_CONTAINS(@tastedIds, c.id)
+          ORDER BY c.createdAt DESC
+        `;
+        parameters.push({ name: '@tastedIds', value: tastedArtworkIds });
+      }
+
+      const { resources: untastedArtworks } = await artworksContainer.items
+        .query({ query: artworksQuery, parameters })
+        .fetchAll();
+
+      this.logger.log(
+        `Found ${untastedArtworks.length} untasted artworks for user ${userId} in domain ${domainId}`,
+      );
+
+      return {
+        artworks: untastedArtworks,
+        total: untastedArtworks.length,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get untasted artworks for user ${userId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Save user preference for an artwork
+   * Creates or updates preference in Cosmos DB
+   */
+  async savePreference(
+    domainId: string,
+    userId: string,
+    preferenceDto: SavePreferenceDto,
+  ): Promise<ArtworkPreference> {
+    const container = await this.cosmosService.getContainer('ArtworkPreferences');
+
+    try {
+      const preferenceId = generatePreferenceId(userId, preferenceDto.artworkId);
+
+      const preference: ArtworkPreference = {
+        id: preferenceId,
+        userId, // Partition key - automatically used by Cosmos DB
+        artworkId: preferenceDto.artworkId,
+        domainId,
+        liked: preferenceDto.liked,
+        createdAt: Date.now(),
+      };
+
+      // Upsert preference (create or update)
+      // No need to specify partitionKey option - Cosmos DB extracts it from the document
+      const { resource } = await container.items.upsert<ArtworkPreference>(preference);
+
+      this.logger.log(
+        `Saved preference for user ${userId}, artwork ${preferenceDto.artworkId}: ${preferenceDto.liked ? 'liked' : 'disliked'}`,
+      );
+
+      // Update artwork like/dislike counts
+      await this.updateArtworkCounts(domainId, preferenceDto.artworkId, preferenceDto.liked);
+
+      return resource as ArtworkPreference;
+    } catch (error) {
+      this.logger.error(`Failed to save preference for user ${userId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update artwork like/dislike counts
+   * Private helper method
+   */
+  private async updateArtworkCounts(
+    domainId: string,
+    artworkId: string,
+    liked: boolean,
+  ): Promise<void> {
+    const container = await this.cosmosService.getContainer('Artworks');
+
+    try {
+      const { resource: artwork } = await container.item(artworkId, domainId).read();
+
+      if (artwork) {
+        const updated = {
+          ...artwork,
+          likeCount: liked
+            ? (artwork.likeCount || 0) + 1
+            : artwork.likeCount || 0,
+          dislikeCount: !liked
+            ? (artwork.dislikeCount || 0) + 1
+            : artwork.dislikeCount || 0,
+          updatedAt: Date.now(),
+        };
+
+        await container.item(artworkId, domainId).replace(updated);
+        this.logger.debug(`Updated counts for artwork ${artworkId}`);
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to update artwork counts for ${artworkId}`, error);
+      // Don't throw - preference save succeeded, count update is secondary
     }
   }
 }

@@ -28,7 +28,19 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
     const start = Date.now();
     this.logger.debug({ msg: 'Initializing CosmosService', database: this.config.database });
 
-    await this.ensureClient();
+    // Create ArtworkPreferences container if it doesn't exist
+    const preferencesContainerDef = {
+      id: 'ArtworkPreferences',
+      partitionKey: {
+        paths: ['/userId'], // Partition by userId for efficient user-scoped queries
+        kind: 'Hash' as any,
+      },
+    };
+
+    var database = await this.getDatabase();
+
+    await database.containers.createIfNotExists(preferencesContainerDef);
+    this.logger.log('ArtworkPreferences container initialized');
 
     this.logger.log({
       msg: 'CosmosService initialized',
