@@ -23,7 +23,7 @@ export interface ThumbnailInfo extends ThumbnailSize {
   url: string;
 }
 
-export interface ThumbnailGenerationResult extends ThumbnailSize {
+export interface ThumbnailGenerationResult extends ThumbnailInfo {
   buffer: Buffer;
   sizeBytes: number;
 }

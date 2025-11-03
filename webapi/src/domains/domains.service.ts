@@ -94,7 +94,7 @@ export class DomainsService {
     await container.item(updatedDomain.id, updatedDomain.adminEmail).replace(updatedDomain);
 
     const token = sign(
-      { sub: updatedDomain.id, email: updatedDomain.adminEmail },
+      { sub: updatedDomain.id, email: updatedDomain.adminEmail, domainId: updatedDomain.id },
       this.jwtSecret,
       { expiresIn: '4h' },
     );

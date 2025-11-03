@@ -72,7 +72,8 @@ export class UploadService {
 
     try {
       // Upload to Azure Blob Storage
-      await this.uploadToBlob(blobName, file.buffer, file.mimetype);
+      const fileUrl = await this.uploadToBlob(blobName, file.buffer, file.mimetype);
+      artwork.filename = fileUrl;
 
       // Create artwork record in database
       await this.createArtworkRecord(artwork);
@@ -152,7 +153,7 @@ export class UploadService {
     return ext.replace(/[^a-z0-9]/gi, '');
   }
 
-  private async uploadToBlob(blobName: string, fileBuffer: Buffer, contentType: string): Promise<void> {
+  private async uploadToBlob(blobName: string, fileBuffer: Buffer, contentType: string): Promise<string> {
     this.logger.log({
       action: 'uploadToBlob.start',
       blobName,
@@ -188,8 +189,10 @@ export class UploadService {
       this.logger.log({
         action: 'uploadToBlob.success',
         blobName,
+        fileUrl: blockBlobClient.url
       });
-      
+
+      return blockBlobClient.url;
     } catch (error) {
       this.logger.error(`Failed to upload blob ${blobName}:`, error);
       throw new InternalServerErrorException('Failed to upload file to storage');

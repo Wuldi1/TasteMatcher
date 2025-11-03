@@ -12,7 +12,7 @@
 
 import { Domain, DomainVerificationResultResponse, ProcessingStatus, Artwork } from '@tastematcher/common';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 export class ApiError extends Error {
   constructor(
@@ -29,20 +29,62 @@ export class ApiError extends Error {
  * Centralized API client with retry logic and proper error handling
  */
 class ApiClient {
+  private baseURL: string;
+  private authToken: string | null = null;
+
+  constructor(baseURL: string) {
+    this.baseURL = baseURL;
+    
+    // Load token from localStorage on initialization
+    const storedToken = localStorage.getItem('token');
+    if (storedToken) {
+      this.authToken = storedToken;
+    }
+  }
+
+  /**
+   * Set authentication token for API requests
+   */
+  setAuthToken(token: string): void {
+    this.authToken = token;
+    localStorage.setItem('token', token);
+  }
+
+  /**
+   * Clear authentication token
+   */
+  clearAuthToken(): void {
+    this.authToken = null;
+    localStorage.removeItem('token');
+    localStorage.removeItem('tm_auth_token');
+  }
+
+  /**
+   * Get default headers with authentication
+   */
+  private getHeaders(): HeadersInit {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.authToken) {
+      headers['Authorization'] = `Bearer ${this.authToken}`;
+    }
+
+    return headers;
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
+    const url = `${this.baseURL}${endpoint}`;
     
     console.debug('API Request:', { method: options.method || 'GET', url });
     
     try {
       const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
+        headers: this.getHeaders(),
         ...options,
       });
 
@@ -156,4 +198,4 @@ class ApiClient {
   }
 }
 
-export const apiClient = new ApiClient();
+export const apiClient = new ApiClient(API_BASE_URL);

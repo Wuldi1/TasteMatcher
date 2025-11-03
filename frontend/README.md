@@ -1,24 +1,59 @@
-# Frontend README for TasteMatcher
+# TasteMatcher Frontend
 
-This is the frontend component of the TasteMatcher application, built using React and Vite.
+React + TypeScript + Vite frontend for the TasteMatcher art recommendation platform.
+
+## Features
+
+- ✅ **Responsive Navigation** - Bottom nav (mobile) / Left sidebar (desktop)
+- ✅ **Home Dashboard** - Domain stats and quick actions
+- ✅ **Artwork Upload** - Drag-and-drop file upload
+- ✅ **Catalog Gallery** - Grid view with lazy loading and search
+- ✅ **Taster** - Tinder-style swipe interface for building taste profiles
+- ✅ **Accessibility** - WCAG AA compliant with keyboard navigation
+- ✅ **Authentication** - JWT-based auth with protected routes
 
 ## Getting Started
 
-To get started with the frontend, follow these steps:
+### Prerequisites
 
-1. **Install Dependencies**: Make sure you have [Node.js](https://nodejs.org/) installed. Then, navigate to the `frontend` directory and run:
+- Node.js 22+
+- pnpm 8+
 
-   ```
-   pnpm install
-   ```
+### Installation
 
-2. **Run the Development Server**: After installing the dependencies, you can start the development server with:
+```bash
+cd frontend
+pnpm install
+```
 
-   ```
-   pnpm run dev
-   ```
+### Development
 
-   This will start the Vite development server, and you can view the application in your browser at `http://localhost:3000`.
+```bash
+# Start dev server
+pnpm dev
+
+# Run tests
+pnpm test
+
+# Run tests in watch mode
+pnpm test:watch
+
+# Type checking
+pnpm typecheck
+
+# Linting
+pnpm lint
+```
+
+### Build
+
+```bash
+# Production build
+pnpm build
+
+# Preview production build
+pnpm preview
+```
 
 ## Project Structure
 
@@ -32,12 +67,6 @@ The frontend project is structured as follows:
 ## API Integration
 
 The frontend communicates with the backend API. Ensure that the backend server is running to fetch data successfully.
-
-## Scripts
-
-- `dev`: Starts the development server.
-- `build`: Builds the application for production.
-- `preview`: Previews the production build.
 
 ## Contributing
 

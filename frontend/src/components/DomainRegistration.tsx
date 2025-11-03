@@ -13,16 +13,19 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDomain } from '../contexts/DomainContext';
+import { useAuth } from '../contexts/AuthContext';
 import { apiClient, ApiError } from '../services/api';
-import { Domain } from 'common';
+import { Domain } from '@tastematcher/common';
 
 /**
  * Professional domain registration component
  * Handles domain existence check and creation
+ * Updates AuthContext after successful verification
  */
 export function DomainRegistration() {
   const navigate = useNavigate();
   const { setCurrentDomain, setLoading, isLoading } = useDomain();
+  const { setUserFromToken } = useAuth();
   
   const [adminEmail, setAdminEmail] = useState<string>('');
   const [domainName, setDomainName] = useState<string>('');
@@ -83,14 +86,23 @@ export function DomainRegistration() {
       try {
         if (phase === 'email') {
           try {
+            // Request verification code - this returns domain info if exists
             const domain = await apiClient.requestDomainVerification(adminEmail.trim().toLowerCase());
+            
+            // Store domain information immediately after email check
             setPendingDomain(domain);
+            
+            // Store domain in context so we have user info available
+            setCurrentDomain(domain);
+            
+            // Move to verification phase
             setPhase('code-entry');
             setVerificationCode('');
             setVerificationError(null);
             setErrors({});
           } catch (error) {
             if (error instanceof ApiError && error.status === 404) {
+              // Domain doesn't exist, move to creation phase
               setPhase('create');
               setErrors({});
             } else {
@@ -104,7 +116,12 @@ export function DomainRegistration() {
             adminEmail: adminEmail.trim().toLowerCase(),
           };
           const domain = await apiClient.createDomain(request);
+          
+          // Store domain information after creation
           setPendingDomain(domain);
+          setCurrentDomain(domain);
+          
+          // Move to verification phase
           setPhase('code-entry');
           setVerificationCode('');
           setVerificationError(null);
@@ -128,7 +145,7 @@ export function DomainRegistration() {
         setLoading(false);
       }
     },
-    [adminEmail, domainName, phase, setLoading, validateForm],
+    [adminEmail, domainName, phase, setLoading, setCurrentDomain, validateForm],
   );
 
   const handleVerifyCode = useCallback(
@@ -148,13 +165,28 @@ export function DomainRegistration() {
       setVerificationError(null);
 
       try {
+        // Verify the code and get authentication token
         const result = await apiClient.verifyDomainCode(
           pendingDomain.adminEmail,
           verificationCode.trim(),
         );
+        
+        // Store the token in localStorage for future API calls
+        localStorage.setItem('token', result.token);
         localStorage.setItem('tm_auth_token', result.token);
+        
+        // Update auth context with the token (parses user info)
+        setUserFromToken(result.token);
+        
+        // Update domain context
         setCurrentDomain(pendingDomain);
-        navigate('/upload');
+        
+        // Configure API client to use the token for future requests
+        apiClient.setAuthToken(result.token);
+        
+        // Navigate to home
+        navigate('/home');
+        
       } catch (error) {
         console.error('Domain Verification Error:', error);
         if (error instanceof ApiError) {
@@ -170,7 +202,7 @@ export function DomainRegistration() {
         setLoading(false);
       }
     },
-    [navigate, pendingDomain, setCurrentDomain, setLoading, verificationCode],
+    [navigate, pendingDomain, setCurrentDomain, setLoading, setUserFromToken, verificationCode],
   );
 
   const handleResend = useCallback(async () => {

@@ -4,6 +4,7 @@ export * from './types/domain.types';
 export * from './types/processing.types';
 export * from './types/queue.types';
 export * from './types/user.types';
+export * from './types/query.types';
 
 export * from './utils/naming';
 export * from './utils/uploader';
