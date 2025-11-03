@@ -96,4 +96,39 @@ describe('ArtworksService', () => {
       expect(result.title).toBe('New Title');
     });
   });
+
+  describe('getStats', () => {
+    it('should return aggregated statistics', async () => {
+      const mockStats = {
+        totalArtworks: 42,
+        totalLiked: 28,
+        recentlyAdded: 5,
+      };
+
+      mockContainer.items.query.mockReturnValue({
+        fetchAll: jest.fn()
+          .mockResolvedValueOnce({ resources: [42] })  // total
+          .mockResolvedValueOnce({ resources: [28] })  // liked
+          .mockResolvedValueOnce({ resources: [5] }),  // recent
+      });
+
+      const result = await service.getStats('domain-1');
+
+      expect(result.totalArtworks).toBe(42);
+      expect(result.totalLiked).toBe(28);
+      expect(result.recentlyAdded).toBe(5);
+    });
+
+    it('should handle zero results gracefully', async () => {
+      mockContainer.items.query.mockReturnValue({
+        fetchAll: jest.fn().mockResolvedValue({ resources: [] }),
+      });
+
+      const result = await service.getStats('domain-1');
+
+      expect(result.totalArtworks).toBe(0);
+      expect(result.totalLiked).toBe(0);
+      expect(result.recentlyAdded).toBe(0);
+    });
+  });
 });

@@ -27,3 +27,12 @@ export interface ThumbnailGenerationResult extends ThumbnailInfo {
   buffer: Buffer;
   sizeBytes: number;
 }
+
+/**
+ * Domain artwork statistics
+ */
+export interface ArtworkStats {
+  totalArtworks: number;
+  totalLiked: number;
+  recentlyAdded: number; // Last 7 days
+}

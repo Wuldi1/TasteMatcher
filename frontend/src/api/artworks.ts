@@ -1,4 +1,4 @@
-import type { Artwork, PaginatedResponse } from '@tastematcher/common';
+import type { Artwork, PaginatedResponse, ArtworkStats } from '@tastematcher/common';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
@@ -164,4 +164,25 @@ export async function deleteArtwork(domainId: string, artworkId: string): Promis
   if (!response.ok) {
     throw new Error('Failed to delete artwork');
   }
+}
+
+/**
+ * Fetch artwork statistics for domain
+ */
+export async function fetchArtworkStats(domainId: string): Promise<ArtworkStats> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/domains/${domainId}/artworks/stats`,
+    {
+      headers: {
+        'Authorization': `Bearer ${getAuthToken()}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch artwork statistics');
+  }
+
+  return response.json();
 }

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { CosmosService } from '../cosmos/cosmos.service';
-import { Artwork, PaginatedResponse, QueryParams } from '@tastematcher/common';
+import { Artwork, PaginatedResponse, QueryParams, ArtworkStats } from '@tastematcher/common';
 import { executeCosmosQuery } from '../cosmos/cosmos-query.utils';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { LikeArtworkDto } from './dto/like-artwork.dto';
@@ -153,6 +153,60 @@ export class ArtworksService {
     } catch (error) {
       this.logger.error(`Failed to delete artwork ${artworkId}`, error);
       throw new NotFoundException(`Artwork ${artworkId} not found`);
+    }
+  }
+
+  /**
+   * Get aggregated statistics for artworks in a domain
+   * Uses efficient Cosmos DB aggregation queries
+   */
+  async getStats(domainId: string): Promise<ArtworkStats> {
+    const container = await this.cosmosService.getContainer('Artworks');
+
+    try {
+      // Calculate date 7 days ago (in milliseconds since epoch)
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+      // Query 1: Total artworks count
+      const totalQuery = {
+        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId',
+        parameters: [{ name: '@domainId', value: domainId }],
+      };
+
+      // Query 2: Total liked artworks (likeCount > 0)
+      const likedQuery = {
+        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.likeCount > 0',
+        parameters: [{ name: '@domainId', value: domainId }],
+      };
+
+      // Query 3: Recently added (last 7 days)
+      const recentQuery = {
+        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.createdAt >= @sevenDaysAgo',
+        parameters: [
+          { name: '@domainId', value: domainId },
+          { name: '@sevenDaysAgo', value: sevenDaysAgo },
+        ],
+      };
+
+      // Execute queries in parallel for better performance
+      const [totalResult, likedResult, recentResult] = await Promise.all([
+        container.items.query(totalQuery).fetchAll(),
+        container.items.query(likedQuery).fetchAll(),
+        container.items.query(recentQuery).fetchAll(),
+      ]);
+
+      const stats: ArtworkStats = {
+        totalArtworks: totalResult.resources[0] || 0,
+        totalLiked: likedResult.resources[0] || 0,
+        recentlyAdded: recentResult.resources[0] || 0,
+      };
+
+      this.logger.log(`Retrieved stats for domain ${domainId}`, stats);
+
+      return stats;
+    } catch (error) {
+      this.logger.error(`Failed to get stats for domain ${domainId}`, error);
+      throw error;
     }
   }
 }

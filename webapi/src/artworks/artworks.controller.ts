@@ -16,7 +16,7 @@ import { ArtworksService } from './artworks.service';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { QueryArtworksDto } from './dto/query-artworks.dto';
 import { LikeArtworkDto } from './dto/like-artwork.dto';
-import { Artwork, PaginatedResponse } from '@tastematcher/common';
+import { Artwork, PaginatedResponse, ArtworkStats } from '@tastematcher/common';
 
 @ApiTags('artworks')
 @Controller('api/domains/:domainId/artworks')
@@ -24,6 +24,13 @@ import { Artwork, PaginatedResponse } from '@tastematcher/common';
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class ArtworksController {
   constructor(private readonly artworksService: ArtworksService) {}
+
+  @Get('stats')
+  @ApiOperation({ summary: 'Get aggregated artwork statistics for domain' })
+  @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
+  async getStats(@Param('domainId') domainId: string): Promise<ArtworkStats> {
+    return this.artworksService.getStats(domainId);
+  }
 
   @Get()
   @ApiOperation({ summary: 'Get all artworks with pagination and filtering' })

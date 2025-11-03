@@ -15,14 +15,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { ArrowRight, Upload, Grid, Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { fetchArtworkStats } from '../../api/artworks';
+import type { ArtworkStats } from '@tastematcher/common';
 import './HomePage.css';
-
-interface DomainStats {
-  totalArtworks: number;
-  totalLikes: number;
-  totalDislikes: number;
-  recentlyAdded: number;
-}
 
 /**
  * Home page displaying domain information and quick action cards.
@@ -31,19 +26,16 @@ interface DomainStats {
 export function HomePage() {
   const { user } = useAuth();
 
-  // Fetch domain stats (placeholder - will be implemented with backend)
-  const { data: stats, isLoading } = useQuery<DomainStats>({
-    queryKey: ['domain-stats', user?.domainId],
+  // Fetch domain stats from API
+  const { data: stats, isLoading } = useQuery<ArtworkStats>({
+    queryKey: ['artwork-stats', user?.domainId],
     queryFn: async () => {
-      // TODO: Replace with actual API call
-      return {
-        totalArtworks: 42,
-        totalLikes: 28,
-        totalDislikes: 14,
-        recentlyAdded: 5,
-      };
+      if (!user?.domainId) throw new Error('No domain ID');
+      return fetchArtworkStats(user.domainId);
     },
     enabled: !!user?.domainId,
+    staleTime: 60000, // Cache for 1 minute
+    refetchOnWindowFocus: true, // Refresh when user returns to page
   });
 
   if (!user) {
@@ -66,7 +58,9 @@ export function HomePage() {
             <Grid aria-hidden="true" />
           </div>
           <div className="stat-card__content">
-            <h2 className="stat-card__value">{isLoading ? '...' : stats?.totalArtworks}</h2>
+            <h2 className="stat-card__value">
+              {isLoading ? '...' : stats?.totalArtworks || 0}
+            </h2>
             <p className="stat-card__label">Total Artworks</p>
           </div>
         </div>
@@ -76,8 +70,10 @@ export function HomePage() {
             <Heart aria-hidden="true" />
           </div>
           <div className="stat-card__content">
-            <h2 className="stat-card__value">{isLoading ? '...' : stats?.totalLikes}</h2>
-            <p className="stat-card__label">Likes</p>
+            <h2 className="stat-card__value">
+              {isLoading ? '...' : stats?.totalLiked || 0}
+            </h2>
+            <p className="stat-card__label">Liked Artworks</p>
           </div>
         </div>
 
@@ -86,8 +82,10 @@ export function HomePage() {
             <Upload aria-hidden="true" />
           </div>
           <div className="stat-card__content">
-            <h2 className="stat-card__value">{isLoading ? '...' : stats?.recentlyAdded}</h2>
-            <p className="stat-card__label">Recently Added</p>
+            <h2 className="stat-card__value">
+              {isLoading ? '...' : stats?.recentlyAdded || 0}
+            </h2>
+            <p className="stat-card__label">Added This Week</p>
           </div>
         </div>
       </section>
