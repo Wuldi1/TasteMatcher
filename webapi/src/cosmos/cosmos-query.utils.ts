@@ -1,4 +1,4 @@
-import { CosmosQuery, FilterCondition, FilterOperator, QueryParams, SortConfig } from '@tastematcher/common';
+import { CosmosQuery, FilterCondition, QueryParams, SortConfig } from '@tastematcher/common';
 
 /**
  * Build Cosmos DB query from generic query parameters
@@ -135,7 +135,7 @@ export async function executeCosmosQuery<T>(
   partitionKey: string,
   partitionValue: string,
   queryParams: QueryParams<T>,
-  defaultSort: SortConfig<T> = { field: 'createdAt' as any, order: 'desc' },
+  defaultSort: SortConfig<T> = { field: 'createdAt', order: 'desc' },
 ): Promise<{ items: T[]; continuationToken?: string; hasMore: boolean }> {
   const builder = new CosmosQueryBuilder<T>();
 

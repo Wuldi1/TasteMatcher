@@ -5,7 +5,7 @@ import { NotFoundException } from '@nestjs/common';
 
 describe('ArtworksService', () => {
   let service: ArtworksService;
-  let cosmosService: jest.Mocked<CosmosService>;
+//   let cosmosService: jest.Mocked<CosmosService>;
 
   const mockContainer = {
     items: {
@@ -28,7 +28,7 @@ describe('ArtworksService', () => {
     }).compile();
 
     service = module.get<ArtworksService>(ArtworksService);
-    cosmosService = module.get(CosmosService) as jest.Mocked<CosmosService>;
+    // cosmosService = module.get(CosmosService) as jest.Mocked<CosmosService>;
   });
 
   it('should be defined', () => {
@@ -107,9 +107,9 @@ describe('ArtworksService', () => {
 
       mockContainer.items.query.mockReturnValue({
         fetchAll: jest.fn()
-          .mockResolvedValueOnce({ resources: [42] })  // total
-          .mockResolvedValueOnce({ resources: [28] })  // liked
-          .mockResolvedValueOnce({ resources: [5] }),  // recent
+          .mockResolvedValueOnce({ resources: [mockStats.totalArtworks] })  // total
+          .mockResolvedValueOnce({ resources: [mockStats.totalLiked] })  // liked
+          .mockResolvedValueOnce({ resources: [mockStats.recentlyAdded] }),  // recent
       });
 
       const result = await service.getStats('domain-1');

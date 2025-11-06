@@ -5,6 +5,7 @@ import { DomainsModule } from './domains/domains.module';
 import { UploadModule } from './upload/upload.module';
 import { ArtworksModule } from './artworks/artworks.module';
 import { BlobModule } from './blob/blob.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { BlobModule } from './blob/blob.module';
     UploadModule,
     ArtworksModule,
     BlobModule,
+    HealthModule,
   ],
   controllers: [],
   providers: [],

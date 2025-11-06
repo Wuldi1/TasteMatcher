@@ -27,7 +27,9 @@ APP_PLAN="tastematcher-${ENV}-plan"
 STORAGE_ACCOUNT_NAME="tastematcher${ENV}sa"  # <= 24 chars ideally, no hyphens
 COMMUNICATION_NAME="tastematcher-${ENV}-comm"
 VISION_NAME="tastematcher-${ENV}-vision"           # computer vision resource name
-
+WEBAPP_API_NAME="tastematcher-${ENV}-api"          # backend API web app name
+WEBAPP_FRONTEND_NAME="tastematcher-${ENV}-web"     # frontend web app name
+WEB_APP_PLAN="tastematcher-${ENV}-webapp-plan"     # separate app service plan for web apps
 
 echo "Environment: $ENV, Location: $LOCATION"
 echo "Resource group: $RG_NAME"
@@ -38,6 +40,8 @@ echo "Key Vault: $KV_NAME"
 echo "Function App: $FUNCAPP_NAME"
 echo "Communication resource: $COMMUNICATION_NAME"
 echo "Computer Vision resource: $VISION_NAME"
+echo "Backend API Web App: $WEBAPP_API_NAME"
+echo "Frontend Web App: $WEBAPP_FRONTEND_NAME"
 
 # Ensure az CLI logged in
 if ! az account show >/dev/null 2>&1; then
@@ -107,6 +111,8 @@ AZURE_EMAIL_SENDER_ADDRESS=${AZURE_EMAIL_SENDER_ADDRESS:-"donotreply@2fd3f94e-2f
 
 # Create Azure Cosmos DB account
 echo "Creating Azure Cosmos DB account: $COSMOS_NAME ..."
+COSMOS_DATABASE="tastematcher"
+
 if az cosmosdb show --name "$COSMOS_NAME" --resource-group "$RG_NAME" >/dev/null 2>&1; then
   echo "Cosmos DB account $COSMOS_NAME already exists. Skipping creation."
 else
@@ -118,60 +124,58 @@ else
     --enable-automatic-failover true \
     --locations regionName="$LOCATION" failoverPriority=0 isZoneRedundant=false \
     -o none
-fi
+    # Create Cosmos DB database
+    echo "Creating Cosmos DB database: $COSMOS_DATABASE ..."
+    az cosmosdb sql database create \
+      --account-name "$COSMOS_NAME" \
+      --resource-group "$RG_NAME" \
+      --name "$COSMOS_DATABASE" \
+      --throughput 400 \
+      -o none || echo "Database $COSMOS_DATABASE already exists or creation failed - continuing..."
 
-# Create Cosmos DB database
-COSMOS_DATABASE="tastematcher"
-echo "Creating Cosmos DB database: $COSMOS_DATABASE ..."
-az cosmosdb sql database create \
-  --account-name "$COSMOS_NAME" \
-  --resource-group "$RG_NAME" \
-  --name "$COSMOS_DATABASE" \
-  --throughput 400 \
-  -o none || echo "Database $COSMOS_DATABASE already exists or creation failed - continuing..."
+    # Create Cosmos DB containers with appropriate partition keys
+    echo "Creating Cosmos DB containers..."
 
-# Create Cosmos DB containers with appropriate partition keys
-echo "Creating Cosmos DB containers..."
+    # Users container - partition by /id for user isolation
+    az cosmosdb sql container create \
+      --account-name "$COSMOS_NAME" \
+      --resource-group "$RG_NAME" \
+      --database-name "$COSMOS_DATABASE" \
+      --name "Users" \
+      --partition-key-path "/id" \
+      --throughput 400 \
+      -o none || echo "Users container already exists or creation failed - continuing..."
 
-# Users container - partition by /id for user isolation
-az cosmosdb sql container create \
-  --account-name "$COSMOS_NAME" \
-  --resource-group "$RG_NAME" \
-  --database-name "$COSMOS_DATABASE" \
-  --name "Users" \
-  --partition-key-path "/id" \
-  --throughput 400 \
-  -o none || echo "Users container already exists or creation failed - continuing..."
+    # Domains container - partition by /adminEmail for domain isolation
+    az cosmosdb sql container create \
+      --account-name "$COSMOS_NAME" \
+      --resource-group "$RG_NAME" \
+      --database-name "$COSMOS_DATABASE" \
+      --name "Domains" \
+      --partition-key-path "/adminEmail" \
+      --throughput 400 \
+      -o none || echo "Domains container already exists or creation failed - continuing..."
 
-# Domains container - partition by /adminEmail for domain isolation
-az cosmosdb sql container create \
-  --account-name "$COSMOS_NAME" \
-  --resource-group "$RG_NAME" \
-  --database-name "$COSMOS_DATABASE" \
-  --name "Domains" \
-  --partition-key-path "/adminEmail" \
-  --throughput 400 \
-  -o none || echo "Domains container already exists or creation failed - continuing..."
+    # Artworks container - partition by /domainId for multi-tenant isolation
+    az cosmosdb sql container create \
+      --account-name "$COSMOS_NAME" \
+      --resource-group "$RG_NAME" \
+      --database-name "$COSMOS_DATABASE" \
+      --name "Artworks" \
+      --partition-key-path "/domainId" \
+      --throughput 400 \
+      -o none || echo "Artworks container already exists or creation failed - continuing..."
 
-# Artworks container - partition by /domainId for multi-tenant isolation
-az cosmosdb sql container create \
-  --account-name "$COSMOS_NAME" \
-  --resource-group "$RG_NAME" \
-  --database-name "$COSMOS_DATABASE" \
-  --name "Artworks" \
-  --partition-key-path "/domainId" \
-  --throughput 400 \
-  -o none || echo "Artworks container already exists or creation failed - continuing..."
-
-# Sessions container - partition by /userId for session isolation
-az cosmosdb sql container create \
-  --account-name "$COSMOS_NAME" \
-  --resource-group "$RG_NAME" \
-  --database-name "$COSMOS_DATABASE" \
-  --name "Sessions" \
-  --partition-key-path "/userId" \
-  --throughput 400 \
-  -o none || echo "Sessions container already exists or creation failed - continuing..."
+    # Sessions container - partition by /userId for session isolation
+    az cosmosdb sql container create \
+      --account-name "$COSMOS_NAME" \
+      --resource-group "$RG_NAME" \
+      --database-name "$COSMOS_DATABASE" \
+      --name "Sessions" \
+      --partition-key-path "/userId" \
+      --throughput 400 \
+      -o none || echo "Sessions container already exists or creation failed - continuing..."
+  fi
 
 # Get Cosmos DB connection string and keys
 COSMOS_CONNECTION_STRING=$(az cosmosdb keys list --name "$COSMOS_NAME" --resource-group "$RG_NAME" --type connection-strings --query "connectionStrings[0].connectionString" -o tsv)
@@ -265,13 +269,22 @@ az functionapp create \
   --storage-account "$STORAGE_ACCOUNT_NAME" \
   --plan "$APP_PLAN" \
   --runtime node \
-  --runtime-version 20 \
+  --runtime-version 22 \
   --os-type Linux \
   -o none
 
 # Enable system-assigned managed identity for Function App
 echo "Assigning system identity to function app..."
 az functionapp identity assign --name "$FUNCAPP_NAME" --resource-group "$RG_NAME" -o none
+
+# Wait for managed identity to propagate in Azure AD
+echo "Waiting for managed identity propagation..."
+sleep 30
+
+# Get Function App managed identity principal ID
+FUNC_PRINCIPAL_ID=$(az functionapp identity show --name "$FUNCAPP_NAME" --resource-group "$RG_NAME" --query principalId -o tsv)
+
+echo "Function App Principal ID: $FUNC_PRINCIPAL_ID"
 
 # Create a Service Principal for CI / admin usage
 SP_NAME="http://tastematcher-${ENV}-sp"
@@ -281,40 +294,302 @@ SP_APP_ID=$(echo "$SP_JSON" | jq -r '.appId')
 SP_PASSWORD=$(echo "$SP_JSON" | jq -r '.password')
 SP_TENANT=$(echo "$SP_JSON" | jq -r '.tenant')
 
-# Give Function managed identity access to Key Vault & Storage
-# Get principal id of Function managed identity
-FUNC_PRINCIPAL_ID=$(az functionapp identity show --name "$FUNCAPP_NAME" --resource-group "$RG_NAME" --query principalId -o tsv)
+# Get Key Vault and Storage resource IDs for role assignments
+KEYVAULT_RESOURCE_ID=$(az keyvault show --name "$KV_NAME" --resource-group "$RG_NAME" --query id -o tsv)
+STORAGE_RESOURCE_ID=$(az storage account show --name "$STORAGE_ACCOUNT_NAME" --resource-group "$RG_NAME" --query id -o tsv)
 
+# Grant Key Vault access to Function App managed identity
 echo "Assigning Key Vault access roles to function managed identity..."
-KEYVAULT_RESOURCE_ID=$(az keyvault show --name "$KV_NAME" --query id -o tsv)
 
 az role assignment create \
   --assignee-object-id "$FUNC_PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
   --role "Key Vault Secrets User" \
-  --scope "$KEYVAULT_RESOURCE_ID" -o none
+  --scope "$KEYVAULT_RESOURCE_ID" \
+  -o none
 
-# Assign storage blob contributor role to function identity for the storage account
+# Grant Storage Blob Data Contributor to Function App
 echo "Assigning 'Storage Blob Data Contributor' to function identity for storage account..."
-STORAGE_RESOURCE_ID=$(az storage account show --name "$STORAGE_ACCOUNT_NAME" --resource-group "$RG_NAME" --query id -o tsv)
-az role assignment create --assignee-object-id "$FUNC_PRINCIPAL_ID" --role "Storage Blob Data Contributor" --scope "$STORAGE_RESOURCE_ID" -o none
+
+az role assignment create \
+  --assignee-object-id "$FUNC_PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Storage Blob Data Contributor" \
+  --scope "$STORAGE_RESOURCE_ID" \
+  -o none
+
+# ============================================
+# Create App Service Plan for Web Apps
+# ============================================
+echo "Creating App Service Plan for Web Apps: $WEB_APP_PLAN ..."
+
+# Determine SKU based on environment
+if [ "$ENV" = "prod" ]; then
+  WEB_APP_SKU="P1V3"  # Production: Premium V3 tier
+else
+  WEB_APP_SKU="B1"    # Dev/Staging: Basic tier
+fi
+
+az appservice plan create \
+  --name "$WEB_APP_PLAN" \
+  --resource-group "$RG_NAME" \
+  --location "$LOCATION" \
+  --sku "$WEB_APP_SKU" \
+  --is-linux \
+  -o none
+
+# ============================================
+# Create Backend API Web App (NestJS)
+# ============================================
+echo "Creating Backend API Web App: $WEBAPP_API_NAME (Node.js 22 LTS)..."
+
+az webapp create \
+  --resource-group "$RG_NAME" \
+  --plan "$WEB_APP_PLAN" \
+  --name "$WEBAPP_API_NAME" \
+  --runtime "NODE:22-lts" \
+  -o none
+
+# Configure Web App settings for backend API
+echo "Configuring Backend API Web App settings..."
+
+az webapp config set \
+  --resource-group "$RG_NAME" \
+  --name "$WEBAPP_API_NAME" \
+  --startup-file "node dist/main.js" \
+  --always-on true \
+  --ftps-state Disabled \
+  --http20-enabled true \
+  -o none
+
+# Enable managed identity for backend API
+echo "Enabling managed identity for Backend API Web App..."
+az webapp identity assign \
+  --resource-group "$RG_NAME" \
+  --name "$WEBAPP_API_NAME" \
+  -o none
+
+# Wait for managed identity to propagate in Azure AD
+echo "Waiting for Backend API managed identity propagation..."
+sleep 30
+
+# Get backend API managed identity principal ID
+WEBAPP_API_PRINCIPAL_ID=$(az webapp identity show \
+  --resource-group "$RG_NAME" \
+  --name "$WEBAPP_API_NAME" \
+  --query principalId -o tsv)
+
+echo "Backend API Principal ID: $WEBAPP_API_PRINCIPAL_ID"
+
+# Grant Key Vault access to backend API managed identity
+echo "Granting Key Vault access to Backend API managed identity..."
+az role assignment create \
+  --assignee-object-id "$WEBAPP_API_PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Key Vault Secrets User" \
+  --scope "$KEYVAULT_RESOURCE_ID" \
+  -o none
+
+# Grant Storage Blob Data Contributor to backend API
+echo "Granting Storage Blob Data Contributor to Backend API..."
+az role assignment create \
+  --assignee-object-id "$WEBAPP_API_PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Storage Blob Data Contributor" \
+  --scope "$STORAGE_RESOURCE_ID" \
+  -o none
+
+# Configure application settings for backend API
+echo "Setting application settings for Backend API..."
+
+BACKEND_API_URL="https://${WEBAPP_API_NAME}.azurewebsites.net"
+FRONTEND_URL="https://${WEBAPP_FRONTEND_NAME}.azurewebsites.net"
+
+az webapp config appsettings set \
+  --resource-group "$RG_NAME" \
+  --name "$WEBAPP_API_NAME" \
+  --settings \
+    NODE_ENV="$ENV" \
+    PORT="8080" \
+    AZURE_STORAGE_ACCOUNT="$STORAGE_ACCOUNT_NAME" \
+    AZURE_BLOB_CONTAINER_ORIGINALS="originals" \
+    AZURE_BLOB_CONTAINER_DERIVATIVES="derivatives" \
+    IMAGE_PROCESSING_QUEUE_NAME="$QUEUE_NAME" \
+    COSMOS_DB_ENDPOINT="$COSMOS_DB_ENDPOINT" \
+    COSMOS_DB_DATABASE="$COSMOS_DATABASE" \
+    AZURE_SEARCH_ENDPOINT="https://${SEARCH_NAME}.search.windows.net" \
+    AZURE_SEARCH_INDEX_NAME="artworks-index" \
+    AZURE_AI_VISION_ENDPOINT="$VISION_ENDPOINT" \
+    AZURE_KEYVAULT_NAME="$KV_NAME" \
+    CORS_ORIGINS="$FRONTEND_URL" \
+    WEBSITE_NODE_DEFAULT_VERSION="~22" \
+  -o none
+
+# Enable CORS for frontend
+echo "Enabling CORS for Backend API..."
+az webapp cors add \
+  --resource-group "$RG_NAME" \
+  --name "$WEBAPP_API_NAME" \
+  --allowed-origins "$FRONTEND_URL" \
+  -o none
+
+# Enable Application Insights for backend API
+echo "Creating Application Insights for Backend API..."
+APP_INSIGHTS_NAME="tastematcher-${ENV}-api-insights"
+
+az monitor app-insights component create \
+  --app "$APP_INSIGHTS_NAME" \
+  --location "$LOCATION" \
+  --resource-group "$RG_NAME" \
+  --application-type web \
+  -o none || echo "Application Insights may already exist - continuing..."
+
+# Get Application Insights connection string
+APP_INSIGHTS_CONNECTION_STRING=$(az monitor app-insights component show \
+  --app "$APP_INSIGHTS_NAME" \
+  --resource-group "$RG_NAME" \
+  --query connectionString -o tsv)
+
+# Set Application Insights for backend API
+az webapp config appsettings set \
+  --resource-group "$RG_NAME" \
+  --name "$WEBAPP_API_NAME" \
+  --settings \
+    APPLICATIONINSIGHTS_CONNECTION_STRING="$APP_INSIGHTS_CONNECTION_STRING" \
+  -o none
+
+# ============================================
+# Create Frontend Web App (React SPA)
+# ============================================
+echo "Creating Frontend Web App: $WEBAPP_FRONTEND_NAME (Node.js 22 LTS)..."
+
+az webapp create \
+  --resource-group "$RG_NAME" \
+  --plan "$WEB_APP_PLAN" \
+  --name "$WEBAPP_FRONTEND_NAME" \
+  --runtime "NODE:22-lts" \
+  -o none
+
+# Configure Web App settings for frontend
+echo "Configuring Frontend Web App settings..."
+
+az webapp config set \
+  --resource-group "$RG_NAME" \
+  --name "$WEBAPP_FRONTEND_NAME" \
+  --startup-file "npx serve -s dist -l 8080" \
+  --always-on true \
+  --ftps-state Disabled \
+  --http20-enabled true \
+  -o none
+
+# Configure application settings for frontend
+echo "Setting application settings for Frontend Web App..."
+
+az webapp config appsettings set \
+  --resource-group "$RG_NAME" \
+  --name "$WEBAPP_FRONTEND_NAME" \
+  --settings \
+    NODE_ENV="production" \
+    VITE_API_BASE_URL="$BACKEND_API_URL" \
+    WEBSITE_NODE_DEFAULT_VERSION="~22" \
+    SCM_DO_BUILD_DURING_DEPLOYMENT="true" \
+  -o none
+
+# Enable Application Insights for frontend
+echo "Creating Application Insights for Frontend Web App..."
+FRONTEND_INSIGHTS_NAME="tastematcher-${ENV}-web-insights"
+
+az monitor app-insights component create \
+  --app "$FRONTEND_INSIGHTS_NAME" \
+  --location "$LOCATION" \
+  --resource-group "$RG_NAME" \
+  --application-type web \
+  -o none || echo "Application Insights may already exist - continuing..."
+
+FRONTEND_INSIGHTS_KEY=$(az monitor app-insights component show \
+  --app "$FRONTEND_INSIGHTS_NAME" \
+  --resource-group "$RG_NAME" \
+  --query instrumentationKey -o tsv)
+
+az webapp config appsettings set \
+  --resource-group "$RG_NAME" \
+  --name "$WEBAPP_FRONTEND_NAME" \
+  --settings \
+    APPINSIGHTS_INSTRUMENTATIONKEY="$FRONTEND_INSIGHTS_KEY" \
+  -o none
+
+# ============================================
+# Configure deployment slots for production
+# ============================================
+if [ "$ENV" = "prod" ]; then
+  echo "Creating staging slot for Backend API (production environment)..."
+  az webapp deployment slot create \
+    --resource-group "$RG_NAME" \
+    --name "$WEBAPP_API_NAME" \
+    --slot staging \
+    -o none || echo "Staging slot may already exist - continuing..."
+  
+  echo "Creating staging slot for Frontend (production environment)..."
+  az webapp deployment slot create \
+    --resource-group "$RG_NAME" \
+    --name "$WEBAPP_FRONTEND_NAME" \
+    --slot staging \
+    -o none || echo "Staging slot may already exist - continuing..."
+fi
+
+# ============================================
+# Create Service Principal for CI/CD
+# ============================================
+echo "Creating service principal for CI/CD..."
+SP_NAME="tastematcher-${ENV}-sp"
+
+# Check if SP already exists
+SP_APP_ID=$(az ad sp list --display-name "$SP_NAME" --query "[0].appId" -o tsv 2>/dev/null || echo "")
+
+if [ -z "$SP_APP_ID" ]; then
+  echo "Creating new service principal: $SP_NAME"
+  SP_JSON=$(az ad sp create-for-rbac \
+    --name "$SP_NAME" \
+    --role "Contributor" \
+    --scopes "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/$RG_NAME" \
+    -o json)
+  
+  SP_APP_ID=$(echo "$SP_JSON" | jq -r '.appId')
+  SP_PASSWORD=$(echo "$SP_JSON" | jq -r '.password')
+  SP_TENANT=$(echo "$SP_JSON" | jq -r '.tenant')
+else
+  echo "Service principal $SP_NAME already exists with appId: $SP_APP_ID"
+  echo "⚠️  Cannot retrieve existing password. If needed, reset credentials with:"
+  echo "    az ad sp credential reset --id $SP_APP_ID"
+  SP_PASSWORD=""
+  SP_TENANT=$(az account show --query tenantId -o tsv)
+fi
 
 # Store secrets in Key Vault
 echo "Storing secrets in Key Vault..."
-az keyvault secret set --vault-name "$KV_NAME" --name "StorageAccountKey" --value "$STORAGE_KEY" -o none
-az keyvault secret set --vault-name "$KV_NAME" --name "CosmosConnectionString" --value "$COSMOS_CONNECTION_STRING" -o none
-az keyvault secret set --vault-name "$KV_NAME" --name "CosmosPrimaryKey" --value "$COSMOS_PRIMARY_KEY" -o none
-az keyvault secret set --vault-name "$KV_NAME" --name "CosmosEndpoint" --value "$COSMOS_DB_ENDPOINT" -o none
-az keyvault secret set --vault-name "$KV_NAME" --name "CosmosDatabase" --value "$COSMOS_DATABASE" -o none
-az keyvault secret set --vault-name "$KV_NAME" --name "CommunicationConnectionString" --value "$COMMUNICATION_CONNECTION_STRING" -o none
-az keyvault secret set --vault-name "$KV_NAME" --name "CommunicationEmailSender" --value "$AZURE_EMAIL_SENDER_ADDRESS" -o none
-az keyvault secret set --vault-name "$KV_NAME" --name "JwtSecret" --value "$JWT_SECRET" -o none
-az keyvault secret set --vault-name "$KV_NAME" --name "SearchAdminKey" --value "$SEARCH_KEY" -o none
-az keyvault secret set --vault-name "$KV_NAME" --name "ComputerVisionEndpoint" --value "$VISION_ENDPOINT" -o none
-az keyvault secret set --vault-name "$KV_NAME" --name "ComputerVisionKey" --value "$VISION_KEY" -o none
-az keyvault secret set --vault-name "$KV_NAME" --name "ServicePrincipalAppId" --value "$SP_APP_ID" -o none
-az keyvault secret set --vault-name "$KV_NAME" --name "ServicePrincipalPassword" --value "$SP_PASSWORD" -o none
-az keyvault secret set --vault-name "$KV_NAME" --name "ServicePrincipalTenant" --value "$SP_TENANT" -o none
+az keyvault secret set --name "StorageAccountKey" --vault-name "$KV_NAME" --value "$STORAGE_KEY"
+az keyvault secret set --name "CosmosConnectionString" --vault-name "$KV_NAME" --value "$COSMOS_CONNECTION_STRING"
+az keyvault secret set --name "CosmosPrimaryKey" --vault-name "$KV_NAME" --value "$COSMOS_PRIMARY_KEY"
+az keyvault secret set --name "CosmosEndpoint" --vault-name "$KV_NAME" --value "$COSMOS_DB_ENDPOINT"
+az keyvault secret set --name "CosmosDatabase" --vault-name "$KV_NAME" --value "$COSMOS_DATABASE"
+az keyvault secret set --name "CommunicationConnectionString" --vault-name "$KV_NAME" --value "$COMMUNICATION_CONNECTION_STRING"
+az keyvault secret set --name "CommunicationEmailSender" --vault-name "$KV_NAME" --value "$AZURE_EMAIL_SENDER_ADDRESS"
+az keyvault secret set --name "JwtSecret" --vault-name "$KV_NAME" --value "$JWT_SECRET"
+az keyvault secret set --name "SearchAdminKey" --vault-name "$KV_NAME" --value "$SEARCH_KEY"
+az keyvault secret set --name "ComputerVisionEndpoint" --vault-name "$KV_NAME" --value "$VISION_ENDPOINT"
+az keyvault secret set --name "ComputerVisionKey" --vault-name "$KV_NAME" --value "$VISION_KEY"
+az keyvault secret set --name "BackendApiUrl" --vault-name "$KV_NAME" --value "$BACKEND_API_URL"
+az keyvault secret set --name "FrontendUrl" --vault-name "$KV_NAME" --value "$FRONTEND_URL"
+az keyvault secret set --name "AppInsightsConnectionString" --vault-name "$KV_NAME" --value "$APP_INSIGHTS_CONNECTION_STRING"
 
+if [ -n "$SP_APP_ID" ]; then
+  az keyvault secret set --name "ServicePrincipalAppId" --vault-name "$KV_NAME" --value "$SP_APP_ID"
+fi
+
+if [ -n "$SP_PASSWORD" ]; then
+  az keyvault secret set --name "ServicePrincipalPassword" --vault-name "$KV_NAME" --value "$SP_PASSWORD"
+  az keyvault secret set --name "ServicePrincipalTenant" --vault-name "$KV_NAME" --value "$SP_TENANT"
+fi
 
 # Build .env file for the backend local usage
 ENVFILE=".env.${ENV}"
@@ -361,6 +636,13 @@ AZURE_KEYVAULT_NAME=${KV_NAME}
 FUNCTION_APP_NAME=${FUNCAPP_NAME}
 FUNCTIONS_WORKER_RUNTIME=node
 
+# Web Apps
+BACKEND_API_URL=${BACKEND_API_URL}
+FRONTEND_URL=${FRONTEND_URL}
+
+# Application Insights
+APPLICATIONINSIGHTS_CONNECTION_STRING=${APP_INSIGHTS_CONNECTION_STRING}
+
 EOF
 
 echo "Provisioning complete. Important outputs:"
@@ -379,14 +661,31 @@ echo " - Key Vault name: $KV_NAME"
 echo " - Function App: $FUNCAPP_NAME"
 echo " - Communication resource: $COMMUNICATION_NAME"
 echo " - Azure Email sender address: $AZURE_EMAIL_SENDER_ADDRESS"
+echo " - Backend API Web App: $WEBAPP_API_NAME"
+echo " - Backend API URL: $BACKEND_API_URL"
+echo " - Frontend Web App: $WEBAPP_FRONTEND_NAME"
+echo " - Frontend URL: $FRONTEND_URL"
+echo " - Application Insights (API): $APP_INSIGHTS_NAME"
+echo " - Application Insights (Frontend): $FRONTEND_INSIGHTS_NAME"
 echo " - Environment file: $ENVFILE"
 
+echo ""
 echo "Next steps:"
-echo " 1. Update Prisma schema to use MongoDB connector for Cosmos DB"
-echo " 2. Create the Cognitive Search index using scripts/azure/create-search-index.sh"
-echo " 3. Deploy your Azure Function code to $FUNCAPP_NAME and ensure it has access to Key Vault"
-echo " 4. Configure Computer Vision for image vectorization in your Functions app"
-echo " 5. Use .env.${ENV} in your backend for local testing (but prefer Key Vault in prod)"
+echo " 1. Deploy backend API code to $WEBAPP_API_NAME using Azure CLI or GitHub Actions"
+echo " 2. Deploy frontend code to $WEBAPP_FRONTEND_NAME using Azure CLI or GitHub Actions"
+echo " 3. Create the Cognitive Search index using scripts/azure/create-search-index.sh"
+echo " 4. Deploy your Azure Function code to $FUNCAPP_NAME"
+echo " 5. Configure Computer Vision for image vectorization in your Functions app"
+echo " 6. Use .env.${ENV} in your backend for local testing (but prefer Key Vault in prod)"
+echo " 7. Set up GitHub Actions workflows for CI/CD deployment"
+echo ""
+echo "Deployment commands:"
+echo " - Backend API: cd webapi && pnpm build && az webapp deploy --resource-group $RG_NAME --name $WEBAPP_API_NAME --src-path dist.zip --type zip"
+echo " - Frontend: cd frontend && pnpm build && az webapp deploy --resource-group $RG_NAME --name $WEBAPP_FRONTEND_NAME --src-path dist.zip --type zip"
+echo ""
+echo "Health check URLs:"
+echo " - Backend API: ${BACKEND_API_URL}/health"
+echo " - Frontend: $FRONTEND_URL"
 
 
 

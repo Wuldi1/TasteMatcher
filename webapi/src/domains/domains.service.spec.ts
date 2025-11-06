@@ -45,7 +45,7 @@ const createMockContainer = () => {
         return { resource: { ...doc } };
       }),
     },
-    item: jest.fn().mockImplementation((id: string, partitionKey: string) => ({
+    item: jest.fn().mockImplementation((id: string, _: string) => ({
       replace: jest.fn().mockImplementation(async (doc) => {
         store[id] = doc;
         return { resource: { ...doc } };
@@ -144,7 +144,7 @@ describe('DomainsService', () => {
 
   it('rejects expired verification code', async () => {
     const adminEmail = 'expired@tld.com';
-    const challenge = await service.createDomain({ name: 'Expired', adminEmail });
+    await service.createDomain({ name: 'Expired', adminEmail });
     const storeEntry = Object.values((mockContainer as any).__store)[0] as any;
     storeEntry.verificationCodeExpiresAt = new Date(Date.now() - 1000).toISOString();
 

@@ -20,6 +20,7 @@ describe('UploadController', () => {
       buffer: Buffer.from('test'),
       originalname: 'photo.jpg',
       mimetype: 'image/jpeg',
+      // eslint-disable-next-line no-undef
     } as Express.Multer.File;
 
     const response: ProcessingStatus = {
@@ -58,6 +59,7 @@ describe('UploadController', () => {
       buffer: Buffer.from('test'),
       originalname: 'photo.jpg',
       mimetype: 'image/jpeg',
+      // eslint-disable-next-line no-undef
     } as Express.Multer.File;
 
     const body = {

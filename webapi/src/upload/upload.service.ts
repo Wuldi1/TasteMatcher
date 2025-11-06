@@ -48,6 +48,7 @@ export class UploadService {
 
   async uploadFileAndEnqueue(
     domainId: string,
+    // eslint-disable-next-line no-undef
     file: Express.Multer.File,
     artwork: Artwork
   ): Promise<ProcessingStatus> {
@@ -167,7 +168,7 @@ export class UploadService {
       // Upload the file
       const blockBlobClient: BlockBlobClient = containerClient.getBlockBlobClient(blobName);
       
-      const uploadResponse = await blockBlobClient.uploadData(fileBuffer, {
+      await blockBlobClient.uploadData(fileBuffer, {
         blobHTTPHeaders: {
           blobContentType: contentType,
           blobCacheControl: 'public, max-age=31536000', // 1 year cache

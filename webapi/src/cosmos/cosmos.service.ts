@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { CosmosClient, CosmosClientOptions, Container, Database } from '@azure/cosmos';
+import { CosmosClient, CosmosClientOptions, Container, Database, PartitionKeyKind } from '@azure/cosmos';
 
 const USER_AGENT_SUFFIX = 'TasteMatcher-WebAPI';
 
@@ -33,11 +33,11 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
       id: 'ArtworkPreferences',
       partitionKey: {
         paths: ['/userId'], // Partition by userId for efficient user-scoped queries
-        kind: 'Hash' as any,
+        kind: PartitionKeyKind.Hash,
       },
     };
 
-    var database = await this.getDatabase();
+    const database = await this.getDatabase();
 
     await database.containers.createIfNotExists(preferencesContainerDef);
     this.logger.log('ArtworkPreferences container initialized');
