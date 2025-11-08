@@ -1,21 +1,21 @@
+# ---------- CODEGEN CHECKLIST (must be satisfied) ----------
+# 1. Excludes unnecessary files from deployment package
+# 2. Reduces deployment package size
+# 3. Follows Azure Functions best practices
+# -----------------------------------------------------------
+
 *.js.map
 *.ts
 .git*
 .vscode
-__azurite_db*__.json
-__blobstorage__
-__queuestorage__
 local.settings.json
 test
 tsconfig.json
-.funcignore
-.gitignore
-.editorconfig
-*.md
+.env
 node_modules/@types
-node_modules/typescript
-node_modules/jest
-azurite
-.env*
-*.spec.ts
+src/**/*.spec.ts
+src/**/*.test.ts
+__tests__
 coverage
+*.log
+.DS_Store

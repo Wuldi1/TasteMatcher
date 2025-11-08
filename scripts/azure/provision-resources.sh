@@ -136,16 +136,6 @@ else
     # Create Cosmos DB containers with appropriate partition keys
     echo "Creating Cosmos DB containers..."
 
-    # Users container - partition by /id for user isolation
-    az cosmosdb sql container create \
-      --account-name "$COSMOS_NAME" \
-      --resource-group "$RG_NAME" \
-      --database-name "$COSMOS_DATABASE" \
-      --name "Users" \
-      --partition-key-path "/id" \
-      --throughput 400 \
-      -o none || echo "Users container already exists or creation failed - continuing..."
-
     # Domains container - partition by /adminEmail for domain isolation
     az cosmosdb sql container create \
       --account-name "$COSMOS_NAME" \
@@ -165,16 +155,6 @@ else
       --partition-key-path "/domainId" \
       --throughput 400 \
       -o none || echo "Artworks container already exists or creation failed - continuing..."
-
-    # Sessions container - partition by /userId for session isolation
-    az cosmosdb sql container create \
-      --account-name "$COSMOS_NAME" \
-      --resource-group "$RG_NAME" \
-      --database-name "$COSMOS_DATABASE" \
-      --name "Sessions" \
-      --partition-key-path "/userId" \
-      --throughput 400 \
-      -o none || echo "Sessions container already exists or creation failed - continuing..."
   fi
 
 # Get Cosmos DB connection string and keys
@@ -205,15 +185,6 @@ setup_cosmos_data() {
 }
 EOF
 )
-
-  # Insert admin user (will fail silently if exists)
-  echo "$ADMIN_USER_JSON" | az cosmosdb sql container item create \
-    --account-name "$COSMOS_NAME" \
-    --resource-group "$RG_NAME" \
-    --database-name "$COSMOS_DATABASE" \
-    --container-name "Users" \
-    --body @- \
-    -o none 2>/dev/null || echo "Admin user may already exist - continuing..."
   
   echo "✅ Cosmos DB initial data setup completed!"
 }
@@ -285,6 +256,32 @@ sleep 30
 FUNC_PRINCIPAL_ID=$(az functionapp identity show --name "$FUNCAPP_NAME" --resource-group "$RG_NAME" --query principalId -o tsv)
 
 echo "Function App Principal ID: $FUNC_PRINCIPAL_ID"
+
+# Configure Function App settings
+echo "Configuring Function App settings..."
+
+STORAGE_CONNECTION_STRING=$(az storage account show-connection-string \
+  --name "$STORAGE_ACCOUNT_NAME" \
+  --resource-group "$RG_NAME" \
+  --query connectionString -o tsv)
+
+az functionapp config appsettings set \
+  --resource-group "$RG_NAME" \
+  --name "$FUNCAPP_NAME" \
+  --settings \
+    FUNCTIONS_WORKER_RUNTIME="node" \
+    WEBSITE_NODE_DEFAULT_VERSION="~22" \
+    FUNCTIONS_EXTENSION_VERSION="~4" \
+    AzureWebJobsStorage="$STORAGE_CONNECTION_STRING" \
+    AZURE_STORAGE_ACCOUNT="$STORAGE_ACCOUNT_NAME" \
+    AZURE_KEYVAULT_URI="https://${KV_NAME}.vault.azure.net/" \
+    IMAGE_PROCESSING_QUEUE_NAME="$QUEUE_NAME" \
+    AZURE_BLOB_CONTAINER_ORIGINALS="originals" \
+    AZURE_BLOB_CONTAINER_DERIVATIVES="derivatives" \
+    NODE_ENV="$ENV" \
+  -o none
+
+echo "✅ Function App configured successfully"
 
 # Create a Service Principal for CI / admin usage
 SP_NAME="http://tastematcher-${ENV}-sp"
