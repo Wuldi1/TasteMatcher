@@ -12,16 +12,14 @@
 // -----------------------------------------------------------
 
 import { app, InvocationContext } from '@azure/functions';
-import { AzureKeyCredential, SearchClient } from '@azure/search-documents';
 import type { ImageProcessingQueueMessage } from '@tastematcher/common';
 import { createLogger } from '../lib/logger';
 import { BlobService } from '../services/Blob/BlobService';
 import { ThumbnailService } from '../services/Thumbnail/ThumbnailService';
 import { VectorizationService } from '../services/Vectorization/VectorizationService';
 import { SearchIndexService } from '../services/SearchIndex/SearchIndexService';
-import { loadConfig } from '../lib/config';
 import { metrics } from '../lib/metrics';
-import { retryWithBackoff } from '../utils/retry';
+import { loadConfig } from '../config';
 
 const logger = createLogger('ProcessImagesFromBlob');
 
@@ -40,11 +38,11 @@ function validateMessage(message: unknown): asserts message is ImageProcessingQu
   if (!msg.domainId || typeof msg.domainId !== 'string') {
     throw new Error('Invalid message: domainId is required');
   }
-  if (!msg.containerName || typeof msg.containerName !== 'string') {
-    throw new Error('Invalid message: containerName is required');
-  }
   if (!msg.blobName || typeof msg.blobName !== 'string') {
     throw new Error('Invalid message: blobName is required');
+  }
+  if (!msg.fileUrl || typeof msg.fileUrl !== 'string') {
+    throw new Error('Invalid message: fileUrl is required');
   }
 }
 
@@ -65,7 +63,6 @@ export async function processImagesFromBlob(
   context: InvocationContext
 ): Promise<void> {
   const start = Date.now();
-  const correlationId = context.invocationId;
 
   try {
     // Validate message structure
@@ -78,7 +75,9 @@ export async function processImagesFromBlob(
       artworkId: message.artworkId,
       domainId: message.domainId,
       blobName: message.blobName,
-      correlationId: message.correlationId || correlationId,
+      fileUrl: message.fileUrl,
+      correlationId: message.messageId,
+      invocationContextId: context.invocationId
     });
 
     metrics.increment('image_processing.received', {
@@ -86,43 +85,7 @@ export async function processImagesFromBlob(
     });
 
     // Initialize search client for idempotency check
-    var config = loadConfig();
-
-    const searchClient = new SearchClient(
-      config.azure.searchEndpoint,
-      config.azure.searchIndexName,
-      new AzureKeyCredential(config.azure.searchKey)
-    );
-
-    /**
-     * Check if message was already processed (idempotency).
-    */
-
-    await retryWithBackoff(
-      async () => {
-        logger.debug({ artworkId: message.artworkId, messageId: message.messageId, correlationId: message.correlationId || correlationId }, 'Checking idempotency');
-        const doc = await searchClient.getDocument(message.artworkId);
-        const alreadyProcessed = doc && (doc as { processedMessageId?: string }).processedMessageId === message.messageId;
-
-        if (alreadyProcessed) {
-          logger.info({ artworkId: message.artworkId, messageId: message.messageId, correlationId: message.correlationId || correlationId }, 'Document already processed');
-          throw new Error('Document already processed');
-        }
-      }, {
-      maxAttempts: 3,
-      initialDelayMs: 1000,
-      maxDelayMs: 30000,
-      backoffMultiplier: 2,
-    }, message.artworkId, logger)
-      .catch(err => {
-        logger.error({
-          msg: 'Failed to check idempotency after retries',
-          artworkId: message.artworkId,
-          messageId: message.messageId,
-          err,
-        });
-        throw err;
-      });
+    const config = loadConfig();
 
     // Initialize services
     const blobService = new BlobService(config);
@@ -134,13 +97,13 @@ export async function processImagesFromBlob(
     logger.debug({
       msg: 'Downloading blob',
       artworkId: message.artworkId,
-      container: message.containerName,
       blob: message.blobName,
-      correlationId,
+      messageId: message.messageId,
+      invocationContextId: context.invocationId
     });
 
     const imageBuffer = await blobService.downloadBlob(
-      message.containerName,
+      config.azure.storageContainerOriginals,
       message.blobName
     );
 
@@ -151,12 +114,15 @@ export async function processImagesFromBlob(
     // Step 2: Generate thumbnails
     logger.debug({
       msg: 'Generating thumbnails',
+      imageUrl: message.fileUrl,
       artworkId: message.artworkId,
-      correlationId,
+      messageId: message.messageId,
+      invocationContextId: context.invocationId
     });
 
-    const thumbnails = await thumbnailService.generateThumbnails(
+    const thumbnails = await thumbnailService.generateAndUploadThumbnails(
       imageBuffer,
+      message.domainId,
       message.artworkId
     );
 
@@ -169,28 +135,31 @@ export async function processImagesFromBlob(
     logger.debug({
       msg: 'Generating vector embedding',
       artworkId: message.artworkId,
-      correlationId,
+      messageId: message.messageId,
+      imageUrl: message.fileUrl,
+      invocationContextId: context.invocationId
     });
 
-    const vectorEmbedding = await vectorizationService.generateEmbedding(imageBuffer, correlationId);
+    const vectorEmbedding = await vectorizationService.generateEmbedding(message.fileUrl, message.messageId);
 
     metrics.increment('image_processing.vectorized', {
       artworkId: message.artworkId,
       domainId: message.domainId,
-      correlationId,
+      messageId: message.messageId,
+      invocationContextId: context.invocationId
     });
 
     // Step 4: Index in cognitive search
     logger.debug({
       msg: 'Indexing in cognitive search',
       artworkId: message.artworkId,
-      correlationId,
+      messageId: message.messageId,
+      invocationContextId: context.invocationId
     });
 
     await searchIndexService.indexArtwork({
       artworkId: message.artworkId,
       domainId: message.domainId,
-      thumbnails,
       vectorEmbedding,
     });
 
@@ -206,7 +175,7 @@ export async function processImagesFromBlob(
       artworkId: message.artworkId,
       domainId: message.domainId,
       durationMs,
-      correlationId: message.correlationId || correlationId,
+      invocationContextId: context.invocationId
     });
 
     metrics.timing('image_processing.duration', durationMs, {
@@ -220,8 +189,7 @@ export async function processImagesFromBlob(
       msg: 'Image processing failed',
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      durationMs,
-      correlationId,
+      durationMs
     });
 
     metrics.increment('image_processing.failed', {
@@ -233,10 +201,11 @@ export async function processImagesFromBlob(
   }
 }
 
-var config = loadConfig();
+const appConfig = loadConfig();
+
 // Register Azure Function with queue trigger
 app.storageQueue('ProcessImagesFromBlob', {
-  queueName: config.azure.imageProcessingQueueName,
-  connection: config.azure.storageConnectionString,
+  queueName: appConfig.queue.name,
+  connection: 'AzureWebJobsStorage', // Use connection string name, not the actual connection string
   handler: processImagesFromBlob,
 });

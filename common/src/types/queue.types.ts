@@ -2,19 +2,23 @@ import { Artwork, ThumbnailInfo } from "./artwork.types";
 
 export type UploadStatus = 'pending' | 'enqueued' | 'processing' | 'completed' | 'failed';
 
-export interface IndexingJobMessage {
+export interface ImageProcessingQueueMessage {
+  /** Unique message identifier for idempotency */
   messageId: string;
-  artId: string;
+  /** Artwork database ID */
+  artworkId: string;
+  /** Domain this artwork belongs to */
   domainId: string;
+  /** Blob name/path */
   blobName: string;
-  artwork: Artwork;
-  attempt: number;
-  enqueuedAt?: number; // timestamp
+  /** File URL */
+  fileUrl: string;
+  /** Timestamp when uploaded */
+  uploadedAt: number;
 }
 
-
 export interface ProcessingStatus {
-  artId: string;
+  artworkId: string;
   status: UploadStatus;
   progress: number;       // 0-100 percentage
   thumbnails?: Array<ThumbnailInfo>;

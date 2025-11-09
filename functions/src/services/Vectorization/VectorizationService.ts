@@ -1,67 +1,92 @@
-import ImageAnalysisClient from '@azure-rest/ai-vision-image-analysis';
-import { AzureKeyCredential } from '@azure/core-auth';
+// ---------- CODEGEN CHECKLIST (must be satisfied) ----------
+// 1. Uses Azure AI Vision Vectorize Images API for proper embeddings
+// 2. Follows Azure best practices for AI Vision API
+// -----------------------------------------------------------
+
 import type { VectorEmbedding } from '@tastematcher/common';
 import { createLogger } from '../../lib/logger';
-import type { Config } from '../../lib/config';
+import type { AppConfig } from '../../config';
+import { retryWithBackoff } from '../../utils/retry';
 
 const logger = createLogger('VectorizationService');
 
+interface SingleVectorResultApiModel {
+  vector: number[];
+  modelVersion: string;
+}
+
 /**
- * Service for generating vector embeddings from images using Azure AI Vision
+ * Service for generating vector embeddings from images using Azure AI Vision Vectorize Images API
  */
 export class VectorizationService {
-  private visionClient: ReturnType<typeof ImageAnalysisClient>;
+  private readonly visionEndpoint: string;
+  private readonly visionKey: string;
   private readonly minEmbeddingDimensions = 512;
 
-  constructor(config: Config) {
-    this.visionClient = ImageAnalysisClient(
-      config.azure.aiVisionEndpoint,
-      new AzureKeyCredential(config.azure.aiVisionKey)
-    );
+  constructor(config: AppConfig) {
+    // Remove trailing slash if present
+    this.visionEndpoint = config.azure.aiVisionEndpoint.replace(/\/$/, '');
+    this.visionKey = config.azure.aiVisionKey;
   }
 
   /**
-   * Generates vector embedding for an image using Azure AI Vision
-   * @param imageBuffer - Image data to vectorize
+   * Generates vector embedding for an image using Azure AI Vision Vectorize Images API
+   * @param imageUrl - Public URL of the image to vectorize
    * @param correlationId - Correlation ID for logging
    * @returns Vector embedding with model metadata
    */
   async generateEmbedding(
-    imageBuffer: Buffer,
+    imageUrl: string,
     correlationId: string
   ): Promise<VectorEmbedding> {
-    const maxRetries = 3;
-    const baseDelay = 2000;
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
+    return await retryWithBackoff(async () => {
         logger.debug({
-          msg: 'Generating embedding with Azure AI Vision',
-          attempt: attempt + 1,
-          imageSizeBytes: imageBuffer.length,
+          msg: 'Generating embedding with Azure AI Vision Vectorize Images API',
+          imageUrl,
+          endpoint: this.visionEndpoint,
           correlationId,
         });
 
-        if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length === 0) {
-          throw new Error('Invalid image buffer');
-        }
+        // Correct API endpoint format for vectorization
+        // Format: https://<resource-name>.cognitiveservices.azure.com/computervision/retrieval:vectorizeImage?api-version=2024-02-01
+        const vectorizeUrl = `${this.visionEndpoint}/computervision/retrieval:vectorizeImage?api-version=2024-02-01&model-version=2023-04-15`;
 
-        // Call Azure AI Vision to generate vector embedding
-        const result = await this.visionClient.path('/imageanalysis:analyze').post({
-          contentType: 'application/octet-stream',
-          body: imageBuffer,
-          queryParameters: {
-            features: ['vectorize'] as const,
-            'api-version': '2023-02-01-preview',
-          },
+        logger.debug({
+          msg: 'Making request to Azure AI Vision',
+          url: vectorizeUrl,
+          correlationId,
         });
 
-        if (result.status !== '200') {
-          throw new Error(`Azure AI Vision API returned status ${result.status}: ${JSON.stringify(result.body)}`);
+        const response = await fetch(vectorizeUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Ocp-Apim-Subscription-Key': this.visionKey,
+          },
+          body: JSON.stringify({
+            url: imageUrl
+          })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          logger.error({
+            msg: 'Azure AI Vision API error',
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText,
+            endpoint: vectorizeUrl,
+            correlationId,
+          });
+          throw new Error(
+            `Azure AI Vision Vectorize API returned status ${response.status}: ${errorText}`
+          );
         }
 
-        const body = result.body as any;
-        const embedding: number[] = body.vectorResult?.values || [];
+        const result = await response.json() as SingleVectorResultApiModel;
+
+        const embedding: number[] = result.vector || [];
 
         if (embedding.length < this.minEmbeddingDimensions) {
           throw new Error(
@@ -72,39 +97,23 @@ export class VectorizationService {
         logger.debug({
           msg: 'Embedding generated successfully',
           dimensions: embedding.length,
-          model: body.modelVersion || 'unknown',
+          model: result.modelVersion || '2023-04-15',
           correlationId,
         });
 
         return {
           vector: embedding,
-          model: body.modelVersion || 'azure-vision-v4',
+          model: result.modelVersion || 'azure-vision-vectorize-2023-04-15',
         };
-
-      } catch (error) {
-        const isLastAttempt = attempt === maxRetries;
-        
-        logger.warn({
-          msg: 'Embedding generation failed',
-          attempt: attempt + 1,
-          error: error instanceof Error ? error.message : 'Unknown',
-          willRetry: !isLastAttempt,
-          correlationId,
-        });
-
-        if (isLastAttempt) {
-          throw new Error(
-            `Failed to generate embedding after ${maxRetries + 1} attempts: ${
-              error instanceof Error ? error.message : 'Unknown error'
-            }`
-          );
-        }
-
-        const delay = baseDelay * Math.pow(2, attempt);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-
-    throw new Error('Unexpected: retry loop completed without return or throw');
+      },
+      {
+        maxAttempts: 2,
+        initialDelayMs: 100,
+        maxDelayMs: 1000,
+        backoffMultiplier: 4,
+      },
+      `generateEmbedding-${correlationId}`,
+      logger
+    );
   }
 }

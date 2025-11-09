@@ -82,7 +82,7 @@ else
 fi
 
 # Bundle ALL node_modules (production dependencies)
-echo "📦 Installing production dependencies locally..."
+echo "📦 Installing production dependencies..."
 
 # Create a temporary directory for dependency installation
 TEMP_DIR=$(mktemp -d)
@@ -93,12 +93,17 @@ cat > "$TEMP_DIR/package.json" <<EOF
 {
   "name": "@tastematcher/functions",
   "version": "1.0.0",
-  "dependencies": $(jq '.dependencies' package.json | jq 'del(.["@tastematcher/common"])')
+  "dependencies": $(jq '.dependencies' package.json | jq 'del(.["@tastematcher/common"])'),
+  "engines": {
+    "node": ">=22.x"
+  }
 }
 EOF
 
 # Install production dependencies
+# No need for platform-specific flags since jimp is pure JavaScript!
 cd "$TEMP_DIR"
+echo "📦 Installing dependencies (pure JavaScript - no native modules!)..."
 npm install --omit=dev --no-package-lock --production
 
 # Return to functions directory
@@ -146,7 +151,7 @@ EOF
 
 echo "✅ Deployment directory prepared"
 
-# Create .deployment file for Kudu - DISABLE build
+# Create .deployment file for Kudu
 cat > deploy/.deployment <<'EOF'
 [config]
 SCM_DO_BUILD_DURING_DEPLOYMENT=false

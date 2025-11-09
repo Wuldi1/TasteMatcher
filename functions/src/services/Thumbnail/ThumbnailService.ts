@@ -1,9 +1,17 @@
-import sharp from 'sharp';
-import { getThumbnailSizeFromDimensions, ThumbnailInfo } from '@tastematcher/common';
+// ---------- CODEGEN CHECKLIST (must be satisfied) ----------
+// 1. Uses TypeScript strict types (no `any`).
+// 2. Uses jimp (pure JavaScript) instead of sharp (native module).
+// 3. Cross-platform compatible - no native dependencies.
+// 4. Adds structured logging at function entry/exit and on errors.
+// 5. No duplicate logic — reuses existing BlobService.
+// -----------------------------------------------------------
+
+import Jimp from 'jimp';
+import { getDerivativeBlobPath, getThumbnailSizeFromDimensions, ThumbnailInfo } from '@tastematcher/common';
 import type { ThumbnailSize } from '@tastematcher/common';
 import { createLogger } from '../../lib/logger';
 import { BlobService } from '../Blob/BlobService';
-import type { Config } from '../../lib/config';
+import type { AppConfig } from '../../config';
 
 const logger = createLogger('ThumbnailService');
 
@@ -14,81 +22,116 @@ const THUMBNAIL_SIZES: ThumbnailSize[] = [
 ];
 
 /**
- * Service for generating image thumbnails at multiple sizes
+ * Service for generating image thumbnails at multiple sizes using Jimp.
+ * Jimp is a pure JavaScript image processing library with no native dependencies,
+ * ensuring cross-platform compatibility and easier deployment to Azure Functions.
  */
 export class ThumbnailService {
   private blobService: BlobService;
-  private containerName = 'thumbnails';
+  private containerName: string;
 
-  constructor(config: Config) {
+  constructor(config: AppConfig) {
     this.blobService = new BlobService(config);
+    this.containerName = config.azure.storageContainerThumbnails || 'derivatives';
   }
 
   /**
    * Generates thumbnails at predefined sizes and uploads them to blob storage
    */
-  async generateThumbnails(
+  async generateAndUploadThumbnails(
     imageBuffer: Buffer,
+    domainId: string,
     artworkId: string
   ): Promise<ThumbnailInfo[]> {
     logger.debug({
-      msg: 'Generating thumbnails',
+      msg: 'Generating thumbnails with Jimp',
       artworkId,
       sizes: THUMBNAIL_SIZES.length,
+      imageSizeBytes: imageBuffer.length,
     });
 
     const results: ThumbnailInfo[] = [];
 
-    for (const size of THUMBNAIL_SIZES) {
-      try {
-        const thumbnailBuffer = await sharp(imageBuffer)
-          .resize(size.width, size.height, {
-            fit: 'cover',
-            position: 'center',
-          })
-          .jpeg({ quality: 85 })
-          .toBuffer();
+    try {
+      // Load the image once with Jimp
+      const image = await Jimp.read(imageBuffer);
 
-        const blobName = `${artworkId}/${getThumbnailSizeFromDimensions(size.width, size.height)}.jpg`;
-        const blobUrl = await this.blobService.uploadBlob(
-          this.containerName,
-          blobName,
-          thumbnailBuffer,
-          'image/jpeg'
-        );
+      for (const size of THUMBNAIL_SIZES) {
+        try {
+          // Clone the image for each size to avoid mutating the original
+          const thumbnail = image.clone();
 
-        results.push({
-          url: blobUrl,
-          width: size.width,
-          height: size.height,
-        });
+          // Resize maintaining aspect ratio - scales to fit within bounds
+          // This preserves the original image ratio instead of cropping
+          thumbnail.scaleToFit(size.width, size.height);
 
-        logger.debug({
-          msg: 'Thumbnail generated',
-          artworkId,
-          blobUrl,
-        });
+          // Set JPEG quality
+          thumbnail.quality(85);
 
-      } catch (error) {
-        logger.error({
-          msg: 'Failed to generate thumbnail',
-          artworkId,
-          error: error instanceof Error ? error.message : 'Unknown',
-        });
-        throw new Error(
-          `Failed to generate thumbnail: ${
-            error instanceof Error ? error.message : 'Unknown error'
-          }`
-        );
+          // Convert to buffer
+          const thumbnailBuffer = await thumbnail.getBufferAsync(Jimp.MIME_JPEG);
+
+          // Get actual dimensions after resize (may be smaller than requested to maintain ratio)
+          const actualWidth = thumbnail.getWidth();
+          const actualHeight = thumbnail.getHeight();
+
+          const blobName = getDerivativeBlobPath(domainId, artworkId, getThumbnailSizeFromDimensions(size.width, size.height));
+          const blobUrl = await this.blobService.uploadBlob(
+            this.containerName,
+            blobName,
+            thumbnailBuffer,
+            'image/jpeg'
+          );
+
+          results.push({
+            url: blobUrl,
+            width: actualWidth,
+            height: actualHeight,
+          });
+
+          logger.debug({
+            msg: 'Thumbnail generated',
+            artworkId,
+            requestedSize: `${size.width}x${size.height}`,
+            actualSize: `${actualWidth}x${actualHeight}`,
+            blobUrl,
+            thumbnailSizeBytes: thumbnailBuffer.length,
+          });
+
+        } catch (error) {
+          logger.error({
+            msg: 'Failed to generate thumbnail for size',
+            artworkId,
+            size: `${size.width}x${size.height}`,
+            error: error instanceof Error ? error.message : 'Unknown',
+          });
+          throw new Error(
+            `Failed to generate thumbnail (${size.width}x${size.height}): ${
+              error instanceof Error ? error.message : 'Unknown error'
+            }`
+          );
+        }
       }
+
+      logger.info({
+        msg: 'All thumbnails generated successfully',
+        artworkId,
+        count: results.length,
+      });
+
+      return results;
+
+    } catch (error) {
+      logger.error({
+        msg: 'Failed to load image with Jimp',
+        artworkId,
+        error: error instanceof Error ? error.message : 'Unknown',
+      });
+      throw new Error(
+        `Failed to process image: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
     }
-
-    logger.info({
-      msg: 'All thumbnails generated',
-      artworkId,
-      count: results.length,
-    });
-
-    return results;
   }
 }

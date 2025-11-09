@@ -1,6 +1,6 @@
 import { BlobServiceClient } from '@azure/storage-blob';
 import { createLogger } from '../../lib/logger';
-import type { Config } from '../../lib/config';
+import type { AppConfig } from '../../config';
 import { retryWithBackoff } from '../../utils/retry';
 
 const logger = createLogger('BlobService');
@@ -11,7 +11,7 @@ const logger = createLogger('BlobService');
 export class BlobService {
   private client: BlobServiceClient;
 
-  constructor(config: Config) {
+  constructor(config: AppConfig) {
     this.client = BlobServiceClient.fromConnectionString(
       config.azure.storageConnectionString
     );
@@ -55,7 +55,7 @@ export class BlobService {
         return buffer;
       },
         {
-          maxAttempts: 5,
+          maxAttempts: 2,
           initialDelayMs: 1000,
           maxDelayMs: 10000,
           backoffMultiplier: 2,
@@ -101,7 +101,7 @@ export class BlobService {
         return blobClient.url;
       },
       {
-        maxAttempts: 5,
+        maxAttempts: 2,
         initialDelayMs: 1000,
         maxDelayMs: 10000,
         backoffMultiplier: 2,

@@ -20,22 +20,22 @@ import {
 
 describe('naming utils', () => {
   const domainId = '11111111-1111-1111-1111-111111111111';
-  const artId = '22222222-2222-2222-2222-222222222222';
+  const artworkId = '22222222-2222-2222-2222-222222222222';
 
   it('returns original blob path', () => {
-    expect(getOriginalBlobPath(domainId, artId, 'jpg')).toBe(
-      `${domainId}/artworks/${artId}/original.jpg`,
+    expect(getOriginalBlobPath(domainId, artworkId, 'jpg')).toBe(
+      `${domainId}/artworks/${artworkId}/original.jpg`,
     );
   });
 
   it('returns derivative path', () => {
-    expect(getDerivativeBlobPath(domainId, artId, 320)).toBe(
-      `${domainId}/artworks/${artId}/thumb-320.webp`,
+    expect(getDerivativeBlobPath(domainId, artworkId, "Small")).toBe(
+      `${domainId}/artworks/${artworkId}/small.webp`,
     );
   });
 
   it('returns search doc id', () => {
-    expect(getSearchDocId(domainId, artId)).toBe(`${domainId}::${artId}`);
+    expect(getSearchDocId(domainId, artworkId)).toBe(`${domainId}::${artworkId}`);
   });
 
   it('returns queue name', () => {
@@ -44,7 +44,7 @@ describe('naming utils', () => {
   });
 
   it('throws for invalid ids', () => {
-    expect(() => getOriginalBlobPath('', artId, 'jpg')).toThrow();
-    expect(() => getDerivativeBlobPath(domainId, artId, 0)).toThrow();
+    expect(() => getOriginalBlobPath('', artworkId, 'jpg')).toThrow();
+    expect(() => getDerivativeBlobPath(domainId, artworkId, "Small")).toThrow();
   });
 });

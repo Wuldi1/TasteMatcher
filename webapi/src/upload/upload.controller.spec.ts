@@ -24,7 +24,7 @@ describe('UploadController', () => {
     } as Express.Multer.File;
 
     const response: ProcessingStatus = {
-      artId: 'art-123',
+      artworkId: 'art-123',
       status: 'enqueued',
       progress: 0,
     };

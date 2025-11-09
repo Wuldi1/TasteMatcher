@@ -23,28 +23,29 @@ const validateId = (label: string, value: string): void => {
   );
 };
 
-export const getOriginalBlobPath = (domainId: string, artId: string, ext: string): string => {
+export const getOriginalBlobPath = (domainId: string, artworkId: string, ext: string): string => {
   validateId('domainId', domainId);
-  validateId('artId', artId);
+  validateId('artworkId', artworkId);
   assert.ok(ext, 'ext required');
-  return `${domainId}/artworks/${artId}/original.${ext.replace(/[^a-z0-9.]/gi, '')}`;
+  return `${domainId}/artworks/${artworkId}/original.${ext.replace(/[^a-z0-9.]/gi, '')}`;
 };
 
 export const getDerivativeBlobPath = (
   domainId: string,
-  artId: string,
-  size: number,
+  artworkId: string,
+  size: string,
 ): string => {
   validateId('domainId', domainId);
-  validateId('artId', artId);
-  assert.ok(size > 0, 'size must be positive');
-  return `${domainId}/artworks/${artId}/thumb-${size}.webp`;
+  validateId('artworkId', artworkId);
+  // size can be only Small, Medium, Large as per ThumbnailSize type
+  assert.ok(['Small', 'Medium', 'Large'].includes(size), `Invalid size: ${size}. Allowed values are Small, Medium, Large.`);
+  return `${domainId}/artworks/${artworkId}/${size.toLocaleLowerCase()}.jpg`;
 };
 
-export const getSearchDocId = (domainId: string, artId: string): string => {
+export const getSearchDocId = (domainId: string, artworkId: string): string => {
   validateId('domainId', domainId);
-  validateId('artId', artId);
-  return `${domainId}::${artId}`;
+  validateId('artworkId', artworkId);
+  return `${domainId}::${artworkId}`;
 };
 
 export const getQueueName = (env: string): string => {

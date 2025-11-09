@@ -5,7 +5,7 @@ import { QueueServiceClient, StorageSharedKeyCredential as QueueCredential } fro
 import { CosmosService } from '../cosmos/cosmos.service';
 import { BlockBlobClient } from '@azure/storage-blob';
 import { v4 as uuidv4 } from 'uuid';
-import { IndexingJobMessage, Artwork, ProcessingStatus } from '@tastematcher/common';
+import { ImageProcessingQueueMessage, Artwork, ProcessingStatus, getOriginalBlobPath } from '@tastematcher/common';
 
 interface UploadConfig {
   account: string;
@@ -64,7 +64,7 @@ export class UploadService {
     this.validateUploadRequest(file.buffer, file.mimetype);
 
     const ext = this.extractFileExtension(file.mimetype);
-    const blobName = `${domainId}/artworks/${artwork.id}/original.${ext}`;
+    const blobName = getOriginalBlobPath(domainId, artwork.id, ext);
 
     this.logger.log(`Uploading artwork ${artwork.id} to blob storage ${blobName}`);
 
@@ -85,7 +85,7 @@ export class UploadService {
         blobName,
       });
       return {
-        artId: artwork.id,
+        artworkId: artwork.id,
         status: 'enqueued',
         progress: 0
       };
@@ -232,14 +232,13 @@ export class UploadService {
       domainId: artwork.domainId,
       blobName,
     });
-    const job: IndexingJobMessage = {
+    const job: ImageProcessingQueueMessage = {
       messageId: uuidv4(),
-      artId: artwork.id,
+      artworkId: artwork.id,
       domainId: artwork.domainId,
       blobName,
-      artwork: artwork,
-      attempt: 0,
-      enqueuedAt: new Date().getTime(),
+      fileUrl: artwork.filename,
+      uploadedAt: Date.now(),
     };
 
     try {

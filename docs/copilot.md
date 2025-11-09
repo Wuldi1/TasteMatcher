@@ -225,3 +225,59 @@ When generating code, **simulate a senior engineer**:
 * When uncertain, produce a short design note in the PR and propose two alternatives with pros/cons.
 
 ---
+
+## 13 — Azure Functions Configuration (environment-specific)
+
+### Azure Platform: Linux (all services)
+
+**Why Linux across the board?**
+- ✅ **Platform consistency** - Development (macOS/Linux) matches production (Linux)
+- ✅ **Native module compatibility** - No cross-compilation issues with `sharp`, `canvas`, native Node.js modules
+- ✅ **Better performance** - Linux containers have better cold-start times and resource utilization
+- ✅ **Industry standard** - Modern serverless and container platforms default to Linux
+- ✅ **Cost effective** - Linux App Service plans are typically 10-15% cheaper than Windows
+
+**Azure Resources on Linux:**
+- Azure Functions: Linux with Node.js 22 runtime
+- Backend API (App Service): Linux with Node.js 22-lts
+- Frontend (App Service): Linux with Node.js 22-lts (serving static files via `serve`)
+
+### Local Development (Functions)
+- Configuration comes from `local.settings.json` (auto-loaded by Azure Functions Core Tools)
+- **Never use `.env` files** in Functions projects
+- **Never commit `local.settings.json`** to git (add to `.gitignore`)
+- Provide `local.settings.json.example` as a template
+
+### Azure Deployment (Functions & Web Apps)
+- Configuration comes from **Application Settings** (configured via provision script)
+- **No environment files are deployed** - Application Settings are set via Azure CLI
+- Values are available as `process.env.*` at runtime
+- All services run on **Linux containers** for consistency
+
+### Configuration Loading Pattern
+```typescript
+// ✅ CORRECT - Read from process.env (works both locally and in Azure)
+const config = {
+  storageConnection: process.env.AzureWebJobsStorage!,
+  queueName: process.env.IMAGE_PROCESSING_QUEUE_NAME!,
+};
+
+// ❌ WRONG - Don't use dotenv in Azure Functions
+import { config } from 'dotenv';
+config(); // This won't work in Azure!
+```
+
+### Validation
+- Always validate required environment variables at startup
+- Throw clear errors if missing
+- Include helpful messages pointing to `local.settings.json` (local) or Application Settings (Azure)
+
+### Native Module Handling (Linux benefits)
+With Linux on all Azure resources, native modules like `sharp` work seamlessly:
+- Local development (macOS) and production (Linux) both use POSIX-compatible binaries
+- No need for `--platform` or `--arch` flags during deployment
+- npm/pnpm automatically installs the correct binaries for the target platform
+- Consistent behavior across all environments
+
+
+https://tastematcherdevsa.blob.core.windows.net/originals/a7912bc0-385e-44c3-b072-c2d991bb6b45/artworks/7875c72b-121a-4ead-905c-3bbed5fd972b/original.jpeg

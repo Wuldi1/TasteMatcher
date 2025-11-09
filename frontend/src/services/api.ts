@@ -186,7 +186,7 @@ class ApiClient {
       }
 
       const data = (await response.json()) as ProcessingStatus;
-      console.info('Upload Success:', { domainId, artId: data.artId });
+      console.info('Upload Success:', { domainId, artworkId: data.artworkId });
       return data;
     } catch (error) {
       if (error instanceof ApiError) {

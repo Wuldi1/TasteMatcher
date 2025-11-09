@@ -1,21 +1,24 @@
 // ---------- CODEGEN CHECKLIST (must be satisfied) ----------
 // 1. Uses TypeScript strict types (no `any`).
 // 2. Validates all required env vars.
-// 3. Unit tests in config.spec.ts.
-// 4. Structured logging for missing config.
+// 3. Structured logging for missing config.
+// 4. Provides helpful error messages for local vs Azure
 // -----------------------------------------------------------
 import { ThumbnailSize } from '@tastematcher/common';
-import { config as loadEnv } from 'dotenv';
-import { resolve } from 'path';
-loadEnv({ path: resolve(__dirname, '..', '..', '.env') });
 
 /**
  * Application configuration loaded from environment variables.
- * Validates required settings at startup.
+ *
+ * For local development: values come from local.settings.json
+ * For Azure: values come from Application Settings
+ *
+ * Azure Functions runtime automatically loads these into process.env
  */
 export interface AppConfig {
   azure: {
     storageConnectionString: string;
+    storageContainerOriginals: string;
+    storageContainerThumbnails: string;
     searchEndpoint: string;
     searchKey: string;
     searchIndexName: string;
@@ -42,37 +45,67 @@ export interface AppConfig {
 }
 
 /**
+ * Get required environment variable or throw error
+ */
+function getRequiredEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    // More helpful error message with debugging info
+    const availableKeys = Object.keys(process.env).filter(k => 
+      k.startsWith('AZURE') || k.startsWith('IMAGE') || k === 'AzureWebJobsStorage'
+    );
+    
+    throw new Error(
+      `Required environment variable '${key}' is not set.\n` +
+      `Available Azure-related env vars: ${availableKeys.join(', ')}\n` +
+      `Check:\n` +
+      `  - Local dev: Ensure 'local.settings.json' exists in the functions directory\n` +
+      `  - Azure: Verify Application Settings are configured for the Function App\n` +
+      `  - Current directory: ${process.cwd()}`
+    );
+  }
+  return value;
+}
+
+/**
+ * Get optional environment variable with default
+ */
+function getOptionalEnv(key: string, defaultValue: string): string {
+  return process.env[key] || defaultValue;
+}
+
+/**
  * Load and validate configuration from environment.
- * Throws if required variables are missing.
+ * 
+ * Environment variables are provided by:
+ * - Local development: local.settings.json (loaded by Azure Functions Core Tools)
+ * - Azure deployment: Application Settings (configured via provision script)
+ * 
+ * Throws if required variables are missing with helpful debugging information.
  */
 export function loadConfig(): AppConfig {
-  const required = [
-    'AZURE_STORAGE_CONNECTION_STRING',
-    'AZURE_SEARCH_ENDPOINT',
-    'AZURE_SEARCH_ADMIN_KEY',
-    'AZURE_SEARCH_INDEX_NAME',
-    'AZURE_AI_VISION_ENDPOINT',
-    'AZURE_AI_VISION_KEY',
-  ];
-
-  const missing = required.filter((key) => !process.env[key]);
-  if (missing.length > 0) {
-    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  // Debug: Log that we're loading config (remove in production)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Config] Loading configuration from environment...');
+    console.log('[Config] Current working directory:', process.cwd());
+    console.log('[Config] AzureWebJobsStorage present:', !!process.env.AzureWebJobsStorage);
   }
 
   return {
     azure: {
-      storageConnectionString: process.env.AZURE_STORAGE_CONNECTION_STRING!,
-      searchEndpoint: process.env.AZURE_SEARCH_ENDPOINT!,
-      searchKey: process.env.AZURE_SEARCH_ADMIN_KEY!,
-      searchIndexName: process.env.AZURE_SEARCH_INDEX_NAME!,
-      aiVisionEndpoint: process.env.AZURE_AI_VISION_ENDPOINT!,
-      aiVisionKey: process.env.AZURE_AI_VISION_KEY!,
+      storageConnectionString: getRequiredEnv('AzureWebJobsStorage'),
+      storageContainerOriginals: "originals",
+      storageContainerThumbnails: "derivatives",
+      searchEndpoint: getRequiredEnv('AZURE_SEARCH_ENDPOINT'),
+      searchKey: getRequiredEnv('AZURE_SEARCH_ADMIN_KEY'),
+      searchIndexName: getRequiredEnv('AZURE_SEARCH_INDEX_NAME'),
+      aiVisionEndpoint: getRequiredEnv('AZURE_AI_VISION_ENDPOINT'),
+      aiVisionKey: getRequiredEnv('AZURE_AI_VISION_KEY'),
     },
     queue: {
-      name: process.env.IMAGE_PROCESSING_QUEUE_NAME || 'image-processing',
-      visibilityTimeout: 300, // 5 minutes
-      maxDequeueCount: 5,
+      name: getRequiredEnv('IMAGE_PROCESSING_QUEUE_NAME'),
+      visibilityTimeout: parseInt(getOptionalEnv('QUEUE_VISIBILITY_TIMEOUT', '300'), 10),
+      maxDequeueCount: parseInt(getOptionalEnv('QUEUE_MAX_DEQUEUE_COUNT', '5'), 10),
     },
     thumbnails: {
       sizes: [
@@ -82,13 +115,13 @@ export function loadConfig(): AppConfig {
       ],
     },
     retry: {
-      maxAttempts: 3,
-      initialDelayMs: 1000,
-      maxDelayMs: 30000,
-      backoffMultiplier: 2,
+      maxAttempts: parseInt(getOptionalEnv('RETRY_MAX_ATTEMPTS', '3'), 10),
+      initialDelayMs: parseInt(getOptionalEnv('RETRY_INITIAL_DELAY_MS', '1000'), 10),
+      maxDelayMs: parseInt(getOptionalEnv('RETRY_MAX_DELAY_MS', '30000'), 10),
+      backoffMultiplier: parseFloat(getOptionalEnv('RETRY_BACKOFF_MULTIPLIER', '2')),
     },
     logging: {
-      level: process.env.LOG_LEVEL || 'info',
+      level: getOptionalEnv('LOG_LEVEL', 'info'),
     },
   };
 }

@@ -257,6 +257,7 @@ When generating code, **simulate a senior engineer**:
 **View Function logs:**
 ```bash
 az functionapp log tail --resource-group tastematcher-dev-rg --name tastematcher-dev-func
+az functionapp log deployment list --resource-group tastematcher-dev-rg --name tastematcher-dev-func
 ```
 
 **Check Function status:**
@@ -296,3 +297,26 @@ az storage message peek \
    - Function App plan is EP1 (Elastic Premium)
    - Monitor memory usage in Azure Portal
    - Consider upgrading to EP2/EP3 for larger images
+
+## Azure Functions Platform
+
+### Operating System: Linux
+
+**Why Linux?**
+- ✅ **Platform consistency** - Development (macOS/Linux) matches production (Linux)
+- ✅ **Native module compatibility** - No cross-compilation issues with `sharp`, `canvas`, etc.
+- ✅ **Better performance** - Linux containers typically have better performance characteristics
+- ✅ **Industry standard** - Most serverless platforms default to Linux
+- ✅ **Cost effective** - Linux App Service plans are generally less expensive
+
+**Configuration:**
+- OS Type: `Linux`
+- Runtime: `Node.js 22`
+- Function App Plan: `EP1` (Elastic Premium for production workloads)
+
+### Native Module Handling
+
+With Linux Functions, native modules like `sharp` work seamlessly:
+- Local development (macOS) and production (Linux) both use POSIX-compatible binaries
+- No need for `--platform` or `--arch` flags during deployment
+- npm/pnpm automatically installs the correct binaries for the target platform

@@ -228,21 +228,41 @@ VISION_KEY=$(az cognitiveservices account keys list --name "$VISION_NAME" --reso
 
 echo "Computer Vision endpoint: $VISION_ENDPOINT"
 
-# Create an App Service plan (consumption) and Function App
-# Function App requires a storage account; we will reuse the storage account above
-echo "Creating App Service plan and Function App..."
-az functionapp plan create --name "$APP_PLAN" --resource-group "$RG_NAME" --location "$LOCATION" --number-of-workers 1 --sku EP1 -o none
+# Create an App Service plan for Function App
+echo "Creating App Service plan for Function App..."
+
+if az functionapp plan show --name "$APP_PLAN" --resource-group "$RG_NAME" >/dev/null 2>&1; then
+  echo "Function App Service plan $APP_PLAN already exists. Skipping creation."
+else
+  az functionapp plan create \
+    --name "$APP_PLAN" \
+    --resource-group "$RG_NAME" \
+    --location "$LOCATION" \
+    --number-of-workers 1 \
+    --sku EP1 \
+    --is-linux \
+    -o none
+  echo "✅ Function App Service plan $APP_PLAN created successfully"
+fi
 
 # Create Function App (Linux, Node)
-az functionapp create \
-  --resource-group "$RG_NAME" \
-  --name "$FUNCAPP_NAME" \
-  --storage-account "$STORAGE_ACCOUNT_NAME" \
-  --plan "$APP_PLAN" \
-  --runtime node \
-  --runtime-version 22 \
-  --os-type Linux \
-  -o none
+echo "Creating Function App: $FUNCAPP_NAME ..."
+
+if az functionapp show --name "$FUNCAPP_NAME" --resource-group "$RG_NAME" >/dev/null 2>&1; then
+  echo "Function App $FUNCAPP_NAME already exists. Skipping creation."
+else
+  az functionapp create \
+    --resource-group "$RG_NAME" \
+    --name "$FUNCAPP_NAME" \
+    --storage-account "$STORAGE_ACCOUNT_NAME" \
+    --plan "$APP_PLAN" \
+    --runtime node \
+    --runtime-version 22 \
+    --os-type Linux \
+    --functions-version 4 \
+    -o none
+  echo "✅ Function App $FUNCAPP_NAME created successfully"
+fi
 
 # Enable system-assigned managed identity for Function App
 echo "Assigning system identity to function app..."
@@ -272,12 +292,23 @@ az functionapp config appsettings set \
     FUNCTIONS_WORKER_RUNTIME="node" \
     WEBSITE_NODE_DEFAULT_VERSION="~22" \
     FUNCTIONS_EXTENSION_VERSION="~4" \
+    WEBSITE_RUN_FROM_PACKAGE="0" \
+    SCM_DO_BUILD_DURING_DEPLOYMENT="true" \
+    ENABLE_ORYX_BUILD="true" \
     AzureWebJobsStorage="$STORAGE_CONNECTION_STRING" \
     AZURE_STORAGE_ACCOUNT="$STORAGE_ACCOUNT_NAME" \
     AZURE_KEYVAULT_URI="https://${KV_NAME}.vault.azure.net/" \
     IMAGE_PROCESSING_QUEUE_NAME="$QUEUE_NAME" \
     AZURE_BLOB_CONTAINER_ORIGINALS="originals" \
     AZURE_BLOB_CONTAINER_DERIVATIVES="derivatives" \
+    AZURE_SEARCH_ENDPOINT="https://${SEARCH_NAME}.search.windows.net" \
+    AZURE_SEARCH_INDEX_NAME="artworks-index" \
+    AZURE_SEARCH_ADMIN_KEY="$SEARCH_KEY" \
+    AZURE_AI_VISION_ENDPOINT="$VISION_ENDPOINT" \
+    AZURE_AI_VISION_KEY="$VISION_KEY" \
+    COSMOS_DB_ENDPOINT="$COSMOS_DB_ENDPOINT" \
+    COSMOS_DB_KEY="$COSMOS_PRIMARY_KEY" \
+    COSMOS_DB_DATABASE="$COSMOS_DATABASE" \
     NODE_ENV="$ENV" \
   -o none
 
@@ -320,32 +351,45 @@ az role assignment create \
 # ============================================
 echo "Creating App Service Plan for Web Apps: $WEB_APP_PLAN ..."
 
-# Determine SKU based on environment
-if [ "$ENV" = "prod" ]; then
-  WEB_APP_SKU="P1V3"  # Production: Premium V3 tier
+# Check if plan already exists
+if az appservice plan show --name "$WEB_APP_PLAN" --resource-group "$RG_NAME" >/dev/null 2>&1; then
+  echo "App Service plan $WEB_APP_PLAN already exists. Skipping creation."
 else
-  WEB_APP_SKU="B1"    # Dev/Staging: Basic tier
-fi
+  # Determine SKU based on environment
+  if [ "$ENV" = "prod" ]; then
+    WEB_APP_SKU="P1V3"  # Production: Premium V3 tier
+  else
+    WEB_APP_SKU="B1"    # Dev/Staging: Basic tier
+  fi
 
-az appservice plan create \
-  --name "$WEB_APP_PLAN" \
-  --resource-group "$RG_NAME" \
-  --location "$LOCATION" \
-  --sku "$WEB_APP_SKU" \
-  --is-linux \
-  -o none
+  az appservice plan create \
+    --name "$WEB_APP_PLAN" \
+    --resource-group "$RG_NAME" \
+    --location "$LOCATION" \
+    --sku "$WEB_APP_SKU" \
+    --is-linux \
+    -o none
+  
+  echo "✅ App Service plan $WEB_APP_PLAN created successfully (Linux)"
+fi
 
 # ============================================
 # Create Backend API Web App (NestJS)
 # ============================================
-echo "Creating Backend API Web App: $WEBAPP_API_NAME (Node.js 22 LTS)..."
+echo "Creating Backend API Web App: $WEBAPP_API_NAME (Node.js 22 LTS on Linux)..."
 
-az webapp create \
-  --resource-group "$RG_NAME" \
-  --plan "$WEB_APP_PLAN" \
-  --name "$WEBAPP_API_NAME" \
-  --runtime "NODE:22-lts" \
-  -o none
+if az webapp show --name "$WEBAPP_API_NAME" --resource-group "$RG_NAME" >/dev/null 2>&1; then
+  echo "Backend API Web App $WEBAPP_API_NAME already exists. Skipping creation."
+else
+  az webapp create \
+    --resource-group "$RG_NAME" \
+    --plan "$WEB_APP_PLAN" \
+    --name "$WEBAPP_API_NAME" \
+    --runtime "NODE:22-lts" \
+    -o none
+  
+  echo "✅ Backend API Web App $WEBAPP_API_NAME created successfully"
+fi
 
 # Configure Web App settings for backend API
 echo "Configuring Backend API Web App settings..."
@@ -387,7 +431,7 @@ az role assignment create \
   --scope "$KEYVAULT_RESOURCE_ID" \
   -o none
 
-# Grant Storage Blob Data Contributor to backend API
+# Grant Storage Blob Data Contributor to Backend API
 echo "Granting Storage Blob Data Contributor to Backend API..."
 az role assignment create \
   --assignee-object-id "$WEBAPP_API_PRINCIPAL_ID" \
@@ -458,14 +502,20 @@ az webapp config appsettings set \
 # ============================================
 # Create Frontend Web App (React SPA)
 # ============================================
-echo "Creating Frontend Web App: $WEBAPP_FRONTEND_NAME (Node.js 22 LTS)..."
+echo "Creating Frontend Web App: $WEBAPP_FRONTEND_NAME (Node.js 22 LTS on Linux)..."
 
-az webapp create \
-  --resource-group "$RG_NAME" \
-  --plan "$WEB_APP_PLAN" \
-  --name "$WEBAPP_FRONTEND_NAME" \
-  --runtime "NODE:22-lts" \
-  -o none
+if az webapp show --name "$WEBAPP_FRONTEND_NAME" --resource-group "$RG_NAME" >/dev/null 2>&1; then
+  echo "Frontend Web App $WEBAPP_FRONTEND_NAME already exists. Skipping creation."
+else
+  az webapp create \
+    --resource-group "$RG_NAME" \
+    --plan "$WEB_APP_PLAN" \
+    --name "$WEBAPP_FRONTEND_NAME" \
+    --runtime "NODE:22-lts" \
+    -o none
+  
+  echo "✅ Frontend Web App $WEBAPP_FRONTEND_NAME created successfully"
+fi
 
 # Configure Web App settings for frontend
 echo "Configuring Frontend Web App settings..."
@@ -642,6 +692,38 @@ APPLICATIONINSIGHTS_CONNECTION_STRING=${APP_INSIGHTS_CONNECTION_STRING}
 
 EOF
 
+# Build local.settings.json for Azure Functions local development
+FUNCTIONS_SETTINGS="functions/local.settings.json"
+echo "Writing Azure Functions local settings to $FUNCTIONS_SETTINGS"
+
+# Create the storage connection string
+STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;AccountName=${STORAGE_ACCOUNT_NAME};AccountKey=${STORAGE_KEY};EndpointSuffix=core.windows.net"
+
+cat > "$FUNCTIONS_SETTINGS" <<EOF
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "AzureWebJobsStorage": "${STORAGE_CONNECTION_STRING}",
+    "AZURE_STORAGE_ACCOUNT": "${STORAGE_ACCOUNT_NAME}",
+    "AZURE_STORAGE_ACCOUNT_KEY": "${STORAGE_KEY}",
+    "IMAGE_PROCESSING_QUEUE_NAME": "${QUEUE_NAME}",
+    "AZURE_KEYVAULT_URI": "https://${KV_NAME}.vault.azure.net/",
+    "AZURE_BLOB_CONTAINER_ORIGINALS": "originals",
+    "AZURE_BLOB_CONTAINER_DERIVATIVES": "derivatives",
+    "AZURE_SEARCH_ENDPOINT": "https://${SEARCH_NAME}.search.windows.net",
+    "AZURE_SEARCH_INDEX_NAME": "artworks-index",
+    "AZURE_SEARCH_ADMIN_KEY": "${SEARCH_KEY}",
+    "AZURE_AI_VISION_ENDPOINT": "${VISION_ENDPOINT}",
+    "AZURE_AI_VISION_KEY": "${VISION_KEY}",
+    "COSMOS_DB_ENDPOINT": "${COSMOS_DB_ENDPOINT}",
+    "COSMOS_DB_KEY": "${COSMOS_PRIMARY_KEY}",
+    "COSMOS_DB_DATABASE": "${COSMOS_DATABASE}",
+    "NODE_ENV": "development"
+  }
+}
+EOF
+
 echo "Provisioning complete. Important outputs:"
 echo " - Resource group: $RG_NAME"
 echo " - Storage account: $STORAGE_ACCOUNT_NAME"
@@ -665,8 +747,18 @@ echo " - Frontend URL: $FRONTEND_URL"
 echo " - Application Insights (API): $APP_INSIGHTS_NAME"
 echo " - Application Insights (Frontend): $FRONTEND_INSIGHTS_NAME"
 echo " - Environment file: $ENVFILE"
-
+echo " - Azure Functions local settings: functions/local.settings.json"
 echo ""
+echo "⚠️  IMPORTANT: local.settings.json is gitignored and NOT deployed to Azure."
+echo "   For local development: Use the generated local.settings.json"
+echo "   For Azure deployment: Application Settings are already configured via this script"
+echo ""
+echo "   To use locally:"
+echo "   1. The provision script created functions/local.settings.json with all values"
+echo "   2. Azure Functions Core Tools automatically loads this file"
+echo "   3. Run: cd functions && func start"
+echo ""
+
 echo "Next steps:"
 echo " 1. Deploy backend API code to $WEBAPP_API_NAME using Azure CLI or GitHub Actions"
 echo " 2. Deploy frontend code to $WEBAPP_FRONTEND_NAME using Azure CLI or GitHub Actions"

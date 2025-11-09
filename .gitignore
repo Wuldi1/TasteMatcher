@@ -33,6 +33,7 @@ pnpm-debug.log*
 bin/
 obj/
 .azurefunctions/
+functions-deploy.zip
 
 # Azurite
 azurite/

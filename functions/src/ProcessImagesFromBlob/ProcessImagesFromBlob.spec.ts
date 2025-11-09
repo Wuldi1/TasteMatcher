@@ -1,9 +1,9 @@
 import { InvocationContext } from '@azure/functions';
-import { processImagesFromBlob } from '.';
-import { ThumbnailService } from './services/ThumbnailService';
-import { VectorizationService } from './services/VectorizationService';
-import { SearchIndexService } from '../services/SearchIndexService';
-import { BlobService } from '../services/BlobService';
+import { processImagesFromBlob } from './ProcessImagesFromBlob';
+import { ThumbnailService } from '../services/Thumbnail/ThumbnailService';
+import { VectorizationService } from '../services/Vectorization/VectorizationService';
+import { SearchIndexService } from '../services/SearchIndex/SearchIndexService';
+import { BlobService } from '../services/Blob/BlobService';
 import type { ImageProcessingQueueMessage } from '@tastematcher/common';
 
 jest.mock('./services/ThumbnailService');
@@ -58,14 +58,14 @@ describe('ProcessImagesFromBlob', () => {
     const mockVector = { vector: new Array(1536).fill(0.1), model: 'ada-002' };
 
     mockBlobService.downloadBlob.mockResolvedValue(mockImageBuffer);
-    mockThumbnailService.generateThumbnails.mockResolvedValue(mockThumbnails);
+    mockThumbnailService.generateAndUploadThumbnails.mockResolvedValue(mockThumbnails);
     mockVectorizationService.generateEmbedding.mockResolvedValue(mockVector);
     mockSearchIndexService.indexArtwork.mockResolvedValue(undefined);
 
     await processImagesFromBlob(message, mockContext as InvocationContext);
 
     expect(mockBlobService.downloadBlob).toHaveBeenCalledWith('uploads', 'test-image.jpg');
-    expect(mockThumbnailService.generateThumbnails).toHaveBeenCalledWith(mockImageBuffer, 'artwork-456');
+    expect(mockThumbnailService.generateAndUploadThumbnails).toHaveBeenCalledWith(mockImageBuffer, 'artwork-456');
     expect(mockVectorizationService.generateEmbedding).toHaveBeenCalledWith(mockImageBuffer);
     expect(mockSearchIndexService.indexArtwork).toHaveBeenCalledWith({
       artworkId: 'artwork-456',
@@ -92,7 +92,7 @@ describe('ProcessImagesFromBlob', () => {
       processImagesFromBlob(message, mockContext as InvocationContext)
     ).rejects.toThrow('Blob not found');
 
-    expect(mockThumbnailService.generateThumbnails).not.toHaveBeenCalled();
+    expect(mockThumbnailService.generateAndUploadThumbnails).not.toHaveBeenCalled();
   });
 
   it('should handle thumbnail generation failure', async () => {
@@ -107,7 +107,7 @@ describe('ProcessImagesFromBlob', () => {
     };
 
     mockBlobService.downloadBlob.mockResolvedValue(Buffer.from('fake'));
-    mockThumbnailService.generateThumbnails.mockRejectedValue(new Error('Invalid image format'));
+    mockThumbnailService.generateAndUploadThumbnails.mockRejectedValue(new Error('Invalid image format'));
 
     await expect(
       processImagesFromBlob(message, mockContext as InvocationContext)
@@ -138,7 +138,7 @@ describe('ProcessImagesFromBlob', () => {
     };
 
     mockBlobService.downloadBlob.mockResolvedValue(Buffer.from('fake'));
-    mockThumbnailService.generateThumbnails.mockResolvedValue([]);
+    mockThumbnailService.generateAndUploadThumbnails.mockResolvedValue([]);
     mockVectorizationService.generateEmbedding.mockResolvedValue({ vector: [], model: 'test' });
     mockSearchIndexService.indexArtwork.mockResolvedValue(undefined);
 

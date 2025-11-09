@@ -14,28 +14,6 @@
 import { ThumbnailInfo } from "./artwork.types";
 
 /**
- * Message format for image processing queue
- */
-export interface ImageProcessingQueueMessage {
-  /** Unique message identifier for idempotency */
-  messageId: string;
-  /** Artwork database ID */
-  artworkId: string;
-  /** Domain this artwork belongs to */
-  domainId: string;
-  /** Blob container name */
-  containerName: string;
-  /** Blob name/path */
-  blobName: string;
-  /** Original content type */
-  contentType: string;
-  /** Timestamp when uploaded */
-  uploadedAt: number;
-  /** Optional correlation ID for tracing */
-  correlationId?: string;
-}
-
-/**
  * Vector embedding result for cognitive search
  */
 export interface VectorEmbedding {

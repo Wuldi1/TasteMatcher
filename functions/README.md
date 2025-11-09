@@ -23,7 +23,7 @@ Azure Functions service for asynchronous image processing workflows.
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - Azure Functions Core Tools v4
 - Azure Storage Account (or Azurite for local dev)
 - Azure Cognitive Search instance
@@ -177,7 +177,7 @@ az functionapp create \
   --resource-group tastematcher-rg \
   --consumption-plan-location eastus \
   --runtime node \
-  --runtime-version 20 \
+  --runtime-version 22 \
   --functions-version 4 \
   --storage-account tastematche storage
 

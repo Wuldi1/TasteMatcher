@@ -97,7 +97,7 @@ export class EmailService {
 
     try {
       const poller = await this.emailClient.beginSend(message);
-      await poller.pollUntilDone();
+      // await poller.pollUntilDone(); // TODO : maybe remove for faster UI response
 
       this.logger.log({
         action: 'sendVerificationEmail',
