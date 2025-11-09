@@ -162,7 +162,8 @@ export class ArtworksService {
    * Uses efficient Cosmos DB aggregation queries
    */
   async getStats(domainId: string): Promise<ArtworkStats> {
-    const container = await this.cosmosService.getContainer('Artworks');
+    const artworksContainer = await this.cosmosService.getContainer('Artworks');
+    const artworksPreferencesContainer = await this.cosmosService.getContainer('ArtworkPreferences');
 
     try {
       // Calculate date 7 days ago (in milliseconds since epoch)
@@ -176,7 +177,7 @@ export class ArtworksService {
 
       // Query 2: Total liked artworks (likeCount > 0)
       const likedQuery = {
-        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.likeCount > 0',
+        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.liked = true',
         parameters: [{ name: '@domainId', value: domainId }],
       };
 
@@ -191,9 +192,9 @@ export class ArtworksService {
 
       // Execute queries in parallel for better performance
       const [totalResult, likedResult, recentResult] = await Promise.all([
-        container.items.query(totalQuery).fetchAll(),
-        container.items.query(likedQuery).fetchAll(),
-        container.items.query(recentQuery).fetchAll(),
+        artworksContainer.items.query(totalQuery).fetchAll(),
+        artworksPreferencesContainer.items.query(likedQuery).fetchAll(),
+        artworksContainer.items.query(recentQuery).fetchAll(),
       ]);
 
       const stats: ArtworkStats = {
@@ -313,48 +314,10 @@ export class ArtworksService {
         `Saved preference for user ${userId}, artwork ${preferenceDto.artworkId}: ${preferenceDto.liked ? 'liked' : 'disliked'}`,
       );
 
-      // Update artwork like/dislike counts
-      await this.updateArtworkCounts(domainId, preferenceDto.artworkId, preferenceDto.liked);
-
       return resource as ArtworkPreference;
     } catch (error) {
       this.logger.error(`Failed to save preference for user ${userId}`, error);
       throw error;
-    }
-  }
-
-  /**
-   * Update artwork like/dislike counts
-   * Private helper method
-   */
-  private async updateArtworkCounts(
-    domainId: string,
-    artworkId: string,
-    liked: boolean,
-  ): Promise<void> {
-    const container = await this.cosmosService.getContainer('Artworks');
-
-    try {
-      const { resource: artwork } = await container.item(artworkId, domainId).read();
-
-      if (artwork) {
-        const updated = {
-          ...artwork,
-          likeCount: liked
-            ? (artwork.likeCount || 0) + 1
-            : artwork.likeCount || 0,
-          dislikeCount: !liked
-            ? (artwork.dislikeCount || 0) + 1
-            : artwork.dislikeCount || 0,
-          updatedAt: Date.now(),
-        };
-
-        await container.item(artworkId, domainId).replace(updated);
-        this.logger.debug(`Updated counts for artwork ${artworkId}`);
-      }
-    } catch (error) {
-      this.logger.warn(`Failed to update artwork counts for ${artworkId}`, error);
-      // Don't throw - preference save succeeded, count update is secondary
     }
   }
 }
