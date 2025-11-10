@@ -15,7 +15,6 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { Heart, X, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { Artwork } from '@tastematcher/common';
 import { fetchUntastedArtworks, saveArtworkPreference } from '../../api/artworks';
 import './TasterPage.css';
 
@@ -126,7 +125,7 @@ export function TasterPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentArtwork, swipeDirection]);
+  }, [handleSwipe]);
 
   const handleReset = () => {
     setCurrentIndex(0);

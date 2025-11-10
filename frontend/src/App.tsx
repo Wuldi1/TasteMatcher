@@ -11,18 +11,12 @@
 // -----------------------------------------------------------
 
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts/AuthContext';
 import { DomainProvider } from './contexts/DomainContext';
 import { queryClient } from './lib/react-query';
-import { AuthPage } from './pages/Auth/AuthPage';
-import { UploadPage } from './pages/Upload/UploadPage';
-import { HomePage } from './pages/Home/HomePage';
-import { CatalogPage } from './pages/Catalog/CatalogPage';
-import { TasterPage } from './pages/Taster/TasterPage';
-import { AppLayout } from './components/Layout/AppLayout';
-import { ProtectedRoute } from './components/ProtectedRoute';
+import { AppRoutes } from './routes/AppRoutes';
 
 /**
  * Main application component with routing and context providers
@@ -33,27 +27,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <DomainProvider>
-          <Router>
-            <div className="App">
-              <Routes>
-                {/* Public route - Authentication handles both login and signup */}
-                <Route path="/auth" element={<AuthPage />} />
-
-                {/* Protected routes with layout */}
-                <Route element={<ProtectedRoute />}>
-                  <Route element={<AppLayout />}>
-                    <Route path="/home" element={<HomePage />} />
-                    <Route path="/upload" element={<UploadPage />} />
-                    <Route path="/catalog" element={<CatalogPage />} />
-                    <Route path="/taster" element={<TasterPage />} />
-                    <Route path="/" element={<Navigate to="/home" replace />} />
-                  </Route>
-                </Route>
-
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </div>
-          </Router>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
         </DomainProvider>
       </AuthProvider>
     </QueryClientProvider>

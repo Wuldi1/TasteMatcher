@@ -14,15 +14,15 @@
 import { useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
-import { Search, X, Heart, Trash2, Edit, HeartOff } from 'lucide-react';
+import { Search, X, Trash2, Edit } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
-import { fetchArtworks, updateArtwork, toggleArtworkLike, deleteArtwork } from '../../api/artworks';
+import { fetchArtworks, deleteArtwork } from '../../api/artworks';
 import { EditArtworkModal } from '../../components/EditArtworkModal/EditArtworkModal';
 import './CatalogPage.css';
 
 /**
  * Catalog page displaying all uploaded artworks in a responsive grid.
- * Features: lazy loading, search/filter, edit, like, delete operations.
+ * Features: lazy loading, search/filter, edit, delete operations.
  */
 export function CatalogPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -106,17 +106,6 @@ export function CatalogPage() {
 
   const allArtworks = data?.pages.flatMap((page) => page.items || []) || [];
 
-  // Like mutation
-  const likeMutation = useMutation({
-    mutationFn: ({ artworkId, liked }: { artworkId: string; liked: boolean }) => {
-      if (!user?.domainId || !user?.id) throw new Error('Not authenticated');
-      return toggleArtworkLike(user.domainId, artworkId, user.id, liked);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
-    },
-  });
-
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: (artworkId: string) => {
@@ -150,11 +139,6 @@ export function CatalogPage() {
   const handleEditClick = (artwork: Artwork, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingArtwork(artwork);
-  };
-
-  const handleLikeClick = (artwork: Artwork, e: React.MouseEvent) => {
-    e.stopPropagation();
-    likeMutation.mutate({ artworkId: artwork.id, liked: true });
   };
 
   const handleDeleteClick = (artwork: Artwork, e: React.MouseEvent) => {
@@ -260,15 +244,6 @@ export function CatalogPage() {
                     title="Edit"
                   >
                     <Edit aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="catalog-item__action catalog-item__action--like"
-                    onClick={(e) => handleLikeClick(artwork, e)}
-                    aria-label="Like artwork"
-                    title="Like"
-                  >
-                    <Heart aria-hidden="true" />
                   </button>
                   <button
                     type="button"

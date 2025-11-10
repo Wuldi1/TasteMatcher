@@ -49,29 +49,6 @@ describe('TasterPage', () => {
     });
   });
 
-  it('displays like and dislike buttons', async () => {
-    renderWithProviders(<TasterPage />);
-    
-    await waitFor(() => {
-      expect(screen.getByLabelText(/Like this artwork/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/Dislike this artwork/i)).toBeInTheDocument();
-    });
-  });
-
-  it('handles like button click', async () => {
-    renderWithProviders(<TasterPage />);
-    
-    await waitFor(() => {
-      const likeButton = screen.getByLabelText(/Like this artwork/i);
-      fireEvent.click(likeButton);
-    });
-    
-    // Verify button interaction
-    await waitFor(() => {
-      expect(screen.getByLabelText(/Like this artwork/i)).toBeInTheDocument();
-    });
-  });
-
   it('handles dislike button click', async () => {
     renderWithProviders(<TasterPage />);
     

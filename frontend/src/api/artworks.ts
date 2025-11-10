@@ -120,34 +120,6 @@ export async function updateArtwork(
 }
 
 /**
- * Like or dislike an artwork
- */
-export async function toggleArtworkLike(
-  domainId: string,
-  artworkId: string,
-  userId: string,
-  liked: boolean
-): Promise<Artwork> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/domains/${domainId}/artworks/${artworkId}/like`,
-    {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`,
-      },
-      body: JSON.stringify({ userId, liked }),
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error('Failed to toggle like');
-  }
-
-  return response.json();
-}
-
-/**
  * Delete artwork
  */
 export async function deleteArtwork(domainId: string, artworkId: string): Promise<void> {
