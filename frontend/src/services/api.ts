@@ -10,7 +10,7 @@
 // 9. CI-friendly: passes typecheck and lint.
 // -----------------------------------------------------------
 
-import { Domain, DomainVerificationResultResponse, ProcessingStatus, Artwork } from '@tastematcher/common';
+import { Domain, DomainVerificationResultResponse, Artwork } from '@tastematcher/common';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 

@@ -164,16 +164,11 @@ export async function processImagesFromBlob(
     // TODO : use Patch operation instead of read + replace
     const artworksContainer = await cosmosService.getContainer('Artworks');
 
-    const { resource: existing } = await artworksContainer.item(message.artworkId, message.domainId).read();
-      
-    const updated = {
-      ...existing,
-      vector: vectorEmbedding.vector,
-      vectorModel: vectorEmbedding.model,
-      updatedAt: Date.now(),
-    };
-
-    await artworksContainer.item(message.artworkId, message.domainId).replace(updated);
+    await artworksContainer.item(message.artworkId, message.domainId).patch([
+      { op: 'set', path: '/vector', value: vectorEmbedding.vector },
+      { op: 'set', path: '/vectorModel', value: vectorEmbedding.model },
+      { op: 'replace', path: '/updatedAt', value: Date.now() }
+    ]);
 
     metrics.increment('image_processing.artwork_updated', {
       domainId: message.domainId,

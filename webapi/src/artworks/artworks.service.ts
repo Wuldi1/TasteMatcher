@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { Artwork, PaginatedResponse, QueryParams, ArtworkStats, UntastedArtworksResponse, ArtworkPreference, generatePreferenceId, CosmosService, executeCosmosQuery } from '@tastematcher/common';
+import { Artwork, PaginatedResponse, QueryParams, ArtworkStats, UntastedArtworksResponse, ArtworkPreference, generatePreferenceId, CosmosService, executeCosmosQuery, User } from '@tastematcher/common';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
 
@@ -244,29 +244,66 @@ export class ArtworksService {
   /**
    * Save user preference for an artwork
    * Creates or updates preference in Cosmos DB
+   * Also updates the user's taste vector
    */
   async savePreference(
     domainId: string,
     userId: string,
     preferenceDto: SavePreferenceDto,
   ): Promise<ArtworkPreference> {
-    const container = await this.cosmosService.getContainer('ArtworkPreferences');
+    const preferencesContainer = await this.cosmosService.getContainer('ArtworkPreferences');
+    const usersContainer = await this.cosmosService.getContainer('Users');
 
     try {
+      // Step 1: Fetch the artwork and user in parallel
+      const [artwork, user] = await Promise.all([
+        this.findOne(domainId, preferenceDto.artworkId) as Promise<Artwork>,
+        usersContainer.item(userId, domainId).read().then(res => res.resource) as Promise<User>,
+      ]);
+
+      if (!artwork) {
+        throw new NotFoundException(`Artwork ${preferenceDto.artworkId} not found`);
+      }
+      if (!user) {
+        throw new NotFoundException(`User ${userId} not found`);
+      }
+      if (!artwork.vector || !user.preferenceVector) {
+        this.logger.warn(`Vector not found for artwork ${artwork.id} or user ${user.id}. Skipping vector update.`);
+        throw new NotFoundException(`Vector not found for artwork ${artwork.id} or user ${user.id}. Skipping vector update.`);
+      } else {
+        // Step 2: Update user's vector
+        const learningRate = 0.1; // Configurable learning rate
+        const direction = preferenceDto.liked ? 1 : -1;
+
+        const newUserVector = user.preferenceVector.map(
+          (val: number, i: number) => val + direction * learningRate * (artwork.vector[i] - val)
+        );
+
+        // Step 3: Normalize the new vector
+        const normalizedVector = this.normalizeVector(newUserVector);
+
+        // Step 4: Update the user object
+        await usersContainer.item(userId, domainId).patch([
+          { op: 'replace', path: '/preferenceVector', value: normalizedVector },
+          { op: 'replace', path: '/updatedAt', value: Date.now() }
+        ]);
+
+        this.logger.log(`Updated vector for user ${userId}`);
+      }
+
+      // Step 5: Save the preference
       const preferenceId = generatePreferenceId(userId, preferenceDto.artworkId);
 
       const preference: ArtworkPreference = {
         id: preferenceId,
-        userId, // Partition key - automatically used by Cosmos DB
+        userId,
         artworkId: preferenceDto.artworkId,
         domainId,
         liked: preferenceDto.liked,
         createdAt: Date.now(),
       };
 
-      // Upsert preference (create or update)
-      // No need to specify partitionKey option - Cosmos DB extracts it from the document
-      const { resource } = await container.items.upsert<ArtworkPreference>(preference);
+      const { resource } = await preferencesContainer.items.upsert<ArtworkPreference>(preference);
 
       this.logger.log(
         `Saved preference for user ${userId}, artwork ${preferenceDto.artworkId}: ${preferenceDto.liked ? 'liked' : 'disliked'}`,
@@ -277,5 +314,18 @@ export class ArtworksService {
       this.logger.error(`Failed to save preference for user ${userId}`, error);
       throw error;
     }
+  }
+
+  /**
+   * Normalizes a vector to a unit vector (length of 1)
+   * @param vector The vector to normalize
+   * @returns The normalized vector
+   */
+  private normalizeVector(vector: number[]): number[] {
+    const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
+    if (magnitude === 0) {
+      return vector; // Avoid division by zero
+    }
+    return vector.map(val => val / magnitude);
   }
 }
