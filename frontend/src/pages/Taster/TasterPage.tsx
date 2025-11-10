@@ -11,7 +11,7 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { Heart, X, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -73,7 +73,7 @@ export function TasterPage() {
   const hasMore = currentIndex < artworks.length - 1;
 
   // Handle swipe decision
-  const handleSwipe = (direction: 'left' | 'right') => {
+  const handleSwipe = useCallback((direction: 'left' | 'right') => {
     if (!currentArtwork || swipeDirection) return;
 
     setSwipeDirection(direction);
@@ -84,7 +84,7 @@ export function TasterPage() {
       setSwipeDirection(null);
       setDragOffset({ x: 0, y: 0 });
     }, 300);
-  };
+  }, [currentArtwork, swipeDirection, savePreference]);
 
   // Mouse/touch drag handlers
   const handleDragStart = (clientX: number, clientY: number) => {

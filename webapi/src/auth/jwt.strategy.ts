@@ -1,33 +1,35 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { ConfigService } from '@nestjs/config';
 
+/**
+ * JWT Passport strategy
+ * Validates JWT tokens and extracts user information
+ */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error('JWT_SECRET environment variable is not set');
-    }
-    
+  constructor(private configService: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: jwtSecret,
+      secretOrKey: configService.get<string>('JWT_SECRET') || 'your-secret-key-change-in-production',
     });
   }
 
   /**
-   * Validates the token payload and returns the user object,
-   * which NestJS will attach to the Request object.
+   * Validates the JWT payload and returns user object
+   * This object will be attached to request.user
    */
   async validate(payload: any) {
-    // The 'sub' (subject) claim of the JWT should be the user's ID.
+    if (!payload.sub || !payload.domainId || !payload.email || !payload.role) {
+      throw new UnauthorizedException('Invalid token payload');
+    }
+
     return {
       id: payload.sub,
-      userId: payload.sub, // Add userId for clarity
-      email: payload.email,
       domainId: payload.domainId,
+      email: payload.email,
       role: payload.role,
     };
   }

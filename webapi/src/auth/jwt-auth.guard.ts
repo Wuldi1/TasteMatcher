@@ -1,9 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 /**
- * A guard that protects routes by validating the JWT token from the Authorization header.
- * It uses the 'jwt' strategy defined in JwtStrategy.
+ * Guard that validates JWT tokens and populates request.user
+ * Uses Passport JWT strategy
  */
 @Injectable()
-export class JwtAuthGuard extends AuthGuard('jwt') {}
+export class JwtAuthGuard extends AuthGuard('jwt') {
+  canActivate(context: ExecutionContext) {
+    return super.canActivate(context);
+  }
+
+  handleRequest(err: any, user: any, info: any) {
+    if (err || !user) {
+      throw err || new UnauthorizedException('Invalid or missing authentication token');
+    }
+    return user;
+  }
+}

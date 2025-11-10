@@ -10,7 +10,7 @@
 // 9. CI-friendly: passes typecheck and lint.
 // -----------------------------------------------------------
 
-import { Domain, DomainVerificationResultResponse, Artwork } from '@tastematcher/common';
+import { Domain, DomainVerificationResultResponse, Artwork, User, Role } from '@tastematcher/common';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
@@ -203,6 +203,44 @@ class ApiClient {
    */
   async getDomainById(domainId: string): Promise<Domain> {
     return this.request<Domain>(`/api/domains/${domainId}`, { method: 'GET' });
+  }
+
+  // ========== User Management Endpoints ==========
+
+  async getAllUsers(): Promise<User[]> {
+    const response = await this.request<User[]>('/api/users', {
+      method: 'GET',
+    });
+    return response;
+  }
+
+  async getUser(userId: string): Promise<User> {
+    const response = await this.request<User>(`/api/users/${userId}`, {
+      method: 'GET',
+    });
+    return response;
+  }
+
+  async updateUser(userId: string, data: { name?: string; role?: Role }): Promise<User> {
+    const response = await this.request<User>(`/api/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return response;
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    await this.request<void>(`/api/users/${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async inviteUser(data: { name: string; email: string; role: Role }): Promise<User> {
+    const response = await this.request<User>('/api/users/invite', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response;
   }
 }
 

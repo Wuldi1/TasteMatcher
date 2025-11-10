@@ -13,7 +13,7 @@ import { Module } from '@nestjs/common';
 import { EmailService } from './email.service';
 
 /**
- * EmailModule exposes the EmailService for dependency injection.
+ * Email module for handling all email operations
  */
 @Module({
   providers: [EmailService],

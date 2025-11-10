@@ -7,6 +7,7 @@ import { MainLayout } from '../components/Layout/MainLayout'; // Import the layo
 import { TasterPage } from '../pages/Taster/TasterPage';
 import { CatalogPage } from '../pages/Catalog/CatalogPage';
 import { UploadPage } from '../pages/Upload/UploadPage';
+import { Management } from '../components/Management';
 
 /**
  * Central component for defining application routes.
@@ -39,9 +40,10 @@ export const AppRoutes = () => {
                 <Route element={<MainLayout />}>
                     <Route path="/home" element={<HomePage />} />
                     {/* Add all other pages that need the menu here. For example: */}
-                    <Route path="/taster" element={<TasterPage />} />
                     <Route path="/catalog" element={<CatalogPage />} />
                     <Route path="/upload" element={<UploadPage />} />
+                    <Route path="/taster" element={<TasterPage />} />
+                    <Route path="/management" element={<Management />} />
                 </Route>
             </Route>
 

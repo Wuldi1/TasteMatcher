@@ -38,9 +38,10 @@ function parseToken(token: string): User | null {
     const payload = JSON.parse(atob(parts[1]));
 
     const user: User = {
-      id: payload.sub || payload.userId || payload.id,
+      id: payload.sub,
       email: payload.email,
-      domainId: payload.domainId || payload.domain_id,
+      domainId: payload.domainId,
+      role: payload.role,
       // Ensure all required fields from the common User type are mapped here
     };
 

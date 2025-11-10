@@ -71,6 +71,7 @@ export class DomainsService {
       email: normalizedEmail,
       name: domainDto.name, // Default name, can be updated later
       role: 'domain_owner',
+      status: 'active',
       preferenceVector: new Array(this.vectorDimensions).fill(0), // Initialize with zero vector
       createdAt: now,
       updatedAt: now,

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Compass, Upload, LayoutGrid, LogOut, ChevronsLeft, ChevronsRight, User as UserIcon } from 'lucide-react';
+import { Home, Compass, Upload, LayoutGrid, LogOut, ChevronsLeft, ChevronsRight, User as UserIcon, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const navLinks = [
@@ -10,9 +10,17 @@ const navLinks = [
   { name: 'Upload', href: '/upload', icon: Upload },
 ];
 
+const domainOwnerLinks = [
+  { name: 'Management', href: '/management', icon: Users },
+];
+
 export const Sidebar = () => {
   const { user, logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  const allLinks = user?.role === 'domain_owner' 
+    ? [...navLinks, ...domainOwnerLinks] 
+    : navLinks;
 
   return (
     <aside
@@ -31,7 +39,7 @@ export const Sidebar = () => {
       </div>
 
       <nav className="flex-1 px-4 py-6 space-y-2">
-        {navLinks.map((link) => (
+        {allLinks.map((link) => (
           <NavLink
             key={link.name}
             to={link.href}

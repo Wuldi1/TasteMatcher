@@ -11,6 +11,7 @@
 // -----------------------------------------------------------
 import { Injectable, Logger } from '@nestjs/common';
 import { EmailClient, EmailMessage } from '@azure/communication-email';
+import { Role } from '@tastematcher/common';
 
 export interface SendVerificationEmailPayload {
   recipient: string;
@@ -108,6 +109,97 @@ export class EmailService {
       this.logger.error({
         action: 'sendVerificationEmail',
         recipient: payload.recipient,
+        errMessage: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Send invitation email to a new user
+   * Sends email via Azure Communication Services
+   */
+  async sendUserInvitation(
+    email: string,
+    name: string,
+    domainId: string,
+    role: Role,
+  ): Promise<void> {
+    const start = Date.now();
+    this.logger.debug({
+      action: 'sendUserInvitation',
+      recipient: email,
+      role,
+      domainId,
+    });
+
+    if (!email.includes('@')) {
+      throw new Error('Invalid recipient email address');
+    }
+
+    const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?email=${encodeURIComponent(email)}`;
+
+    const subject = 'You\'ve been invited to TasteMatcher';
+    const textBody = [
+      `Hello ${name},`,
+      '',
+      `You've been invited to join TasteMatcher as a ${role}.`,
+      '',
+      'Click the link below to log in and get started:',
+      inviteLink,
+      '',
+      'Welcome to TasteMatcher!',
+    ].join('\n');
+
+    const htmlBody = [
+      `<h2>Hello ${name},</h2>`,
+      `<p>You've been invited to join TasteMatcher as a <strong>${role}</strong>.</p>`,
+      '<p>Click the link below to log in and get started:</p>',
+      `<p><a href="${inviteLink}" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 8px; font-weight: 600;">Join TasteMatcher</a></p>`,
+      `<p style="color: #666; font-size: 14px;">Or copy this link: ${inviteLink}</p>`,
+      '<br>',
+      '<p>Welcome to TasteMatcher!</p>',
+    ].join('');
+
+    if (!this.emailClient || !this.senderAddress) {
+      this.logger.log({
+        action: 'sendUserInvitation',
+        mode: 'log-only',
+        recipient: email,
+        role,
+        inviteLink,
+        durationMs: Date.now() - start,
+      });
+      return;
+    }
+
+    const message: EmailMessage = {
+      senderAddress: this.senderAddress,
+      content: {
+        subject,
+        plainText: textBody,
+        html: htmlBody,
+      },
+      recipients: {
+        to: [{ address: email }],
+      },
+    };
+
+    try {
+      const poller = await this.emailClient.beginSend(message);
+      // await poller.pollUntilDone(); // Optional: wait for email to be sent
+
+      this.logger.log({
+        action: 'sendUserInvitation',
+        recipient: email,
+        role,
+        durationMs: Date.now() - start,
+      });
+    } catch (error) {
+      this.logger.error({
+        action: 'sendUserInvitation',
+        recipient: email,
+        role,
         errMessage: (error as Error).message,
       });
       throw error;

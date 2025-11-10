@@ -205,7 +205,7 @@ export function ArtworkUpload() {
         }
       }
     },
-    [file, metadata, resetForm],
+    [file, metadata, resetForm, currentDomain],
   );
 
   useEffect(() => {
