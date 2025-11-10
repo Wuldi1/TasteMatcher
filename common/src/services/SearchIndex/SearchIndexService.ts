@@ -1,8 +1,8 @@
 import { SearchClient, AzureKeyCredential } from '@azure/search-documents';
-import type { VectorEmbedding } from '@tastematcher/common';
 import { createLogger } from '../../lib/logger';
-import type { AppConfig } from '../../config';
+import { loadConfig, type AppConfig } from '../../lib/config';
 import { retryWithBackoff } from '../../utils/retry';
+import { VectorEmbedding } from '../../types/processing.types';
 
 const logger = createLogger('SearchIndexService');
 
@@ -23,12 +23,14 @@ interface IndexArtworkInput {
  */
 export class SearchIndexService {
   private searchClient: SearchClient<ArtworkSearchDocument>;
+  private appConfig: AppConfig;
 
-  constructor(config: AppConfig) {
+  constructor() {
+    this.appConfig = loadConfig();
     this.searchClient = new SearchClient<ArtworkSearchDocument>(
-      config.azure.searchEndpoint,
-      config.azure.searchIndexName,
-      new AzureKeyCredential(config.azure.searchKey)
+      this.appConfig.azure.searchEndpoint,
+      this.appConfig.azure.searchIndexName,
+      new AzureKeyCredential(this.appConfig.azure.searchKey)
     );
   }
 

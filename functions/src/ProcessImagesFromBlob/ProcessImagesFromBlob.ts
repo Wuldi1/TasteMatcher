@@ -13,13 +13,7 @@
 
 import { app, InvocationContext } from '@azure/functions';
 import type { ImageProcessingQueueMessage } from '@tastematcher/common';
-import { createLogger } from '../lib/logger';
-import { BlobService } from '../services/Blob/BlobService';
-import { ThumbnailService } from '../services/Thumbnail/ThumbnailService';
-import { VectorizationService } from '../services/Vectorization/VectorizationService';
-import { SearchIndexService } from '../services/SearchIndex/SearchIndexService';
-import { metrics } from '../lib/metrics';
-import { loadConfig } from '../config';
+import { BlobService, ThumbnailService, VectorizationService, SearchIndexService, createLogger, metrics, loadConfig } from '@tastematcher/common';
 
 const logger = createLogger('ProcessImagesFromBlob');
 
@@ -84,14 +78,11 @@ export async function processImagesFromBlob(
       domainId: message.domainId,
     });
 
-    // Initialize search client for idempotency check
-    const config = loadConfig();
-
     // Initialize services
-    const blobService = new BlobService(config);
-    const thumbnailService = new ThumbnailService(config);
-    const vectorizationService = new VectorizationService(config);
-    const searchIndexService = new SearchIndexService(config);
+    const blobService = new BlobService();
+    const thumbnailService = new ThumbnailService();
+    const vectorizationService = new VectorizationService();
+    const searchIndexService = new SearchIndexService();
 
     // Step 1: Download blob
     logger.debug({
@@ -103,7 +94,7 @@ export async function processImagesFromBlob(
     });
 
     const imageBuffer = await blobService.downloadBlob(
-      config.azure.storageContainerOriginals,
+      "originals",
       message.blobName
     );
 

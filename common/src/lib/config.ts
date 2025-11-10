@@ -4,7 +4,8 @@
 // 3. Structured logging for missing config.
 // 4. Provides helpful error messages for local vs Azure
 // -----------------------------------------------------------
-import { ThumbnailSize } from '@tastematcher/common';
+
+import { ThumbnailSize } from "../types/artwork.types";
 
 /**
  * Application configuration loaded from environment variables.
@@ -24,6 +25,16 @@ export interface AppConfig {
     searchIndexName: string;
     aiVisionEndpoint: string;
     aiVisionKey: string;
+  };
+  cosmos: {
+    endpoint: string;
+    key: string;
+    database: string;
+  };
+  storage: {
+    account: string;
+    accountKey: string;
+    supportedMimeTypes: string[];
   };
   queue: {
     name: string;
@@ -101,6 +112,16 @@ export function loadConfig(): AppConfig {
       searchIndexName: getRequiredEnv('AZURE_SEARCH_INDEX_NAME'),
       aiVisionEndpoint: getRequiredEnv('AZURE_AI_VISION_ENDPOINT'),
       aiVisionKey: getRequiredEnv('AZURE_AI_VISION_KEY'),
+    },
+    cosmos: {
+      endpoint: getRequiredEnv('COSMOS_DB_ENDPOINT'),
+      key: getRequiredEnv('COSMOS_DB_KEY'),
+      database: getRequiredEnv('COSMOS_DB_DATABASE'),
+    },
+    storage: {
+      account: getRequiredEnv('AZURE_STORAGE_ACCOUNT'),
+      accountKey: getRequiredEnv('AZURE_STORAGE_ACCOUNT_KEY'),
+      supportedMimeTypes: getOptionalEnv('SUPPORTED_MIME_TYPES', 'image/jpeg,image/png,image/gif').split(','),
     },
     queue: {
       name: getRequiredEnv('IMAGE_PROCESSING_QUEUE_NAME'),

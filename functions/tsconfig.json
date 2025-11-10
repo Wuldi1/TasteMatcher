@@ -23,7 +23,7 @@
             "@tastematcher/common": ["../common/src/*"]
         }
     },
-    "include": ["src/**/*"],
+    "include": ["src/**/*", "../common/src/utils/retry.ts", "../common/src/lib"],
     "exclude": ["node_modules", "dist", "**/*.spec.ts"],
     "references": [
         {

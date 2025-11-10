@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ArtworksService } from './artworks.service';
-import { CosmosService } from '../cosmos/cosmos.service';
 import { NotFoundException } from '@nestjs/common';
+import { CosmosService } from '@tastematcher/common';
 
 describe('ArtworksService', () => {
   let service: ArtworksService;

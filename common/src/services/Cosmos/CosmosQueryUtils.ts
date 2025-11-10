@@ -1,4 +1,4 @@
-import { CosmosQuery, FilterCondition, QueryParams, SortConfig } from '@tastematcher/common';
+import { CosmosQuery, FilterCondition, QueryParams, SortConfig } from "../../types/query.types";
 
 /**
  * Build Cosmos DB query from generic query parameters

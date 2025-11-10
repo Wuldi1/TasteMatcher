@@ -8,8 +8,7 @@
 
 import { Controller, Get, HttpStatus, HttpException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { CosmosService } from '../cosmos/cosmos.service';
-import { BlobService } from '../blob/blob.service';
+import { BlobService, CosmosService } from '@tastematcher/common';
 
 interface HealthStatus {
   status: 'healthy' | 'unhealthy';
@@ -25,10 +24,13 @@ interface HealthStatus {
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
-  constructor(
-    private readonly cosmosService: CosmosService,
-    private readonly blobService: BlobService,
-  ) {}
+private readonly cosmosService: CosmosService;
+private readonly blobService: BlobService;
+
+  constructor() {
+    this.cosmosService = new CosmosService();
+    this.blobService = new BlobService();
+  }
 
   @Get()
   @ApiOperation({ summary: 'Health check endpoint' })
@@ -51,7 +53,7 @@ export class HealthController {
 
     // Check Blob Storage
     try {
-      const containerClient = this.blobService.getContainerClient('originals');
+      const containerClient = await this.blobService.getBlobContainerClient('originals');
       await containerClient.exists();
       checks.storage = 'ok';
     } catch (_) {

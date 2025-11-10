@@ -3,10 +3,10 @@
 // 2. Follows Azure best practices for AI Vision API
 // -----------------------------------------------------------
 
-import type { VectorEmbedding } from '@tastematcher/common';
 import { createLogger } from '../../lib/logger';
-import type { AppConfig } from '../../config';
+import { loadConfig, type AppConfig } from '../../lib/config';
 import { retryWithBackoff } from '../../utils/retry';
+import { VectorEmbedding } from '../../types/processing.types';
 
 const logger = createLogger('VectorizationService');
 
@@ -22,11 +22,13 @@ export class VectorizationService {
   private readonly visionEndpoint: string;
   private readonly visionKey: string;
   private readonly minEmbeddingDimensions = 512;
+  private appConfig: AppConfig;
 
-  constructor(config: AppConfig) {
+  constructor() {
+    this.appConfig = loadConfig();
     // Remove trailing slash if present
-    this.visionEndpoint = config.azure.aiVisionEndpoint.replace(/\/$/, '');
-    this.visionKey = config.azure.aiVisionKey;
+    this.visionEndpoint = this.appConfig.azure.aiVisionEndpoint.replace(/\/$/, '');
+    this.visionKey = this.appConfig.azure.aiVisionKey;
   }
 
   /**
@@ -49,7 +51,6 @@ export class VectorizationService {
         });
 
         // Correct API endpoint format for vectorization
-        // Format: https://<resource-name>.cognitiveservices.azure.com/computervision/retrieval:vectorizeImage?api-version=2024-02-01
         const vectorizeUrl = `${this.visionEndpoint}/computervision/retrieval:vectorizeImage?api-version=2024-02-01&model-version=2023-04-15`;
 
         logger.debug({

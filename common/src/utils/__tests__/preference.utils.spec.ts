@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generatePreferenceId } from './preference.utils';
+import { generatePreferenceId } from '../preference.utils';
 
 describe('preference.utils', () => {
   describe('generatePreferenceId', () => {

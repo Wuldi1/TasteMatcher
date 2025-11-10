@@ -11,10 +11,10 @@
 // -----------------------------------------------------------
 import { ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DomainsService } from './domains.service';
-import { CosmosService } from '../cosmos/cosmos.service';
 import { EmailService } from '../email/email.service';
 import { DomainDto } from './dto/domain.dto';
 import { sign } from 'jsonwebtoken';
+import { CosmosService } from '@tastematcher/common';
 
 jest.mock('jsonwebtoken', () => ({
   sign: jest.fn(() => 'jwt-token'),
@@ -66,15 +66,12 @@ describe('DomainsService', () => {
     process.env.JWT_SECRET = 'test-secret';
 
     mockContainer = createMockContainer();
-    cosmos = {
-      getDomainsContainer: jest.fn().mockResolvedValue(mockContainer),
-    } as unknown as CosmosService;
 
     email = {
       sendVerificationCode: jest.fn().mockResolvedValue(undefined),
     } as unknown as EmailService;
 
-    service = new DomainsService(cosmos, email);
+    service = new DomainsService(email);
   });
 
   afterEach(() => {

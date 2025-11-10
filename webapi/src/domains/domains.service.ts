@@ -1,6 +1,5 @@
 import {
   Injectable,
-  Logger,
   ConflictException,
   NotFoundException,
   BadRequestException,
@@ -9,24 +8,25 @@ import { v4 as uuidv4 } from 'uuid';
 import { createHash } from 'crypto';
 import { sign } from 'jsonwebtoken';
 import {
+  CosmosService,
   Domain,
   DomainVerificationResultResponse,
 } from '@tastematcher/common';
 import { DomainDto } from './dto/domain.dto';
-import { CosmosService } from '../cosmos/cosmos.service';
 import { EmailService } from '../email/email.service';
 
 const VERIFICATION_TTL_MS = 10 * 60 * 1000;
 
 @Injectable()
 export class DomainsService {
-  private readonly logger = new Logger(DomainsService.name);
+  private cosmosService: CosmosService;
   private readonly jwtSecret: string;
 
   constructor(
-    private readonly cosmos: CosmosService,
     private readonly emailService: EmailService,
   ) {
+    this.cosmosService = new CosmosService();
+  
     this.jwtSecret = process.env.JWT_SECRET ?? '';
     if (!this.jwtSecret) {
       throw new Error('JWT_SECRET environment variable is required');
@@ -35,7 +35,7 @@ export class DomainsService {
 
   async createDomain(domainDto: DomainDto): Promise<Domain> {
     const normalizedEmail = domainDto.adminEmail.toLowerCase().trim();
-    const container = await this.cosmos.getDomainsContainer();
+    const container = await this.cosmosService.getDomainsContainer();
 
     const { resources: existingDomains } = await container.items
       .query({
@@ -84,7 +84,7 @@ export class DomainsService {
       throw new BadRequestException('Invalid verification code');
     }
 
-    const container = await this.cosmos.getDomainsContainer();
+    const container = await this.cosmosService.getDomainsContainer();
     const updatedDomain: Domain = {
       ...domain,
       verificationCodeHash: undefined,
@@ -107,7 +107,7 @@ export class DomainsService {
   }
 
   private async issueVerificationCode(domain: Domain): Promise<Domain> {
-    const container = await this.cosmos.getDomainsContainer();
+    const container = await this.cosmosService.getDomainsContainer();
     const code = this.generateVerificationCode();
     const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MS).getTime();
 
@@ -131,7 +131,7 @@ export class DomainsService {
 
   private async fetchDomainByEmail(adminEmail: string): Promise<Domain> {
     const normalizedEmail = adminEmail.toLowerCase().trim();
-    const container = await this.cosmos.getDomainsContainer();
+    const container = await this.cosmosService.getDomainsContainer();
 
     const { resources } = await container.items
       .query({

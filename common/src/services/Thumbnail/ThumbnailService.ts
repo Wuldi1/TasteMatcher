@@ -7,11 +7,11 @@
 // -----------------------------------------------------------
 
 import Jimp from 'jimp';
-import { getDerivativeBlobPath, getThumbnailSizeFromDimensions, ThumbnailInfo } from '@tastematcher/common';
-import type { ThumbnailSize } from '@tastematcher/common';
 import { createLogger } from '../../lib/logger';
 import { BlobService } from '../Blob/BlobService';
-import type { AppConfig } from '../../config';
+import { loadConfig, type AppConfig } from '../../lib/config';
+import { ThumbnailInfo, ThumbnailSize } from '../../types/artwork.types';
+import { getDerivativeBlobPath, getThumbnailSizeFromDimensions } from '../../utils/naming';
 
 const logger = createLogger('ThumbnailService');
 
@@ -29,10 +29,12 @@ const THUMBNAIL_SIZES: ThumbnailSize[] = [
 export class ThumbnailService {
   private blobService: BlobService;
   private containerName: string;
+  private appConfig: AppConfig;
 
-  constructor(config: AppConfig) {
-    this.blobService = new BlobService(config);
-    this.containerName = config.azure.storageContainerThumbnails || 'derivatives';
+  constructor() {
+    this.appConfig = loadConfig();
+    this.blobService = new BlobService();
+    this.containerName = this.appConfig.azure.storageContainerThumbnails || 'derivatives';
   }
 
   /**

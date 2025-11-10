@@ -1,7 +1,5 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { CosmosService } from '../cosmos/cosmos.service';
-import { Artwork, PaginatedResponse, QueryParams, ArtworkStats, UntastedArtworksResponse, ArtworkPreference, generatePreferenceId } from '@tastematcher/common';
-import { executeCosmosQuery } from '../cosmos/cosmos-query.utils';
+import { Artwork, PaginatedResponse, QueryParams, ArtworkStats, UntastedArtworksResponse, ArtworkPreference, generatePreferenceId, CosmosService, executeCosmosQuery } from '@tastematcher/common';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { LikeArtworkDto } from './dto/like-artwork.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
@@ -9,8 +7,11 @@ import { SavePreferenceDto } from './dto/save-preference.dto';
 @Injectable()
 export class ArtworksService {
   private readonly logger = new Logger(ArtworksService.name);
+  private readonly cosmosService: CosmosService;
 
-  constructor(private readonly cosmosService: CosmosService) {}
+  constructor() {
+    this.cosmosService = new CosmosService();
+  }
 
   /**
    * Fetch artworks with generic query parameters

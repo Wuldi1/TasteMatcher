@@ -10,15 +10,19 @@ import {
   Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { UploadService } from './upload.service';
-import { Artwork, ProcessingStatus } from '@tastematcher/common';
+import { Artwork, BlobService, CosmosService, getOriginalBlobPath, ImageProcessingQueueMessage, ProcessingStatus } from '@tastematcher/common';
 import { v4 as uuidv4 } from 'uuid';
 
 @Controller('domains/:domainId/uploads')
 export class UploadController {
   private readonly logger = new Logger(UploadController.name);
+  private readonly blobService: BlobService;
+  private readonly cosmosService: CosmosService;
 
-  constructor(private readonly uploadService: UploadService) {}
+  constructor() {
+    this.blobService = new BlobService();
+    this.cosmosService = new CosmosService();
+   }
 
   @Post()
   @UseInterceptors(FileInterceptor('file'))
@@ -40,17 +44,62 @@ export class UploadController {
       throw new BadRequestException('File is required');
     }
 
-    const artworkMetadata = this.parseArtworkPayload(body, domainId);
-
     try {
-      const response = await this.uploadService.uploadFileAndEnqueue(domainId, file, artworkMetadata);
+      const artworkMetadata = this.parseArtworkPayload(body, domainId);
+      const fileExtension = this.extractFileExtension(file.mimetype);
+      const blobName = getOriginalBlobPath(domainId, artworkMetadata.id, fileExtension);
+
+      this.logger.debug({
+        action: 'uploadArtwork.start',
+        artworkId: artworkMetadata.id,
+        domainId,
+        blobName,
+        containerId: "originals",
+        fileSize: file.size,
+        fileMimeType: file.mimetype,
+      });
+
+      // upload file to blob storage
+      const artworkUrl = await this.blobService.uploadBlob("originals", blobName, file.buffer, file.mimetype);
+      artworkMetadata.filename = artworkUrl;
+
+      // write artwork record to database
+      artworkMetadata.createdAt = Date.now();
+
+      const artworksContainer = await this.cosmosService.getArtworksContainer();
+      await artworksContainer.items.create(artworkMetadata);
+
+      this.logger.log({
+        action: 'createArtworkRecord.success',
+        artworkId: artworkMetadata.id,
+      });
+      
+      
+      // send message to queue for additional processing (thumbnail generation, vectorization, indexing)
+      const imageProcessingQueueMessage: ImageProcessingQueueMessage = {
+        messageId: uuidv4(),
+        artworkId: artworkMetadata.id,
+        domainId: artworkMetadata.domainId,
+        blobName,
+        fileUrl: artworkMetadata.filename,
+        uploadedAt: Date.now(),
+      };
+      await this.blobService.sendMessageToQueue(imageProcessingQueueMessage);
+
       this.logger.log({
         route: '/domains/:domainId/uploads',
         method: 'POST',
         domainId,
         durationMs: Date.now() - start,
       });
-      return response;
+
+      // TODO : this is a stupid response, fix it
+      return {
+        artworkId: artworkMetadata.id,
+        status: 'enqueued',
+        progress: 0
+      };
+
     } catch (error) {
       this.logger.error({
         route: '/domains/:domainId/uploads',
@@ -61,6 +110,20 @@ export class UploadController {
       });
       throw error;
     }
+  }
+
+  private extractFileExtension(mimeType: string): string {
+    this.logger.log({
+      action: 'extractFileExtension',
+      mimeType,
+    });
+    const ext = mimeType.split('/').pop()?.toLowerCase();
+    if (!ext) {
+      throw new BadRequestException('File must have an extension');
+    }
+
+    // Sanitize extension to prevent path traversal
+    return ext.replace(/[^a-z0-9]/gi, '');
   }
 
   private parseArtworkPayload(body: Record<string, unknown>, domainId: string): Artwork {
@@ -77,7 +140,7 @@ export class UploadController {
       parsed = raw as Partial<Artwork>;
     }
 
-     return {
+    return {
       id: uuidv4(),
       domainId,
       title: parsed.title!,

@@ -6,14 +6,20 @@ export * from './types/queue.types';
 export * from './types/user.types';
 export * from './types/query.types';
 
-export * from './utils/naming';
-export * from './utils/uploader';
-export * from './utils/preference.utils';
-
-// Re-export commonly used types
-export type { ArtworkMetadata } from './types/artwork.types';
-export type { UploadStatus  } from './types/queue.types';
-export type { Role } from './types/user.types';
-export type { DomainVerificationResultResponse } from './types/domain.types';
-
 // utils
+export * from './utils/naming';
+export * from './utils/preference.utils';
+export * from './utils/retry';
+
+// services
+export * from './services/Blob/BlobService';
+export * from './services/Vectorization/VectorizationService';
+export * from './services/SearchIndex/SearchIndexService';
+export * from './services/Thumbnail/ThumbnailService';
+export * from './services/Cosmos/CosmosService';
+export * from './services/Cosmos/CosmosQueryUtils';
+
+// lib
+export * from './lib/config';
+export * from './lib/logger';
+export * from './lib/metrics';

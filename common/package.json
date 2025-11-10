@@ -12,8 +12,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@azure/cosmos": "^4.7.0",
     "@azure/identity": "^4.13.0",
     "@azure/storage-blob": "^12.29.1",
+    "@azure/storage-queue": "^12.28.1",
+    "@nestjs/common": "^11.1.8",
+    "jimp": "^0.22.12",
     "p-retry": "^7.1.0"
   },
   "devDependencies": {

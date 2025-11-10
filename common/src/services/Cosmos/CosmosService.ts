@@ -1,32 +1,28 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { CosmosClient, CosmosClientOptions, Container, Database, PartitionKeyKind } from '@azure/cosmos';
+import { AppConfig, loadConfig } from '../../lib/config';
+import { createLogger } from '../../lib/logger';
 
 const USER_AGENT_SUFFIX = 'TasteMatcher-WebAPI';
-
-export interface CosmosConfig {
-  endpoint: string;
-  key: string;
-  database: string;
-}
+const logger = createLogger('CosmosService');
 
 /**
  * CosmosService manages the lifecycle of the shared CosmosClient instance and exposes typed container accessors.
  */
 @Injectable()
 export class CosmosService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(CosmosService.name);
-  private readonly config: CosmosConfig;
+  private readonly appConfig: AppConfig;
   private client?: CosmosClient;
   private database?: Database;
   private readonly containerCache = new Map<string, Container>();
 
   constructor() {
-    this.config = this.readConfigFromEnv();
+    this.appConfig = loadConfig();
   }
 
   async onModuleInit(): Promise<void> {
     const start = Date.now();
-    this.logger.debug({ msg: 'Initializing CosmosService', database: this.config.database });
+    logger.debug({ msg: 'Initializing CosmosService', database: this.appConfig.cosmos.database });
 
     // Create ArtworkPreferences container if it doesn't exist
     const preferencesContainerDef = {
@@ -40,19 +36,19 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
     const database = await this.getDatabase();
 
     await database.containers.createIfNotExists(preferencesContainerDef);
-    this.logger.log('ArtworkPreferences container initialized');
+    logger.debug({ msg: 'ArtworkPreferences container initialized' });
 
-    this.logger.log({
+    logger.debug({
       msg: 'CosmosService initialized',
-      database: this.config.database,
+      database: this.appConfig.cosmos.database,
       durationMs: Date.now() - start,
     });
   }
 
   async onModuleDestroy(): Promise<void> {
-    this.logger.debug({ msg: 'Disposing CosmosService' });
+    logger.debug({ msg: 'Disposing CosmosService' });
     await this.client?.dispose?.();
-    this.logger.log({ msg: 'CosmosService disposed' });
+    logger.debug({ msg: 'CosmosService disposed' });
   }
 
   /**
@@ -84,7 +80,7 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
 
     const container = this.database!.container(containerName);
     this.containerCache.set(containerName, container);
-    this.logger.debug({ msg: 'Cached Cosmos container', containerName });
+    logger.debug({ msg: 'Cached Cosmos container', containerName });
     return container;
   }
 
@@ -109,46 +105,23 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
 
     try {
       const options: CosmosClientOptions = {
-        endpoint: this.config.endpoint,
-        key: this.config.key,
+        endpoint: this.appConfig.cosmos.endpoint,
+        key: this.appConfig.cosmos.key,
         userAgentSuffix: USER_AGENT_SUFFIX,
       };
 
       this.client = new CosmosClient(options);
-      this.database = this.client.database(this.config.database);
-      this.logger.debug({
+      this.database = this.client.database(this.appConfig.cosmos.database);
+      logger.debug({
         msg: 'Cosmos client created',
-        database: this.config.database
+        database: this.appConfig.cosmos.database
       });
     } catch (error) {
-      this.logger.error({
+      logger.error({
         msg: 'Failed to initialize Cosmos client',
         error,
       });
       throw error;
     }
-  }
-
-  private readConfigFromEnv(): CosmosConfig {
-    const { COSMOS_DB_ENDPOINT, COSMOS_DB_KEY, COSMOS_DB_DATABASE } =
-      process.env;
-
-    if (!COSMOS_DB_ENDPOINT) {
-      throw new Error('COSMOS_DB_ENDPOINT environment variable is required');
-    }
-
-    if (!COSMOS_DB_KEY) {
-      throw new Error('COSMOS_DB_KEY environment variable is required');
-    }
-
-    if (!COSMOS_DB_DATABASE) {
-      throw new Error('COSMOS_DB_DATABASE environment variable is required');
-    }
-
-    return {
-      endpoint: COSMOS_DB_ENDPOINT,
-      key: COSMOS_DB_KEY,
-      database: COSMOS_DB_DATABASE
-    };
   }
 }

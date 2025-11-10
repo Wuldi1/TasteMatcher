@@ -51,12 +51,24 @@ importers:
 
   common:
     dependencies:
+      '@azure/cosmos':
+        specifier: ^4.7.0
+        version: 4.7.0
       '@azure/identity':
         specifier: ^4.13.0
         version: 4.13.0
       '@azure/storage-blob':
         specifier: ^12.29.1
         version: 12.29.1
+      '@azure/storage-queue':
+        specifier: ^12.28.1
+        version: 12.28.1
+      '@nestjs/common':
+        specifier: ^11.1.8
+        version: 11.1.8(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      jimp:
+        specifier: ^0.22.12
+        version: 0.22.12
       p-retry:
         specifier: ^7.1.0
         version: 7.1.0
@@ -158,6 +170,9 @@ importers:
       '@azure/core-auth':
         specifier: ^1.9.0
         version: 1.10.1
+      '@azure/cosmos':
+        specifier: ^4.7.0
+        version: 4.7.0
       '@azure/functions':
         specifier: ^4.8.0
         version: 4.8.0
@@ -173,6 +188,9 @@ importers:
       '@azure/storage-queue':
         specifier: ^12.23.0
         version: 12.28.1
+      '@nestjs/common':
+        specifier: ^11.1.8
+        version: 11.1.8(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@tastematcher/common':
         specifier: workspace:*
         version: link:../common
