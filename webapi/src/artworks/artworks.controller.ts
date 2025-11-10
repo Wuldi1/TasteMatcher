@@ -68,19 +68,6 @@ export class ArtworksController {
     return this.artworksService.update(domainId, artworkId, updateDto);
   }
 
-  @Patch(':artworkId/like')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Like or dislike an artwork' })
-  @ApiResponse({ status: 200, description: 'Like status updated successfully' })
-  @ApiResponse({ status: 404, description: 'Artwork not found' })
-  async toggleLike(
-    @Param('domainId') domainId: string,
-    @Param('artworkId') artworkId: string,
-    @Body() likeDto: LikeArtworkDto,
-  ): Promise<Artwork> {
-    return this.artworksService.toggleLike(domainId, artworkId, likeDto);
-  }
-
   @Delete(':artworkId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete artwork' })

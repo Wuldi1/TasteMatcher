@@ -13,7 +13,7 @@
 
 import { app, InvocationContext } from '@azure/functions';
 import type { ImageProcessingQueueMessage } from '@tastematcher/common';
-import { BlobService, ThumbnailService, VectorizationService, SearchIndexService, createLogger, metrics, loadConfig } from '@tastematcher/common';
+import { BlobService, ThumbnailService, VectorizationService, SearchIndexService, createLogger, metrics, loadConfig, CosmosService } from '@tastematcher/common';
 
 const logger = createLogger('ProcessImagesFromBlob');
 
@@ -83,6 +83,7 @@ export async function processImagesFromBlob(
     const thumbnailService = new ThumbnailService();
     const vectorizationService = new VectorizationService();
     const searchIndexService = new SearchIndexService();
+    const cosmosService = new CosmosService();
 
     // Step 1: Download blob
     logger.debug({
@@ -155,6 +156,26 @@ export async function processImagesFromBlob(
     });
 
     metrics.increment('image_processing.indexed', {
+      domainId: message.domainId,
+    });
+
+
+    // store vector embedding in cosmos db aswell
+    // TODO : use Patch operation instead of read + replace
+    const artworksContainer = await cosmosService.getContainer('Artworks');
+
+    const { resource: existing } = await artworksContainer.item(message.artworkId, message.domainId).read();
+      
+    const updated = {
+      ...existing,
+      vector: vectorEmbedding.vector,
+      vectorModel: vectorEmbedding.model,
+      updatedAt: Date.now(),
+    };
+
+    await artworksContainer.item(message.artworkId, message.domainId).replace(updated);
+
+    metrics.increment('image_processing.artwork_updated', {
       domainId: message.domainId,
     });
 

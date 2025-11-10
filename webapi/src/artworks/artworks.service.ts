@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { Artwork, PaginatedResponse, QueryParams, ArtworkStats, UntastedArtworksResponse, ArtworkPreference, generatePreferenceId, CosmosService, executeCosmosQuery } from '@tastematcher/common';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
-import { LikeArtworkDto } from './dto/like-artwork.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
 
 @Injectable()
@@ -97,48 +96,6 @@ export class ArtworksService {
         throw error;
       }
       this.logger.error(`Failed to update artwork ${artworkId}`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Like or dislike an artwork
-   */
-  async toggleLike(
-    domainId: string,
-    artworkId: string,
-    likeDto: LikeArtworkDto,
-  ): Promise<Artwork> {
-    const container = await this.cosmosService.getContainer('Artworks');
-
-    try {
-      const { resource: existing } = await container.item(artworkId, domainId).read();
-      
-      if (!existing) {
-        throw new NotFoundException(`Artwork ${artworkId} not found`);
-      }
-
-      const updated = {
-        ...existing,
-        likeCount: likeDto.liked 
-          ? (existing.likeCount || 0) + 1 
-          : Math.max((existing.likeCount || 0) - 1, 0),
-        dislikeCount: !likeDto.liked 
-          ? (existing.dislikeCount || 0) + 1 
-          : Math.max((existing.dislikeCount || 0) - 1, 0),
-        updatedAt: Date.now(),
-      };
-
-      const { resource } = await container.item(artworkId, domainId).replace(updated);
-
-      this.logger.log(`Toggled like on artwork ${artworkId}: ${likeDto.liked ? 'liked' : 'disliked'}`);
-
-      return resource;
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      this.logger.error(`Failed to toggle like on artwork ${artworkId}`, error);
       throw error;
     }
   }

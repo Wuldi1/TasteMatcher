@@ -8,6 +8,8 @@ export interface Artwork {
   artist: string;
   category: string;
   filename: string; // defined by service
+  vector: number[]; // embedding vector for search
+  vectorModel: string; // model used for vectorization
   thumbnails?: ThumbnailInfo[];
   tags?: string[];
   createdAt?: number; // timestamp
