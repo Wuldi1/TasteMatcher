@@ -16,7 +16,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import { useAuth } from '../../hooks/useAuth';
 import { Search, X, Trash2, Edit } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
-import { fetchArtworks, deleteArtwork } from '../../api/artworks';
+import { fetchArtworks, deleteArtwork } from '../../services/artworksApi';
 import { EditArtworkModal } from '../../components/EditArtworkModal/EditArtworkModal';
 import './CatalogPage.css';
 

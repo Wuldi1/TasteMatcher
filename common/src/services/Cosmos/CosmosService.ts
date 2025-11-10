@@ -98,6 +98,13 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
     return this.getContainer('Artworks');
   }
 
+  /**
+   * Convenience getter for the Users container.
+   */
+  async getUsersContainer(): Promise<Container> {
+    return this.getContainer('Users');
+  }
+
   private async ensureClient(): Promise<void> {
     if (this.client && this.database) {
       return;

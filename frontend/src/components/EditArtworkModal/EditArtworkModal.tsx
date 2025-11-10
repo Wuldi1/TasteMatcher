@@ -1,9 +1,9 @@
 import { useState, FormEvent } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import type { Artwork, ArtworkUpdateRequest } from '@tastematcher/common';
+import type { Artwork } from '@tastematcher/common';
 import { useAuth } from '../../hooks/useAuth';
-import { updateArtwork } from '../../api/artworks';
+import { updateArtwork } from '../../services/artworksApi';
 import './EditArtworkModal.css';
 
 interface EditArtworkModalProps {
@@ -21,7 +21,7 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
   const [error, setError] = useState('');
 
   const updateMutation = useMutation({
-    mutationFn: (updates: ArtworkUpdateRequest) => {
+    mutationFn: (updates: Partial<Artwork>) => {
       if (!user?.domainId) throw new Error('No domain ID');
       return updateArtwork(user.domainId, artwork.id, updates);
     },
@@ -37,7 +37,7 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
     e.preventDefault();
     setError('');
 
-    const updates: ArtworkUpdateRequest = {
+    const updates: Partial<Artwork> = {
       title: title.trim() || undefined,
       artist: artist.trim() || undefined,
       description: description.trim() || undefined,

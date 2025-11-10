@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { ArrowRight, Upload, Grid, Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { fetchArtworkStats } from '../../api/artworks';
+import { fetchArtworkStats } from '../../services/artworksApi';
 import type { ArtworkStats } from '@tastematcher/common';
 import './HomePage.css';
 

@@ -98,7 +98,7 @@ export async function fetchArtwork(domainId: string, artworkId: string): Promise
 export async function updateArtwork(
   domainId: string,
   artworkId: string,
-  artwork: Artwork
+  artwork: Partial<Artwork>
 ): Promise<Artwork> {
   const response = await fetch(
     `${API_BASE_URL}/api/domains/${domainId}/artworks/${artworkId}`,

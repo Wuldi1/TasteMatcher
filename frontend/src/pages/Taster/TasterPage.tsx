@@ -15,7 +15,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { Heart, X, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
-import { fetchUntastedArtworks, saveArtworkPreference } from '../../api/artworks';
+import { fetchUntastedArtworks, saveArtworkPreference } from '../../services/artworksApi';
 import './TasterPage.css';
 
 type SwipeDirection = 'left' | 'right' | null;

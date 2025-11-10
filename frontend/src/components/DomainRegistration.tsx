@@ -24,7 +24,7 @@ import { Domain } from '@tastematcher/common';
  */
 export function DomainRegistration() {
   const navigate = useNavigate();
-  const { setCurrentDomain, setLoading, isLoading } = useDomain();
+  const { setCurrentDomain } = useDomain();
   const { setUserFromToken } = useAuth();
   
   const [adminEmail, setAdminEmail] = useState<string>('');
@@ -34,6 +34,7 @@ export function DomainRegistration() {
   const [pendingDomain, setPendingDomain] = useState<Domain | null>(null);
   const [verificationCode, setVerificationCode] = useState<string>('');
   const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [isLoading, setLoading] = useState<boolean>(false);
 
   const getStepMessage = useCallback((): string => {
     if (!isLoading) {
@@ -110,8 +111,8 @@ export function DomainRegistration() {
             }
           }
         } else if (phase === 'create') {
+          // @ts-ignore
           const request: Domain = {
-            id: '',
             name: domainName.trim(),
             adminEmail: adminEmail.trim().toLowerCase(),
           };

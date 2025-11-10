@@ -118,7 +118,7 @@ class ApiClient {
     }
 
     const encodedEmail = encodeURIComponent(adminEmail);
-    return this.request<Domain>(`/domain/${encodedEmail}`, { method: 'GET' });
+    return this.request<Domain>(`/api/domains/auth/${encodedEmail}`, { method: 'GET' });
   }
 
   /**
@@ -129,7 +129,7 @@ class ApiClient {
       throw new ApiError('Name and admin email are required', 400);
     }
 
-    return this.request<Domain>('/domain', {
+    return this.request<Domain>('/api/domains', {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -144,7 +144,7 @@ class ApiClient {
     }
 
     const encodedEmail = encodeURIComponent(adminEmail);
-    return this.request<DomainVerificationResultResponse>(`/domain/${encodedEmail}/verify`, {
+    return this.request<DomainVerificationResultResponse>(`/api/domains/verify/${encodedEmail}`, {
       method: 'POST',
       body: JSON.stringify({ code }),
     });
@@ -153,7 +153,7 @@ class ApiClient {
   /**
    * Upload artwork along with optional metadata
    */
-  async uploadArtwork(domainId: string, file: File, artworkMetadata?: Partial<Artwork>): Promise<ProcessingStatus> {
+  async uploadArtwork(domainId: string, file: File, artworkMetadata?: Partial<Artwork>): Promise<Artwork> {
     if (!domainId) {
       throw new ApiError('Domain ID is required', 400);
     }
@@ -169,7 +169,7 @@ class ApiClient {
         formData.append('artwork', JSON.stringify(artworkMetadata));
     }
 
-    const url = `${API_BASE_URL}/domains/${domainId}/uploads`;
+    const url = `${API_BASE_URL}/api/domains/${domainId}/uploads`;
 
     console.debug('Upload Request:', { domainId, fileName: file.name, fileSize: file.size });
 
@@ -185,8 +185,8 @@ class ApiClient {
         throw new ApiError(errorText || `Upload failed`, response.status);
       }
 
-      const data = (await response.json()) as ProcessingStatus;
-      console.info('Upload Success:', { domainId, artworkId: data.artworkId });
+      const data = (await response.json()) as Artwork;
+      console.info('Upload Success:', { domainId, artworkId: data.id });
       return data;
     } catch (error) {
       if (error instanceof ApiError) {
@@ -195,6 +195,14 @@ class ApiClient {
       console.error('Upload Network Error:', error);
       throw new ApiError('Upload network error', 0);
     }
+  }
+
+  /**
+   * Fetches domain details by its ID.
+   * The backend will validate that the authenticated user belongs to this domain.
+   */
+  async getDomainById(domainId: string): Promise<Domain> {
+    return this.request<Domain>(`/api/domains/${domainId}`, { method: 'GET' });
   }
 }
 

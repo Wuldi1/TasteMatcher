@@ -4,6 +4,7 @@ import { DomainsModule } from './domains/domains.module';
 import { UploadModule } from './upload/upload.module';
 import { ArtworksModule } from './artworks/artworks.module';
 import { HealthModule } from './health/health.module';
+import { AuthModule } from './auth/auth.module'; // Import the new AuthModule
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { HealthModule } from './health/health.module';
       isGlobal: true,
       expandVariables: true,
     }),
+    AuthModule, // Add AuthModule here
     DomainsModule,
     UploadModule,
     ArtworksModule,

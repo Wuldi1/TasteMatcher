@@ -13,7 +13,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Artwork, BlobService, CosmosService, getOriginalBlobPath, ImageProcessingQueueMessage, ProcessingStatus } from '@tastematcher/common';
 import { v4 as uuidv4 } from 'uuid';
 
-@Controller('domains/:domainId/uploads')
+@Controller('api/domains/:domainId/uploads')
 export class UploadController {
   private readonly logger = new Logger(UploadController.name);
   private readonly blobService: BlobService;

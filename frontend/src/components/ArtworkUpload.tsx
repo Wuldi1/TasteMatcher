@@ -11,7 +11,7 @@
 // -----------------------------------------------------------
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Artwork } from 'common';
+import { Artwork } from '@tastematcher/common';
 import { useDomain } from '../contexts/DomainContext';
 import { apiClient, ApiError } from '../services/api';
 
@@ -176,12 +176,8 @@ export function ArtworkUpload() {
     async (event: React.FormEvent) => {
       event.preventDefault();
 
-      if (!currentDomain) {
-        setStatus('error');
-        setMessage('Please select a domain before uploading artwork.');
-        return;
-      }
-
+      // The check for currentDomain is no longer the primary validation,
+      // as the backend handles authorization. We just need a file.
       if (!file) {
         setStatus('error');
         setMessage('Please choose a file to upload.');
@@ -192,7 +188,9 @@ export function ArtworkUpload() {
       setMessage('Uploading artwork...');
 
       try {
-        await apiClient.uploadArtwork(currentDomain.id, file, metadata);
+        // The API client now sends the token, and the backend infers the domain.
+        // We no longer pass the domainId from the frontend.
+        await apiClient.uploadArtwork(currentDomain!.id, file, metadata);
         setStatus('success');
         setMessage('Artwork uploaded successfully!');
         setShowSuccessToast(true);
@@ -207,7 +205,7 @@ export function ArtworkUpload() {
         }
       }
     },
-    [currentDomain, file, metadata, resetForm],
+    [file, metadata, resetForm],
   );
 
   useEffect(() => {
@@ -291,11 +289,10 @@ export function ArtworkUpload() {
           ) : (
             <label
               htmlFor="artwork-file"
-              className={`flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition focus:outline-none ${
-                isDragActive
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-300 bg-gray-50 hover:border-blue-500 hover:bg-blue-50'
-              }`}
+              className={`flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition focus:outline-none ${isDragActive
+                ? 'border-blue-500 bg-blue-50'
+                : 'border-gray-300 bg-gray-50 hover:border-blue-500 hover:bg-blue-50'
+                }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -403,13 +400,12 @@ export function ArtworkUpload() {
 
         {status !== 'idle' && message && (
           <div
-            className={`rounded-lg px-4 py-3 text-sm ${
-              status === 'success'
-                ? 'border border-green-200 bg-green-50 text-green-700'
-                : status === 'error'
+            className={`rounded-lg px-4 py-3 text-sm ${status === 'success'
+              ? 'border border-green-200 bg-green-50 text-green-700'
+              : status === 'error'
                 ? 'border border-red-200 bg-red-50 text-red-600'
                 : 'border border-blue-200 bg-blue-50 text-blue-600'
-            }`}
+              }`}
             role="status"
             aria-live="polite"
           >
@@ -429,11 +425,10 @@ export function ArtworkUpload() {
           <button
             type="submit"
             disabled={!isReadyToUpload || status === 'uploading'}
-            className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition ${
-              !isReadyToUpload || status === 'uploading'
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-            }`}
+            className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition ${!isReadyToUpload || status === 'uploading'
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+              }`}
           >
             {status === 'uploading' ? 'Uploading…' : 'Upload artwork'}
           </button>
