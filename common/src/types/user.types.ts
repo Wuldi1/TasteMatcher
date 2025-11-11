@@ -12,7 +12,7 @@ export type Role = 'global_admin' | 'domain_owner' | 'dealer' | 'customer';
  */
 export type UserStatus = 'pending_verification' | 'active';
 
-export type UserOnboardingStatus = 'not_started' | 'in_progress' | 'completed';
+export type UserOnboardingStatus = 'not_started' | 'in_progress' | 'completed' | 'skipped';
 
 /**
  * Personal details section of the questionnaire
@@ -143,4 +143,10 @@ export interface User {
    * The user's personal questionnaire responses.
    */
   personalQuestionnaire?: PersonalQuestionnaire;
+
+  /**
+   * Temporary storage for preference image vectors during onboarding
+   * Cleared after finalization
+   */
+  tempPreferenceVectors?: number[][];
 }

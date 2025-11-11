@@ -36,6 +36,7 @@
   "devDependencies": {
     "@eslint/js": "^9.38.0",
     "@nestjs/testing": "^11.1.8",
+    "@types/express": "^5.0.5",
     "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.0.0",

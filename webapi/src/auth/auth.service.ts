@@ -155,7 +155,7 @@ export class AuthService {
   /**
    * Generate JWT token for user
    */
-  private generateUserToken(user: User): string {
+  public generateUserToken(user: User): string {
     return sign(
       {
         id: user.id,

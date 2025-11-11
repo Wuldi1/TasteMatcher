@@ -2,6 +2,8 @@ import type { Artwork, PaginatedResponse, ArtworkStats, UntastedArtworksResponse
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
+// TODO : need to do some cleanup here and api.ts + client for all token + content type + etc. and error handling
+
 /**
  * Get auth token from localStorage
  */
@@ -35,17 +37,10 @@ export async function fetchArtworks(
   if (params.searchQuery) queryParams.append('searchQuery', params.searchQuery);
 
   const url = `${API_BASE_URL}/api/domains/${domainId}/artworks?${queryParams.toString()}`;
-  const token = getAuthToken();
-
-  console.log('Fetching artworks from API:', { 
-    url, 
-    hasToken: !!token,
-    tokenLength: token?.length 
-  });
 
   const response = await fetch(url, {
     headers: {
-      'Authorization': `Bearer ${token}`,
+      'Authorization': `Bearer ${getAuthToken()}`,
       'Content-Type': 'application/json',
     },
   });

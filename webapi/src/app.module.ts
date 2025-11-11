@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { MulterModule } from '@nestjs/platform-express';
 import { DomainsModule } from './domains/domains.module';
 import { UploadModule } from './upload/upload.module';
 import { ArtworksModule } from './artworks/artworks.module';
@@ -13,6 +14,11 @@ import { EmailModule } from './email/email.module';
     ConfigModule.forRoot({
       isGlobal: true,
       expandVariables: true,
+    }),
+    MulterModule.register({
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max file size
+      },
     }),
     AuthModule,
     DomainsModule,

@@ -52,7 +52,7 @@ export function HomePage() {
     return null;
   }
 
-  // Redirect customers to onboarding if not completed
+  // Redirect customers to onboarding if not completed (including skipped status)
   if (user.role === 'customer' && user.onboardingStatus !== 'completed') {
     console.log('HomePage - Redirecting to onboarding');
     return <Navigate to="/onboarding" replace />;

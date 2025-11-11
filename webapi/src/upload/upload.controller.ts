@@ -28,7 +28,6 @@ export class UploadController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadArtwork(
     @Param('domainId') domainId: string,
-    // eslint-disable-next-line no-undef
     @UploadedFile() file: Express.Multer.File,
     @Body() body: Record<string, unknown>,
   ): Promise<ProcessingStatus> {
@@ -45,9 +44,11 @@ export class UploadController {
     }
 
     try {
+      
+      this.blobService.validateImageFile(file);
+
       const artworkMetadata = this.parseArtworkPayload(body, domainId);
-      const fileExtension = this.extractFileExtension(file.mimetype);
-      const blobName = getOriginalBlobPath(domainId, artworkMetadata.id, fileExtension);
+      const blobName = getOriginalBlobPath(domainId, artworkMetadata.id, file.mimetype);
 
       this.logger.debug({
         action: 'uploadArtwork.start',
@@ -110,20 +111,6 @@ export class UploadController {
       });
       throw error;
     }
-  }
-
-  private extractFileExtension(mimeType: string): string {
-    this.logger.log({
-      action: 'extractFileExtension',
-      mimeType,
-    });
-    const ext = mimeType.split('/').pop()?.toLowerCase();
-    if (!ext) {
-      throw new BadRequestException('File must have an extension');
-    }
-
-    // Sanitize extension to prevent path traversal
-    return ext.replace(/[^a-z0-9]/gi, '');
   }
 
   private parseArtworkPayload(body: Record<string, unknown>, domainId: string): Artwork {

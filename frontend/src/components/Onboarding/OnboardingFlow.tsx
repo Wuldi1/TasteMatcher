@@ -24,6 +24,7 @@ export function OnboardingFlow() {
   const [collectingPreferences, setCollectingPreferences] = useState<CollectingPreferences>({});
   const [artworkPreferences, setArtworkPreferences] = useState<ArtworkPreferences>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSkipping, setIsSkipping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleNext = useCallback(() => {
@@ -55,25 +56,29 @@ export function OnboardingFlow() {
       await apiClient.updateUserQuestionnaire({
         personalDetails,
         collectingPreferences,
-        artworkPreferences,
+        artworkPreferences: {
+          description: artworkPreferences.description,
+        },
       });
 
-      // If there are artwork preference images, vectorize them
-      // Note: Images are processed for vectorization only, not stored
+      // Finalize vectors if images were uploaded
       if (artworkPreferences.referenceImageUrls && artworkPreferences.referenceImageUrls.length > 0) {
-        await apiClient.vectorizePreferenceImages(artworkPreferences.referenceImageUrls);
+        await apiClient.finalizePreferenceVectors();
       }
 
       // Update onboarding status
       await apiClient.completeOnboarding();
 
-      // Refresh user data to get updated onboarding status
+      // Critical: Refresh user data with new token BEFORE navigating
       if (refreshUser) {
         await refreshUser();
       }
 
-      // Navigate to home
-      navigate('/home');
+      // Small delay to ensure state updates
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Navigate to home with replace to prevent back navigation
+      navigate('/home', { replace: true });
     } catch (err) {
       console.error('Failed to complete onboarding:', err);
       setError(err instanceof ApiError ? err.message : 'Failed to save your preferences');
@@ -81,6 +86,33 @@ export function OnboardingFlow() {
       setIsSubmitting(false);
     }
   }, [user, personalDetails, collectingPreferences, artworkPreferences, refreshUser, navigate]);
+
+  const handleSkip = useCallback(async () => {
+    if (!user) return;
+
+    setIsSkipping(true);
+    setError(null);
+
+    try {
+      await apiClient.skipOnboarding();
+
+      // Refresh user data with new token BEFORE navigating
+      if (refreshUser) {
+        await refreshUser();
+      }
+
+      // Small delay to ensure state updates
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Navigate to home
+      navigate('/home', { replace: true });
+    } catch (err) {
+      console.error('Failed to skip onboarding:', err);
+      setError(err instanceof ApiError ? err.message : 'Failed to skip onboarding');
+    } finally {
+      setIsSkipping(false);
+    }
+  }, [user, refreshUser, navigate]);
 
   const getProgress = useCallback(() => {
     const steps: OnboardingStep[] = ['welcome', 'personal', 'collecting', 'artwork', 'completion'];
@@ -96,6 +128,19 @@ export function OnboardingFlow() {
           style={{ width: `${getProgress()}%` }}
         />
       </div>
+
+      {/* Skip Button - Show on all steps except completion */}
+      {currentStep !== 'completion' && (
+        <div className="fixed top-4 right-4 z-40">
+          <button
+            onClick={handleSkip}
+            disabled={isSkipping}
+            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 bg-white/80 hover:bg-white rounded-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSkipping ? 'Skipping...' : 'Skip for now'}
+          </button>
+        </div>
+      )}
 
       <div className="max-w-4xl mx-auto px-4 py-8 sm:py-12">
         {error && (

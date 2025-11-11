@@ -12,13 +12,10 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { apiClient } from '../services/api';
-import { User as CommonUser } from '@tastematcher/common';
-
-// Use the shared User type
-export type User = CommonUser;
+import { User } from '@tastematcher/common';
 
 interface AuthContextType {
-  user: User | null;
+  user: Partial<User> | null;
   isAuthenticated: boolean;
   isInitializing: boolean; // Single loading state for initial auth check
   logout: () => void;
@@ -72,7 +69,7 @@ const isTokenValid = (token: string): boolean => {
  * AuthProvider component that manages authentication state
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<Partial<User> | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
   const logout = useCallback(() => {
@@ -88,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout();
         return;
       }
-    
+
       const decoded = parseToken(token);
       if (decoded) {
         const userData = {
@@ -98,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: decoded.role,
           name: decoded.name
         };
-        
+
         console.log('Setting user from token:', userData);
         setUser(userData);
       }
@@ -116,20 +113,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // Decode token to get updated user info
-      const decoded = parseToken(token);
-      if (decoded) {
-        const userData = {
-          id: decoded.id,
-          email: decoded.email,
-          domainId: decoded.domainId,
-          role: decoded.role,
-          name: decoded.name
-        };
-        
-        console.log('Refreshing user:', userData);
-        setUser(userData);
-      }
+      // Fetch fresh user data with new token from backend
+      const { user: freshUser, token: newToken } = await apiClient.refreshCurrentUser();
+
+      // Update stored tokens
+      localStorage.setItem('token', newToken);
+      localStorage.setItem('tm_auth_token', newToken);
+
+      // Update API client token
+      apiClient.setAuthToken(newToken);
+
+      // Update user state with fresh data
+      setUser({
+        id: freshUser.id,
+        email: freshUser.email,
+        domainId: freshUser.domainId,
+        role: freshUser.role,
+        name: freshUser.name,
+        onboardingStatus: freshUser.onboardingStatus || 'not_started',
+      });
+
+      console.log('Refreshed user with new token:', freshUser);
     } catch (error) {
       console.error('Failed to refresh user:', error);
     }

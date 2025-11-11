@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CollectingPreferences } from '@tastematcher/common';
 
 interface CollectingPreferencesStepProps {
@@ -9,6 +9,11 @@ interface CollectingPreferencesStepProps {
 }
 
 export function CollectingPreferencesStep({ data, onChange, onNext, onBack }: CollectingPreferencesStepProps) {
+  // Local state for text input that needs to be split into array
+  const [displayLocationsText, setDisplayLocationsText] = useState(
+    data.displayLocations?.join(', ') || ''
+  );
+
   const handleChange = (field: keyof CollectingPreferences, value: any) => {
     onChange({ ...data, [field]: value });
   };
@@ -94,8 +99,16 @@ export function CollectingPreferencesStep({ data, onChange, onNext, onBack }: Co
             <input
               id="displayLocations"
               type="text"
-              value={data.displayLocations?.join(', ') || ''}
-              onChange={(e) => handleChange('displayLocations', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+              value={displayLocationsText}
+              onChange={(e) => {
+                const text = e.target.value;
+                setDisplayLocationsText(text);
+                // Only split and filter when there's actual content
+                const locations = text.trim()
+                  ? text.split(',').map(s => s.trim()).filter(Boolean)
+                  : [];
+                handleChange('displayLocations', locations);
+              }}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="e.g., Home, Office, Multiple residences"
             />

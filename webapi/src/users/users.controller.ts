@@ -10,20 +10,26 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
 import { InviteUserDto } from './dto/invite-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateQuestionnaireDto } from './dto/update-questionnaire.dto';
 import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
 import { RolesGuard } from '../auth/utils/roles.guard';
 import { Roles } from '../auth/utils/roles.decorator';
 import { User } from '@tastematcher/common';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
+import { AuthService } from '../auth/auth.service';
 
 @Controller('api/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService, private readonly authService: AuthService) {}
 
   /**
    * Get all users in the current domain (domain_owner and global_admin only)
@@ -84,5 +90,86 @@ export class UsersController {
   @Roles('domain_owner', 'global_admin')
   async invite(@Request() req: AuthenticatedRequest, @Body() inviteDto: InviteUserDto): Promise<User> {
     return this.usersService.inviteUser(req.user.domainId, inviteDto, req.user.id);
+  }
+
+  /**
+   * Update current user's questionnaire
+   */
+  @Patch('me/questionnaire')
+  async updateQuestionnaire(
+    @Request() req: AuthenticatedRequest,
+    @Body() questionnaireDto: UpdateQuestionnaireDto,
+  ): Promise<User> {
+    return this.usersService.updateQuestionnaire(
+      req.user.id,
+      req.user.domainId,
+      questionnaireDto,
+    );
+  }
+
+  /**
+   * Complete current user's onboarding
+   */
+  @Post('me/complete-onboarding')
+  @HttpCode(HttpStatus.OK)
+  async completeOnboarding(@Request() req: AuthenticatedRequest): Promise<User> {
+    return this.usersService.completeOnboarding(req.user.id, req.user.domainId);
+  }
+
+  /**
+   * Skip current user's onboarding (can be resumed later)
+   */
+  @Post('me/skip-onboarding')
+  @HttpCode(HttpStatus.OK)
+  async skipOnboarding(@Request() req: AuthenticatedRequest): Promise<User> {
+    return this.usersService.skipOnboarding(req.user.id, req.user.domainId);
+  }
+
+  /**
+   * Upload a single preference image and vectorize it
+   * Call this endpoint multiple times for multiple images
+   */
+  @Post('me/vectorize-preference-image')
+  @UseInterceptors(FileInterceptor('file'))
+  @HttpCode(HttpStatus.OK)
+  async vectorizePreferenceImage(
+    @Request() req: AuthenticatedRequest,
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<{ success: boolean; message: string; vectorized: number }> {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    return this.usersService.vectorizePreferenceImage(
+      req.user.id,
+      req.user.domainId,
+      file,
+    );
+  }
+
+  /**
+   * Complete preference image vectorization
+   * Call this after uploading all preference images
+   */
+  @Post('me/finalize-preference-vectors')
+  @HttpCode(HttpStatus.OK)
+  async finalizePreferenceVectors(
+    @Request() req: AuthenticatedRequest,
+  ): Promise<{ success: boolean; message: string; totalVectors: number }> {
+    return this.usersService.finalizePreferenceVectors(
+      req.user.id,
+      req.user.domainId,
+    );
+  }
+
+  /**
+   * Get current user with refreshed JWT token
+   */
+  @Get('me/refresh')
+  async refreshCurrentUser(@Request() req: AuthenticatedRequest): Promise<{ user: User; token: string }> {
+    const user = await this.usersService.findOne(req.user.domainId, req.user.id);
+    const token = this.authService.generateUserToken(user);
+
+    return { user, token };
   }
 }

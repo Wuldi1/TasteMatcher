@@ -10,6 +10,14 @@ interface PersonalDetailsStepProps {
 
 export function PersonalDetailsStep({ data, onChange, onNext, onBack }: PersonalDetailsStepProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Local state for text inputs that need to be split into arrays
+  const [secondaryLocationsText, setSecondaryLocationsText] = useState(
+    data.secondaryLocations?.join(', ') || ''
+  );
+  const [residencesText, setResidencesText] = useState(
+    data.residences?.join(', ') || ''
+  );
 
   const handleChange = (field: keyof PersonalDetails, value: any) => {
     onChange({ ...data, [field]: value });
@@ -102,10 +110,18 @@ export function PersonalDetailsStep({ data, onChange, onNext, onBack }: Personal
             <input
               id="secondaryLocations"
               type="text"
-              value={data.secondaryLocations?.join(', ') || ''}
-              onChange={(e) => handleChange('secondaryLocations', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+              value={secondaryLocationsText}
+              onChange={(e) => {
+                const text = e.target.value;
+                setSecondaryLocationsText(text);
+                // Only split and filter when there's actual content
+                const locations = text.trim() 
+                  ? text.split(',').map(s => s.trim()).filter(Boolean)
+                  : [];
+                handleChange('secondaryLocations', locations);
+              }}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="e.g., London, Miami"
+              placeholder="e.g., London, Miami, Paris"
             />
             <p className="mt-1 text-xs text-gray-500">Separate multiple locations with commas</p>
           </div>
@@ -189,10 +205,18 @@ export function PersonalDetailsStep({ data, onChange, onNext, onBack }: Personal
             <input
               id="residences"
               type="text"
-              value={data.residences?.join(', ') || ''}
-              onChange={(e) => handleChange('residences', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+              value={residencesText}
+              onChange={(e) => {
+                const text = e.target.value;
+                setResidencesText(text);
+                // Only split and filter when there's actual content
+                const locations = text.trim()
+                  ? text.split(',').map(s => s.trim()).filter(Boolean)
+                  : [];
+                handleChange('residences', locations);
+              }}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="e.g., Manhattan apartment, Hamptons house"
+              placeholder="e.g., Manhattan apartment, Hamptons house, London flat"
             />
             <p className="mt-1 text-xs text-gray-500">Separate multiple residences with commas</p>
           </div>

@@ -76,7 +76,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
         </button>
 
         <p className="mt-6 text-sm text-gray-500">
-          This will take about 5-10 minutes
+          This will take about 5-10 minutes • You can skip and complete later
         </p>
       </div>
     </div>

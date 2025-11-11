@@ -4,6 +4,7 @@ import { createLogger } from '../../lib/logger';
 import { loadConfig, type AppConfig } from '../../lib/config';
 import { retryWithBackoff } from '../../utils/retry';
 import { ImageProcessingQueueMessage } from '../../types/queue.types';
+import { BadRequestException } from '@nestjs/common';
 
 const logger = createLogger('BlobService');
 
@@ -13,8 +14,16 @@ const logger = createLogger('BlobService');
 export class BlobService {
   private blobStorageClient: BlobServiceClient;
   private queueServiceClient: QueueServiceClient;
-
   private appConfig: AppConfig;
+
+  // File validation constants
+  private static readonly ALLOWED_IMAGE_MIME_TYPES = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+  ];
+  
+  private static readonly MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
   constructor() {
     this.appConfig = loadConfig();
@@ -33,6 +42,42 @@ export class BlobService {
     this.queueServiceClient = QueueServiceClient.fromConnectionString(
       this.appConfig.azure.storageConnectionString
     );
+  }
+
+  /**
+   * Validate image file type
+   * @throws Error if file type is not allowed
+   */
+  public validateImageMimeType(mimetype: string): void {
+    if (!BlobService.ALLOWED_IMAGE_MIME_TYPES.includes(mimetype.toLowerCase())) {
+      throw new BadRequestException(
+        `Invalid file type: ${mimetype}. Only JPEG and PNG images are allowed.`
+      );
+    }
+  }
+
+  /**
+   * Validate file size
+   * @throws Error if file exceeds maximum size
+   */
+  public validateFileSize(sizeBytes: number, maxSizeBytes?: number): void {
+    const maxSize = maxSizeBytes || BlobService.MAX_FILE_SIZE_BYTES;
+    if (sizeBytes > maxSize) {
+      const maxSizeMB = Math.round(maxSize / (1024 * 1024));
+      const actualSizeMB = (sizeBytes / (1024 * 1024)).toFixed(2);
+      throw new BadRequestException(
+        `File size (${actualSizeMB}MB) exceeds maximum allowed size of ${maxSizeMB}MB.`
+      );
+    }
+  }
+
+  /**
+   * Validate image file (combines mime type and size validation)
+   * @throws Error if validation fails
+   */
+  public validateImageFile(file: Express.Multer.File): void {
+    this.validateImageMimeType(file.mimetype);
+    this.validateFileSize(file.size);
   }
 
   // will be used mostly for health purposes
@@ -165,8 +210,8 @@ export class BlobService {
   }
 
   /**
- * Delete blob if it exists
- */
+   * Delete blob if it exists
+   */
   async deleteBlobIfExists(container: string, blobName: string): Promise<void> {
     const containerClient = this.blobStorageClient.getContainerClient(container);
     const blobClient = containerClient.getBlockBlobClient(blobName);
@@ -175,6 +220,98 @@ export class BlobService {
       msg: 'Deleted blob if exists',
       container,
       blobName,
+    });
+  }
+
+  /**
+   * Delete all blobs with a given prefix (folder)
+   * Useful for cleaning up temporary files in a specific folder
+   * @param containerName - The container name
+   * @param prefix - The blob prefix (folder path) to delete, e.g., "temp/preferences/userId123/"
+   */
+  async deleteBlobsWithPrefix(containerName: string, prefix: string): Promise<void> {
+    return retryWithBackoff<void>(
+      async () => {
+        logger.debug({
+          msg: 'Deleting blobs with prefix',
+          container: containerName,
+          prefix,
+        });
+
+        const containerClient = this.blobStorageClient.getContainerClient(containerName);
+        
+        // List all blobs with the given prefix
+        const blobsToDelete: string[] = [];
+        for await (const blob of containerClient.listBlobsFlat({ prefix })) {
+          blobsToDelete.push(blob.name);
+        }
+
+        if (blobsToDelete.length === 0) {
+          logger.debug({
+            msg: 'No blobs found with prefix',
+            container: containerName,
+            prefix,
+          });
+          return;
+        }
+
+        logger.debug({
+          msg: 'Found blobs to delete',
+          container: containerName,
+          prefix,
+          count: blobsToDelete.length,
+        });
+
+        // Delete blobs in parallel (with reasonable batch size)
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < blobsToDelete.length; i += BATCH_SIZE) {
+          const batch = blobsToDelete.slice(i, i + BATCH_SIZE);
+          await Promise.all(
+            batch.map(async (blobName) => {
+              try {
+                const blobClient = containerClient.getBlockBlobClient(blobName);
+                await blobClient.deleteIfExists();
+                logger.debug({
+                  msg: 'Deleted blob',
+                  container: containerName,
+                  blobName,
+                });
+              } catch (err) {
+                logger.error({
+                  msg: 'Failed to delete blob',
+                  container: containerName,
+                  blobName,
+                  err,
+                });
+                // Continue with other blobs even if one fails
+              }
+            })
+          );
+        }
+
+        logger.debug({
+          msg: 'Successfully deleted blobs with prefix',
+          container: containerName,
+          prefix,
+          deletedCount: blobsToDelete.length,
+        });
+      },
+      {
+        maxAttempts: 2,
+        initialDelayMs: 1000,
+        maxDelayMs: 10000,
+        backoffMultiplier: 2,
+      },
+      `deleteBlobsWithPrefix-${containerName}-${prefix}`,
+      logger
+    ).catch((err: Error) => {
+      logger.error({
+        msg: 'Failed to delete blobs with prefix after retries',
+        container: containerName,
+        prefix,
+        err,
+      });
+      throw err;
     });
   }
 

@@ -10,9 +10,16 @@
 // 9. CI-friendly: passes typecheck and lint.
 // -----------------------------------------------------------
 
-import { Domain, DomainVerificationResultResponse, Artwork, User, Role, DomainRequest } from '@tastematcher/common';
+import { Domain, DomainVerificationResultResponse, Artwork, User, Role, DomainRequest, PersonalQuestionnaire } from '@tastematcher/common';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+
+/**
+ * Get auth token from localStorage
+ */
+function getAuthToken(): string {
+  return localStorage.getItem('token') || '';
+}
 
 export class ApiError extends Error {
   constructor(
@@ -321,6 +328,68 @@ class ApiClient {
     const response = await this.request<{ token: string }>('/api/auth/login/verify', {
       method: 'POST',
       body: JSON.stringify({ email, code }),
+    });
+    return response;
+  }
+
+  // ========== Onboarding Endpoints ==========
+
+  async uploadPreferenceImage(file: File): Promise<{ success: boolean; message: string; }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${this.baseURL}/api/users/me/vectorize-preference-image`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${getAuthToken()}`,
+        // Don't set Content-Type - browser will set it with boundary for multipart/form-data
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new ApiError(error.message || 'Upload failed', response.status);
+    }
+
+    return response.json();
+  }
+
+  async finalizePreferenceVectors(): Promise<{ success: boolean; message: string; totalVectors: number }> {
+    const response = await this.request<{ success: boolean; message: string; totalVectors: number }>(
+      '/api/users/me/finalize-preference-vectors',
+      {
+        method: 'POST',
+      },
+    );
+    return response;
+  }
+
+  async updateUserQuestionnaire(questionnaire: PersonalQuestionnaire): Promise<User> {
+    const response = await this.request<User>('/api/users/me/questionnaire', {
+      method: 'PATCH',
+      body: JSON.stringify({ personalQuestionnaire: questionnaire }),
+    });
+    return response;
+  }
+
+  async completeOnboarding(): Promise<User> {
+    const response = await this.request<User>('/api/users/me/complete-onboarding', {
+      method: 'POST',
+    });
+    return response;
+  }
+
+  async skipOnboarding(): Promise<User> {
+    const response = await this.request<User>('/api/users/me/skip-onboarding', {
+      method: 'POST',
+    });
+    return response;
+  }
+
+  async refreshCurrentUser(): Promise<{ user: User; token: string }> {
+    const response = await this.request<{ user: User; token: string }>('/api/users/me/refresh', {
+      method: 'GET',
     });
     return response;
   }
