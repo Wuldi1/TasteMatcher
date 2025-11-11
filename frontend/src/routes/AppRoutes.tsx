@@ -75,7 +75,7 @@ export function AppRoutes() {
         }
       />
 
-      {/* Onboarding route - full screen, no navigation */}
+      {/* Onboarding route - accessible for customers in any status (for editing) */}
       <Route
         path="/onboarding"
         element={

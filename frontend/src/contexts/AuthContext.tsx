@@ -78,33 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  const setUserFromToken = useCallback((token: string) => {
-    try {
-      if (isTokenValid(token) === false) {
-        console.error('Token is expired or invalid.');
-        logout();
-        return;
-      }
-
-      const decoded = parseToken(token);
-      if (decoded) {
-        const userData = {
-          id: decoded.id,
-          email: decoded.email,
-          domainId: decoded.domainId,
-          role: decoded.role,
-          name: decoded.name
-        };
-
-        console.log('Setting user from token:', userData);
-        setUser(userData);
-      }
-    } catch (error) {
-      console.error('Failed to parse token:', error);
-      logout();
-    }
-  }, [logout]);
-
   const refreshUser = useCallback(async () => {
     const token = localStorage.getItem('tm_auth_token');
     if (!token) {
@@ -123,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Update API client token
       apiClient.setAuthToken(newToken);
 
-      // Update user state with fresh data
+      // Update user state with fresh data including personalQuestionnaire
       setUser({
         id: freshUser.id,
         email: freshUser.email,
@@ -131,13 +104,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: freshUser.role,
         name: freshUser.name,
         onboardingStatus: freshUser.onboardingStatus || 'not_started',
+        personalQuestionnaire: freshUser.personalQuestionnaire,
       });
 
       console.log('Refreshed user with new token:', freshUser);
     } catch (error) {
       console.error('Failed to refresh user:', error);
+      // If refresh fails, try parsing existing token
+      try {
+        const decoded = parseToken(token);
+        if (decoded) {
+          setUser({
+            id: decoded.id,
+            email: decoded.email,
+            domainId: decoded.domainId,
+            role: decoded.role,
+            name: decoded.name || decoded.email
+          });
+        }
+      } catch (parseError) {
+        console.error('Failed to parse token:', parseError);
+      }
     }
   }, []);
+
+  const setUserFromToken = useCallback((token: string) => {
+    try {
+      if (isTokenValid(token) === false) {
+        console.error('Token is expired or invalid.');
+        logout();
+        return;
+      }
+
+      const decoded = parseToken(token);
+      if (decoded) {
+        const userData = {
+          id: decoded.id,
+          email: decoded.email,
+          domainId: decoded.domainId,
+          role: decoded.role,
+          name: decoded.name || decoded.email,
+          onboardingStatus: decoded.onboardingStatus || 'not_started',
+          // personalQuestionnaire will be loaded when needed via refreshUser
+        };
+
+        console.log('Setting user from token:', userData);
+        setUser(userData);
+      }
+    } catch (error) {
+      console.error('Failed to parse token:', error);
+      logout();
+    }
+  }, [logout]);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('tm_auth_token');

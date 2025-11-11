@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { PersonalDetails, CollectingPreferences, ArtworkPreferences } from '@tastematcher/common';
@@ -26,6 +26,65 @@ export function OnboardingFlow() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Check if user should even be on this page
+  useEffect(() => {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    // If user is not a customer, redirect to home
+    if (user.role !== 'customer') {
+      navigate('/home', { replace: true });
+      return;
+    }
+
+    // If user hasn't started or is in progress, they should be here
+    if (user.onboardingStatus === 'not_started' || user.onboardingStatus === 'in_progress') {
+      setIsLoading(false);
+      return;
+    }
+
+    // If user has completed or skipped, they're editing
+    if (user.onboardingStatus === 'completed' || user.onboardingStatus === 'skipped') {
+      setIsEditMode(true);
+    }
+
+    setIsLoading(false);
+  }, [user, navigate]);
+
+  // Load existing questionnaire data after determining edit mode
+  useEffect(() => {
+    if (isLoading || !user) return;
+
+    // Only refresh if we're in edit mode to get latest data
+    if (isEditMode && refreshUser) {
+      refreshUser().then(() => {
+        console.log('User data refreshed for onboarding edit mode');
+      });
+    }
+  }, [isEditMode, isLoading]); // Don't include refreshUser or user to avoid loops
+
+  useEffect(() => {
+    if (!user?.personalQuestionnaire) return;
+
+    const { personalDetails: pd, collectingPreferences: cp, artworkPreferences: ap } = user.personalQuestionnaire;
+    
+    console.log('Loading questionnaire data:', { pd, cp, ap });
+    
+    if (pd) {
+      setPersonalDetails(pd);
+    }
+    if (cp) {
+      setCollectingPreferences(cp);
+    }
+    if (ap) {
+      setArtworkPreferences(ap);
+    }
+  }, [user?.personalQuestionnaire]);
 
   const handleNext = useCallback(() => {
     const steps: OnboardingStep[] = ['welcome', 'personal', 'collecting', 'artwork', 'completion'];
@@ -66,16 +125,11 @@ export function OnboardingFlow() {
         await apiClient.finalizePreferenceVectors();
       }
 
-      // Update onboarding status
-      await apiClient.completeOnboarding();
-
-      // Critical: Refresh user data with new token BEFORE navigating
-      if (refreshUser) {
-        await refreshUser();
+      // Only update onboarding status if NOT in edit mode
+      // In edit mode, user already has completed/skipped status
+      if (!isEditMode) {
+        await apiClient.completeOnboarding();
       }
-
-      // Small delay to ensure state updates
-      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Navigate to home with replace to prevent back navigation
       navigate('/home', { replace: true });
@@ -85,24 +139,22 @@ export function OnboardingFlow() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [user, personalDetails, collectingPreferences, artworkPreferences, refreshUser, navigate]);
+  }, [user, personalDetails, collectingPreferences, artworkPreferences, isEditMode, refreshUser, navigate]);
 
   const handleSkip = useCallback(async () => {
     if (!user) return;
+
+    // If in edit mode, just navigate back instead of skipping
+    if (isEditMode) {
+      navigate('/home', { replace: true });
+      return;
+    }
 
     setIsSkipping(true);
     setError(null);
 
     try {
       await apiClient.skipOnboarding();
-
-      // Refresh user data with new token BEFORE navigating
-      if (refreshUser) {
-        await refreshUser();
-      }
-
-      // Small delay to ensure state updates
-      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Navigate to home
       navigate('/home', { replace: true });
@@ -112,12 +164,20 @@ export function OnboardingFlow() {
     } finally {
       setIsSkipping(false);
     }
-  }, [user, refreshUser, navigate]);
+  }, [user, isEditMode, refreshUser, navigate]);
 
   const getProgress = useCallback(() => {
     const steps: OnboardingStep[] = ['welcome', 'personal', 'collecting', 'artwork', 'completion'];
     return ((steps.indexOf(currentStep) + 1) / steps.length) * 100;
   }, [currentStep]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center">
+        <p className="text-gray-600">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
@@ -129,7 +189,7 @@ export function OnboardingFlow() {
         />
       </div>
 
-      {/* Skip Button - Show on all steps except completion */}
+      {/* Skip/Cancel Button - Show on all steps except completion */}
       {currentStep !== 'completion' && (
         <div className="fixed top-4 right-4 z-40">
           <button
@@ -137,7 +197,7 @@ export function OnboardingFlow() {
             disabled={isSkipping}
             className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 bg-white/80 hover:bg-white rounded-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSkipping ? 'Skipping...' : 'Skip for now'}
+            {isSkipping ? 'Canceling...' : isEditMode ? 'Cancel' : 'Skip for now'}
           </button>
         </div>
       )}

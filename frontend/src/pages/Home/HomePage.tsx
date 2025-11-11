@@ -15,10 +15,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { ArrowRight, Upload, Grid, Heart } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
-import { fetchArtworkStats } from '../../services/artworksApi';
+import { apiClient } from '../../services/api';
 import type { ArtworkStats } from '@tastematcher/common';
 import './HomePage.css';
 import { useDomain } from '../../contexts/DomainContext';
+import { useEffect } from 'react';
 
 /**
  * Home page displaying domain information and quick action cards.
@@ -26,20 +27,36 @@ import { useDomain } from '../../contexts/DomainContext';
  * Redirects customers to onboarding if not yet completed.
  */
 export function HomePage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { currentDomain } = useDomain();
 
-  // Add console logging for debugging
-  console.log('HomePage - user:', user);
-  console.log('HomePage - user role:', user?.role);
-  console.log('HomePage - onboarding status:', user?.onboardingStatus);
+  // Load existing questionnaire data if user has already completed or is editing
+  useEffect(() => {
+    // Refresh user data to get latest personalQuestionnaire from backend
+    if (refreshUser && user) {
+      refreshUser().then(() => {
+        console.log('User data refreshed for onboarding');
 
-  // Fetch domain stats from API
+        // Redirect customers to onboarding only if they haven't started or are in progress
+        // Users who skipped or completed can access the home page
+        // When they manually navigate to /onboarding, they can edit their answers
+        if (user.role === 'customer' &&
+          (user.onboardingStatus === 'not_started' || user.onboardingStatus === 'in_progress')) {
+          console.log('HomePage - Redirecting to onboarding');
+          return <Navigate to="/onboarding" replace />;
+        }
+
+      });
+    }
+  }, []); // Only run once on mount
+
+
+  // Fetch domain stats from API using unified client
   const { data: stats, isLoading } = useQuery<ArtworkStats>({
     queryKey: ['artwork-stats', user?.domainId],
     queryFn: async () => {
       if (!user?.domainId) throw new Error('No domain ID');
-      return fetchArtworkStats(user.domainId);
+      return apiClient.getArtworkStats(user.domainId);
     },
     enabled: !!user?.domainId,
     staleTime: 60000,
@@ -50,12 +67,6 @@ export function HomePage() {
   if (!user) {
     console.log('HomePage - No user, returning null');
     return null;
-  }
-
-  // Redirect customers to onboarding if not completed (including skipped status)
-  if (user.role === 'customer' && user.onboardingStatus !== 'completed') {
-    console.log('HomePage - Redirecting to onboarding');
-    return <Navigate to="/onboarding" replace />;
   }
 
   console.log('HomePage - Rendering home page');

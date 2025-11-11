@@ -15,7 +15,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { Heart, X, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
-import { fetchUntastedArtworks, saveArtworkPreference } from '../../services/artworksApi';
+import { apiClient } from '../../services/api';
+import { saveArtworkPreference } from '../../services/artworksApi';
 import './TasterPage.css';
 
 type SwipeDirection = 'left' | 'right' | null;
@@ -35,17 +36,20 @@ export function TasterPage() {
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Fetch untasted artworks for the user
-  const { data: artworksData, isLoading } = useQuery({
+  const { data: untastedData, isLoading } = useQuery({
     queryKey: ['untasted-artworks', user?.domainId, user?.id],
     queryFn: async () => {
       if (!user?.domainId || !user?.id) throw new Error('User not authenticated');
-      return fetchUntastedArtworks(user.domainId, user.id, 20);
+      return apiClient.fetchUntastedArtworks(user.domainId, user.id, 20);
     },
     enabled: !!user?.domainId && !!user?.id,
     staleTime: 60000, // Cache for 1 minute
   });
 
-  const artworks = artworksData?.artworks || [];
+  // Extract artworks array from response with fallback to empty array
+  const artworks = untastedData?.artworks || [];
+  const currentArtwork = artworks[currentIndex];
+  const hasMore = currentIndex < artworks.length - 1;
 
   // Save preference mutation
   const savePreference = useMutation({
@@ -68,9 +72,6 @@ export function TasterPage() {
       // TODO: Show error toast to user
     },
   });
-
-  const currentArtwork = artworks[currentIndex];
-  const hasMore = currentIndex < artworks.length - 1;
 
   // Handle swipe decision
   const handleSwipe = useCallback((direction: 'left' | 'right') => {
@@ -143,7 +144,7 @@ export function TasterPage() {
     );
   }
 
-  if (artworks.length === 0) {
+  if (!artworks || artworks.length === 0) {
     return (
       <div className="taster-page taster-page--empty">
         <div className="taster-empty">

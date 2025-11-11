@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import { Home, Compass, Upload, LayoutGrid, LogOut, ChevronsLeft, ChevronsRight, User as UserIcon, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const navLinks = [
   { name: 'Home', href: '/home', icon: Home },
-  { name: 'Taster', href: '/taster', icon: Compass },
-  { name: 'Catalog', href: '/catalog', icon: LayoutGrid },
   { name: 'Upload', href: '/upload', icon: Upload },
+  { name: 'Catalog', href: '/catalog', icon: LayoutGrid },
+  { name: 'Taster', href: '/taster', icon: Compass },
 ];
 
 const domainOwnerLinks = [
@@ -62,16 +62,36 @@ export const Sidebar = () => {
         {user && (
           <div className={`flex items-center mb-4 ${isCollapsed ? 'justify-center' : ''}`}>
             {!isCollapsed ? (
-              <>
+              <div className="flex items-center w-full group relative">
                 <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
                   <UserIcon className="w-5 h-5 text-blue-600" />
                 </div>
-                <div className="overflow-hidden">
+                <div className="overflow-hidden flex-1">
                   <p className="text-sm font-semibold text-gray-800 truncate">{user.name || user.email}</p>
                   <p className="text-xs text-gray-500 truncate">{user.email}</p>
                   <p className="text-xs text-gray-400 capitalize mt-0.5">{user.role}</p>
                 </div>
-              </>
+
+                {/* Tooltip for customer users */}
+                {user.role === 'customer' && (
+                  <Link
+                    to="/onboarding"
+                    className="absolute inset-0 cursor-pointer"
+                    aria-label="Edit your profile and preferences"
+                  >
+                    {/* Hover tooltip */}
+                    <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block w-48 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs rounded-lg px-3 py-2 shadow-lg z-10 animate-fade-in">
+                      <div className="relative">
+                        ✨ Want to relive the onboarding experience?
+                        {/* Arrow pointing down */}
+                        <div className="absolute top-full left-4 -mt-1">
+                          <div className="border-4 border-transparent border-t-blue-600"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                )}
+              </div>
             ) : (
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                 <UserIcon className="w-5 h-5 text-blue-600" />

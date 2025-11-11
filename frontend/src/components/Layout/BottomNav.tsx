@@ -4,9 +4,9 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const navLinks = [
   { name: 'Home', href: '/home', icon: Home },
-  { name: 'Taster', href: '/taster', icon: Compass },
-  { name: 'Catalog', href: '/catalog', icon: LayoutGrid },
   { name: 'Upload', href: '/upload', icon: Upload },
+  { name: 'Catalog', href: '/catalog', icon: LayoutGrid },
+  { name: 'Taster', href: '/taster', icon: Compass },
 ];
 
 const domainOwnerLinks = [

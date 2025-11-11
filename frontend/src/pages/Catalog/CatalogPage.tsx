@@ -16,7 +16,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import { useAuth } from '../../hooks/useAuth';
 import { Search, X, Trash2, Edit } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
-import { fetchArtworks, deleteArtwork } from '../../services/artworksApi';
+import { apiClient } from '../../services/api';
 import { EditArtworkModal } from '../../components/EditArtworkModal/EditArtworkModal';
 import './CatalogPage.css';
 
@@ -25,7 +25,7 @@ import './CatalogPage.css';
  * Features: lazy loading, search/filter, edit, delete operations.
  */
 export function CatalogPage() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isInitializing: authLoading } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
@@ -71,18 +71,7 @@ export function CatalogPage() {
         throw new Error('No domain ID');
       }
       
-      const result = await fetchArtworks(user.domainId, {
-        limit: 20,
-        continuationToken: pageParam,
-        sortBy: 'createdAt',
-        sortOrder: 'desc',
-        searchQuery: searchQuery || undefined,
-      });
-
-      console.log('[Query] Results:', { 
-        itemCount: result.items?.length, 
-        hasMore: result.hasMore,
-      });
+      const result = await apiClient.getArtworks(user.domainId);
 
       return result;
     },
@@ -110,7 +99,7 @@ export function CatalogPage() {
   const deleteMutation = useMutation({
     mutationFn: (artworkId: string) => {
       if (!user?.domainId) throw new Error('No domain ID');
-      return deleteArtwork(user.domainId, artworkId);
+      return apiClient.deleteArtwork(user.domainId, artworkId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });

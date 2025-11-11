@@ -10,17 +10,23 @@
 // 9. CI-friendly: passes typecheck and lint.
 // -----------------------------------------------------------
 
-import { Domain, DomainVerificationResultResponse, Artwork, User, Role, DomainRequest, PersonalQuestionnaire } from '@tastematcher/common';
+import {
+  Domain,
+  DomainVerificationResultResponse,
+  Artwork,
+  User,
+  Role,
+  DomainRequest,
+  PersonalQuestionnaire,
+  ArtworkStats,
+  UntastedArtworksResponse
+} from '@tastematcher/common';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 /**
- * Get auth token from localStorage
+ * Custom API Error with status code and optional error code
  */
-function getAuthToken(): string {
-  return localStorage.getItem('token') || '';
-}
-
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -33,17 +39,23 @@ export class ApiError extends Error {
 }
 
 /**
- * Centralized API client with retry logic and proper error handling
+ * Base API client with shared functionality for all requests
+ * Handles authentication, headers, error handling, and logging
  */
-class ApiClient {
-  private baseURL: string;
-  private authToken: string | null = null;
+class BaseApiClient {
+  protected baseURL: string;
+  protected authToken: string | null = null;
 
   constructor(baseURL: string) {
     this.baseURL = baseURL;
-    
-    // Load token from localStorage on initialization
-    const storedToken = localStorage.getItem('token');
+    this.loadAuthToken();
+  }
+
+  /**
+   * Load authentication token from localStorage
+   */
+  private loadAuthToken(): void {
+    const storedToken = localStorage.getItem('tm_auth_token') || localStorage.getItem('token');
     if (storedToken) {
       this.authToken = storedToken;
     }
@@ -55,6 +67,7 @@ class ApiClient {
   setAuthToken(token: string): void {
     this.authToken = token;
     localStorage.setItem('token', token);
+    localStorage.setItem('tm_auth_token', token);
   }
 
   /**
@@ -67,12 +80,21 @@ class ApiClient {
   }
 
   /**
+   * Get authentication token
+   */
+  protected getAuthToken(): string | null {
+    return this.authToken;
+  }
+
+  /**
    * Get default headers with authentication
    */
-  private getHeaders(): HeadersInit {
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
+  protected getHeaders(includeContentType: boolean = true): HeadersInit {
+    const headers: HeadersInit = {};
+
+    if (includeContentType) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     if (this.authToken) {
       headers['Authorization'] = `Bearer ${this.authToken}`;
@@ -81,27 +103,29 @@ class ApiClient {
     return headers;
   }
 
-  private async request<T>(
+  /**
+   * Make a request with proper error handling and logging
+   */
+  protected async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
-    
-    console.debug('API Request:', { method: options.method || 'GET', url });
-    
+    const method = options.method || 'GET';
+
+    console.debug('API Request:', { method, url });
+
     try {
       const response = await fetch(url, {
-        headers: this.getHeaders(),
         ...options,
+        headers: {
+          ...this.getHeaders(),
+          ...options.headers,
+        },
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API Error:', { status: response.status, url, error: errorText });
-        throw new ApiError(
-          errorText || `HTTP ${response.status}`,
-          response.status
-        );
+        await this.handleErrorResponse(response, url);
       }
 
       const data = await response.json();
@@ -117,13 +141,108 @@ class ApiClient {
   }
 
   /**
+   * Handle error responses with proper logging
+   */
+  private async handleErrorResponse(response: Response, url: string): Promise<never> {
+    let errorMessage = `HTTP ${response.status}`;
+    let errorCode: string | undefined;
+
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.message || errorData.error || errorMessage;
+      errorCode = errorData.code;
+    } catch {
+      // If JSON parsing fails, try to get text
+      try {
+        errorMessage = await response.text() || errorMessage;
+      } catch {
+        // Use default error message
+      }
+    }
+
+    console.error('API Error:', { status: response.status, url, error: errorMessage, code: errorCode });
+    throw new ApiError(errorMessage, response.status, errorCode);
+  }
+
+  /**
+   * Upload file with FormData
+   */
+  protected async uploadFile<T>(
+    endpoint: string,
+    file: File,
+    additionalData?: Record<string, any>
+  ): Promise<T> {
+    const url = `${this.baseURL}${endpoint}`;
+    const formData = new FormData();
+    formData.append('file', file);
+
+    if (additionalData) {
+      Object.entries(additionalData).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          formData.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+        }
+      });
+    }
+
+    console.debug('Upload Request:', { url, fileName: file.name, fileSize: file.size });
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          // Don't set Content-Type - browser will set it with boundary for multipart/form-data
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        await this.handleErrorResponse(response, url);
+      }
+
+      const data = await response.json();
+      console.info('Upload Success:', { url, status: response.status });
+      return data;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      console.error('Upload Network Error:', { url, error });
+      throw new ApiError('Upload network error', 0);
+    }
+  }
+
+  /**
+   * Validate email format
+   */
+  protected validateEmail(email: string): void {
+    if (!email || !email.includes('@')) {
+      throw new ApiError('Valid email is required', 400);
+    }
+  }
+
+  /**
+   * Validate required field
+   */
+  protected validateRequired(value: any, fieldName: string): void {
+    if (!value) {
+      throw new ApiError(`${fieldName} is required`, 400);
+    }
+  }
+}
+
+/**
+ * Centralized API client with all endpoints
+ * Handles domains, users, artworks, authentication, and onboarding
+ */
+class ApiClient extends BaseApiClient {
+  // ========== Domain Endpoints ==========
+
+  /**
    * Request an existing domain verification by admin email
    */
   async requestDomainVerification(adminEmail: string): Promise<Domain> {
-    if (!adminEmail || !adminEmail.includes('@')) {
-      throw new ApiError('Valid email is required', 400);
-    }
-
+    this.validateEmail(adminEmail);
     const encodedEmail = encodeURIComponent(adminEmail);
     return this.request<Domain>(`/api/domains/auth/${encodedEmail}`, { method: 'GET' });
   }
@@ -131,11 +250,9 @@ class ApiClient {
   /**
    * Create a new domain
    */
-  async createDomain(request: Domain): Promise<Domain> {
-    if (!request.name || !request.adminEmail) {
-      throw new ApiError('Name and admin email are required', 400);
-    }
-
+  async createDomain(request: { name: string; adminEmail: string }): Promise<Domain> {
+    this.validateRequired(request.name, 'Name');
+    this.validateEmail(request.adminEmail);
     return this.request<Domain>('/api/domains', {
       method: 'POST',
       body: JSON.stringify(request),
@@ -149,250 +266,304 @@ class ApiClient {
     if (!code || code.length !== 6) {
       throw new ApiError('Verification code must be 6 digits', 400);
     }
-
     const encodedEmail = encodeURIComponent(adminEmail);
     return this.request<DomainVerificationResultResponse>(`/api/domains/verify/${encodedEmail}`, {
       method: 'POST',
       body: JSON.stringify({ code }),
     });
   }
-  
-  /**
-   * Upload artwork along with optional metadata
-   */
-  async uploadArtwork(domainId: string, file: File, artworkMetadata?: Partial<Artwork>): Promise<Artwork> {
-    if (!domainId) {
-      throw new ApiError('Domain ID is required', 400);
-    }
-    if (!file) {
-      throw new ApiError('File is required', 400);
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    // TODO : add some validation for artworkMetadata fields
-    if (artworkMetadata) {
-        formData.append('artwork', JSON.stringify(artworkMetadata));
-    }
-
-    const url = `${API_BASE_URL}/api/domains/${domainId}/uploads`;
-
-    console.debug('Upload Request:', { domainId, fileName: file.name, fileSize: file.size });
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Upload Error:', { status: response.status, error: errorText });
-        throw new ApiError(errorText || `Upload failed`, response.status);
-      }
-
-      const data = (await response.json()) as Artwork;
-      console.info('Upload Success:', { domainId, artworkId: data.id });
-      return data;
-    } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
-      }
-      console.error('Upload Network Error:', error);
-      throw new ApiError('Upload network error', 0);
-    }
-  }
 
   /**
-   * Fetches domain details by its ID.
-   * The backend will validate that the authenticated user belongs to this domain.
+   * Get domain by ID
    */
   async getDomainById(domainId: string): Promise<Domain> {
+    this.validateRequired(domainId, 'Domain ID');
     return this.request<Domain>(`/api/domains/${domainId}`, { method: 'GET' });
   }
 
-  // ========== User Management Endpoints ==========
-
-  // Update getAllUsers to accept optional domainId parameter for global admins
-  async getAllUsers(domainId?: string): Promise<User[]> {
-    const url = domainId ? `/api/users/domain/${domainId}` : '/api/users';
-    const response = await this.request<User[]>(url, {
-      method: 'GET',
-    });
-    return response;
+  /**
+   * Get all domains (global admin only)
+   */
+  async getAllDomains(): Promise<Domain[]> {
+    return this.request<Domain[]>('/api/domains', { method: 'GET' });
   }
 
-  async getUser(userId: string): Promise<User> {
-    const response = await this.request<User>(`/api/users/${userId}`, {
-      method: 'GET',
-    });
-    return response;
-  }
-
-  async updateUser(userId: string, data: { name?: string; role?: Role }): Promise<User> {
-    const response = await this.request<User>(`/api/users/${userId}`, {
+  /**
+   * Update domain
+   */
+  async updateDomain(domainId: string, data: { name?: string }): Promise<Domain> {
+    this.validateRequired(domainId, 'Domain ID');
+    return this.request<Domain>(`/api/domains/${domainId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
-    return response;
   }
 
-  async deleteUser(userId: string): Promise<void> {
-    await this.request<void>(`/api/users/${userId}`, {
-      method: 'DELETE',
-    });
+  /**
+   * Delete domain
+   */
+  async deleteDomain(domainId: string): Promise<void> {
+    this.validateRequired(domainId, 'Domain ID');
+    await this.request<void>(`/api/domains/${domainId}`, { method: 'DELETE' });
   }
 
-  async inviteUser(data: { name: string; email: string; role: Role }): Promise<User> {
-    const response = await this.request<User>('/api/users/invite', {
+  /**
+   * Create domain by admin (global admin only)
+   */
+  async createDomainByAdmin(data: {
+    userName: string;
+    email: string;
+    domainName: string;
+  }): Promise<Domain> {
+    return this.request<Domain>('/api/domains/create', {
       method: 'POST',
       body: JSON.stringify(data),
     });
-    return response;
   }
 
-  // ========== Domain Management Endpoints (Global Admin) ==========
-
-  async getAllDomains(): Promise<Domain[]> {
-    const response = await this.request<Domain[]>('/api/domains', {
-      method: 'GET',
-    });
-    return response;
-  }
-
-  async getDomain(domainId: string): Promise<Domain> {
-    const response = await this.request<Domain>(`/api/domains/${domainId}`, {
-      method: 'GET',
-    });
-    return response;
-  }
-
-  async updateDomain(domainId: string, data: { name?: string }): Promise<Domain> {
-    const response = await this.request<Domain>(`/api/domains/${domainId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
-    return response;
-  }
-
-  async deleteDomain(domainId: string): Promise<void> {
-    await this.request<void>(`/api/domains/${domainId}`, {
-      method: 'DELETE',
-    });
-  }
-
+  /**
+   * Create domain request (public)
+   */
   async createDomainRequest(data: {
     name: string;
     email: string;
     proposedDomainName: string;
     message?: string;
   }): Promise<DomainRequest> {
-    const response = await this.request<DomainRequest>('/auth/domain-request', {
+    return this.request<DomainRequest>('/api/auth/domain-request', {
       method: 'POST',
       body: JSON.stringify(data),
     });
-    return response;
   }
 
+  /**
+   * Get all domain requests (global admin only)
+   */
   async getAllDomainRequests(): Promise<DomainRequest[]> {
-    const response = await this.request<DomainRequest[]>('/api/domains/requests/all', {
+    return this.request<DomainRequest[]>('/api/domains/requests/all', { method: 'GET' });
+  }
+
+  // ========== User Management Endpoints ==========
+
+  /**
+   * Get all users (optionally filtered by domain for global admins)
+   */
+  async getAllUsers(domainId?: string): Promise<User[]> {
+    const url = domainId ? `/api/users/domain/${domainId}` : '/api/users';
+    return this.request<User[]>(url, { method: 'GET' });
+  }
+
+  /**
+   * Get user by ID
+   */
+  async getUser(userId: string): Promise<User> {
+    this.validateRequired(userId, 'User ID');
+    return this.request<User>(`/api/users/${userId}`, { method: 'GET' });
+  }
+
+  /**
+   * Update user
+   */
+  async updateUser(userId: string, data: { name?: string; role?: Role }): Promise<User> {
+    this.validateRequired(userId, 'User ID');
+    return this.request<User>(`/api/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Delete user
+   */
+  async deleteUser(userId: string): Promise<void> {
+    this.validateRequired(userId, 'User ID');
+    await this.request<void>(`/api/users/${userId}`, { method: 'DELETE' });
+  }
+
+  /**
+   * Invite user to domain
+   */
+  async inviteUser(data: { name: string; email: string; role: Role }): Promise<User> {
+    this.validateRequired(data.name, 'Name');
+    this.validateEmail(data.email);
+    return this.request<User>('/api/users/invite', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Refresh current user and get new token
+   */
+  async refreshCurrentUser(): Promise<{ user: User; token: string }> {
+    return this.request<{ user: User; token: string }>('/api/users/me/refresh', {
       method: 'GET',
     });
-    return response;
   }
 
-  async createDomainByAdmin(data: {
-    userName: string;
-    email: string;
-    domainName: string;
-  }): Promise<Domain> {
-    const response = await this.request<Domain>('/domains/create', {
-      method: 'POST',
+  // ========== Artwork Endpoints ==========
+
+  /**
+   * Upload artwork with file and optional metadata
+   */
+  async uploadArtwork(domainId: string, file: File, artworkMetadata?: Partial<Artwork>): Promise<Artwork> {
+    this.validateRequired(domainId, 'Domain ID');
+    this.validateRequired(file, 'File');
+
+    return this.uploadFile<Artwork>(
+      `/api/domains/${domainId}/uploads`,
+      file,
+      artworkMetadata ? { artwork: artworkMetadata } : undefined
+    );
+  }
+
+  /**
+   * Get artwork statistics for a domain
+   */
+  async getArtworkStats(domainId: string): Promise<ArtworkStats> {
+    this.validateRequired(domainId, 'Domain ID');
+    return this.request<ArtworkStats>(`/api/domains/${domainId}/artworks/stats`, { method: 'GET' });
+  }
+
+  /**
+   * Get artworks for a domain with optional pagination
+   */
+  async getArtworks(domainId: string, limit?: number, offset?: number): Promise<Artwork[]> {
+    this.validateRequired(domainId, 'Domain ID');
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.append('limit', String(limit));
+    if (offset !== undefined) params.append('offset', String(offset));
+    const queryString = params.toString();
+    const endpoint = `/api/domains/${domainId}/artworks${queryString ? `?${queryString}` : ''}`;
+    return this.request<Artwork[]>(endpoint, { method: 'GET' });
+  }
+
+  /**
+   * Get single artwork by ID
+   */
+  async getArtwork(domainId: string, artworkId: string): Promise<Artwork> {
+    this.validateRequired(domainId, 'Domain ID');
+    this.validateRequired(artworkId, 'Artwork ID');
+    return this.request<Artwork>(`/api/domains/${domainId}/artworks/${artworkId}`, { method: 'GET' });
+  }
+
+  /**
+   * Update artwork metadata
+   */
+  async updateArtwork(domainId: string, artworkId: string, data: Partial<Artwork>): Promise<Artwork> {
+    this.validateRequired(domainId, 'Domain ID');
+    this.validateRequired(artworkId, 'Artwork ID');
+    return this.request<Artwork>(`/api/domains/${domainId}/artworks/${artworkId}`, {
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
-    return response;
   }
 
-  // ========== Authentication Endpoints (Public) ==========
+  /**
+   * Delete artwork
+   */
+  async deleteArtwork(domainId: string, artworkId: string): Promise<void> {
+    this.validateRequired(domainId, 'Domain ID');
+    this.validateRequired(artworkId, 'Artwork ID');
+    await this.request<void>(`/api/domains/${domainId}/artworks/${artworkId}`, { method: 'DELETE' });
+  }
 
+  /**
+   * Fetch untasted artworks for user (Taster page)
+   */
+  async fetchUntastedArtworks(
+    domainId: string,
+    userId: string,
+    limit: number = 20
+  ): Promise<UntastedArtworksResponse> {
+    return await this.request<UntastedArtworksResponse>(`/api/domains/${domainId}/artworks/untasted/${userId}?limit=${limit}`, { method: 'GET' });
+  }
+
+
+  // ======= Authentication Endpoints (Public) ==========
+
+  /**
+   * Request login verification code
+   */
   async requestLoginCode(email: string): Promise<{ message: string }> {
-    const response = await this.request<{ message: string }>('/api/auth/login/request', {
+    this.validateEmail(email);
+    return this.request<{ message: string }>('/api/auth/login/request', {
       method: 'POST',
       body: JSON.stringify({ email }),
     });
-    return response;
   }
 
+  /**
+   * Verify login code and get JWT token
+   */
   async verifyLoginCode(email: string, code: string): Promise<{ token: string }> {
-    const response = await this.request<{ token: string }>('/api/auth/login/verify', {
+    this.validateEmail(email);
+    if (!code || code.length !== 6) {
+      throw new ApiError('Verification code must be 6 digits', 400);
+    }
+    return this.request<{ token: string }>('/api/auth/login/verify', {
       method: 'POST',
       body: JSON.stringify({ email, code }),
     });
-    return response;
   }
 
   // ========== Onboarding Endpoints ==========
 
-  async uploadPreferenceImage(file: File): Promise<{ success: boolean; message: string; }> {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const response = await fetch(`${this.baseURL}/api/users/me/vectorize-preference-image`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${getAuthToken()}`,
-        // Don't set Content-Type - browser will set it with boundary for multipart/form-data
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new ApiError(error.message || 'Upload failed', response.status);
-    }
-
-    return response.json();
-  }
-
-  async finalizePreferenceVectors(): Promise<{ success: boolean; message: string; totalVectors: number }> {
-    const response = await this.request<{ success: boolean; message: string; totalVectors: number }>(
-      '/api/users/me/finalize-preference-vectors',
-      {
-        method: 'POST',
-      },
+  /**
+   * Upload preference image for onboarding
+   */
+  async uploadPreferenceImage(file: File): Promise<{ success: boolean; message: string; vectorized: number }> {
+    this.validateRequired(file, 'File');
+    return this.uploadFile<{ success: boolean; message: string; vectorized: number }>(
+      '/api/users/me/vectorize-preference-image',
+      file
     );
-    return response;
   }
 
+  /**
+   * Finalize preference vectors after uploading images
+   */
+  async finalizePreferenceVectors(): Promise<{ success: boolean; message: string; totalVectors: number }> {
+    return this.request<{ success: boolean; message: string; totalVectors: number }>(
+      '/api/users/me/finalize-preference-vectors',
+      { method: 'POST' }
+    );
+  }
+
+  /**
+   * Update user questionnaire
+   */
   async updateUserQuestionnaire(questionnaire: PersonalQuestionnaire): Promise<User> {
-    const response = await this.request<User>('/api/users/me/questionnaire', {
+    return this.request<User>('/api/users/me/questionnaire', {
       method: 'PATCH',
       body: JSON.stringify({ personalQuestionnaire: questionnaire }),
     });
-    return response;
   }
 
+  /**
+   * Complete onboarding
+   */
   async completeOnboarding(): Promise<User> {
-    const response = await this.request<User>('/api/users/me/complete-onboarding', {
-      method: 'POST',
-    });
-    return response;
+    return this.request<User>('/api/users/me/complete-onboarding', { method: 'POST' });
   }
 
+  /**
+   * Skip onboarding (can be resumed later)
+   */
   async skipOnboarding(): Promise<User> {
-    const response = await this.request<User>('/api/users/me/skip-onboarding', {
-      method: 'POST',
-    });
-    return response;
-  }
-
-  async refreshCurrentUser(): Promise<{ user: User; token: string }> {
-    const response = await this.request<{ user: User; token: string }>('/api/users/me/refresh', {
-      method: 'GET',
-    });
-    return response;
+    return this.request<User>('/api/users/me/skip-onboarding', { method: 'POST' });
   }
 }
 
+/**
+ * Singleton API client instance
+ */
 export const apiClient = new ApiClient(API_BASE_URL);
+
+/**
+ * Legacy function for artwork stats (for backward compatibility)
+ * @deprecated Use apiClient.getArtworkStats() instead
+ */
+export async function fetchArtworkStats(domainId: string): Promise<ArtworkStats> {
+  return apiClient.getArtworkStats(domainId);
+}

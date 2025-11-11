@@ -30,6 +30,5 @@ async function bootstrap() {
   await app.listen(port);
   
   console.log(`Application is running on: http://localhost:${port}`);
-  console.log(`Auth endpoints available at: http://localhost:${port}/api/auth`);
 }
 bootstrap();
