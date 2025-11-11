@@ -11,12 +11,12 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { DomainRegistration } from '../../components/DomainRegistration';
+import { Login } from '../../components/Login';
 
 /**
- * Authentication page that wraps DomainRegistration component
- * Handles both login and domain signup flows
+ * Authentication page with email-based login
+ * Handles existing users and provides options for new users (buyers/sellers)
  */
 export function AuthPage() {
-  return <DomainRegistration />;
+  return <Login />;
 }

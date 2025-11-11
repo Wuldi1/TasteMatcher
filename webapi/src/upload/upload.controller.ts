@@ -34,7 +34,7 @@ export class UploadController {
   ): Promise<ProcessingStatus> {
     const start = Date.now();
     this.logger.debug({
-      route: '/domains/:domainId/uploads',
+      route: '/api/domains/:domainId/uploads',
       method: 'POST',
       domainId,
       metadataKeys: Object.keys(body),
@@ -87,7 +87,7 @@ export class UploadController {
       await this.blobService.sendMessageToQueue(imageProcessingQueueMessage);
 
       this.logger.log({
-        route: '/domains/:domainId/uploads',
+        route: '/api/domains/:domainId/uploads',
         method: 'POST',
         domainId,
         durationMs: Date.now() - start,
@@ -102,7 +102,7 @@ export class UploadController {
 
     } catch (error) {
       this.logger.error({
-        route: '/domains/:domainId/uploads',
+        route: '/api/domains/:domainId/uploads',
         method: 'POST',
         domainId,
         errMessage: (error as Error).message,

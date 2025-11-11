@@ -12,9 +12,9 @@
 import { ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DomainsService } from './domains.service';
 import { EmailService } from '../email/email.service';
-import { DomainDto } from './dto/domain.dto';
 import { sign } from 'jsonwebtoken';
 import { CosmosService } from '@tastematcher/common';
+import { CreateDomainRequestDto } from './dto/create-domain-request.dto';
 
 jest.mock('jsonwebtoken', () => ({
   sign: jest.fn(() => 'jwt-token'),
@@ -59,7 +59,7 @@ const createMockContainer = () => {
 describe('DomainsService', () => {
   let service: DomainsService;
   let cosmos: CosmosService;
-  let email: EmailService;
+  let emailService: EmailService;
   let mockContainer: ReturnType<typeof createMockContainer>;
 
   beforeEach(() => {
@@ -67,11 +67,11 @@ describe('DomainsService', () => {
 
     mockContainer = createMockContainer();
 
-    email = {
+    emailService = {
       sendVerificationCode: jest.fn().mockResolvedValue(undefined),
     } as unknown as EmailService;
 
-    service = new DomainsService(email);
+    service = new DomainsService(emailService);
   });
 
   afterEach(() => {
@@ -80,12 +80,12 @@ describe('DomainsService', () => {
   });
 
   it('creates a new domain and issues verification code', async () => {
-    const dto: DomainDto = { name: 'Gallery', adminEmail: 'new@tld.com' };
+    const dto: CreateDomainRequestDto = { name: 'Gallery', email: 'new@tld.com', proposedDomainName: 'gallery.com' };
 
     const result = await service.createDomain(dto);
 
     expect(result.adminEmail).toBe('new@tld.com');
-    expect(email.sendVerificationEmail).toHaveBeenCalledWith(
+    expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(
       'new@tld.com',
       'Gallery',
       expect.any(String),
@@ -94,20 +94,20 @@ describe('DomainsService', () => {
   });
 
   it('rejects creation if domain already exists', async () => {
-    const dto: DomainDto = { name: 'Gallery', adminEmail: 'dup@tld.com' };
+    const dto: CreateDomainRequestDto = { name: 'Gallery', email: 'dup@tld.com', proposedDomainName: 'gallery.com' };
     await service.createDomain(dto);
 
     await expect(service.createDomain(dto)).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('sends verification for existing domain via GET endpoint', async () => {
-    const adminEmail = 'existing@tld.com';
-    await service.createDomain({ name: 'Existing', adminEmail });
+    const email = 'existing@tld.com';
+    await service.createDomain({ name: 'Existing', email, proposedDomainName: 'existing.com' });
 
-    const result = await service.sendVerificationCode(adminEmail);
+    const result = await service.sendVerificationCode(email);
 
-    expect(result.adminEmail).toBe(adminEmail);
-    expect(email.sendVerificationEmail).toHaveBeenCalledTimes(2);
+    expect(result.adminEmail).toBe(email);
+    expect(emailService.sendVerificationEmail).toHaveBeenCalledTimes(2);
   });
 
   it('throws NotFound when requesting verification for missing domain', async () => {
@@ -115,37 +115,37 @@ describe('DomainsService', () => {
   });
 
   it('verifies code successfully and returns token', async () => {
-    const adminEmail = 'verify@tld.com';
-    await service.createDomain({ name: 'Verify', adminEmail });
+    const email = 'verify@tld.com';
+    await service.createDomain({ name: 'Verify', email, proposedDomainName: 'verify.com' });
 
-    const sentCode = (email.sendVerificationEmail as jest.Mock).mock.calls[0][2] as string;
+    const sentCode = (emailService.sendVerificationEmail as jest.Mock).mock.calls[0][2] as string;
 
-    const result = await service.verifyDomainCode(adminEmail, sentCode);
+    const result = await service.verifyDomainCode(email, sentCode);
 
     expect(result.token).toBe('jwt-token');
     expect(sign).toHaveBeenCalledWith(
-      expect.objectContaining({ sub: expect.any(String), email: adminEmail }),
+      expect.objectContaining({ sub: expect.any(String), email }),
       'test-secret',
       expect.objectContaining({ expiresIn: '1h' }),
     );
   });
 
   it('rejects invalid verification code', async () => {
-    const adminEmail = 'invalid@tld.com';
-    await service.createDomain({ name: 'Invalid', adminEmail });
+    const email = 'invalid@tld.com';
+    await service.createDomain({ name: 'Invalid', email, proposedDomainName: 'invaliddomain.com' });
 
-    await expect(service.verifyDomainCode(adminEmail, '123456')).rejects.toBeInstanceOf(
+    await expect(service.verifyDomainCode(email, '123456')).rejects.toBeInstanceOf(
       BadRequestException,
     );
   });
 
   it('rejects expired verification code', async () => {
-    const adminEmail = 'expired@tld.com';
-    await service.createDomain({ name: 'Expired', adminEmail });
+    const email = 'expired@tld.com';
+    await service.createDomain({ name: 'Expired', email, proposedDomainName: 'expireddomain.com' });
     const storeEntry = Object.values((mockContainer as any).__store)[0] as any;
     storeEntry.verificationCodeExpiresAt = new Date(Date.now() - 1000).toISOString();
 
-    await expect(service.verifyDomainCode(adminEmail, '000000')).rejects.toBeInstanceOf(
+    await expect(service.verifyDomainCode(email, '000000')).rejects.toBeInstanceOf(
       BadRequestException,
     );
   });

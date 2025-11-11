@@ -35,6 +35,17 @@ export class UsersController {
   }
 
   /**
+   * Get all users in a specific domain (global_admin only)
+   */
+  @Get('domain/:domainId')
+  @Roles('global_admin')
+  async findAllInSpecificDomain(
+    @Param('domainId') domainId: string,
+  ): Promise<User[]> {
+    return this.usersService.findAllInDomain(domainId);
+  }
+
+  /**
    * Get a specific user by ID (domain_owner only)
    */
   @Get(':id')

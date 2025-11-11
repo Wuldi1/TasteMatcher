@@ -10,7 +10,7 @@
 // 9. CI-friendly: passes typecheck and lint.
 // -----------------------------------------------------------
 
-import { Domain, DomainVerificationResultResponse, Artwork, User, Role } from '@tastematcher/common';
+import { Domain, DomainVerificationResultResponse, Artwork, User, Role, DomainRequest } from '@tastematcher/common';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
@@ -207,8 +207,10 @@ class ApiClient {
 
   // ========== User Management Endpoints ==========
 
-  async getAllUsers(): Promise<User[]> {
-    const response = await this.request<User[]>('/api/users', {
+  // Update getAllUsers to accept optional domainId parameter for global admins
+  async getAllUsers(domainId?: string): Promise<User[]> {
+    const url = domainId ? `/api/users/domain/${domainId}` : '/api/users';
+    const response = await this.request<User[]>(url, {
       method: 'GET',
     });
     return response;
@@ -239,6 +241,86 @@ class ApiClient {
     const response = await this.request<User>('/api/users/invite', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+    return response;
+  }
+
+  // ========== Domain Management Endpoints (Global Admin) ==========
+
+  async getAllDomains(): Promise<Domain[]> {
+    const response = await this.request<Domain[]>('/api/domains', {
+      method: 'GET',
+    });
+    return response;
+  }
+
+  async getDomain(domainId: string): Promise<Domain> {
+    const response = await this.request<Domain>(`/api/domains/${domainId}`, {
+      method: 'GET',
+    });
+    return response;
+  }
+
+  async updateDomain(domainId: string, data: { name?: string }): Promise<Domain> {
+    const response = await this.request<Domain>(`/api/domains/${domainId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return response;
+  }
+
+  async deleteDomain(domainId: string): Promise<void> {
+    await this.request<void>(`/api/domains/${domainId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async createDomainRequest(data: {
+    name: string;
+    email: string;
+    proposedDomainName: string;
+    message?: string;
+  }): Promise<DomainRequest> {
+    const response = await this.request<DomainRequest>('/auth/domain-request', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response;
+  }
+
+  async getAllDomainRequests(): Promise<DomainRequest[]> {
+    const response = await this.request<DomainRequest[]>('/api/domains/requests/all', {
+      method: 'GET',
+    });
+    return response;
+  }
+
+  async createDomainByAdmin(data: {
+    userName: string;
+    email: string;
+    domainName: string;
+  }): Promise<Domain> {
+    const response = await this.request<Domain>('/domains/create', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response;
+  }
+
+  // ========== Authentication Endpoints (Public) ==========
+
+  async requestLoginCode(email: string): Promise<{ message: string }> {
+    const response = await this.request<{ message: string }>('/api/auth/login/request', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+    return response;
+  }
+
+  async verifyLoginCode(email: string, code: string): Promise<{ token: string }> {
+    const response = await this.request<{ token: string }>('/api/auth/login/verify', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
     });
     return response;
   }

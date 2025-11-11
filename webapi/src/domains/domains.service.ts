@@ -3,6 +3,7 @@ import {
   ConflictException,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { createHash } from 'crypto';
@@ -10,88 +11,90 @@ import { sign } from 'jsonwebtoken';
 import {
   CosmosService,
   Domain,
+  DomainRequest,
   DomainVerificationResultResponse,
-  User, // Import the User type
+  User,
 } from '@tastematcher/common';
 import { DomainDto } from './dto/domain.dto';
 import { EmailService } from '../email/email.service';
+import { CreateDomainRequestDto } from './dto/create-domain-request.dto';
+import { UpdateDomainDto } from './dto/update-domain.dto';
 
 const VERIFICATION_TTL_MS = 10 * 60 * 1000;
+const VECTOR_DIMENSIONS = 1024;
 
 @Injectable()
 export class DomainsService {
+  private readonly logger = new Logger(DomainsService.name);
   private cosmosService: CosmosService;
   private readonly jwtSecret: string;
-  private readonly vectorDimensions = 1024; // Standard vector size
 
-  constructor(
-    private readonly emailService: EmailService,
-  ) {
+  constructor(private readonly emailService: EmailService) {
     this.cosmosService = new CosmosService();
-  
     this.jwtSecret = process.env.JWT_SECRET ?? '';
     if (!this.jwtSecret) {
       throw new Error('JWT_SECRET environment variable is required');
     }
   }
 
-  async createDomain(domainDto: DomainDto): Promise<Domain> {
-    const normalizedEmail = domainDto.adminEmail.toLowerCase().trim();
-    const domainsContainer = await this.cosmosService.getDomainsContainer();
+  // ========== Domain Registration Flow (Public) ==========
 
-    const { resources: existingDomains } = await domainsContainer.items
-      .query({
-        query: 'SELECT * FROM c WHERE c.adminEmail = @adminEmail',
-        parameters: [{ name: '@adminEmail', value: normalizedEmail }],
-      })
-      .fetchAll();
+  /**
+   * Create a new domain with a domain_owner user
+   * Called by global_admin or during domain registration flow
+   */
+  async createDomain(createDto: CreateDomainRequestDto): Promise<Domain> {
+    const normalizedEmail = createDto.email.toLowerCase().trim();
 
-    if (existingDomains.length > 0) {
+    // Check for existing domain
+    const existing = await this.findDomainByEmailOrNull(normalizedEmail);
+    if (existing) {
       throw new ConflictException(`Domain with admin email '${normalizedEmail}' already exists`);
     }
 
     const now = Date.now();
     const domainId = uuidv4();
 
+    // Create domain
     const newDomain: Domain = {
       id: domainId,
-      name: domainDto.name,
+      name: createDto.proposedDomainName,
       adminEmail: normalizedEmail,
-      createdAt: now,
-    };
-
-    // Create the domain
-    const { resource: createdDomain } = await domainsContainer.items.create(newDomain);
-
-    // Create the domain_owner user
-    const usersContainer = await this.cosmosService.getUsersContainer();
-    const newUser: User = {
-      id: uuidv4(),
-      domainId: domainId,
-      email: normalizedEmail,
-      name: domainDto.name, // Default name, can be updated later
-      role: 'domain_owner',
-      status: 'active',
-      preferenceVector: new Array(this.vectorDimensions).fill(0), // Initialize with zero vector
+      status: 'pending_verification',
       createdAt: now,
       updatedAt: now,
     };
-    await usersContainer.items.create(newUser);
+
+    const domainsContainer = await this.cosmosService.getDomainsContainer();
+    const { resource: createdDomain } = await domainsContainer.items.create(newDomain);
+
+    // Create domain_owner user
+    await this.createDomainOwnerUser(domainId, normalizedEmail, createDto.name, now);
+
+    this.logger.log(`Created domain ${domainId} with owner ${normalizedEmail}`);
 
     return createdDomain as Domain;
   }
 
+  /**
+   * Send verification code to domain admin email
+   * Returns the domain with updated verification fields
+   */
   async sendVerificationCode(adminEmail: string): Promise<Domain> {
-    const doc = await this.fetchDomainByEmail(adminEmail);
-    return this.issueVerificationCode(doc);
+    const domain = await this.findDomainByEmail(adminEmail);
+    return this.issueVerificationCode(domain);
   }
 
+  /**
+   * Verify domain code and return JWT token for the domain owner
+   */
   async verifyDomainCode(
     adminEmail: string,
     code: string,
   ): Promise<DomainVerificationResultResponse> {
-    const domain = await this.fetchDomainByEmail(adminEmail);
+    const domain = await this.findDomainByEmail(adminEmail);
 
+    // Validate verification code
     if (!domain.verificationCodeHash || !domain.verificationCodeExpiresAt) {
       throw new BadRequestException('No verification code requested for this domain');
     }
@@ -105,53 +108,44 @@ export class DomainsService {
       throw new BadRequestException('Invalid verification code');
     }
 
-    // Fetch the user associated with this domain's admin email
-    const usersContainer = await this.cosmosService.getUsersContainer();
-    const { resources: users } = await usersContainer.items
-      .query({
-        query: 'SELECT * FROM c WHERE c.email = @email AND c.domainId = @domainId',
-        parameters: [
-          { name: '@email', value: domain.adminEmail },
-          { name: '@domainId', value: domain.id },
-        ],
-      })
-      .fetchAll();
+    // Find domain owner user
+    const user = await this.findDomainOwnerUser(domain.id, domain.adminEmail);
 
-    if (users.length === 0) {
-      throw new NotFoundException(`Owner user for domain '${domain.name}' not found.`);
-    }
-    const user = users[0] as User;
+    // Clear verification code
+    await this.clearVerificationCode(domain);
 
-    // Clean up verification code from domain
-    const domainsContainer = await this.cosmosService.getDomainsContainer();
-    const updatedDomain: Domain = {
-      ...domain,
-      verificationCodeHash: undefined,
-      verificationCodeExpiresAt: undefined,
-    };
-    await domainsContainer.item(updatedDomain.id, updatedDomain.adminEmail).replace(updatedDomain);
+    // Generate JWT
+    const token = this.generateUserToken(user);
 
-    // Sign a JWT for the USER, not the domain
-    const token = sign(
-      {
-        sub: user.id, // Subject is now the userId
-        email: user.email,
-        domainId: user.domainId,
-        role: user.role,
-      },
-      this.jwtSecret,
-      { expiresIn: '4h' },
-    );
+    this.logger.log(`Verified domain ${domain.id} for user ${user.id}`);
 
     return { token };
   }
 
-  async findDomainByEmail(adminEmail: string): Promise<Domain> {
-    return await this.fetchDomainByEmail(adminEmail);
+  // ========== Global Admin Operations ==========
+
+  /**
+   * Get all domains (global_admin only)
+   */
+  async findAll(): Promise<Domain[]> {
+    const container = await this.cosmosService.getDomainsContainer();
+
+    const query = {
+      query: 'SELECT * FROM c ORDER BY c.createdAt DESC',
+    };
+
+    const { resources } = await container.items.query<Domain>(query).fetchAll();
+
+    this.logger.log(`Fetched ${resources.length} domains`);
+    return resources;
   }
 
-  async findDomainById(domainId: string): Promise<Domain> {
+  /**
+   * Get a single domain by ID
+   */
+  async findOne(domainId: string): Promise<Domain> {
     const container = await this.cosmosService.getDomainsContainer();
+
     const { resources } = await container.items
       .query({
         query: 'SELECT * FROM c WHERE c.id = @domainId',
@@ -160,36 +154,159 @@ export class DomainsService {
       .fetchAll();
 
     if (resources.length === 0) {
-      throw new NotFoundException(`Domain with ID '${domainId}' not found`);
+      throw new NotFoundException(`Domain ${domainId} not found`);
     }
 
     return resources[0] as Domain;
   }
 
-  private async issueVerificationCode(domain: Domain): Promise<Domain> {
+  /**
+   * Update domain information (global_admin only)
+   */
+  async update(domainId: string, updateDto: UpdateDomainDto): Promise<Domain> {
     const container = await this.cosmosService.getDomainsContainer();
-    const code = this.generateVerificationCode();
-    const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MS).getTime();
+    const domain = await this.findOne(domainId);
 
     const updatedDomain: Domain = {
       ...domain,
-      verificationCodeHash: this.hashCode(code),
-      verificationCodeExpiresAt: expiresAt,
+      name: updateDto.name ?? domain.name,
+      updatedAt: Date.now(),
     };
 
-    await container.item(updatedDomain.id, updatedDomain.adminEmail).replace(updatedDomain);
+    const { resource } = await container
+      .item(domainId, domain.adminEmail)
+      .replace(updatedDomain);
 
-    await this.emailService.sendVerificationEmail({
-      recipient: updatedDomain.adminEmail,
-      domainName: updatedDomain.name,
-      code,
-      expiresAt,
-    });
-
-    return updatedDomain;
+    this.logger.log(`Updated domain ${domainId}`);
+    return resource as Domain;
   }
 
-  private async fetchDomainByEmail(adminEmail: string): Promise<Domain> {
+  /**
+   * Delete a domain and all associated data (global_admin only)
+   */
+  async remove(domainId: string): Promise<void> {
+    const domain = await this.findOne(domainId);
+
+    // Delete in order: preferences -> users -> artworks -> domain
+    await this.deleteAllUserPreferences(domainId);
+    await this.deleteAllUsers(domainId);
+    await this.deleteAllArtworks(domainId);
+    await this.deleteDomainDocument(domain);
+
+    this.logger.log(`Deleted domain ${domainId} and all associated data`);
+  }
+
+  // ========== Domain Request Operations ==========
+
+  /**
+   * Create a domain request (public - for users wanting their own domain)
+   */
+  async createDomainRequest(requestDto: CreateDomainRequestDto): Promise<DomainRequest> {
+    const container = await this.cosmosService.getContainer('DomainRequests');
+    const normalizedEmail = requestDto.email.toLowerCase().trim();
+
+    // Check for existing pending request
+    const existingQuery = {
+      query: 'SELECT * FROM c WHERE c.email = @email AND c.status = @status',
+      parameters: [
+        { name: '@email', value: normalizedEmail },
+        { name: '@status', value: 'pending' },
+      ],
+    };
+
+    const { resources: existing } = await container.items.query(existingQuery).fetchAll();
+
+    if (existing.length > 0) {
+      throw new BadRequestException('You already have a pending domain request');
+    }
+
+    // Check if user already exists in the system
+    const usersContainer = await this.cosmosService.getUsersContainer();
+    const userQuery = {
+      query: 'SELECT * FROM c WHERE c.email = @email',
+      parameters: [{ name: '@email', value: normalizedEmail }],
+    };
+
+    const { resources: users } = await usersContainer.items.query(userQuery).fetchAll();
+
+    if (users.length > 0) {
+      throw new BadRequestException('An account with this email already exists. Please use the login page.');
+    }
+
+    const newRequest: DomainRequest = {
+      id: uuidv4(),
+      email: normalizedEmail,
+      name: requestDto.name,
+      proposedDomainName: requestDto.proposedDomainName,
+      message: requestDto.message,
+      status: 'pending_verification',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    const { resource } = await container.items.create(newRequest);
+
+    this.logger.log(`Created domain request ${newRequest.id} for ${normalizedEmail}`);
+
+    return resource as DomainRequest;
+  }
+
+  /**
+   * Get all domain requests (global_admin only)
+   */
+  async getAllDomainRequests(): Promise<DomainRequest[]> {
+    const container = await this.cosmosService.getContainer('DomainRequests');
+
+    const query = {
+      query: 'SELECT * FROM c ORDER BY c.createdAt DESC',
+    };
+
+    const { resources } = await container.items.query<DomainRequest>(query).fetchAll();
+
+    this.logger.log(`Fetched ${resources.length} domain requests`);
+    return resources;
+  }
+
+  /**
+   * Create a new domain or resend verification if it already exists (global_admin only)
+   */
+  async createOrResendDomain(createDto: CreateDomainRequestDto): Promise<Domain> {
+    // Check if domain already exists
+    const existingDomain = await this.findDomainByEmailOrNull(createDto.email.toLowerCase().trim());
+
+    if (existingDomain) {
+      // Domain exists - resend verification code
+      this.logger.log(`Domain already exists for ${createDto.email}, resending verification`);
+      await this.issueInviteEmail(existingDomain);
+      return existingDomain;
+    }
+
+    // Create new domain
+    const newDomain = await this.createDomain(createDto);
+    
+    // Send verification code to new domain
+    await this.issueInviteEmail(newDomain);
+
+    return newDomain;
+  }
+
+  // ========== Helper Methods ==========
+
+  /**
+   * Find domain by email (throws if not found)
+   */
+  async findDomainByEmail(adminEmail: string): Promise<Domain> {
+    const domain = await this.findDomainByEmailOrNull(adminEmail);
+    if (!domain) {
+      throw new NotFoundException(`Domain with admin email '${adminEmail}' not found`);
+    }
+    return domain;
+  }
+
+  /**
+   * Find domain by email (returns null if not found)
+   */
+  private async findDomainByEmailOrNull(adminEmail: string): Promise<Domain | null> {
     const normalizedEmail = adminEmail.toLowerCase().trim();
     const container = await this.cosmosService.getDomainsContainer();
 
@@ -200,23 +317,236 @@ export class DomainsService {
       })
       .fetchAll();
 
-    if (resources.length === 0) {
-      throw new NotFoundException(`Domain that belongs to ${adminEmail} not found`);
-    }
-
-    return resources[0] as Domain;
+    return resources.length > 0 ? (resources[0] as Domain) : null;
   }
 
-  private generateVerificationCode(): string {
-    // return randomInt(0, 1_000_000).toString().padStart(6, '0');
-    return "000000";
+  /**
+   * Find domain by ID (alias for findOne for consistency)
+   */
+  async findDomainById(domainId: string): Promise<Domain> {
+    return this.findOne(domainId);
+  }
+
+  /**
+   * Create domain owner user
+   */
+  private async createDomainOwnerUser(
+    domainId: string,
+    email: string,
+    name: string,
+    timestamp: number,
+  ): Promise<User> {
+    const usersContainer = await this.cosmosService.getUsersContainer();
+
+    const newUser: User = {
+      id: uuidv4(),
+      domainId,
+      email,
+      name,
+      role: 'domain_owner',
+      status: 'pending_verification',
+      preferenceVector: new Array(VECTOR_DIMENSIONS).fill(0),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+
+    await usersContainer.items.create(newUser);
+    return newUser;
+  }
+
+  /**
+   * Find domain owner user
+   */
+  private async findDomainOwnerUser(domainId: string, email: string): Promise<User> {
+    const usersContainer = await this.cosmosService.getUsersContainer();
+
+    const { resources: users } = await usersContainer.items
+      .query({
+        query: 'SELECT * FROM c WHERE c.email = @email AND c.domainId = @domainId',
+        parameters: [
+          { name: '@email', value: email },
+          { name: '@domainId', value: domainId },
+        ],
+      })
+      .fetchAll();
+
+    if (users.length === 0) {
+      throw new NotFoundException(`Owner user for domain '${domainId}' not found`);
     }
 
+    return users[0] as User;
+  }
+
+  private async issueInviteEmail(domain: Domain): Promise<void> {
+    await this.emailService.sendUserInvitation(domain.adminEmail, domain.name, domain.id, 'domain_owner');
+    this.logger.log(`Sent invite email to ${domain.adminEmail}`);
+  }
+
+  /**
+   * Issue verification code and send email
+   */
+  private async issueVerificationCode(domain: Domain): Promise<Domain> {
+    const container = await this.cosmosService.getDomainsContainer();
+    const code = this.generateVerificationCode();
+    const expiresAt = Date.now() + VERIFICATION_TTL_MS;
+
+    const updatedDomain: Domain = {
+      ...domain,
+      verificationCodeHash: this.hashCode(code),
+      verificationCodeExpiresAt: expiresAt,
+    };
+
+    await container
+      .item(updatedDomain.id, updatedDomain.adminEmail)
+      .replace(updatedDomain);
+
+    await this.emailService.sendVerificationEmail({
+      recipient: updatedDomain.adminEmail,
+      domainName: updatedDomain.name,
+      code,
+      expiresAt,
+    });
+
+    this.logger.log(`Sent verification code to ${updatedDomain.adminEmail}`);
+
+    return updatedDomain;
+  }
+
+  /**
+   * Clear verification code from domain and mark as active
+   */
+  private async clearVerificationCode(domain: Domain): Promise<void> {
+    const container = await this.cosmosService.getDomainsContainer();
+
+    const updatedDomain: Domain = {
+      ...domain,
+      status: 'active',
+      verificationCodeHash: undefined,
+      verificationCodeExpiresAt: undefined,
+    };
+
+    await container
+      .item(updatedDomain.id, updatedDomain.adminEmail)
+      .replace(updatedDomain);
+  }
+
+  /**
+   * Generate JWT token for user
+   */
+  private generateUserToken(user: User): string {
+    return sign(
+      {
+        sub: user.id,
+        id: user.id,
+        email: user.email,
+        domainId: user.domainId,
+        role: user.role,
+      },
+      this.jwtSecret,
+      { expiresIn: '7d' },
+    );
+  }
+
+  /**
+   * Generate 6-digit verification code
+   */
+  private generateVerificationCode(): string {
+    // TODO: Use randomInt in production
+    // return randomInt(0, 1_000_000).toString().padStart(6, '0');
+    return '000000';
+  }
+
+  /**
+   * Hash verification code
+   */
   private hashCode(code: string): string {
     if (typeof code !== 'string' || code.trim().length === 0) {
       throw new BadRequestException('Verification code must be a non-empty string');
     }
-
     return createHash('sha256').update(code.trim()).digest('hex');
+  }
+
+  /**
+   * Delete all user preferences for a domain
+   */
+  private async deleteAllUserPreferences(domainId: string): Promise<void> {
+    const usersContainer = await this.cosmosService.getUsersContainer();
+    const preferencesContainer = await this.cosmosService.getContainer('ArtworkPreferences');
+
+    // Get all users in domain
+    const usersQuery = {
+      query: 'SELECT * FROM c WHERE c.domainId = @domainId',
+      parameters: [{ name: '@domainId', value: domainId }],
+    };
+
+    const { resources: users } = await usersContainer.items.query(usersQuery).fetchAll();
+
+    // Delete preferences for each user
+    for (const user of users) {
+      const prefsQuery = {
+        query: 'SELECT * FROM c WHERE c.userId = @userId',
+        parameters: [{ name: '@userId', value: user.id }],
+      };
+
+      const { resources: prefs } = await preferencesContainer.items
+        .query(prefsQuery, { partitionKey: user.id })
+        .fetchAll();
+
+      await Promise.all(
+        prefs.map((pref) => preferencesContainer.item(pref.id, user.id).delete()),
+      );
+    }
+
+    this.logger.debug(`Deleted preferences for ${users.length} users in domain ${domainId}`);
+  }
+
+  /**
+   * Delete all users in a domain
+   */
+  private async deleteAllUsers(domainId: string): Promise<void> {
+    const usersContainer = await this.cosmosService.getUsersContainer();
+
+    const usersQuery = {
+      query: 'SELECT * FROM c WHERE c.domainId = @domainId',
+      parameters: [{ name: '@domainId', value: domainId }],
+    };
+
+    const { resources: users } = await usersContainer.items.query(usersQuery).fetchAll();
+
+    await Promise.all(
+      users.map((user) => usersContainer.item(user.id, domainId).delete()),
+    );
+
+    this.logger.debug(`Deleted ${users.length} users from domain ${domainId}`);
+  }
+
+  /**
+   * Delete all artworks in a domain
+   */
+  private async deleteAllArtworks(domainId: string): Promise<void> {
+    const artworksContainer = await this.cosmosService.getContainer('Artworks');
+
+    const artworksQuery = {
+      query: 'SELECT * FROM c WHERE c.domainId = @domainId',
+      parameters: [{ name: '@domainId', value: domainId }],
+    };
+
+    const { resources: artworks } = await artworksContainer.items
+      .query(artworksQuery)
+      .fetchAll();
+
+    await Promise.all(
+      artworks.map((artwork) => artworksContainer.item(artwork.id, domainId).delete()),
+    );
+
+    this.logger.debug(`Deleted ${artworks.length} artworks from domain ${domainId}`);
+  }
+
+  /**
+   * Delete domain document
+   */
+  private async deleteDomainDocument(domain: Domain): Promise<void> {
+    const domainsContainer = await this.cosmosService.getDomainsContainer();
+    await domainsContainer.item(domain.id, domain.adminEmail).delete();
   }
 }

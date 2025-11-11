@@ -10,7 +10,7 @@ export type Role = 'global_admin' | 'domain_owner' | 'dealer' | 'customer';
  * - `pending_verification`: The user has been invited but has not yet logged in.
  * - `active`: The user has logged in and is active.
  */
-export type UserStatus = 'pending_verification' | 'active' | 'onboarded';
+export type UserStatus = 'pending_verification' | 'active';
 
 /**
  * Represents a user in the system.
@@ -69,4 +69,14 @@ export interface User {
    * Timestamp of the last update to the user's record.
    */
   updatedAt: number;
+
+  /**
+   * Hashed verification code for login verification.
+   */
+  verificationCodeHash?: string;
+
+  /**
+   * Expiration timestamp for the verification code.
+   */
+  verificationCodeExpiresAt?: number;
 }

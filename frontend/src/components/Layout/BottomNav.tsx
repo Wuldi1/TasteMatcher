@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Compass, Upload, LayoutGrid } from 'lucide-react';
+import { Home, Compass, Upload, LayoutGrid, Users } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 const navLinks = [
   { name: 'Home', href: '/home', icon: Home },
@@ -8,10 +9,20 @@ const navLinks = [
   { name: 'Upload', href: '/upload', icon: Upload },
 ];
 
+const domainOwnerLinks = [
+  { name: 'Management', href: '/management', icon: Users },
+];
+
 export const BottomNav = () => {
+  const { user } = useAuth();
+
+  const allLinks = user?.role === 'domain_owner' || user?.role === 'global_admin'
+    ? [...navLinks, ...domainOwnerLinks] 
+    : navLinks;
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around h-16">
-      {navLinks.map((link) => (
+      {allLinks.map((link) => (
         <NavLink
           key={link.name}
           to={link.href}

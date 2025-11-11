@@ -8,25 +8,28 @@ loadEnv({ path: resolve(__dirname, '..', '..', '.env') });
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Enable global validation with transformation
+  // Enable CORS
+  app.enableCors({
+    origin: process.env.CORS_ORIGINS?.split(',') || '*',
+    credentials: true,
+  });
+
+  // Global prefix is already 'api' in controller routes
+  // So don't set it here if your routes already include /api/
+  // app.setGlobalPrefix('api');
+
+  // Validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
-      transform: true,        // Transform plain objects to DTO instances
-      whitelist: true,        // Strip properties not in DTO
-      forbidNonWhitelisted: true, // Throw error if extra properties exist
+      whitelist: true,
+      transform: true,
     }),
   );
 
-    // Enable CORS for http://10.100.102.2:3001
-  app.enableCors({
-    origin: 'http://10.100.102.2:3001',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true, // Allow cookies if needed
-  });
-
   const port = process.env.PORT || 3000;
   await app.listen(port);
+  
   console.log(`Application is running on: http://localhost:${port}`);
+  console.log(`Auth endpoints available at: http://localhost:${port}/api/auth`);
 }
-
 bootstrap();

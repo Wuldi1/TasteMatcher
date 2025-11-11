@@ -4,7 +4,7 @@ import { DomainsModule } from './domains/domains.module';
 import { UploadModule } from './upload/upload.module';
 import { ArtworksModule } from './artworks/artworks.module';
 import { HealthModule } from './health/health.module';
-import { AuthModule } from './auth/auth.module'; // Import the new AuthModule
+import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { EmailModule } from './email/email.module';
 
@@ -14,7 +14,7 @@ import { EmailModule } from './email/email.module';
       isGlobal: true,
       expandVariables: true,
     }),
-    AuthModule, // Add AuthModule here
+    AuthModule,
     DomainsModule,
     UploadModule,
     ArtworksModule,

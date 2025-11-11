@@ -146,6 +146,16 @@ else
       --throughput 400 \
       -o none || echo "Domains container already exists or creation failed - continuing..."
 
+    # DomainRequests container - partition by /email for request isolation
+    az cosmosdb sql container create \
+      --account-name "$COSMOS_NAME" \
+      --resource-group "$RG_NAME" \
+      --database-name "$COSMOS_DATABASE" \
+      --name "DomainRequests" \
+      --partition-key-path "/email" \
+      --throughput 400 \
+      -o none || echo "DomainRequests container already exists or creation failed - continuing..."
+
     # Artworks container - partition by /domainId for multi-tenant isolation
     az cosmosdb sql container create \
       --account-name "$COSMOS_NAME" \
@@ -165,6 +175,16 @@ else
       --partition-key-path "/domainId" \
       --throughput 400 \
       -o none || echo "Users container already exists or creation failed - continuing..."
+
+    # ArtworkPreferences container - partition by /userId for user-specific preferences
+    az cosmosdb sql container create \
+      --account-name "$COSMOS_NAME" \
+      --resource-group "$RG_NAME" \
+      --database-name "$COSMOS_DATABASE" \
+      --name "ArtworkPreferences" \
+      --partition-key-path "/userId" \
+      --throughput 400 \
+      -o none || echo "ArtworkPreferences container already exists or creation failed - continuing..."
   fi
 
 # Get Cosmos DB connection string and keys

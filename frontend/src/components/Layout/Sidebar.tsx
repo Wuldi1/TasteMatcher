@@ -18,7 +18,7 @@ export const Sidebar = () => {
   const { user, logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  const allLinks = user?.role === 'domain_owner' 
+  const allLinks = user?.role === 'domain_owner' || user?.role === 'global_admin'
     ? [...navLinks, ...domainOwnerLinks] 
     : navLinks;
 
