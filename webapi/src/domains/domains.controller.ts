@@ -19,9 +19,9 @@ import { DomainsService } from './domains.service';
 import { Domain, DomainVerificationResultResponse, DomainRequest } from '@tastematcher/common';
 import { CreateDomainRequestDto } from './dto/create-domain-request.dto';
 import { UpdateDomainDto } from './dto/update-domain.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
+import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
+import { RolesGuard } from '../auth/utils/roles.guard';
+import { Roles } from '../auth/utils/roles.decorator';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
 
 @ApiTags('domains')

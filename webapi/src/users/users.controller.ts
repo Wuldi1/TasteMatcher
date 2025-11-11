@@ -14,9 +14,9 @@ import {
 import { UsersService } from './users.service';
 import { InviteUserDto } from './dto/invite-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
+import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
+import { RolesGuard } from '../auth/utils/roles.guard';
+import { Roles } from '../auth/utils/roles.decorator';
 import { User } from '@tastematcher/common';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
 
@@ -26,10 +26,10 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   /**
-   * Get all users in the current domain (domain_owner only)
+   * Get all users in the current domain (domain_owner and global_admin only)
    */
   @Get()
-  @Roles('domain_owner')
+  @Roles('domain_owner', 'global_admin')
   async findAll(@Request() req: AuthenticatedRequest): Promise<User[]> {
     return this.usersService.findAllInDomain(req.user.domainId);
   }
@@ -46,19 +46,19 @@ export class UsersController {
   }
 
   /**
-   * Get a specific user by ID (domain_owner only)
+   * Get a specific user by ID (domain_owner and global_admin only)
    */
   @Get(':id')
-  @Roles('domain_owner')
+  @Roles('domain_owner', 'global_admin')
   async findOne(@Request() req: AuthenticatedRequest, @Param('id') userId: string): Promise<User> {
     return this.usersService.findOne(req.user.domainId, userId);
   }
 
   /**
-   * Update a user (domain_owner only)
+   * Update a user (domain_owner and global_admin only)
    */
   @Patch(':id')
-  @Roles('domain_owner')
+  @Roles('domain_owner', 'global_admin')
   async update(
     @Request() req: AuthenticatedRequest,
     @Param('id') userId: string,
@@ -68,20 +68,20 @@ export class UsersController {
   }
 
   /**
-   * Delete a user and all their preferences (domain_owner only)
+   * Delete a user and all their preferences (domain_owner and global_admin only)
    */
   @Delete(':id')
-  @Roles('domain_owner')
+  @Roles('domain_owner', 'global_admin')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Request() req: AuthenticatedRequest, @Param('id') userId: string): Promise<void> {
     return this.usersService.remove(req.user.domainId, userId, req.user.id);
   }
 
   /**
-   * Invite a new user to the domain (domain_owner only)
+   * Invite a new user to the domain (domain_owner and global_admin only)
    */
   @Post('invite')
-  @Roles('domain_owner')
+  @Roles('domain_owner', 'global_admin')
   async invite(@Request() req: AuthenticatedRequest, @Body() inviteDto: InviteUserDto): Promise<User> {
     return this.usersService.inviteUser(req.user.domainId, inviteDto, req.user.id);
   }

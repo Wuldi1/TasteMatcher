@@ -49,6 +49,8 @@ export class UsersService {
                 throw new NotFoundException(`User ${userId} not found`);
             }
 
+            this.logger.log(`Fetched user ${userId} from domain ${domainId}`);
+
             return resource;
         } catch (error) {
             if (error instanceof NotFoundException) {
@@ -73,17 +75,12 @@ export class UsersService {
         try {
             const user = await this.findOne(domainId, userId);
 
-            // Prevent users from modifying themselves
-            if (userId === requestingUserId) {
-                throw new BadRequestException('You cannot modify your own account');
-            }
-
             // Prevent modifying domain owners
             if (user.role === 'domain_owner') {
                 throw new ForbiddenException('Cannot modify domain owner accounts');
             }
 
-            const { resource } = await container.item(domainId, userId).patch([
+            const { resource } = await container.item(userId, domainId).patch([
                 { op: 'replace', path: '/name', value: updateDto.name ?? user.name },
                 { op: 'replace', path: '/role', value: updateDto.role ?? user.role },
                 { op: 'replace', path: '/updatedAt', value: Date.now() }
@@ -95,7 +92,7 @@ export class UsersService {
             if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ForbiddenException) {
                 throw error;
             }
-            this.logger.error(`Failed to update user ${userId}`, error);
+            this.logger.error(`Failed to update user ${userId}, on domain ${domainId}`, error);
             throw error;
         }
     }
@@ -200,6 +197,7 @@ export class UsersService {
                 name: inviteDto.name,
                 role: inviteDto.role,
                 status: 'pending_verification',
+                onboardingStatus: 'not_started',
                 invitedBy: invitedById,
                 preferenceVector: new Array(1024).fill(0), // Initialize with zero vector
                 createdAt: Date.now(),

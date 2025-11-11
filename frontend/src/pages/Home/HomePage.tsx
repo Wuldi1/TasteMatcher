@@ -14,17 +14,25 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { ArrowRight, Upload, Grid, Heart } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { fetchArtworkStats } from '../../services/artworksApi';
 import type { ArtworkStats } from '@tastematcher/common';
 import './HomePage.css';
+import { useDomain } from '../../contexts/DomainContext';
 
 /**
  * Home page displaying domain information and quick action cards.
  * Shows domain name, statistics, and navigation shortcuts.
+ * Redirects customers to onboarding if not yet completed.
  */
 export function HomePage() {
   const { user } = useAuth();
+  const { currentDomain } = useDomain();
+
+  // Add console logging for debugging
+  console.log('HomePage - user:', user);
+  console.log('HomePage - user role:', user?.role);
+  console.log('HomePage - onboarding status:', user?.onboardingStatus);
 
   // Fetch domain stats from API
   const { data: stats, isLoading } = useQuery<ArtworkStats>({
@@ -34,18 +42,28 @@ export function HomePage() {
       return fetchArtworkStats(user.domainId);
     },
     enabled: !!user?.domainId,
-    staleTime: 60000, // Cache for 1 minute
-    refetchOnWindowFocus: true, // Refresh when user returns to page
+    staleTime: 60000,
+    refetchOnWindowFocus: true,
   });
 
+  // Don't render anything while user is loading
   if (!user) {
+    console.log('HomePage - No user, returning null');
     return null;
   }
 
+  // Redirect customers to onboarding if not completed
+  if (user.role === 'customer' && user.onboardingStatus !== 'completed') {
+    console.log('HomePage - Redirecting to onboarding');
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  console.log('HomePage - Rendering home page');
+
   return (
-    <div className="home-page">
+    <div className="home-page p-4 sm:p-6 md:p-8">
       <header className="home-header">
-        <h1 className="home-title">Welcome to {user.domainName || 'TasteMatcher'}</h1>
+        <h1 className="home-title">Welcome to {currentDomain?.name || 'TasteMatcher'}</h1>
         <p className="home-subtitle">
           Manage your artwork collection and discover your taste preferences
         </p>

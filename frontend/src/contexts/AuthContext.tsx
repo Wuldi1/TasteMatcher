@@ -23,6 +23,7 @@ interface AuthContextType {
   isInitializing: boolean; // Single loading state for initial auth check
   logout: () => void;
   setUserFromToken: (token: string) => void;
+  refreshUser: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,15 +31,15 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 /**
  * Parse JWT token and extract user information
  */
-function parseToken(token: string): User | null {
+function parseToken(token: string): Partial<User> | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
 
     const payload = JSON.parse(atob(parts[1]));
 
-    const user: User = {
-      id: payload.sub,
+    const user: Partial<User> = {
+      id: payload.id,
       email: payload.email,
       domainId: payload.domainId,
       role: payload.role,
@@ -81,19 +82,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setUserFromToken = useCallback((token: string) => {
-    if (isTokenValid(token)) {
-      const parsedUser = parseToken(token);
-      if (parsedUser) {
-        setUser(parsedUser);
-        localStorage.setItem('tm_auth_token', token);
-        apiClient.setAuthToken(token);
-      } else {
-        logout(); // Token is invalid or malformed
+    try {
+      if (isTokenValid(token) === false) {
+        console.error('Token is expired or invalid.');
+        logout();
+        return;
       }
-    } else {
-      logout(); // Token is expired
+    
+      const decoded = parseToken(token);
+      if (decoded) {
+        const userData = {
+          id: decoded.id,
+          email: decoded.email,
+          domainId: decoded.domainId,
+          role: decoded.role,
+          name: decoded.name
+        };
+        
+        console.log('Setting user from token:', userData);
+        setUser(userData);
+      }
+    } catch (error) {
+      console.error('Failed to parse token:', error);
+      logout();
     }
   }, [logout]);
+
+  const refreshUser = useCallback(async () => {
+    const token = localStorage.getItem('tm_auth_token');
+    if (!token) {
+      console.log('No token found in refreshUser');
+      return;
+    }
+
+    try {
+      // Decode token to get updated user info
+      const decoded = parseToken(token);
+      if (decoded) {
+        const userData = {
+          id: decoded.id,
+          email: decoded.email,
+          domainId: decoded.domainId,
+          role: decoded.role,
+          name: decoded.name
+        };
+        
+        console.log('Refreshing user:', userData);
+        setUser(userData);
+      }
+    } catch (error) {
+      console.error('Failed to refresh user:', error);
+    }
+  }, []);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('tm_auth_token');
@@ -110,8 +150,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isInitializing,
       logout,
       setUserFromToken,
+      refreshUser,
     }),
-    [user, isInitializing, logout, setUserFromToken],
+    [user, isInitializing, logout, setUserFromToken, refreshUser],
   );
 
   return (

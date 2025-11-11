@@ -57,9 +57,12 @@ export class AuthService {
 
     await usersContainer.item(user.id, user.domainId).replace(updatedUser);
 
-    // Get domain info for email
+    // Get domain info using domainId only
     const domainsContainer = await this.cosmosService.getDomainsContainer();
-    const { resource: domain } = await domainsContainer.item(user.domainId, user.email).read();
+    const { resource: domain } = await domainsContainer.items.query({
+      query: 'SELECT * FROM c WHERE c.id = @domainId',
+      parameters: [{ name: '@domainId', value: user.domainId }],
+    }).fetchAll().then(res => ({ resource: res.resources[0] }));
 
     if (!domain) {
       throw new NotFoundException('Domain not found');
@@ -155,11 +158,11 @@ export class AuthService {
   private generateUserToken(user: User): string {
     return sign(
       {
-        sub: user.id,
         id: user.id,
         email: user.email,
         domainId: user.domainId,
         role: user.role,
+        name: user.name
       },
       this.jwtSecret,
       { expiresIn: '7d' },

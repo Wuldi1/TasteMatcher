@@ -22,7 +22,7 @@ import { QueryArtworksDto } from './dto/query-artworks.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
 import { Artwork, PaginatedResponse, ArtworkStats, UntastedArtworksResponse } from '@tastematcher/common';
 import { ArtworkPreference } from '@tastematcher/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
 
 @ApiTags('artworks')

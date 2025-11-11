@@ -10,34 +10,29 @@
 // 9. CI-friendly: passes typecheck and tests.
 // -----------------------------------------------------------
 
-import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { ReactNode } from 'react';
+
+interface ProtectedRouteProps {
+  children: ReactNode;
+}
 
 /**
  * Protected route wrapper that requires authentication
  * Redirects to auth page if user is not authenticated
  */
-export function ProtectedRoute() {
-  const { user, isLoading } = useAuth();
+export function ProtectedRoute({ children }: ProtectedRouteProps) {
+  const { user } = useAuth();
 
-  if (isLoading) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-        }}
-      >
-        <p>Loading...</p>
-      </div>
-    );
-  }
+  console.log('ProtectedRoute - user:', user);
+  console.log('ProtectedRoute - token exists:', !!localStorage.getItem('tm_auth_token'));
 
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    console.log('ProtectedRoute - No user, redirecting to login');
+    return <Navigate to="/login" replace />;
   }
 
-  return <Outlet />;
+  console.log('ProtectedRoute - User authenticated, rendering children');
+  return <>{children}</>;
 }

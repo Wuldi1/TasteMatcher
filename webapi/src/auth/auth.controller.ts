@@ -11,7 +11,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly domainsService: DomainsService,
-  ) {}
+  ) { }
 
   /**
    * Request login verification code
@@ -41,5 +41,21 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   async createDomainRequest(@Body() requestDto: CreateDomainRequestDto): Promise<DomainRequest> {
     return this.domainsService.createDomainRequest(requestDto);
+  }
+
+  /**
+   * ⚠️ TESTING ONLY - Create domain and admin user without verification
+   * This endpoint should be disabled in production environments
+   * Creates both domain and user with active status immediately
+   */
+  @Post('test/create-domain')
+  @HttpCode(HttpStatus.CREATED)
+  async createDomainForTesting(@Body() dto: CreateDomainRequestDto): Promise<void> {
+    // Add environment check - only allow in development
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('This endpoint is disabled in production');
+    }
+
+    await this.domainsService.createDomainWithAdmin(dto);
   }
 }

@@ -124,7 +124,7 @@ describe('DomainsService', () => {
 
     expect(result.token).toBe('jwt-token');
     expect(sign).toHaveBeenCalledWith(
-      expect.objectContaining({ sub: expect.any(String), email }),
+      expect.objectContaining({ id: expect.any(String), email }),
       'test-secret',
       expect.objectContaining({ expiresIn: '1h' }),
     );

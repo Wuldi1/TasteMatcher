@@ -24,11 +24,11 @@ export const Sidebar = () => {
 
   return (
     <aside
-      className={`flex-shrink-0 bg-white text-gray-800 flex flex-col transition-all duration-300 ease-in-out border-r border-gray-200 ${
+      className={`h-screen flex-shrink-0 bg-white text-gray-800 flex flex-col transition-all duration-300 ease-in-out border-r border-gray-200 ${
         isCollapsed ? 'w-20' : 'w-64'
       }`}
     >
-      <div className="flex items-center justify-center h-20 border-b border-gray-200 relative">
+      <div className="flex items-center justify-center h-20 border-b border-gray-200 relative flex-shrink-0">
         {!isCollapsed && <h1 className="text-2xl font-bold tracking-wider text-gray-800">TasteMatcher</h1>}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
@@ -38,7 +38,7 @@ export const Sidebar = () => {
         </button>
       </div>
 
-      <nav className="flex-1 px-4 py-6 space-y-2">
+      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         {allLinks.map((link) => (
           <NavLink
             key={link.name}
@@ -58,21 +58,30 @@ export const Sidebar = () => {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-gray-200">
-        {user && !isCollapsed && (
-          <div className="flex items-center mb-4">
-            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mr-3">
-              <UserIcon className="w-5 h-5 text-gray-500" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-800 truncate">{user.name || user.email}</p>
-              <p className="text-xs text-gray-500 capitalize">{user.role}</p>
-            </div>
+      <div className="p-4 border-t border-gray-200 flex-shrink-0">
+        {user && (
+          <div className={`flex items-center mb-4 ${isCollapsed ? 'justify-center' : ''}`}>
+            {!isCollapsed ? (
+              <>
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
+                  <UserIcon className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="overflow-hidden">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{user.name || user.email}</p>
+                  <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                  <p className="text-xs text-gray-400 capitalize mt-0.5">{user.role}</p>
+                </div>
+              </>
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                <UserIcon className="w-5 h-5 text-blue-600" />
+              </div>
+            )}
           </div>
         )}
         <button
           onClick={logout}
-          className={`flex items-center w-full px-4 py-2.5 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors duration-200 ${
+          className={`flex items-center w-full px-4 py-2.5 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors duration-200 font-medium ${
             isCollapsed ? 'justify-center' : ''
           }`}
           title={isCollapsed ? 'Logout' : undefined}

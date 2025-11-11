@@ -1,60 +1,148 @@
+import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import ProtectedRoute from './ProtectedRoute';
 import { AuthPage } from '../pages/Auth/AuthPage';
 import { HomePage } from '../pages/Home/HomePage';
-import { MainLayout } from '../components/Layout/MainLayout'; // Import the layout
-import { TasterPage } from '../pages/Taster/TasterPage';
+import { ProtectedRoute } from '../components/ProtectedRoute';
+import { OnboardingFlow } from '../components/Onboarding/OnboardingFlow';
+import { Sidebar } from '../components/Layout/Sidebar';
+import { BottomNav } from '../components/Layout/BottomNav';
+import { useAuth } from '../hooks/useAuth';
 import { CatalogPage } from '../pages/Catalog/CatalogPage';
+import { TasterPage } from '../pages/Taster/TasterPage';
 import { UploadPage } from '../pages/Upload/UploadPage';
 import { Management } from '../components/Management';
 
 /**
- * Central component for defining application routes.
- * It uses the authentication state to correctly render public or protected routes.
+ * Wrapper component that redirects authenticated users away from auth pages
  */
-export const AppRoutes = () => {
-    const { isAuthenticated, isInitializing } = useAuth();
+function PublicRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  
+  if (user) {
+    console.log('PublicRoute - User authenticated, redirecting to /home');
+    return <Navigate to="/home" replace />;
+  }
+  
+  return <>{children}</>;
+}
 
-    // While the authentication state is being determined, show a global loading indicator.
-    // This prevents rendering the wrong route on initial load.
-    if (isInitializing) {
-        return (
-            <div className="flex h-screen w-screen items-center justify-center bg-gray-50">
-                <p className="text-lg text-gray-500 animate-pulse">Initializing Session...</p>
-            </div>
-        );
-    }
+/**
+ * Layout wrapper for protected routes with responsive navigation
+ */
+function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex h-screen overflow-hidden">
+      {/* Desktop Sidebar - hidden on mobile */}
+      <div className="hidden md:block">
+        <Sidebar />
+      </div>
+      
+      {/* Main content area */}
+      <main className="flex-1 overflow-y-auto bg-gray-50 pb-16 md:pb-0 p-4 sm:p-6 md:p-8">
+        {children}
+      </main>
+      
+      {/* Mobile Bottom Navigation - hidden on desktop */}
+      <div className="md:hidden">
+        <BottomNav />
+      </div>
+    </div>
+  );
+}
 
-    return (
-        <Routes>
-            {/* Public route for authentication. If the user is already authenticated, redirect to /home. */}
-            <Route
-                path="/auth"
-                element={isAuthenticated ? <Navigate to="/home" replace /> : <AuthPage />}
-            />
+/**
+ * Application routes configuration
+ * Handles all routing including auth, onboarding, and protected routes
+ */
+export function AppRoutes() {
+  return (
+    <Routes>
+      {/* Public routes - redirect to /home if authenticated */}
+      <Route
+        path="/"
+        element={
+          <PublicRoute>
+            <AuthPage />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/login"
+        element={
+          <PublicRoute>
+            <AuthPage />
+          </PublicRoute>
+        }
+      />
 
-            {/* Protected routes are wrapped by the ProtectedRoute component. */}
-            <Route element={<ProtectedRoute />}>
-                {/* All routes inside here will first be checked for auth, then rendered inside MainLayout */}
-                <Route element={<MainLayout />}>
-                    <Route path="/home" element={<HomePage />} />
-                    {/* Add all other pages that need the menu here. For example: */}
-                    <Route path="/catalog" element={<CatalogPage />} />
-                    <Route path="/upload" element={<UploadPage />} />
-                    <Route path="/taster" element={<TasterPage />} />
-                    <Route path="/management" element={<Management />} />
-                </Route>
-            </Route>
+      {/* Onboarding route - full screen, no navigation */}
+      <Route
+        path="/onboarding"
+        element={
+          <ProtectedRoute>
+            <OnboardingFlow />
+          </ProtectedRoute>
+        }
+      />
 
-            {/* Redirect from the root path. If authenticated, go to /home, otherwise to /auth. */}
-            <Route
-                path="/"
-                element={<Navigate to={isAuthenticated ? "/home" : "/auth"} replace />}
-            />
+      {/* Protected routes with responsive layout */}
+      <Route
+        path="/home"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <HomePage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
 
-            {/* Optional: A catch-all 404 Not Found page. */}
-            <Route path="*" element={<div>404 Not Found</div>} />
-        </Routes>
-    );
-};
+      <Route
+        path="/catalog"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <CatalogPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/taster"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <TasterPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/upload"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <UploadPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/management"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <Management />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+     
+      {/* Catch-all redirect to home or login */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}

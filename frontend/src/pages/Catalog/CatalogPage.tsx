@@ -149,189 +149,191 @@ export function CatalogPage() {
   };
 
   return (
-    <div className="catalog-page">
-      <header className="catalog-header">
-        <h1 className="catalog-title">Artwork Catalog</h1>
-        
-        {/* Search bar */}
-        <div className="catalog-search">
-          <label htmlFor="catalog-search-input" className="sr-only">
-            Search artworks
-          </label>
-          <div className="catalog-search__wrapper">
-            <Search className="catalog-search__icon" aria-hidden="true" />
-            <input
-              id="catalog-search-input"
-              type="text"
-              className="catalog-search__input"
-              placeholder="Search artworks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="Search artworks"
-            />
-            {searchQuery && (
+    <div className="p-4 sm:p-6 md:p-8">
+      <div className="catalog-page">
+        <header className="catalog-header">
+          <h1 className="catalog-title">Artwork Catalog</h1>
+          
+          {/* Search bar */}
+          <div className="catalog-search">
+            <label htmlFor="catalog-search-input" className="sr-only">
+              Search artworks
+            </label>
+            <div className="catalog-search__wrapper">
+              <Search className="catalog-search__icon" aria-hidden="true" />
+              <input
+                id="catalog-search-input"
+                type="text"
+                className="catalog-search__input"
+                placeholder="Search artworks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Search artworks"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="catalog-search__clear"
+                  onClick={handleClearSearch}
+                  aria-label="Clear search"
+                >
+                  <X aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Gallery grid */}
+        {authLoading || queryLoading ? (
+          <div className="catalog-loading" role="status" aria-live="polite">
+            <p>{authLoading ? 'Authenticating...' : 'Loading artworks...'}</p>
+          </div>
+        ) : error ? (
+          <div className="catalog-error" role="alert">
+            <p>Error loading artworks: {error.message}</p>
+            <button 
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['artworks'] })}
+              className="catalog-retry-button"
+            >
+              Retry
+            </button>
+          </div>
+        ) : allArtworks.length === 0 ? (
+          <div className="catalog-empty" role="status">
+            <p>No artworks found. Start by uploading some!</p>
+            {user?.domainId && (
+              <p className="catalog-debug">Domain ID: {user.domainId}</p>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="catalog-grid" role="list">
+              {allArtworks.map((artwork) => (
+                <div
+                  key={artwork.id}
+                  className="catalog-item"
+                  role="listitem"
+                >
+                  <button
+                    type="button"
+                    className="catalog-item__image-wrapper"
+                    onClick={() => handleArtworkClick(artwork)}
+                    aria-label={`View ${artwork.title}`}
+                  >
+                    <img
+                      src={artwork.thumbnails?.[0]?.url || artwork.filename}
+                      alt={artwork.title}
+                      className="catalog-item__image"
+                      loading="lazy"
+                    />
+                    <div className="catalog-item__overlay">
+                      <span className="catalog-item__title">{artwork.title}</span>
+                      {artwork.artist && (
+                        <span className="catalog-item__artist">{artwork.artist}</span>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Action buttons */}
+                  <div className="catalog-item__actions">
+                    <button
+                      type="button"
+                      className="catalog-item__action catalog-item__action--edit"
+                      onClick={(e) => handleEditClick(artwork, e)}
+                      aria-label="Edit artwork"
+                      title="Edit"
+                    >
+                      <Edit aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      className="catalog-item__action catalog-item__action--delete"
+                      onClick={(e) => handleDeleteClick(artwork, e)}
+                      aria-label="Delete artwork"
+                      title="Delete"
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Load more button */}
+            {hasNextPage && (
+              <div className="catalog-load-more">
+                <button
+                  type="button"
+                  className="catalog-load-more__button"
+                  onClick={handleLoadMore}
+                  disabled={isFetchingNextPage}
+                  aria-label="Load more artworks"
+                >
+                  {isFetchingNextPage ? 'Loading...' : 'Load More'}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Full-size modal */}
+        {selectedArtwork && (
+          <div
+            className="catalog-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-title"
+            onClick={handleCloseModal}
+          >
+            <div className="catalog-modal__content" onClick={(e) => e.stopPropagation()}>
               <button
                 type="button"
-                className="catalog-search__clear"
-                onClick={handleClearSearch}
-                aria-label="Clear search"
+                className="catalog-modal__close"
+                onClick={handleCloseModal}
+                aria-label="Close modal"
               >
                 <X aria-hidden="true" />
               </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Gallery grid */}
-      {authLoading || queryLoading ? (
-        <div className="catalog-loading" role="status" aria-live="polite">
-          <p>{authLoading ? 'Authenticating...' : 'Loading artworks...'}</p>
-        </div>
-      ) : error ? (
-        <div className="catalog-error" role="alert">
-          <p>Error loading artworks: {error.message}</p>
-          <button 
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['artworks'] })}
-            className="catalog-retry-button"
-          >
-            Retry
-          </button>
-        </div>
-      ) : allArtworks.length === 0 ? (
-        <div className="catalog-empty" role="status">
-          <p>No artworks found. Start by uploading some!</p>
-          {user?.domainId && (
-            <p className="catalog-debug">Domain ID: {user.domainId}</p>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="catalog-grid" role="list">
-            {allArtworks.map((artwork) => (
-              <div
-                key={artwork.id}
-                className="catalog-item"
-                role="listitem"
-              >
-                <button
-                  type="button"
-                  className="catalog-item__image-wrapper"
-                  onClick={() => handleArtworkClick(artwork)}
-                  aria-label={`View ${artwork.title}`}
-                >
-                  <img
-                    src={artwork.thumbnails?.[0]?.url || artwork.filename}
-                    alt={artwork.title}
-                    className="catalog-item__image"
-                    loading="lazy"
-                  />
-                  <div className="catalog-item__overlay">
-                    <span className="catalog-item__title">{artwork.title}</span>
-                    {artwork.artist && (
-                      <span className="catalog-item__artist">{artwork.artist}</span>
-                    )}
+              <img
+                src={selectedArtwork.thumbnails?.[2]?.url || selectedArtwork.filename}
+                alt={selectedArtwork.title}
+                className="catalog-modal__image"
+              />
+              <div className="catalog-modal__info">
+                <h2 id="modal-title" className="catalog-modal__title">
+                  {selectedArtwork.title}
+                </h2>
+                {selectedArtwork.artist && (
+                  <p className="catalog-modal__artist">by {selectedArtwork.artist}</p>
+                )}
+                {selectedArtwork.description && (
+                  <p className="catalog-modal__description">{selectedArtwork.description}</p>
+                )}
+                {selectedArtwork.tags && selectedArtwork.tags.length > 0 && (
+                  <div className="catalog-modal__tags">
+                    {selectedArtwork.tags.map((tag) => (
+                      <span key={tag} className="catalog-modal__tag">{tag}</span>
+                    ))}
                   </div>
-                </button>
-
-                {/* Action buttons */}
-                <div className="catalog-item__actions">
-                  <button
-                    type="button"
-                    className="catalog-item__action catalog-item__action--edit"
-                    onClick={(e) => handleEditClick(artwork, e)}
-                    aria-label="Edit artwork"
-                    title="Edit"
-                  >
-                    <Edit aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="catalog-item__action catalog-item__action--delete"
-                    onClick={(e) => handleDeleteClick(artwork, e)}
-                    aria-label="Delete artwork"
-                    title="Delete"
-                  >
-                    <Trash2 aria-hidden="true" />
-                  </button>
-                </div>
+                )}
               </div>
-            ))}
-          </div>
-
-          {/* Load more button */}
-          {hasNextPage && (
-            <div className="catalog-load-more">
-              <button
-                type="button"
-                className="catalog-load-more__button"
-                onClick={handleLoadMore}
-                disabled={isFetchingNextPage}
-                aria-label="Load more artworks"
-              >
-                {isFetchingNextPage ? 'Loading...' : 'Load More'}
-              </button>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Full-size modal */}
-      {selectedArtwork && (
-        <div
-          className="catalog-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-title"
-          onClick={handleCloseModal}
-        >
-          <div className="catalog-modal__content" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="catalog-modal__close"
-              onClick={handleCloseModal}
-              aria-label="Close modal"
-            >
-              <X aria-hidden="true" />
-            </button>
-            <img
-              src={selectedArtwork.thumbnails?.[2]?.url || selectedArtwork.filename}
-              alt={selectedArtwork.title}
-              className="catalog-modal__image"
-            />
-            <div className="catalog-modal__info">
-              <h2 id="modal-title" className="catalog-modal__title">
-                {selectedArtwork.title}
-              </h2>
-              {selectedArtwork.artist && (
-                <p className="catalog-modal__artist">by {selectedArtwork.artist}</p>
-              )}
-              {selectedArtwork.description && (
-                <p className="catalog-modal__description">{selectedArtwork.description}</p>
-              )}
-              {selectedArtwork.tags && selectedArtwork.tags.length > 0 && (
-                <div className="catalog-modal__tags">
-                  {selectedArtwork.tags.map((tag) => (
-                    <span key={tag} className="catalog-modal__tag">{tag}</span>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Edit modal */}
-      {editingArtwork && (
-        <EditArtworkModal
-          artwork={editingArtwork}
-          onClose={() => setEditingArtwork(null)}
-          onSave={() => {
-            setEditingArtwork(null);
-            queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
-          }}
-        />
-      )}
+        {/* Edit modal */}
+        {editingArtwork && (
+          <EditArtworkModal
+            artwork={editingArtwork}
+            onClose={() => setEditingArtwork(null)}
+            onSave={() => {
+              setEditingArtwork(null);
+              queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }

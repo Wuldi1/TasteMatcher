@@ -15,7 +15,6 @@ import {
   DomainVerificationResultResponse,
   User,
 } from '@tastematcher/common';
-import { DomainDto } from './dto/domain.dto';
 import { EmailService } from '../email/email.service';
 import { CreateDomainRequestDto } from './dto/create-domain-request.dto';
 import { UpdateDomainDto } from './dto/update-domain.dto';
@@ -290,6 +289,55 @@ export class DomainsService {
     return newDomain;
   }
 
+  /**
+   * Create domain and admin user for testing purposes
+   * ⚠️ THIS SHOULD ONLY BE USED FOR TESTING - DISABLE IN PRODUCTION
+   */
+  async createDomainWithAdmin(dto: CreateDomainRequestDto): Promise<void> {
+    const normalizedEmail = dto.email.toLowerCase().trim();
+
+    // Check for existing domain
+    const existing = await this.findDomainByEmailOrNull(normalizedEmail);
+    if (existing) {
+      throw new ConflictException(`Domain with admin email '${normalizedEmail}' already exists`);
+    }
+
+    const now = Date.now();
+    const domainId = uuidv4();
+
+    // Create domain
+    const newDomain: Domain = {
+      id: domainId,
+      name: dto.proposedDomainName,
+      adminEmail: normalizedEmail,
+      status: 'active', // Set as active immediately for testing
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const domainsContainer = await this.cosmosService.getDomainsContainer();
+    await domainsContainer.items.create(newDomain);
+
+    // Create domain_owner user with active status
+    const usersContainer = await this.cosmosService.getUsersContainer();
+    const newUser: User = {
+      id: uuidv4(),
+      domainId: domainId,
+      email: normalizedEmail,
+      name: dto.name,
+      role: 'domain_owner',
+      status: 'active', // Set as active immediately for testing
+      onboardingStatus: 'not_started',
+      preferenceVector: new Array(VECTOR_DIMENSIONS).fill(0),
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await usersContainer.items.create(newUser);
+
+    this.logger.log(`[TEST] Created domain ${domainId} with admin user ${newUser.id} for ${normalizedEmail}`);
+  }
+
   // ========== Helper Methods ==========
 
   /**
@@ -345,6 +393,7 @@ export class DomainsService {
       name,
       role: 'domain_owner',
       status: 'pending_verification',
+      onboardingStatus: 'not_started',
       preferenceVector: new Array(VECTOR_DIMENSIONS).fill(0),
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -436,14 +485,13 @@ export class DomainsService {
   private generateUserToken(user: User): string {
     return sign(
       {
-        sub: user.id,
         id: user.id,
         email: user.email,
         domainId: user.domainId,
         role: user.role,
       },
       this.jwtSecret,
-      { expiresIn: '7d' },
+      { expiresIn: '4h' },
     );
   }
 

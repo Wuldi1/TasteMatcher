@@ -1,8 +1,8 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Role } from '@tastematcher/common';
-import { ROLES_KEY } from './utils/roles.decorator';
-import { AuthenticatedRequest } from './types/authenticated-request.interface';
+import { ROLES_KEY } from './roles.decorator';
+import { AuthenticatedRequest } from '../types/authenticated-request.interface';
 
 /**
  * Guard that checks if the authenticated user has the required role(s)

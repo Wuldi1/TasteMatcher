@@ -12,6 +12,60 @@ export type Role = 'global_admin' | 'domain_owner' | 'dealer' | 'customer';
  */
 export type UserStatus = 'pending_verification' | 'active';
 
+export type UserOnboardingStatus = 'not_started' | 'in_progress' | 'completed';
+
+/**
+ * Personal details section of the questionnaire
+ */
+export interface PersonalDetails {
+  location?: string;
+  secondaryLocations?: string[];
+  profession?: string;
+  culturalInfluences?: string;
+  maritalStatus?: 'single' | 'married' | 'partnered' | 'other';
+  residences?: string[];
+  hasChildren?: boolean;
+  numberOfChildren?: number;
+  currentlyCollects?: boolean;
+  currentCollection?: string;
+  familyCollects?: boolean;
+}
+
+/**
+ * Collecting preferences section
+ */
+export interface CollectingPreferences {
+  themes?: string;
+  artistsOrMovements?: string;
+  collectingStyle?: 'conceptual' | 'aesthetic' | 'research-based' | 'intuitive' | 'mixed';
+  displayLocations?: string[];
+  startedCollecting?: string;
+  firstAcquisition?: string;
+  evolutionOfFocus?: string;
+  mentorsOrAdvisors?: string;
+  eventsAttended?: string;
+  museumBoards?: string;
+  artistEngagement?: string;
+}
+
+/**
+ * Artwork preferences section
+ */
+export interface ArtworkPreferences {
+  description?: string;
+  referenceImageUrls?: string[]; // URLs to uploaded images (if we store them)
+}
+
+/**
+ * Complete personal questionnaire structure
+ */
+export interface PersonalQuestionnaire {
+  personalDetails?: PersonalDetails;
+  collectingPreferences?: CollectingPreferences;
+  artworkPreferences?: ArtworkPreferences;
+  completedAt?: number; // Timestamp when questionnaire was completed
+}
+
 /**
  * Represents a user in the system.
  * Each user belongs to a single domain.
@@ -49,6 +103,11 @@ export interface User {
   status: UserStatus;
 
   /**
+   * The user's onboarding status.
+   */
+  onboardingStatus: UserOnboardingStatus;
+
+  /**
    * The ID of the user who invited this user. Optional.
    */
   invitedBy?: string;
@@ -79,4 +138,9 @@ export interface User {
    * Expiration timestamp for the verification code.
    */
   verificationCodeExpiresAt?: number;
+
+  /**
+   * The user's personal questionnaire responses.
+   */
+  personalQuestionnaire?: PersonalQuestionnaire;
 }
