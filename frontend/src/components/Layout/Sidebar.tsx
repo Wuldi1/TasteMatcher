@@ -1,14 +1,9 @@
 import { useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import { Home, Compass, Upload, LayoutGrid, LogOut, ChevronsLeft, ChevronsRight, User as UserIcon, Users } from 'lucide-react';
+import { Home, Compass, Upload, LayoutGrid, LogOut, ChevronsLeft, ChevronsRight, User as UserIcon, Users, Sparkles, Lock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-
-const navLinks = [
-  { name: 'Home', href: '/home', icon: Home },
-  { name: 'Upload', href: '/upload', icon: Upload },
-  { name: 'Catalog', href: '/catalog', icon: LayoutGrid },
-  { name: 'Taster', href: '/taster', icon: Compass },
-];
+import { getAIRecommendationsEligibility } from '../../utils/recommendations';
+import { User } from '@tastematcher/common';
 
 const domainOwnerLinks = [
   { name: 'Management', href: '/management', icon: Users },
@@ -18,9 +13,27 @@ export const Sidebar = () => {
   const { user, logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  const allLinks = user?.role === 'domain_owner' || user?.role === 'global_admin'
-    ? [...navLinks, ...domainOwnerLinks] 
-    : navLinks;
+  const { isEligible, reasons } = getAIRecommendationsEligibility(user as User);
+
+  const baseLinks = [
+    { name: 'Home', href: '/home', icon: Home },
+    { name: 'Upload', href: '/upload', icon: Upload },
+    { name: 'Catalog', href: '/catalog', icon: LayoutGrid },
+    { name: 'Taster', href: '/taster', icon: Compass },
+  ];
+
+  const aiSuggestionsLink = {
+    name: 'AI Suggestions',
+    href: '/ai-suggestions',
+    icon: Sparkles,
+    locked: user?.role === 'customer' && !isEligible,
+    lockReason: reasons.join(', '),
+  };
+
+  const allLinks =
+    user?.role === 'domain_owner' || user?.role === 'global_admin'
+      ? [...baseLinks, aiSuggestionsLink, ...domainOwnerLinks]
+      : [...baseLinks, aiSuggestionsLink];
 
   return (
     <aside
@@ -39,23 +52,34 @@ export const Sidebar = () => {
       </div>
 
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-        {allLinks.map((link) => (
-          <NavLink
-            key={link.name}
-            to={link.href}
-            className={({ isActive }) =>
-              `flex items-center px-4 py-2.5 rounded-lg transition-colors duration-200 ease-in-out font-medium ${
-                isActive
-                  ? 'bg-blue-50 text-blue-600'
-                  : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-              } ${isCollapsed ? 'justify-center' : ''}`
-            }
-            title={isCollapsed ? link.name : undefined}
-          >
-            <link.icon className={`w-5 h-5 ${!isCollapsed ? 'mr-4' : ''}`} strokeWidth={2} />
-            {!isCollapsed && <span>{link.name}</span>}
-          </NavLink>
-        ))}
+        {allLinks.map((link) => {
+          const isLocked = 'locked' in link && link.locked;
+
+          return (
+            <NavLink
+              key={link.name}
+              to={link.href}
+              className={({ isActive }) =>
+                `flex items-center px-4 py-2.5 rounded-lg transition-colors duration-200 ease-in-out font-medium ${
+                  isActive
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                } ${isCollapsed ? 'justify-center' : ''}`
+              }
+              title={isCollapsed ? link.name : undefined}
+              aria-disabled={isLocked ? true : undefined}
+              onClick={(event) => {
+                if (isLocked) {
+                  event.preventDefault();
+                }
+              }}
+            >
+              <link.icon className={`w-5 h-5 ${!isCollapsed ? 'mr-4' : ''}`} strokeWidth={2} />
+              {!isCollapsed && <span>{link.name}</span>}
+              {!!(isLocked && !isCollapsed) && <Lock className="ml-auto h-4 w-4 text-gray-500" />}
+            </NavLink>
+          );
+        })}
       </nav>
 
       <div className="p-4 border-t border-gray-200 flex-shrink-0">
