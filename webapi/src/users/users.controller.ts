@@ -171,7 +171,7 @@ export class UsersController {
   @Get('me/refresh')
   async refreshCurrentUser(@Request() req: AuthenticatedRequest): Promise<{ user: User; token: string }> {
     const user = await this.usersService.findOne(req.user.domainId, req.user.id);
-    const numberOfSwipes = await this.artworksService.getStats(req.user.domainId).then(stats => stats.totalSwiped);
+    const numberOfSwipes = await this.artworksService.getStats(req.user.domainId, req.user.id).then(stats => stats.totalSwiped);
     user.swipeCount = numberOfSwipes;
 
     const token = this.authService.generateUserToken(user);

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import {
   Artwork,
   PaginatedResponse,
@@ -133,7 +133,7 @@ export class ArtworksService {
    * Get aggregated statistics for artworks in a domain
    * Uses efficient Cosmos DB aggregation queries
    */
-  async getStats(domainId: string): Promise<ArtworkStats> {
+  async getStats(domainId: string, userId: string): Promise<ArtworkStats> {
     const artworksContainer = await this.cosmosService.getContainer('Artworks');
     const artworksPreferencesContainer = await this.cosmosService.getContainer('ArtworkPreferences');
 
@@ -149,8 +149,8 @@ export class ArtworksService {
 
       // Query 2: Total liked artworks (likeCount > 0)
       const swipeQuery = {
-        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId',
-        parameters: [{ name: '@domainId', value: domainId }],
+        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId and c.userId = @userId',
+        parameters: [{ name: '@domainId', value: domainId }, { name: '@userId', value: userId }],
       };
 
       // Query 3: Recently added (last 7 days)
@@ -332,31 +332,20 @@ export class ArtworksService {
         throw new NotFoundException(`User ${resolvedUserId} not found in domain ${domainId}`);
       }
 
-      const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
-      const { resources: swipeCounts } = await preferencesContainer.items
-        .query({
-          query:
-            'SELECT VALUE COUNT(1) FROM c WHERE c.userId = @userId AND c.domainId = @domainId',
-          parameters: [
-            { name: '@userId', value: resolvedUserId },
-            { name: '@domainId', value: domainId },
-          ],
-        })
-        .fetchAll();
-
-      const currentSwipeCount = swipeCounts[0] ?? 0;
+      const { totalArtworks, totalSwiped, recentlyAdded  } = await this.getStats(domainId, resolvedUserId);
+      userRecord.swipeCount = totalSwiped;
 
       const { isEligible, reasons } = getAIRecommendationsEligibility(userRecord);
 
       if (!isEligible) {
         this.logger.log({
-          msg: 'User not eligible for AI suggestions',
+          msg: `User not eligible for AI suggestions: ${reasons.join(', ')}`,
           domainId,
           targetUserId: resolvedUserId,
           durationMs: Date.now() - start,
         });
 
-        return [];
+        throw new BadRequestException(`User not eligible for AI suggestions: ${reasons.join(', ')}`);
       }
 
       const preferenceVector = Array.isArray(userRecord.preferenceVector)

@@ -6,7 +6,7 @@ import { getAIRecommendationsEligibility } from '../../utils/recommendations';
 import { User } from '@tastematcher/common';
 
 const domainOwnerLinks = [
-  { name: 'Management', href: '/management', icon: Users },
+  { name: 'Management', href: '/management', icon: Users, lockReason: undefined },
 ];
 
 export const Sidebar = () => {
@@ -16,10 +16,10 @@ export const Sidebar = () => {
   const { isEligible, reasons } = getAIRecommendationsEligibility(user as User);
 
   const baseLinks = [
-    { name: 'Home', href: '/home', icon: Home },
-    { name: 'Upload', href: '/upload', icon: Upload },
-    { name: 'Catalog', href: '/catalog', icon: LayoutGrid },
-    { name: 'Taster', href: '/taster', icon: Compass },
+    { name: 'Home', href: '/home', icon: Home, lockReason: undefined },
+    { name: 'Upload', href: '/upload', icon: Upload, lockReason: undefined },
+    { name: 'Catalog', href: '/catalog', icon: LayoutGrid, lockReason: undefined },
+    { name: 'Taster', href: '/taster', icon: Compass, lockReason: undefined },
   ];
 
   const aiSuggestionsLink = {
@@ -27,7 +27,7 @@ export const Sidebar = () => {
     href: '/ai-suggestions',
     icon: Sparkles,
     locked: user?.role === 'customer' && !isEligible,
-    lockReason: reasons.join(', '),
+    lockReason: reasons[0] ?? '',
   };
 
   const allLinks =
@@ -56,28 +56,36 @@ export const Sidebar = () => {
           const isLocked = 'locked' in link && link.locked;
 
           return (
-            <NavLink
-              key={link.name}
-              to={link.href}
-              className={({ isActive }) =>
-                `flex items-center px-4 py-2.5 rounded-lg transition-colors duration-200 ease-in-out font-medium ${
-                  isActive
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-                } ${isCollapsed ? 'justify-center' : ''}`
-              }
-              title={isCollapsed ? link.name : undefined}
-              aria-disabled={isLocked ? true : undefined}
-              onClick={(event) => {
-                if (isLocked) {
-                  event.preventDefault();
+            <div key={link.name} className="relative group">
+              <NavLink
+                to={link.href}
+                className={({ isActive }) =>
+                  `flex items-center px-4 py-2.5 rounded-lg transition-colors duration-200 ease-in-out font-medium ${
+                    isActive
+                      ? 'bg-blue-50 text-blue-600'
+                      : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                  } ${isCollapsed ? 'justify-center' : ''}`
                 }
-              }}
-            >
-              <link.icon className={`w-5 h-5 ${!isCollapsed ? 'mr-4' : ''}`} strokeWidth={2} />
-              {!isCollapsed && <span>{link.name}</span>}
-              {!!(isLocked && !isCollapsed) && <Lock className="ml-auto h-4 w-4 text-gray-500" />}
-            </NavLink>
+                title={isCollapsed ? link.name : undefined}
+                aria-disabled={isLocked ? true : undefined}
+                onClick={(event) => {
+                  if (isLocked) {
+                    event.preventDefault();
+                  }
+                }}
+              >
+                <link.icon className={`w-5 h-5 ${!isCollapsed ? 'mr-4' : ''}`} strokeWidth={2} />
+                {!isCollapsed && <span>{link.name}</span>}
+                {!!(isLocked && !isCollapsed) && <Lock className="ml-auto h-4 w-4 text-gray-500" />}
+              </NavLink>
+
+              {!!isLocked && !!link.lockReason && !isCollapsed && (
+                <div className="pointer-events-none absolute bottom-full left-1/2 mb-3 w-max max-w-[16rem] -translate-x-1/2 rounded-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 px-4 py-3 text-xs font-semibold leading-snug text-white opacity-0 shadow-xl transition-opacity duration-200 group-hover:opacity-100">
+                  <span className="block text-center whitespace-normal break-words">{link.lockReason}</span>
+                  <div className="absolute left-1/2 top-full h-3 w-3 -translate-x-1/2 rotate-45 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500" />
+                </div>
+              )}
+            </div>
           );
         })}
       </nav>

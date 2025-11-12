@@ -14,7 +14,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { ArrowRight, Upload, Grid, Heart } from 'lucide-react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../../services/api';
 import type { ArtworkStats } from '@tastematcher/common';
 import './HomePage.css';
@@ -29,21 +29,21 @@ import { useEffect } from 'react';
 export function HomePage() {
   const { user, refreshUser } = useAuth();
   const { currentDomain } = useDomain();
+  const navigate = useNavigate();
 
   // Load existing questionnaire data if user has already completed or is editing
   useEffect(() => {
     // Refresh user data to get latest personalQuestionnaire from backend
     if (refreshUser && user) {
       refreshUser().then(() => {
-        console.log('User data refreshed for onboarding');
+        console.log('User data refreshed for onboarding', user.role, user.onboardingStatus);
 
         // Redirect customers to onboarding only if they haven't started or are in progress
         // Users who skipped or completed can access the home page
         // When they manually navigate to /onboarding, they can edit their answers
-        if (user.role === 'customer' &&
-          (user.onboardingStatus === 'not_started' || user.onboardingStatus === 'in_progress')) {
+        if (user.role === 'customer' && (user.onboardingStatus !== 'completed' && user.onboardingStatus !== 'skipped')) {
           console.log('HomePage - Redirecting to onboarding');
-          return <Navigate to="/onboarding" replace />;
+          navigate('/onboarding', { replace: true });
         }
 
       });

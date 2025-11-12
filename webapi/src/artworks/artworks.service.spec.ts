@@ -112,7 +112,7 @@ describe('ArtworksService', () => {
           .mockResolvedValueOnce({ resources: [mockStats.recentlyAdded] }),  // recent
       });
 
-      const result = await service.getStats('domain-1');
+      const result = await service.getStats('domain-1', 'user-1');
 
       expect(result.totalArtworks).toBe(42);
       expect(result.totalSwiped).toBe(28);
@@ -124,7 +124,7 @@ describe('ArtworksService', () => {
         fetchAll: jest.fn().mockResolvedValue({ resources: [] }),
       });
 
-      const result = await service.getStats('domain-1');
+      const result = await service.getStats('domain-1', 'user-1');
 
       expect(result.totalArtworks).toBe(0);
       expect(result.totalSwiped).toBe(0);

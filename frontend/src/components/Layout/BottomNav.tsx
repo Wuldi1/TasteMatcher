@@ -27,7 +27,7 @@ export const BottomNav = () => {
           href: '/ai-suggestions',
           icon: Sparkles,
           locked: !isEligible,
-          lockReason: reasons.join(', '),
+          lockReason: reasons[0] ?? '',
         };
 
   const allLinks =
@@ -41,32 +41,40 @@ export const BottomNav = () => {
         const isLocked = 'locked' in link && link.locked;
 
         return (
-          <NavLink
-            key={link.name}
-            to={link.href}
-            className={({ isActive }) =>
-              `flex flex-col items-center justify-center w-full text-xs transition-colors ${
-                isActive ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
-              }`
-            }
-            aria-disabled={!!isLocked}
-            onClick={(event) => {
-              if (isLocked) {
-                event.preventDefault();
+          <div key={link.name} className="relative group flex-1">
+            <NavLink
+              to={link.href}
+              className={({ isActive }) =>
+                `flex flex-col items-center justify-center w-full text-xs transition-colors ${
+                  isActive ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
+                }`
               }
-            }}
-          >
-            <div className="relative">
-              <link.icon className="mb-1 h-6 w-6" strokeWidth={2} />
-              {!!isLocked && (
-                <Lock className="absolute -right-1 -top-1 h-3 w-3 text-gray-500" aria-hidden="true" />
+              aria-disabled={!!isLocked}
+              onClick={(event) => {
+                if (isLocked) {
+                  event.preventDefault();
+                }
+              }}
+            >
+              <div className="relative">
+                <link.icon className="mb-1 h-6 w-6" strokeWidth={2} />
+                {!!isLocked && (
+                  <Lock className="absolute -right-1 -top-1 h-3 w-3 text-gray-500" aria-hidden="true" />
+                )}
+              </div>
+              <span>{link.name}</span>
+              {isLocked && !!link.lockReason && (
+                <span className="sr-only">{`Locked: ${link.lockReason}`}</span>
               )}
-            </div>
-            <span>{link.name}</span>
+            </NavLink>
+
             {isLocked && !!link.lockReason && (
-              <span className="sr-only">{`Locked: ${link.lockReason}`}</span>
+              <div className="pointer-events-none absolute bottom-full left-1/2 mb-3 w-max max-w-[14rem] -translate-x-1/2 rounded-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 px-4 py-3 text-[11px] font-semibold leading-snug text-white opacity-0 shadow-xl transition-opacity duration-200 group-hover:opacity-100">
+                <span className="block text-center whitespace-normal break-words">{link.lockReason}</span>
+                <div className="absolute left-1/2 top-full h-3 w-3 -translate-x-1/2 rotate-45 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500" />
+              </div>
             )}
-          </NavLink>
+          </div>
         );
       })}
     </nav>

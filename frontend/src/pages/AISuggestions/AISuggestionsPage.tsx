@@ -99,6 +99,14 @@ export const AISuggestionsPage = () => {
     void fetchRecommendations();
   }, [isDomainOwner, targetUserId, user]);
 
+  const formatMatchPercentage = (score?: number): string => {
+    if (typeof score !== 'number' || Number.isNaN(score)) {
+      return '0.00%';
+    }
+    const truncated = Math.floor(score * 10000) / 100;
+    return `${truncated.toFixed(2)}%`;
+  };
+
   if (loading) {
     return (
       <div
@@ -155,7 +163,7 @@ export const AISuggestionsPage = () => {
         </div>
       )}
 
-      {getAIRecommendationsEligibility(targetUser as User).isEligible && (
+      {!getAIRecommendationsEligibility(targetUser as User).isEligible && (
         <div
           className="mx-auto mb-6 max-w-2xl rounded-lg border border-yellow-200 bg-yellow-50 p-6"
           role="alert"
@@ -182,7 +190,7 @@ export const AISuggestionsPage = () => {
               key={item.id}
               className="group flex flex-col overflow-hidden rounded-lg shadow transition hover:shadow-lg focus-within:ring-2 focus-within:ring-primary"
               tabIndex={0}
-              aria-label={`${item.title} - similarity ${Math.round(item.probabilityMatch || 0 * 100)} percent`}
+              aria-label={`${item.title} - similarity ${formatMatchPercentage(item.probabilityMatch)}`}
             >
               {item.filename ? (
                 <img
@@ -203,7 +211,7 @@ export const AISuggestionsPage = () => {
                 <div className="mt-auto flex items-center justify-between text-sm text-gray-600">
                   <span>Match</span>
                   <span className="font-medium text-primary">
-                    {Math.round(item.probabilityMatch || 0 * 100)}%
+                    {formatMatchPercentage(item.probabilityMatch)}
                   </span>
                 </div>
               </div>

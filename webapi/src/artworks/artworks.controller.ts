@@ -43,7 +43,29 @@ export class ArtworksController {
     if (req.user.domainId !== domainId) {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
-    return this.artworksService.getStats(domainId);
+    return this.artworksService.getStats(domainId, req.user.id);
+  }
+
+  @Get('recommendations')
+  @ApiOperation({ summary: 'Get AI suggestions for a user within the domain' })
+  @ApiResponse({ status: 200, description: 'AI suggestions retrieved successfully' })
+  async getRecommendations(
+    @Request() req: AuthenticatedRequest,
+    @Param('domainId') domainId: string,
+    @Query('userId') targetUserId?: string,
+  ): Promise<Array<Artwork>> {
+    if (req.user.domainId !== domainId) {
+      throw new ForbiddenException('You are not authorized to access this domain.');
+    }
+
+    const isDomainOwner =
+      req.user.role === 'domain_owner' || req.user.role === 'global_admin';
+
+    if (!isDomainOwner && targetUserId && targetUserId !== req.user.id) {
+      throw new ForbiddenException('Customers cannot request suggestions for other users.');
+    }
+
+    return this.artworksService.getRecommendationsForUser(domainId, req.user, targetUserId);
   }
 
   @Get()
@@ -170,27 +192,5 @@ export class ArtworksController {
       throw new ForbiddenException('You are not authorized to save preferences for this user.');
     }
     return this.artworksService.savePreference(domainId, userId, preferenceDto.artworkId, preferenceDto);
-  }
-
-  @Get('recommendations')
-  @ApiOperation({ summary: 'Get AI suggestions for a user within the domain' })
-  @ApiResponse({ status: 200, description: 'AI suggestions retrieved successfully' })
-  async getRecommendations(
-    @Request() req: AuthenticatedRequest,
-    @Param('domainId') domainId: string,
-    @Query('userId') targetUserId?: string,
-  ): Promise<Array<Artwork>> {
-    if (req.user.domainId !== domainId) {
-      throw new ForbiddenException('You are not authorized to access this domain.');
-    }
-
-    const isDomainOwner =
-      req.user.role === 'domain_owner' || req.user.role === 'global_admin';
-
-    if (!isDomainOwner && targetUserId && targetUserId !== req.user.id) {
-      throw new ForbiddenException('Customers cannot request suggestions for other users.');
-    }
-
-    return this.artworksService.getRecommendationsForUser(domainId, req.user, targetUserId);
   }
 }
