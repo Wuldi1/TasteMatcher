@@ -100,9 +100,9 @@ export function HomePage() {
           </div>
           <div className="stat-card__content">
             <h2 className="stat-card__value">
-              {isLoading ? '...' : stats?.totalLiked || 0}
+              {isLoading ? '...' : stats?.totalSwiped || 0}
             </h2>
-            <p className="stat-card__label">Liked Artworks</p>
+            <p className="stat-card__label">Swiped Artworks</p>
           </div>
         </div>
 

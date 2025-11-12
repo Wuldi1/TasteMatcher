@@ -39,7 +39,7 @@ export interface ThumbnailGenerationResult extends ThumbnailInfo {
  */
 export interface ArtworkStats {
   totalArtworks: number;
-  totalLiked: number;
+  totalSwiped: number;
   recentlyAdded: number; // Last 7 days
 }
 

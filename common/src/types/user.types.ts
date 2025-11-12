@@ -149,4 +149,9 @@ export interface User {
    * Cleared after finalization
    */
   tempPreferenceVectors?: number[][];
+
+  /**
+   * The user's amount of swipe interactions used for recommendations.
+   */
+  swipeCount?: number;
 }

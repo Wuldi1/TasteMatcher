@@ -134,8 +134,8 @@ export class ArtworksService {
       };
 
       // Query 2: Total liked artworks (likeCount > 0)
-      const likedQuery = {
-        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.liked = true',
+      const swipeQuery = {
+        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId',
         parameters: [{ name: '@domainId', value: domainId }],
       };
 
@@ -149,15 +149,15 @@ export class ArtworksService {
       };
 
       // Execute queries in parallel for better performance
-      const [totalResult, likedResult, recentResult] = await Promise.all([
+      const [totalResult, swipeResult, recentResult] = await Promise.all([
         artworksContainer.items.query(totalQuery).fetchAll(),
-        artworksPreferencesContainer.items.query(likedQuery).fetchAll(),
+        artworksPreferencesContainer.items.query(swipeQuery).fetchAll(),
         artworksContainer.items.query(recentQuery).fetchAll(),
       ]);
 
       const stats: ArtworkStats = {
         totalArtworks: totalResult.resources[0] || 0,
-        totalLiked: likedResult.resources[0] || 0,
+        totalSwiped: swipeResult.resources[0] || 0,
         recentlyAdded: recentResult.resources[0] || 0,
       };
 

@@ -85,6 +85,13 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Convenience getter for the ArtworkPreferences container.
+   */
+  async getArtworkPreferencesContainer(): Promise<Container> {
+    return this.getContainer('ArtworkPreferences');
+  }
+
+  /**
    * Convenience getter for the Domains container.
    */
   async getDomainsContainer(): Promise<Container> {

@@ -105,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: freshUser.name,
         onboardingStatus: freshUser.onboardingStatus || 'not_started',
         personalQuestionnaire: freshUser.personalQuestionnaire,
+        swipeCount: freshUser.swipeCount || 0,
       });
 
       console.log('Refreshed user with new token:', freshUser);

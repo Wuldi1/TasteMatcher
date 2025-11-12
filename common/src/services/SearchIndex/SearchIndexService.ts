@@ -100,4 +100,70 @@ export class SearchIndexService {
 
     return;
   }
+
+  /**
+   * Search for similar artworks using vector similarity
+   * Returns top K most similar artworks for a given user preference vector
+   */
+  async searchSimilarArtworks(
+    domainId: string,
+    userVector: number[],
+    topK: number = 10
+  ): Promise<Array<{ artworkId: string; score: number }>> {
+    logger.debug({
+      msg: 'Searching similar artworks',
+      domainId,
+      vectorDimensions: userVector.length,
+      topK,
+    });
+
+    // Validate vector dimensions
+    if (userVector.length !== 1024) {
+      throw new Error(
+        `Invalid vector dimensions: expected 1024 (Azure AI Vision), got ${userVector.length}`
+      );
+    }
+
+    try {
+      const searchResults = await this.searchClient.search('*', {
+        vectorSearchOptions: {
+          queries: [
+            {
+              kind: 'vector',
+              vector: userVector,
+              kNearestNeighborsCount: topK,
+              fields: ['imageVector'],
+            },
+          ],
+        },
+        filter: `domainId eq '${domainId}'`,
+        top: topK,
+        select: ['artworkId'],
+      });
+
+      const results: Array<{ artworkId: string; score: number }> = [];
+
+      for await (const result of searchResults.results) {
+        results.push({
+          artworkId: result.document.artworkId,
+          score: result.score ?? 0,
+        });
+      }
+
+      logger.info({
+        msg: 'Similar artworks found',
+        domainId,
+        count: results.length,
+      });
+
+      return results;
+    } catch (err) {
+      logger.error({
+        msg: 'Failed to search similar artworks',
+        domainId,
+        err,
+      });
+      throw err;
+    }
+  }
 }

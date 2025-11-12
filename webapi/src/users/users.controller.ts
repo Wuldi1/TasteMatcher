@@ -25,11 +25,14 @@ import { Roles } from '../auth/utils/roles.decorator';
 import { User } from '@tastematcher/common';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
 import { AuthService } from '../auth/auth.service';
+import { ArtworksService } from '../artworks/artworks.service';
 
 @Controller('api/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService, private readonly authService: AuthService) {}
+  constructor(private readonly usersService: UsersService, 
+    private readonly authService: AuthService,
+    private readonly artworksService: ArtworksService) {}
 
   /**
    * Get all users in the current domain (domain_owner and global_admin only)
@@ -168,6 +171,9 @@ export class UsersController {
   @Get('me/refresh')
   async refreshCurrentUser(@Request() req: AuthenticatedRequest): Promise<{ user: User; token: string }> {
     const user = await this.usersService.findOne(req.user.domainId, req.user.id);
+    const numberOfSwipes = await this.artworksService.getStats(req.user.domainId).then(stats => stats.totalSwiped);
+    user.swipeCount = numberOfSwipes;
+
     const token = this.authService.generateUserToken(user);
 
     return { user, token };
