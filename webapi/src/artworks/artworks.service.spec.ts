@@ -101,21 +101,21 @@ describe('ArtworksService', () => {
     it('should return aggregated statistics', async () => {
       const mockStats = {
         totalArtworks: 42,
-        totalLiked: 28,
+        totalSwiped: 28,
         recentlyAdded: 5,
       };
 
       mockContainer.items.query.mockReturnValue({
         fetchAll: jest.fn()
           .mockResolvedValueOnce({ resources: [mockStats.totalArtworks] })  // total
-          .mockResolvedValueOnce({ resources: [mockStats.totalLiked] })  // liked
+          .mockResolvedValueOnce({ resources: [mockStats.totalSwiped] })  // swiped
           .mockResolvedValueOnce({ resources: [mockStats.recentlyAdded] }),  // recent
       });
 
       const result = await service.getStats('domain-1');
 
       expect(result.totalArtworks).toBe(42);
-      expect(result.totalLiked).toBe(28);
+      expect(result.totalSwiped).toBe(28);
       expect(result.recentlyAdded).toBe(5);
     });
 
@@ -127,7 +127,7 @@ describe('ArtworksService', () => {
       const result = await service.getStats('domain-1');
 
       expect(result.totalArtworks).toBe(0);
-      expect(result.totalLiked).toBe(0);
+      expect(result.totalSwiped).toBe(0);
       expect(result.recentlyAdded).toBe(0);
     });
   });

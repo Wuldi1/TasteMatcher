@@ -1,5 +1,17 @@
-import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
-import { Artwork, PaginatedResponse, QueryParams, ArtworkStats, UntastedArtworksResponse, ArtworkPreference, generatePreferenceId, CosmosService, executeCosmosQuery, User } from '@tastematcher/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Artwork,
+  PaginatedResponse,
+  QueryParams,
+  ArtworkStats,
+  UntastedArtworksResponse,
+  ArtworkPreference,
+  generatePreferenceId,
+  CosmosService,
+  SearchIndexService,
+  executeCosmosQuery,
+  getAIRecommendationsEligibility
+} from '@tastematcher/common';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
 
@@ -7,9 +19,11 @@ import { SavePreferenceDto } from './dto/save-preference.dto';
 export class ArtworksService {
   private readonly logger = new Logger(ArtworksService.name);
   private readonly cosmosService: CosmosService;
+  private readonly searchIndexService: SearchIndexService;
 
   constructor() {
     this.cosmosService = new CosmosService();
+    this.searchIndexService = new SearchIndexService();
   }
 
   /**
@@ -285,6 +299,128 @@ export class ArtworksService {
       }
     } catch (error) {
       this.logger.error(`Failed to save preference for artwork ${artworkId} by user ${userId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get recommendations for a user (customer or domain owner scoped)
+   */
+  async getRecommendationsForUser(
+    domainId: string,
+    requester: { id: string; role: string },
+    targetUserId?: string,
+  ): Promise<Array<Artwork>> {
+    const resolvedUserId =
+      (requester.role === 'domain_owner' || requester.role === 'global_admin') && targetUserId
+        ? targetUserId
+        : requester.id;
+
+    const start = Date.now();
+    this.logger.debug({
+      msg: 'Fetching AI suggestions',
+      domainId,
+      requesterId: requester.id,
+      targetUserId: resolvedUserId,
+    });
+
+    try {
+      const usersContainer = await this.cosmosService.getUsersContainer();
+      const { resource: userRecord } = await usersContainer.item(resolvedUserId, domainId).read();
+
+      if (!userRecord) {
+        throw new NotFoundException(`User ${resolvedUserId} not found in domain ${domainId}`);
+      }
+
+      const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
+      const { resources: swipeCounts } = await preferencesContainer.items
+        .query({
+          query:
+            'SELECT VALUE COUNT(1) FROM c WHERE c.userId = @userId AND c.domainId = @domainId',
+          parameters: [
+            { name: '@userId', value: resolvedUserId },
+            { name: '@domainId', value: domainId },
+          ],
+        })
+        .fetchAll();
+
+      const currentSwipeCount = swipeCounts[0] ?? 0;
+
+      const { isEligible, reasons } = getAIRecommendationsEligibility(userRecord);
+
+      if (!isEligible) {
+        this.logger.log({
+          msg: 'User not eligible for AI suggestions',
+          domainId,
+          targetUserId: resolvedUserId,
+          durationMs: Date.now() - start,
+        });
+
+        return [];
+      }
+
+      const preferenceVector = Array.isArray(userRecord.preferenceVector)
+        ? userRecord.preferenceVector
+        : undefined;
+
+      if (!preferenceVector || preferenceVector.length !== 1024) {
+        this.logger.warn({
+          msg: 'Missing or invalid preference vector; skipping AI suggestions',
+          domainId,
+          targetUserId: resolvedUserId,
+        });
+
+        return [];
+      }
+
+      const matches = await this.searchIndexService.searchSimilarArtworks(
+        domainId,
+        preferenceVector,
+        10,
+      );
+
+      const artworksContainer = await this.cosmosService.getArtworksContainer();
+      const recommendedArtworks: Artwork[] = [];
+
+      for (const match of matches) {
+        try {
+          const { resource: artwork } = await artworksContainer
+            .item(match.artworkId, domainId)
+            .read();
+
+          if (artwork) {
+            artwork.probabilityMatch = match.score;
+            recommendedArtworks.push(artwork);
+          }
+        } catch (lookupError) {
+          this.logger.warn({
+            msg: 'Failed to fetch artwork during AI suggestions',
+            domainId,
+            artworkId: match.artworkId,
+            error: (lookupError as Error).message,
+          });
+        }
+      }
+
+      this.logger.log({
+        msg: 'AI suggestions generated successfully',
+        domainId,
+        targetUserId: resolvedUserId,
+        recommendationCount: recommendedArtworks.length,
+        durationMs: Date.now() - start,
+      });
+
+      return recommendedArtworks;
+
+    } catch (error) {
+      this.logger.error({
+        msg: 'Failed to generate AI suggestions',
+        domainId,
+        requesterId: requester.id,
+        targetUserId: resolvedUserId,
+        error: (error as Error).message,
+        stack: (error as Error).stack,
+      });
       throw error;
     }
   }

@@ -1,23 +1,24 @@
+import { User } from "../types/user.types";
+
 /**
  * Check AI Recommendations eligibility
  * Pure function - safe for both frontend and backend
  * No dependencies on Node.js or NestJS
  */
 export function getAIRecommendationsEligibility(
-  swipeCount: number,
-  onboardingStatus: string
+  user: User
 ): { isEligible: boolean; reasons: string[] } {
   const reasons: string[] = [];
   let isEligible = true;
 
-  if (swipeCount < 20) {
+  if ((user.swipeCount || 0) < 20) {
     isEligible = false;
-    reasons.push('At least 20 swipes required');
+    reasons.push('You need at least 20 swipes to unlock AI recommendations');
   }
 
-  if (onboardingStatus !== 'completed') {
+  if (user.onboardingStatus !== 'completed') {
     isEligible = false;
-    reasons.push('Complete onboarding to unlock');
+    reasons.push('Complete onboarding to unlock AI recommendations');
   }
 
   return { isEligible, reasons };

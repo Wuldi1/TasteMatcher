@@ -3,6 +3,7 @@ import { ArtworksController } from './artworks.controller';
 import { ArtworksService } from './artworks.service';
 
 @Module({
+  imports: [],
   controllers: [ArtworksController],
   providers: [ArtworksService],
   exports: [ArtworksService],

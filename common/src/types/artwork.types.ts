@@ -16,6 +16,7 @@ export interface Artwork {
   vectorModel: string; // model used for vectorization
   thumbnails?: ThumbnailInfo[];
   tags?: string[];
+  probabilityMatch?: number; // confidence score for AI-generated tags
   createdAt?: number; // timestamp
   metadata?: ArtworkMetadata; // allow additional metadata fields
 }
