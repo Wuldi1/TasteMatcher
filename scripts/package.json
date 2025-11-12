@@ -1,0 +1,10 @@
+{
+  "name": "tastematcher-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "form-data": "^4.0.4",
+    "fs-extra": "^11.2.0",
+    "node-fetch": "^3.3.2"
+  }
+}

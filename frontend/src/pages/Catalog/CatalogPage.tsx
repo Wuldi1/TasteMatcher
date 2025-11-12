@@ -296,9 +296,34 @@ export function CatalogPage() {
                 {selectedArtwork.artist && (
                   <p className="catalog-modal__artist">by {selectedArtwork.artist}</p>
                 )}
+                {selectedArtwork.date && (
+                  <p className="catalog-modal__date">{selectedArtwork.date}</p>
+                )}
                 {selectedArtwork.description && (
                   <p className="catalog-modal__description">{selectedArtwork.description}</p>
                 )}
+                
+                {/* Metadata badges */}
+                {(selectedArtwork.classification || selectedArtwork.department || selectedArtwork.country) && (
+                  <div className="catalog-modal__metadata">
+                    {selectedArtwork.classification && (
+                      <span className="catalog-modal__badge catalog-modal__badge--classification">
+                        {selectedArtwork.classification}
+                      </span>
+                    )}
+                    {selectedArtwork.department && (
+                      <span className="catalog-modal__badge catalog-modal__badge--department">
+                        {selectedArtwork.department}
+                      </span>
+                    )}
+                    {selectedArtwork.country && (
+                      <span className="catalog-modal__badge catalog-modal__badge--country">
+                        {selectedArtwork.country}
+                      </span>
+                    )}
+                  </div>
+                )}
+                
                 {selectedArtwork.tags && selectedArtwork.tags.length > 0 && (
                   <div className="catalog-modal__tags">
                     {selectedArtwork.tags.map((tag) => (

@@ -333,6 +333,45 @@
   font-weight: 500;
 }
 
+.catalog-modal__date {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 0.75rem;
+}
+
+.catalog-modal__metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.catalog-modal__badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 9999px;
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.catalog-modal__badge--classification {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.catalog-modal__badge--department {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.catalog-modal__badge--country {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
 /* Error state */
 .catalog-error {
   text-align: center;

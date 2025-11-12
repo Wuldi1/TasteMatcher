@@ -11,6 +11,7 @@ build/
 
 # Testing
 coverage/
+TasteMatcherTestContent
 
 # IDE
 .vscode/

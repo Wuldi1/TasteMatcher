@@ -7,6 +7,10 @@ export interface Artwork {
   description: string;
   artist: string;
   category: string;
+  classification: string;
+  department: string;
+  country: string;
+  date: string;
   filename: string; // defined by service
   vector: number[]; // embedding vector for search
   vectorModel: string; // model used for vectorization

@@ -339,6 +339,70 @@ export function ArtworkUpload() {
             />
             <p className="text-xs text-gray-500">Credit the creator of this piece.</p>
           </div>
+
+          <div className="space-y-1">
+            <label htmlFor="metadata-classification" className="text-sm font-medium text-gray-700">
+              Classification
+            </label>
+            <input
+              id="metadata-classification"
+              type="text"
+              value={metadata.classification ?? ''}
+              onChange={handleMetadataChange('classification')}
+              placeholder="e.g., Painting, Sculpture, Photography"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+              disabled={status === 'uploading'}
+            />
+            <p className="text-xs text-gray-500">Type or medium of the artwork.</p>
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="metadata-department" className="text-sm font-medium text-gray-700">
+              Department
+            </label>
+            <input
+              id="metadata-department"
+              type="text"
+              value={metadata.department ?? ''}
+              onChange={handleMetadataChange('department')}
+              placeholder="e.g., Modern Art, Islamic Art"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+              disabled={status === 'uploading'}
+            />
+            <p className="text-xs text-gray-500">Museum or collection department.</p>
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="metadata-country" className="text-sm font-medium text-gray-700">
+              Country
+            </label>
+            <input
+              id="metadata-country"
+              type="text"
+              value={metadata.country ?? ''}
+              onChange={handleMetadataChange('country')}
+              placeholder="e.g., France, Japan, USA"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+              disabled={status === 'uploading'}
+            />
+            <p className="text-xs text-gray-500">Country of origin.</p>
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="metadata-date" className="text-sm font-medium text-gray-700">
+              Date
+            </label>
+            <input
+              id="metadata-date"
+              type="text"
+              value={metadata.date ?? ''}
+              onChange={handleMetadataChange('date')}
+              placeholder="e.g., 1889, ca. 1500-1600"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+              disabled={status === 'uploading'}
+            />
+            <p className="text-xs text-gray-500">Creation date or period.</p>
+          </div>
         </div>
 
         <div className="space-y-1">

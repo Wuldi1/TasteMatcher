@@ -44,10 +44,22 @@ export class UploadController {
     }
 
     try {
-      
       this.blobService.validateImageFile(file);
 
-      const artworkMetadata = this.parseArtworkPayload(body, domainId);
+      // Extract fields from form data body
+      const artworkData = {
+        title: body.title as string,
+        artist: body.artist as string,
+        description: body.description as string,
+        classification: body.classification as string,
+        department: body.department as string,
+        country: body.country as string,
+        date: body.date as string,
+        tags: body.tags ? JSON.parse(body.tags as string) : [],
+        category: body.category as string,
+      };
+
+      const artworkMetadata = this.parseArtworkPayload({ artwork: artworkData }, domainId);
       const blobName = getOriginalBlobPath(domainId, artworkMetadata.id, file.mimetype);
 
       this.logger.debug({
@@ -133,11 +145,17 @@ export class UploadController {
       title: parsed.title!,
       artist: parsed.artist!,
       description: parsed.description!,
+      classification: parsed.classification ?? '',
+      department: parsed.department ?? '',
+      country: parsed.country ?? '',
+      date: parsed.date ?? '',
       filename: parsed.filename ?? 'unknown',
       tags: parsed.tags ?? [],
       createdAt: new Date().getTime(),
       metadata: parsed.metadata,
       category: parsed.category ?? 'uncategorized',
+      vector: [],
+      vectorModel: '',
     } as Artwork;
   }
 }

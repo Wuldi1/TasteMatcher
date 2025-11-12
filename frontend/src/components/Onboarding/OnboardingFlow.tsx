@@ -139,7 +139,7 @@ export function OnboardingFlow() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [user, personalDetails, collectingPreferences, artworkPreferences, isEditMode, refreshUser, navigate]);
+  }, [user, personalDetails, collectingPreferences, artworkPreferences, isEditMode, navigate]);
 
   const handleSkip = useCallback(async () => {
     if (!user) return;
@@ -164,7 +164,7 @@ export function OnboardingFlow() {
     } finally {
       setIsSkipping(false);
     }
-  }, [user, isEditMode, refreshUser, navigate]);
+  }, [user, isEditMode, navigate]);
 
   const getProgress = useCallback(() => {
     const steps: OnboardingStep[] = ['welcome', 'personal', 'collecting', 'artwork', 'completion'];

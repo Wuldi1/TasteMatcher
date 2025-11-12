@@ -225,6 +225,24 @@ export function TasterPage() {
                 {currentArtwork.artist && (
                   <p className="taster-card__artist">by {currentArtwork.artist}</p>
                 )}
+                {currentArtwork.date && (
+                  <p className="taster-card__date">{currentArtwork.date}</p>
+                )}
+                
+                {/* Metadata badges */}
+                {(currentArtwork.classification || currentArtwork.department || currentArtwork.country) && (
+                  <div className="taster-card__metadata">
+                    {currentArtwork.classification && (
+                      <span className="taster-card__badge">{currentArtwork.classification}</span>
+                    )}
+                    {currentArtwork.department && (
+                      <span className="taster-card__badge">{currentArtwork.department}</span>
+                    )}
+                    {currentArtwork.country && (
+                      <span className="taster-card__badge">{currentArtwork.country}</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Swipe indicators */}
