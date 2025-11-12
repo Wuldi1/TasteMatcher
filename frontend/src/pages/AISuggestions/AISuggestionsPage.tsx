@@ -13,7 +13,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { Artwork, getAIRecommendationsEligibility, User } from '@tastematcher/common';
+import { Artwork, User } from '@tastematcher/common';
+import { getAIRecommendationsEligibility } from '../../utils/recommendations';
 
 interface DomainUserOption {
   id: string;
@@ -25,8 +26,6 @@ interface DomainUserOption {
 export const AISuggestionsPage = () => {
   const { user } = useAuth();
   const [recommendations, setRecommendations] = useState<Artwork[]>([]);
-  const [isUserEligible, setEligibility] = useState<boolean | null>(null);
-  const [eligibilityReasons, setEligibilityReasons] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState<string | undefined>(undefined);
   const [users, setUsers] = useState<DomainUserOption[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -37,9 +36,16 @@ export const AISuggestionsPage = () => {
 
   const targetUserId = useMemo(() => {
     if (isDomainOwner) {
-      return selectedUser ?? user?.id;
+      return selectedUser || user?.id;
     }
     return user?.id;
+  }, [isDomainOwner, selectedUser, user?.id]);
+
+  const targetUser = useMemo(() => {
+    if (isDomainOwner) {
+      return users.find((u) => u.id === (selectedUser || user?.id));
+    }
+    return user;
   }, [isDomainOwner, selectedUser, user?.id]);
 
   useEffect(() => {
@@ -77,15 +83,11 @@ export const AISuggestionsPage = () => {
       setError(null);
 
       try {
-        const recommendedArtworks = await apiClient.getRecommendations(
+        const recommendations = await apiClient.getRecommendations(
           user.domainId!,
           isDomainOwner && targetUserId !== user.id ? targetUserId : undefined,
         );
-        setRecommendations(recommendedArtworks);
-        const { isEligible, reasons } = getAIRecommendationsEligibility(user as User);
-
-        setEligibility(isEligible);
-        setEligibilityReasons(reasons);
+        setRecommendations(recommendations);
       } catch (err) {
         console.error('Failed to load AI suggestions', err);
         setError('Unable to load AI suggestions. Please try again.');
@@ -153,7 +155,7 @@ export const AISuggestionsPage = () => {
         </div>
       )}
 
-      {isUserEligible && (
+      {getAIRecommendationsEligibility(targetUser as User).isEligible && (
         <div
           className="mx-auto mb-6 max-w-2xl rounded-lg border border-yellow-200 bg-yellow-50 p-6"
           role="alert"
@@ -163,14 +165,14 @@ export const AISuggestionsPage = () => {
             This profile is almost ready for AI suggestions
           </h2>
           <ul className="list-disc space-y-2 pl-5 text-yellow-800">
-            {eligibilityReasons.map((reason) => (
+            {getAIRecommendationsEligibility(targetUser as User).reasons.map((reason) => (
               <li key={reason}>{reason}</li>
             ))}
           </ul>
         </div>
       )}
 
-      {isUserEligible && recommendations.length > 0 && (
+      {getAIRecommendationsEligibility(targetUser as User).isEligible && recommendations.length > 0 && (
         <section
           aria-label="AI suggested artworks"
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
@@ -210,7 +212,7 @@ export const AISuggestionsPage = () => {
         </section>
       )}
 
-      {isUserEligible && recommendations.length === 0 && (
+      {getAIRecommendationsEligibility(targetUser as User).isEligible && recommendations.length === 0 && (
         <p className="py-12 text-center text-gray-600">
           No AI suggestions yet. Encourage additional tasting activity to enrich personalization.
         </p>

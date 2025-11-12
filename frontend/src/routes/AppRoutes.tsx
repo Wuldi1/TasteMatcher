@@ -11,18 +11,19 @@ import { CatalogPage } from '../pages/Catalog/CatalogPage';
 import { TasterPage } from '../pages/Taster/TasterPage';
 import { UploadPage } from '../pages/Upload/UploadPage';
 import { Management } from '../components/Management';
+import { AISuggestionsPage } from '../pages/AISuggestions/AISuggestionsPage';
 
 /**
  * Wrapper component that redirects authenticated users away from auth pages
  */
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  
+
   if (user) {
     console.log('PublicRoute - User authenticated, redirecting to /home');
     return <Navigate to="/home" replace />;
   }
-  
+
   return <>{children}</>;
 }
 
@@ -36,12 +37,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="hidden md:block">
         <Sidebar />
       </div>
-      
+
       {/* Main content area */}
       <main className="flex-1 overflow-y-auto bg-gray-50 pb-16 md:pb-0 p-4 sm:p-6 md:p-8">
         {children}
       </main>
-      
+
       {/* Mobile Bottom Navigation - hidden on desktop */}
       <div className="md:hidden">
         <BottomNav />
@@ -140,7 +141,18 @@ export function AppRoutes() {
           </ProtectedRoute>
         }
       />
-     
+
+      <Route
+        path="/ai-suggestions"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <AISuggestionsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
       {/* Catch-all redirect to home or login */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
