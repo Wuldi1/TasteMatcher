@@ -21,8 +21,7 @@ import {
   ArtworkStats,
   UntastedArtworksResponse,
   SavePreferenceRequest,
-  PaginatedResponse,
-  QueryParams
+  PaginatedResponse
 } from '@tastematcher/common';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
@@ -504,7 +503,17 @@ class ApiClient extends BaseApiClient {
   await this.request<UntastedArtworksResponse>(`/api/domains/${domainId}/artworks/preferences/${userId}`, { method: 'POST', body: JSON.stringify(preference) });
 }
 
-
+  /**
+   * Get recommendations for a domain
+   */
+  async getRecommendations(domainId: string, userId?: string): Promise<Array<Artwork>> {
+    this.validateRequired(domainId, 'Domain ID');
+    const params = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+    return this.request<Array<Artwork>>(
+      `/api/domains/${domainId}/artworks/recommendations${params}`,
+      { method: 'GET' },
+    );
+  }
 
   // ======= Authentication Endpoints (Public) ==========
 
