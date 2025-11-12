@@ -24,15 +24,15 @@ async function main() {
   // Define diverse search queries for different content types
   const searchQueries = [
     { query: "painting", label: "Paintings" },
-    { query: "landscape", label: "Landscapes" },
-    { query: "nature", label: "Nature" },
-    { query: "modern art", label: "Modern Art" },
-    { query: "sculpture", label: "Sculptures" },
-    { query: "photography", label: "Photography" },
-    { query: "abstract", label: "Abstract Art" },
-    { query: "portrait", label: "Portraits" },
-    { query: "flowers", label: "Flowers" },
-    { query: "architecture", label: "Architecture" },
+    // { query: "landscape", label: "Landscapes" },
+    // { query: "nature", label: "Nature" },
+    // { query: "modern art", label: "Modern Art" },
+    // { query: "sculpture", label: "Sculptures" },
+    // { query: "photography", label: "Photography" },
+    // { query: "abstract", label: "Abstract Art" },
+    // { query: "portrait", label: "Portraits" },
+    // { query: "flowers", label: "Flowers" },
+    // { query: "architecture", label: "Architecture" },
   ];
 
   let allIds = [];

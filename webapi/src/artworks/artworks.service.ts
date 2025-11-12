@@ -13,7 +13,7 @@ export class ArtworksService {
   }
 
   /**
-   * Fetch artworks with generic query parameters
+   * Fetch artworks with generic query parameters using CosmosQueryBuilder
    */
   async findAll(domainId: string, queryParams: QueryParams<Artwork>): Promise<PaginatedResponse<Artwork>> {
     const container = await this.cosmosService.getContainer('Artworks');
@@ -30,7 +30,7 @@ export class ArtworksService {
       this.logger.log(`Fetched ${result.items.length} artworks for domain ${domainId}`);
 
       return {
-        items: result.items,
+        items: result.items || [],
         continuationToken: result.continuationToken,
         hasMore: result.hasMore,
       };
@@ -236,96 +236,56 @@ export class ArtworksService {
         total: untastedArtworks.length,
       };
     } catch (error) {
-      this.logger.error(`Failed to get untasted artworks for user ${userId}`, error);
+      this.logger.error(`Failed to get untasted artworks for user ${userId} in domain ${domainId}`, error);
       throw error;
     }
   }
 
   /**
-   * Save user preference for an artwork
-   * Creates or updates preference in Cosmos DB
-   * Also updates the user's taste vector
+   * Save or update artwork preference (like/dislike) for a user
    */
-  async savePreference(
-    domainId: string,
-    userId: string,
-    preferenceDto: SavePreferenceDto,
-  ): Promise<ArtworkPreference> {
-    const preferencesContainer = await this.cosmosService.getContainer('ArtworkPreferences');
-    const usersContainer = await this.cosmosService.getContainer('Users');
+  async savePreference(domainId: string, userId: string, artworkId: string, saveDto: SavePreferenceDto): Promise<ArtworkPreference> {
+    const container = await this.cosmosService.getContainer('ArtworkPreferences');
 
     try {
-      // Step 1: Fetch the artwork and user in parallel
-      const [artwork, user] = await Promise.all([
-        this.findOne(domainId, preferenceDto.artworkId) as Promise<Artwork>,
-        usersContainer.item(userId, domainId).read().then(res => res.resource) as Promise<User>,
-      ]);
+      // Check if preference already exists
+      const { resource: existingPreference } = await container.item(artworkId, userId).read();
+      
+      const preferenceId = generatePreferenceId(userId, artworkId);
 
-      if (!artwork) {
-        throw new NotFoundException(`Artwork ${preferenceDto.artworkId} not found`);
-      }
-      if (!user) {
-        throw new NotFoundException(`User ${userId} not found`);
-      }
-      if (!artwork.vector || !user.preferenceVector) {
-        this.logger.warn(`Vector not found for artwork ${artwork.id} or user ${user.id}. Skipping vector update.`);
-        throw new NotFoundException(`Vector not found for artwork ${artwork.id} or user ${user.id}. Skipping vector update.`);
+      if (existingPreference) {
+        // Update existing preference
+        const updatedPreference = {
+          ...existingPreference,
+          ...saveDto,
+          updatedAt: Date.now(),
+        };
+
+        const { resource } = await container.item(artworkId, userId).replace(updatedPreference);
+
+        this.logger.log(`Updated preference for artwork ${artworkId} by user ${userId}`);
+
+        return resource;
       } else {
-        // Step 2: Update user's vector
-        const learningRate = 0.1; // Configurable learning rate
-        const direction = preferenceDto.liked ? 1 : -1;
+        // Create new preference
+        const newPreference = {
+          id: preferenceId,
+          domainId,
+          userId,
+          ...saveDto,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
 
-        const newUserVector = user.preferenceVector.map(
-          (val: number, i: number) => val + direction * learningRate * (artwork.vector[i] - val)
-        );
+        const { resource } = await container.items.create(newPreference);
 
-        // Step 3: Normalize the new vector
-        const normalizedVector = this.normalizeVector(newUserVector);
+        this.logger.log(`Saved new preference for artwork ${artworkId} by user ${userId}`);
 
-        // Step 4: Update the user object
-        await usersContainer.item(userId, domainId).patch([
-          { op: 'replace', path: '/preferenceVector', value: normalizedVector },
-          { op: 'replace', path: '/updatedAt', value: Date.now() }
-        ]);
-
-        this.logger.log(`Updated vector for user ${userId}`);
+        return resource!;
       }
-
-      // Step 5: Save the preference
-      const preferenceId = generatePreferenceId(userId, preferenceDto.artworkId);
-
-      const preference: ArtworkPreference = {
-        id: preferenceId,
-        userId,
-        artworkId: preferenceDto.artworkId,
-        domainId,
-        liked: preferenceDto.liked,
-        createdAt: Date.now(),
-      };
-
-      const { resource } = await preferencesContainer.items.upsert<ArtworkPreference>(preference);
-
-      this.logger.log(
-        `Saved preference for user ${userId}, artwork ${preferenceDto.artworkId}: ${preferenceDto.liked ? 'liked' : 'disliked'}`,
-      );
-
-      return resource as ArtworkPreference;
     } catch (error) {
-      this.logger.error(`Failed to save preference for user ${userId}`, error);
+      this.logger.error(`Failed to save preference for artwork ${artworkId} by user ${userId}`, error);
       throw error;
     }
-  }
-
-  /**
-   * Normalizes a vector to a unit vector (length of 1)
-   * @param vector The vector to normalize
-   * @returns The normalized vector
-   */
-  private normalizeVector(vector: number[]): number[] {
-    const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
-    if (magnitude === 0) {
-      return vector; // Avoid division by zero
-    }
-    return vector.map(val => val / magnitude);
   }
 }

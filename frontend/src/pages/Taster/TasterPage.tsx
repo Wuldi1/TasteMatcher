@@ -16,7 +16,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { Heart, X, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiClient } from '../../services/api';
-import { saveArtworkPreference } from '../../services/artworksApi';
 import './TasterPage.css';
 
 type SwipeDirection = 'left' | 'right' | null;
@@ -58,7 +57,7 @@ export function TasterPage() {
       
       console.log(`Saving preference: ${artworkId} - ${liked ? 'liked' : 'disliked'}`);
       
-      await saveArtworkPreference(user.domainId, user.id, {
+      await apiClient.saveArtworkPreference(user.domainId, user.id, {
         artworkId,
         liked,
       });

@@ -28,6 +28,9 @@ export function CatalogPage() {
   const { user, isInitializing: authLoading } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<string>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [filterBy, setFilterBy] = useState<string>('');
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [editingArtwork, setEditingArtwork] = useState<Artwork | null>(null);
 
@@ -59,25 +62,34 @@ export function CatalogPage() {
     isFetching,
     status,
   } = useInfiniteQuery({
-    queryKey: ['artworks', user?.domainId, searchQuery],
+    queryKey: ['artworks', user?.domainId, searchQuery, sortBy, sortOrder, filterBy],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
       console.log('[Query] Executing queryFn:', { 
         domainId: user?.domainId, 
         pageParam, 
-        searchQuery 
+        searchQuery,
+        sortBy,
+        sortOrder,
+        filterBy
       });
 
       if (!user?.domainId) {
         throw new Error('No domain ID');
       }
       
-      const result = await apiClient.getArtworks(user.domainId);
+      const result = await apiClient.getArtworks(user.domainId, {
+        limit: 20,
+        continuationToken: pageParam,
+        sortBy,
+        sortOrder,
+        filterBy: filterBy || undefined,
+      });
 
       return result;
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.continuationToken,
-    enabled: !!user?.domainId, // Simplified condition
+    enabled: !!user?.domainId,
     staleTime: 30000,
     retry: 2,
   });
@@ -94,6 +106,21 @@ export function CatalogPage() {
   });
 
   const allArtworks = data?.pages.flatMap((page) => page.items || []) || [];
+
+  // Filter artworks by search query (client-side)
+  const filteredArtworks = searchQuery
+    ? allArtworks.filter((artwork) => {
+        const query = searchQuery.toLowerCase();
+        return (
+          artwork.title?.toLowerCase().includes(query) ||
+          artwork.artist?.toLowerCase().includes(query) ||
+          artwork.description?.toLowerCase().includes(query) ||
+          artwork.classification?.toLowerCase().includes(query) ||
+          artwork.department?.toLowerCase().includes(query) ||
+          artwork.tags?.some(tag => tag.toLowerCase().includes(query))
+        );
+      })
+    : allArtworks;
 
   // Delete mutation
   const deleteMutation = useMutation({
@@ -143,32 +170,92 @@ export function CatalogPage() {
         <header className="catalog-header">
           <h1 className="catalog-title">Artwork Catalog</h1>
           
-          {/* Search bar */}
-          <div className="catalog-search">
-            <label htmlFor="catalog-search-input" className="sr-only">
-              Search artworks
-            </label>
-            <div className="catalog-search__wrapper">
-              <Search className="catalog-search__icon" aria-hidden="true" />
-              <input
-                id="catalog-search-input"
-                type="text"
-                className="catalog-search__input"
-                placeholder="Search artworks..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                aria-label="Search artworks"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  className="catalog-search__clear"
-                  onClick={handleClearSearch}
-                  aria-label="Clear search"
+          {/* Search and Filter Bar */}
+          <div className="catalog-controls">
+            <div className="catalog-search">
+              <label htmlFor="catalog-search-input" className="sr-only">
+                Search artworks
+              </label>
+              <div className="catalog-search__wrapper">
+                <Search className="catalog-search__icon" aria-hidden="true" />
+                <input
+                  id="catalog-search-input"
+                  type="text"
+                  className="catalog-search__input"
+                  placeholder="Search artworks..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="Search artworks"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="catalog-search__clear"
+                    onClick={handleClearSearch}
+                    aria-label="Clear search"
+                  >
+                    <X aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Sort and Filter Controls */}
+            <div className="catalog-filters">
+              <div className="catalog-filter-group">
+                <label htmlFor="sort-by" className="catalog-filter-label">
+                  Sort by
+                </label>
+                <select
+                  id="sort-by"
+                  className="catalog-filter-select"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
                 >
-                  <X aria-hidden="true" />
-                </button>
-              )}
+                  <option value="createdAt">Date Added</option>
+                  <option value="title">Title</option>
+                  <option value="artist">Artist</option>
+                  <option value="date">Date Created</option>
+                </select>
+              </div>
+
+              <div className="catalog-filter-group">
+                <label htmlFor="sort-order" className="catalog-filter-label">
+                  Order
+                </label>
+                <select
+                  id="sort-order"
+                  className="catalog-filter-select"
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+                >
+                  <option value="desc">Newest First</option>
+                  <option value="asc">Oldest First</option>
+                </select>
+              </div>
+
+              <div className="catalog-filter-group">
+                <label htmlFor="filter-by" className="catalog-filter-label">
+                  Filter by
+                </label>
+                <select
+                  id="filter-by"
+                  className="catalog-filter-select"
+                  value={filterBy}
+                  onChange={(e) => setFilterBy(e.target.value)}
+                >
+                  <option value="">All Artworks</option>
+                  <option value="classification:Painting">Paintings</option>
+                  <option value="classification:Sculpture">Sculptures</option>
+                  <option value="classification:Photography">Photography</option>
+                  <option value="classification:Drawing">Drawings</option>
+                  <option value="classification:Print">Prints</option>
+                  <option value="classification:Codices">Codices</option>
+                  <option value="department:Modern">Modern Art</option>
+                  <option value="department:Islamic">Islamic Art</option>
+                  <option value="department:Asian">Asian Art</option>
+                </select>
+              </div>
             </div>
           </div>
         </header>
@@ -188,17 +275,14 @@ export function CatalogPage() {
               Retry
             </button>
           </div>
-        ) : allArtworks.length === 0 ? (
+        ) : filteredArtworks.length === 0 ? (
           <div className="catalog-empty" role="status">
-            <p>No artworks found. Start by uploading some!</p>
-            {user?.domainId && (
-              <p className="catalog-debug">Domain ID: {user.domainId}</p>
-            )}
+            <p>No artworks found{searchQuery ? ' matching your search' : ''}. {!searchQuery && 'Start by uploading some!'}</p>
           </div>
         ) : (
           <>
             <div className="catalog-grid" role="list">
-              {allArtworks.map((artwork) => (
+              {filteredArtworks.map((artwork) => (
                 <div
                   key={artwork.id}
                   className="catalog-item"
@@ -250,7 +334,7 @@ export function CatalogPage() {
             </div>
 
             {/* Load more button */}
-            {hasNextPage && (
+            {hasNextPage && !searchQuery && (
               <div className="catalog-load-more">
                 <button
                   type="button"

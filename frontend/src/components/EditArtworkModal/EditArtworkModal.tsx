@@ -3,8 +3,8 @@ import { useMutation } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
 import { useAuth } from '../../hooks/useAuth';
-import { updateArtwork } from '../../services/artworksApi';
 import './EditArtworkModal.css';
+import { apiClient } from '../../services/api';
 
 interface EditArtworkModalProps {
   artwork: Artwork;
@@ -17,13 +17,17 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
   const [title, setTitle] = useState(artwork.title || '');
   const [artist, setArtist] = useState(artwork.artist || '');
   const [description, setDescription] = useState(artwork.description || '');
+  const [classification, setClassification] = useState(artwork.classification || '');
+  const [department, setDepartment] = useState(artwork.department || '');
+  const [country, setCountry] = useState(artwork.country || '');
+  const [date, setDate] = useState(artwork.date || '');
   const [tags, setTags] = useState(artwork.tags?.join(', ') || '');
   const [error, setError] = useState('');
 
   const updateMutation = useMutation({
     mutationFn: (updates: Partial<Artwork>) => {
       if (!user?.domainId) throw new Error('No domain ID');
-      return updateArtwork(user.domainId, artwork.id, updates);
+      return apiClient.updateArtwork(user.domainId, artwork.id, updates);
     },
     onSuccess: () => {
       onSave();
@@ -41,6 +45,10 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
       title: title.trim() || undefined,
       artist: artist.trim() || undefined,
       description: description.trim() || undefined,
+      classification: classification.trim() || undefined,
+      department: department.trim() || undefined,
+      country: country.trim() || undefined,
+      date: date.trim() || undefined,
       tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
     };
 
@@ -93,6 +101,62 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
               className="edit-modal__input"
               value={artist}
               onChange={(e) => setArtist(e.target.value)}
+            />
+          </div>
+
+          <div className="edit-modal__field">
+            <label htmlFor="edit-classification" className="edit-modal__label">
+              Classification
+            </label>
+            <input
+              id="edit-classification"
+              type="text"
+              className="edit-modal__input"
+              value={classification}
+              onChange={(e) => setClassification(e.target.value)}
+              placeholder="e.g., Painting, Sculpture, Photography"
+            />
+          </div>
+
+          <div className="edit-modal__field">
+            <label htmlFor="edit-department" className="edit-modal__label">
+              Department
+            </label>
+            <input
+              id="edit-department"
+              type="text"
+              className="edit-modal__input"
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              placeholder="e.g., Modern Art, Islamic Art"
+            />
+          </div>
+
+          <div className="edit-modal__field">
+            <label htmlFor="edit-country" className="edit-modal__label">
+              Country
+            </label>
+            <input
+              id="edit-country"
+              type="text"
+              className="edit-modal__input"
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              placeholder="e.g., France, Japan, USA"
+            />
+          </div>
+
+          <div className="edit-modal__field">
+            <label htmlFor="edit-date" className="edit-modal__label">
+              Date
+            </label>
+            <input
+              id="edit-date"
+              type="text"
+              className="edit-modal__input"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              placeholder="e.g., 1889, ca. 1500-1600"
             />
           </div>
 

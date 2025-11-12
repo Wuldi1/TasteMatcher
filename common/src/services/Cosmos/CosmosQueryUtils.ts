@@ -116,6 +116,7 @@ export class CosmosQueryBuilder<T = any> {
       case 'lte':
         return `${field} <= ${paramName}`;
       case 'contains':
+        // Use LOWER for case-insensitive comparison
         return `CONTAINS(LOWER(${field}), LOWER(${paramName}))`;
       case 'in':
         return `ARRAY_CONTAINS(${paramName}, ${field})`;

@@ -19,7 +19,10 @@ import {
   DomainRequest,
   PersonalQuestionnaire,
   ArtworkStats,
-  UntastedArtworksResponse
+  UntastedArtworksResponse,
+  SavePreferenceRequest,
+  PaginatedResponse,
+  QueryParams
 } from '@tastematcher/common';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
@@ -426,16 +429,30 @@ class ApiClient extends BaseApiClient {
   }
 
   /**
-   * Get artworks for a domain with optional pagination
+   * Get artworks for a domain with optional pagination and filtering
    */
-  async getArtworks(domainId: string, limit?: number, offset?: number): Promise<Artwork[]> {
+  async getArtworks(
+    domainId: string,
+    options?: {
+      limit?: number;
+      continuationToken?: string;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+      filterBy?: string;
+    }
+  ): Promise<PaginatedResponse<Artwork>> {
     this.validateRequired(domainId, 'Domain ID');
     const params = new URLSearchParams();
-    if (limit !== undefined) params.append('limit', String(limit));
-    if (offset !== undefined) params.append('offset', String(offset));
+    
+    if (options?.limit !== undefined) params.append('limit', String(options.limit));
+    if (options?.continuationToken) params.append('continuationToken', options.continuationToken);
+    if (options?.sortBy) params.append('sortBy', options.sortBy);
+    if (options?.sortOrder) params.append('sortOrder', options.sortOrder);
+    if (options?.filterBy) params.append('filterBy', options.filterBy);
+    
     const queryString = params.toString();
     const endpoint = `/api/domains/${domainId}/artworks${queryString ? `?${queryString}` : ''}`;
-    return this.request<Artwork[]>(endpoint, { method: 'GET' });
+    return this.request<PaginatedResponse<Artwork>>(endpoint, { method: 'GET' });
   }
 
   /**
@@ -478,6 +495,15 @@ class ApiClient extends BaseApiClient {
   ): Promise<UntastedArtworksResponse> {
     return await this.request<UntastedArtworksResponse>(`/api/domains/${domainId}/artworks/untasted/${userId}?limit=${limit}`, { method: 'GET' });
   }
+
+  async saveArtworkPreference(
+  domainId: string,
+  userId: string,
+  preference: SavePreferenceRequest
+): Promise<void> {
+  await this.request<UntastedArtworksResponse>(`/api/domains/${domainId}/artworks/preferences/${userId}`, { method: 'POST', body: JSON.stringify(preference) });
+}
+
 
 
   // ======= Authentication Endpoints (Public) ==========

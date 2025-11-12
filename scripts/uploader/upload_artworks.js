@@ -87,8 +87,8 @@ async function main() {
         console.log(`\n📤 Starting upload of ${folders.length} artworks...\n`);
 
         for (const folder of folders) {
-            if (uploadCount == 10) {
-                console.log("⏸️  Reached 10 uploads, taking a short break...");
+            if (uploadCount == 50) {
+                console.log("⏸️  Reached 50 uploads, taking a short break...");
                 return;
             }
             const folderPath = path.join(CONTENT_DIR, folder);

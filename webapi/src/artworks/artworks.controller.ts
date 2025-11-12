@@ -14,13 +14,14 @@ import {
   UseGuards,
   Request,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { ArtworksService } from './artworks.service';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { QueryArtworksDto } from './dto/query-artworks.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
-import { Artwork, PaginatedResponse, ArtworkStats, UntastedArtworksResponse } from '@tastematcher/common';
+import { Artwork, PaginatedResponse, ArtworkStats, UntastedArtworksResponse, QueryParams } from '@tastematcher/common';
 import { ArtworkPreference } from '@tastematcher/common';
 import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
@@ -52,12 +53,46 @@ export class ArtworksController {
   async findAll(
     @Request() req: AuthenticatedRequest,
     @Param('domainId') domainId: string,
-    @Query() query: QueryArtworksDto,
+    @Query('limit') limit?: string,
+    @Query('continuationToken') continuationToken?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+    @Query('filterBy') filterBy?: string,
   ): Promise<PaginatedResponse<Artwork>> {
     if (req.user.domainId !== domainId) {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
-    return this.artworksService.findAll(domainId, query.toQueryParams());
+    
+    // Convert simple query params to QueryParams format
+    const queryParams: QueryParams<Artwork> = {
+      limit: limit ? parseInt(limit, 10) : 20,
+      continuationToken: continuationToken || undefined,
+      sort: sortBy ? {
+        field: sortBy as keyof Artwork,
+        order: sortOrder || 'desc'
+      } : undefined,
+      filters: filterBy ? [this.parseFilterBy(filterBy)] : undefined,
+    };
+    
+    return this.artworksService.findAll(domainId, queryParams);
+  }
+
+  /**
+   * Parse filterBy string format "field:value" into FilterCondition
+   * Uses case-insensitive contains for flexible matching
+   */
+  private parseFilterBy(filterBy: string) {
+    const [field, value] = filterBy.split(':');
+    if (!field || !value) {
+      throw new BadRequestException('Invalid filterBy format. Expected "field:value"');
+    }
+    
+    // Use contains operator for flexible, case-insensitive matching
+    return {
+      field: field as keyof Artwork,
+      operator: 'contains' as const,
+      value: value,
+    };
   }
 
   @Get(':artworkId')
@@ -135,6 +170,6 @@ export class ArtworksController {
     if (req.user.domainId !== domainId || req.user.id !== userId) {
       throw new ForbiddenException('You are not authorized to save preferences for this user.');
     }
-    return this.artworksService.savePreference(domainId, userId, preferenceDto);
+    return this.artworksService.savePreference(domainId, userId, preferenceDto.artworkId, preferenceDto);
   }
 }
