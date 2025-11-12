@@ -204,56 +204,73 @@ export function CatalogPage() {
             <div className="catalog-filters">
               <div className="catalog-filter-group">
                 <label htmlFor="sort-by" className="catalog-filter-label">
-                  Sort by
+                  Sort By
                 </label>
                 <select
                   id="sort-by"
                   className="catalog-filter-select"
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
+                  value={`${sortBy}-${sortOrder}`}
+                  onChange={(e) => {
+                    const [field, order] = e.target.value.split('-');
+                    setSortBy(field);
+                    setSortOrder(order as 'asc' | 'desc');
+                  }}
                 >
-                  <option value="createdAt">Date Added</option>
-                  <option value="title">Title</option>
-                  <option value="artist">Artist</option>
-                  <option value="date">Date Created</option>
+                  <optgroup label="Date Added">
+                    <option value="createdAt-desc">Newest First</option>
+                    <option value="createdAt-asc">Oldest First</option>
+                  </optgroup>
+                  <optgroup label="Title">
+                    <option value="title-asc">A → Z</option>
+                    <option value="title-desc">Z → A</option>
+                  </optgroup>
+                  <optgroup label="Artist">
+                    <option value="artist-asc">A → Z</option>
+                    <option value="artist-desc">Z → A</option>
+                  </optgroup>
+                  <optgroup label="Date Created">
+                    <option value="date-desc">Newest First</option>
+                    <option value="date-asc">Oldest First</option>
+                  </optgroup>
                 </select>
               </div>
 
               <div className="catalog-filter-group">
-                <label htmlFor="sort-order" className="catalog-filter-label">
-                  Order
+                <label htmlFor="filter-classification" className="catalog-filter-label">
+                  Classification
                 </label>
                 <select
-                  id="sort-order"
-                  className="catalog-filter-select"
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-                >
-                  <option value="desc">Newest First</option>
-                  <option value="asc">Oldest First</option>
-                </select>
-              </div>
-
-              <div className="catalog-filter-group">
-                <label htmlFor="filter-by" className="catalog-filter-label">
-                  Filter by
-                </label>
-                <select
-                  id="filter-by"
+                  id="filter-classification"
                   className="catalog-filter-select"
                   value={filterBy}
                   onChange={(e) => setFilterBy(e.target.value)}
                 >
-                  <option value="">All Artworks</option>
+                  <option value="">All Types</option>
                   <option value="classification:Painting">Paintings</option>
                   <option value="classification:Sculpture">Sculptures</option>
                   <option value="classification:Photography">Photography</option>
                   <option value="classification:Drawing">Drawings</option>
                   <option value="classification:Print">Prints</option>
                   <option value="classification:Codices">Codices</option>
+                </select>
+              </div>
+
+              <div className="catalog-filter-group">
+                <label htmlFor="filter-department" className="catalog-filter-label">
+                  Department
+                </label>
+                <select
+                  id="filter-department"
+                  className="catalog-filter-select"
+                  value={filterBy.startsWith('department:') ? filterBy : ''}
+                  onChange={(e) => setFilterBy(e.target.value)}
+                >
+                  <option value="">All Departments</option>
                   <option value="department:Modern">Modern Art</option>
                   <option value="department:Islamic">Islamic Art</option>
                   <option value="department:Asian">Asian Art</option>
+                  <option value="department:European">European Art</option>
+                  <option value="department:American">American Art</option>
                 </select>
               </div>
             </div>

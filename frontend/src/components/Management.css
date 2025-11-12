@@ -1,0 +1,139 @@
+/* Management filters styling - consistent with Catalog page */
+.management-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  width: 100%;
+  margin-top: 1rem;
+  margin-bottom: 1.5rem; /* Add bottom margin */
+}
+
+.management-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.management-filter-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  line-height: 1.25;
+}
+
+.management-filter-input,
+.management-filter-select {
+  height: 2.75rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  background-color: white;
+  transition: all 0.2s;
+  color: #111827;
+}
+
+.management-filter-input {
+  width: 100%;
+}
+
+.management-filter-input::placeholder {
+  color: #9ca3af;
+}
+
+.management-filter-input:hover,
+.management-filter-select:hover {
+  border-color: #9ca3af;
+  background-color: #f9fafb;
+}
+
+.management-filter-input:focus,
+.management-filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background-color: white;
+}
+
+.management-filter-select {
+  width: 100%;
+  padding-right: 2.5rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 0.625rem center;
+  background-repeat: no-repeat;
+  background-size: 1.25rem;
+  appearance: none;
+  cursor: pointer;
+}
+
+.management-filter-select option {
+  padding: 0.5rem;
+  background-color: white;
+  color: #111827;
+}
+
+.management-sort-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.management-sort-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.management-sort-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background-color: white;
+  color: #374151;
+  font-size: 1.125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.management-sort-button:hover {
+  border-color: #9ca3af;
+  background-color: #f9fafb;
+}
+
+.management-sort-button:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.management-sort-button:active {
+  background-color: #e5e7eb;
+}
+
+/* Responsive layout */
+@media (min-width: 640px) {
+  .management-filters {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 768px) {
+  .management-filters {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .management-filters {
+    grid-template-columns: repeat(4, 1fr);
+    max-width: 100%;
+  }
+}

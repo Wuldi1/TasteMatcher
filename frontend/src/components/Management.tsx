@@ -3,6 +3,7 @@ import { User, Role, Domain, DomainRequest, DomainRequestStatus } from '@tastema
 import { useAuth } from '../contexts/AuthContext';
 import { apiClient, ApiError } from '../services/api';
 import { Navigate } from 'react-router-dom';
+import './Management.css';
 
 type TabType = 'users' | 'domains' | 'domain-requests';
 
@@ -21,6 +22,26 @@ export function Management() {
   const [selectedDomainId, setSelectedDomainId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Filter and sort state for users
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<string>('all');
+  const [userStatusFilter, setUserStatusFilter] = useState<string>('all');
+  const [userSortBy, setUserSortBy] = useState<'name' | 'email' | 'createdAt'>('createdAt');
+  const [userSortOrder, setUserSortOrder] = useState<'asc' | 'desc'>('desc');
+  
+  // Filter and sort state for domains
+  const [domainSearchQuery, setDomainSearchQuery] = useState('');
+  const [domainStatusFilter, setDomainStatusFilter] = useState<string>('all');
+  const [domainSortBy, setDomainSortBy] = useState<'name' | 'adminEmail' | 'createdAt'>('createdAt');
+  const [domainSortOrder, setDomainSortOrder] = useState<'asc' | 'desc'>('desc');
+  
+  // Filter and sort state for domain requests
+  const [requestSearchQuery, setRequestSearchQuery] = useState('');
+  const [requestStatusFilter, setRequestStatusFilter] = useState<string>('all');
+  const [requestSortBy, setRequestSortBy] = useState<'name' | 'email' | 'createdAt'>('createdAt');
+  const [requestSortOrder, setRequestSortOrder] = useState<'asc' | 'desc'>('desc');
+  
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingDomain, setEditingDomain] = useState<Domain | null>(null);
@@ -293,6 +314,126 @@ export function Management() {
     setEditDomainError(null);
   }, []);
 
+  // Filter and sort users
+  const filteredAndSortedUsers = React.useMemo(() => {
+    let filtered = [...users];
+    
+    // Apply search filter
+    if (userSearchQuery.trim()) {
+      const query = userSearchQuery.toLowerCase();
+      filtered = filtered.filter(u => 
+        u.name.toLowerCase().includes(query) ||
+        u.email.toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply role filter
+    if (userRoleFilter !== 'all') {
+      filtered = filtered.filter(u => u.role === userRoleFilter);
+    }
+    
+    // Apply status filter
+    if (userStatusFilter !== 'all') {
+      filtered = filtered.filter(u => u.status === userStatusFilter);
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue: string | number = a[userSortBy];
+      let bValue: string | number = b[userSortBy];
+      
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = (bValue as string).toLowerCase();
+      }
+      
+      if (userSortOrder === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+    
+    return filtered;
+  }, [users, userSearchQuery, userRoleFilter, userStatusFilter, userSortBy, userSortOrder]);
+
+  // Filter and sort domains
+  const filteredAndSortedDomains = React.useMemo(() => {
+    let filtered = [...domains];
+    
+    // Apply search filter
+    if (domainSearchQuery.trim()) {
+      const query = domainSearchQuery.toLowerCase();
+      filtered = filtered.filter(d => 
+        d.name.toLowerCase().includes(query) ||
+        d.adminEmail.toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply status filter
+    if (domainStatusFilter !== 'all') {
+      filtered = filtered.filter(d => (d.status || 'active') === domainStatusFilter);
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue: string | number = a[domainSortBy];
+      let bValue: string | number = b[domainSortBy];
+      
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = (bValue as string).toLowerCase();
+      }
+      
+      if (domainSortOrder === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+    
+    return filtered;
+  }, [domains, domainSearchQuery, domainStatusFilter, domainSortBy, domainSortOrder]);
+
+  // Filter and sort domain requests
+  const filteredAndSortedRequests = React.useMemo(() => {
+    let filtered = [...domainRequests];
+    
+    // Apply search filter
+    if (requestSearchQuery.trim()) {
+      const query = requestSearchQuery.toLowerCase();
+      filtered = filtered.filter(r => 
+        r.name.toLowerCase().includes(query) ||
+        r.email.toLowerCase().includes(query) ||
+        r.proposedDomainName.toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply status filter
+    if (requestStatusFilter !== 'all') {
+      filtered = filtered.filter(r => r.status === requestStatusFilter);
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue: string | number = a[requestSortBy];
+      let bValue: string | number = b[requestSortBy];
+      
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = (bValue as string).toLowerCase();
+      }
+      
+      if (requestSortOrder === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+    
+    return filtered;
+  }, [domainRequests, requestSearchQuery, requestStatusFilter, requestSortBy, requestSortOrder]);
+
   // Check authorization - AFTER all hooks
   if (!user || (user.role !== 'domain_owner' && user.role !== 'global_admin')) {
     return <Navigate to="/home" replace />;
@@ -420,6 +561,84 @@ export function Management() {
                       </select>
                     </div>
                   )}
+                  
+                  {/* User Filters */}
+                  <div className="management-filters">
+                    <div className="management-filter-group">
+                      <label htmlFor="user-search" className="management-filter-label">
+                        Search
+                      </label>
+                      <input
+                        id="user-search"
+                        type="text"
+                        placeholder="Search by name or email..."
+                        value={userSearchQuery}
+                        onChange={(e) => setUserSearchQuery(e.target.value)}
+                        className="management-filter-input"
+                      />
+                    </div>
+                    
+                    <div className="management-filter-group">
+                      <label htmlFor="user-role-filter" className="management-filter-label">
+                        Role
+                      </label>
+                      <select
+                        id="user-role-filter"
+                        value={userRoleFilter}
+                        onChange={(e) => setUserRoleFilter(e.target.value)}
+                        className="management-filter-select"
+                      >
+                        <option value="all">All Roles</option>
+                        <option value="customer">Customer</option>
+                        <option value="dealer">Dealer</option>
+                        <option value="domain_owner">Domain Owner</option>
+                        <option value="global_admin">Global Admin</option>
+                      </select>
+                    </div>
+                    
+                    <div className="management-filter-group">
+                      <label htmlFor="user-status-filter" className="management-filter-label">
+                        Status
+                      </label>
+                      <select
+                        id="user-status-filter"
+                        value={userStatusFilter}
+                        onChange={(e) => setUserStatusFilter(e.target.value)}
+                        className="management-filter-select"
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="pending_verification">Pending</option>
+                        <option value="active">Active</option>
+                      </select>
+                    </div>
+                    
+                    <div className="management-filter-group">
+                      <label htmlFor="user-sort" className="management-filter-label">
+                        Sort By
+                      </label>
+                      <div className="management-sort-controls">
+                        <select
+                          id="user-sort"
+                          value={userSortBy}
+                          onChange={(e) => setUserSortBy(e.target.value as any)}
+                          className="management-filter-select management-sort-select"
+                        >
+                          <option value="name">Name</option>
+                          <option value="email">Email</option>
+                          <option value="createdAt">Date</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setUserSortOrder(userSortOrder === 'asc' ? 'desc' : 'asc')}
+                          className="management-sort-button"
+                          title={userSortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                          aria-label={userSortOrder === 'asc' ? 'Sort ascending' : 'Sort descending'}
+                        >
+                          {userSortOrder === 'asc' ? '↑' : '↓'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {error && (
@@ -448,7 +667,7 @@ export function Management() {
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {users.map((u) => (
+                          {filteredAndSortedUsers.map((u) => (
                             <tr key={u.id} className="hover:bg-gray-50">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">{u.name}</div>
@@ -489,16 +708,16 @@ export function Management() {
                         </tbody>
                       </table>
 
-                      {users.length === 0 && (
+                      {filteredAndSortedUsers.length === 0 && (
                         <div className="text-center py-12">
-                          <p className="text-gray-500">No users found</p>
+                          <p className="text-gray-500">No users found matching your filters</p>
                         </div>
                       )}
                     </div>
 
                     {/* Mobile Cards */}
                     <div className="sm:hidden space-y-4">
-                      {users.map((u) => (
+                      {filteredAndSortedUsers.map((u) => (
                         <div key={u.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                           <div className="flex justify-between items-start mb-3">
                             <div className="flex-1">
@@ -547,9 +766,9 @@ export function Management() {
                         </div>
                       ))}
 
-                      {users.length === 0 && (
+                      {filteredAndSortedUsers.length === 0 && (
                         <div className="text-center py-12">
-                          <p className="text-gray-500">No users found</p>
+                          <p className="text-gray-500">No users found matching your filters</p>
                         </div>
                       )}
                     </div>
@@ -569,6 +788,66 @@ export function Management() {
                   >
                     + Create Domain
                   </button>
+                </div>
+                
+                {/* Domain Filters */}
+                <div className="management-filters">
+                  <div className="management-filter-group">
+                    <label htmlFor="domain-search" className="management-filter-label">
+                      Search
+                    </label>
+                    <input
+                      id="domain-search"
+                      type="text"
+                      placeholder="Search by name or email..."
+                      value={domainSearchQuery}
+                      onChange={(e) => setDomainSearchQuery(e.target.value)}
+                      className="management-filter-input"
+                    />
+                  </div>
+                  
+                  <div className="management-filter-group">
+                    <label htmlFor="domain-status-filter" className="management-filter-label">
+                      Status
+                    </label>
+                    <select
+                      id="domain-status-filter"
+                      value={domainStatusFilter}
+                      onChange={(e) => setDomainStatusFilter(e.target.value)}
+                      className="management-filter-select"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="pending_verification">Pending</option>
+                      <option value="active">Active</option>
+                    </select>
+                  </div>
+                  
+                  <div className="management-filter-group">
+                    <label htmlFor="domain-sort" className="management-filter-label">
+                      Sort By
+                    </label>
+                    <div className="management-sort-controls">
+                      <select
+                        id="domain-sort"
+                        value={domainSortBy}
+                        onChange={(e) => setDomainSortBy(e.target.value as any)}
+                        className="management-filter-select management-sort-select"
+                      >
+                        <option value="name">Name</option>
+                        <option value="adminEmail">Email</option>
+                        <option value="createdAt">Date</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setDomainSortOrder(domainSortOrder === 'asc' ? 'desc' : 'asc')}
+                        className="management-sort-button"
+                        title={domainSortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                        aria-label={domainSortOrder === 'asc' ? 'Sort ascending' : 'Sort descending'}
+                      >
+                        {domainSortOrder === 'asc' ? '↑' : '↓'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {error && (
@@ -596,7 +875,7 @@ export function Management() {
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {domains.map((d) => (
+                          {filteredAndSortedDomains.map((d) => (
                             <tr key={d.id} className="hover:bg-gray-50">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">{d.name}</div>
@@ -630,16 +909,16 @@ export function Management() {
                         </tbody>
                       </table>
 
-                      {domains.length === 0 && (
+                      {filteredAndSortedDomains.length === 0 && (
                         <div className="text-center py-12">
-                          <p className="text-gray-500">No domains found</p>
+                          <p className="text-gray-500">No domains found matching your filters</p>
                         </div>
                       )}
                     </div>
 
                     {/* Mobile Cards */}
                     <div className="sm:hidden space-y-4">
-                      {domains.map((d) => (
+                      {filteredAndSortedDomains.map((d) => (
                         <div key={d.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                           <div className="flex justify-between items-start mb-3">
                             <div className="flex-1">
@@ -683,9 +962,9 @@ export function Management() {
                         </div>
                       ))}
 
-                      {domains.length === 0 && (
+                      {filteredAndSortedDomains.length === 0 && (
                         <div className="text-center py-12">
-                          <p className="text-gray-500">No domains found</p>
+                          <p className="text-gray-500">No domains found matching your filters</p>
                         </div>
                       )}
                     </div>
@@ -699,6 +978,67 @@ export function Management() {
               <>
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
                   <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Domain Requests</h1>
+                </div>
+                
+                {/* Request Filters */}
+                <div className="management-filters">
+                  <div className="management-filter-group">
+                    <label htmlFor="request-search" className="management-filter-label">
+                      Search
+                    </label>
+                    <input
+                      id="request-search"
+                      type="text"
+                      placeholder="Search by name or email..."
+                      value={requestSearchQuery}
+                      onChange={(e) => setRequestSearchQuery(e.target.value)}
+                      className="management-filter-input"
+                    />
+                  </div>
+                  
+                  <div className="management-filter-group">
+                    <label htmlFor="request-status-filter" className="management-filter-label">
+                      Status
+                    </label>
+                    <select
+                      id="request-status-filter"
+                      value={requestStatusFilter}
+                      onChange={(e) => setRequestStatusFilter(e.target.value)}
+                      className="management-filter-select"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </div>
+                  
+                  <div className="management-filter-group">
+                    <label htmlFor="request-sort" className="management-filter-label">
+                      Sort By
+                    </label>
+                    <div className="management-sort-controls">
+                      <select
+                        id="request-sort"
+                        value={requestSortBy}
+                        onChange={(e) => setRequestSortBy(e.target.value as any)}
+                        className="management-filter-select management-sort-select"
+                      >
+                        <option value="name">Name</option>
+                        <option value="email">Email</option>
+                        <option value="createdAt">Date</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setRequestSortOrder(requestSortOrder === 'asc' ? 'desc' : 'asc')}
+                        className="management-sort-button"
+                        title={requestSortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                        aria-label={requestSortOrder === 'asc' ? 'Sort ascending' : 'Sort descending'}
+                      >
+                        {requestSortOrder === 'asc' ? '↑' : '↓'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {error && (
@@ -727,7 +1067,7 @@ export function Management() {
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {domainRequests.map((req) => (
+                          {filteredAndSortedRequests.map((req) => (
                             <tr key={req.id} className="hover:bg-gray-50">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">{req.name}</div>
@@ -756,16 +1096,16 @@ export function Management() {
                         </tbody>
                       </table>
 
-                      {domainRequests.length === 0 && (
+                      {filteredAndSortedRequests.length === 0 && (
                         <div className="text-center py-12">
-                          <p className="text-gray-500">No domain requests found</p>
+                          <p className="text-gray-500">No requests found matching your filters</p>
                         </div>
                       )}
                     </div>
 
                     {/* Mobile Cards */}
                     <div className="sm:hidden space-y-4">
-                      {domainRequests.map((req) => (
+                      {filteredAndSortedRequests.map((req) => (
                         <div key={req.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                           <div className="flex justify-between items-start mb-3">
                             <div className="flex-1">
@@ -800,9 +1140,9 @@ export function Management() {
                         </div>
                       ))}
 
-                      {domainRequests.length === 0 && (
+                      {filteredAndSortedRequests.length === 0 && (
                         <div className="text-center py-12">
-                          <p className="text-gray-500">No domain requests found</p>
+                          <p className="text-gray-500">No requests found matching your filters</p>
                         </div>
                       )}
                     </div>
