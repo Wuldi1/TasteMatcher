@@ -36,7 +36,7 @@ export const BottomNav = () => {
       : [...navLinks, aiLink];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around h-16 z-50 md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 z-50 md:hidden">
       {allLinks.map((link) => {
         const isLocked = 'locked' in link && link.locked;
 
@@ -45,7 +45,7 @@ export const BottomNav = () => {
             <NavLink
               to={link.href}
               className={({ isActive }) =>
-                `flex flex-col items-center justify-center w-full text-xs transition-colors ${
+                `flex flex-col items-center justify-center h-full w-full text-xs transition-colors ${
                   isActive ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
                 }`
               }
