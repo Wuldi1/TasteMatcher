@@ -261,6 +261,9 @@ importers:
       '@azure/cosmos':
         specifier: ^4.7.0
         version: 4.7.0
+      '@azure/identity':
+        specifier: ^4.13.0
+        version: 4.13.0
       '@azure/storage-blob':
         specifier: ^12.29.1
         version: 12.29.1
@@ -300,12 +303,18 @@ importers:
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
+      jimp:
+        specifier: ^0.22.12
+        version: 0.22.12
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.2
       multer:
         specifier: 2.0.2
         version: 2.0.2
+      p-retry:
+        specifier: ^7.1.0
+        version: 7.1.0
       passport-jwt:
         specifier: ^4.0.1
         version: 4.0.1

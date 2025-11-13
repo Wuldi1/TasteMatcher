@@ -56,9 +56,16 @@ jobs:
         run: |
           cd ${{ env.WEBAPI_DIR }}
           mkdir -p deploy
+          
+          # Copy built files
           cp -r dist deploy/
+          
+          # Copy package.json and create production-only version
           cp package.json deploy/
-          cp -r node_modules deploy/
+          
+          # Install production dependencies only
+          cd deploy
+          npm install --omit=dev --production
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
