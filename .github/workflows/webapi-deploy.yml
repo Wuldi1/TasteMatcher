@@ -65,7 +65,7 @@ jobs:
           # Install production dependencies (no workspace context here)
           cd deploy
           corepack enable
-          pnpm install --prod --frozen-lockfile || pnpm install --prod
+          pnpm install --frozen-lockfile || pnpm install
 
           # Inject built @tastematcher/common AFTER install so pnpm doesn't prune it
           mkdir -p node_modules/@tastematcher/common/build
