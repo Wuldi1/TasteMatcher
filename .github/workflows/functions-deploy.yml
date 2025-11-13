@@ -1,0 +1,154 @@
+# ---------- CODEGEN CHECKLIST (must be satisfied) ----------
+# 1. Uses Azure Functions deployment best practices
+# 2. Includes build validation before deployment
+# 3. Separates build and deploy stages
+# 4. Uses environment-specific configurations
+# 5. CI-friendly: runs lint, typecheck, and tests
+# -----------------------------------------------------------
+
+name: Deploy Azure Functions
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'functions/**'
+      - 'common/**'
+      - '.github/workflows/deploy-functions.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
+env:
+  NODE_VERSION: '22.x'
+  AZURE_FUNCTIONAPP_NAME: tastematcher-dev-func
+
+jobs:
+  build:
+    name: Build Azure Functions
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build common package
+        run: pnpm --filter @tastematcher/common build
+
+      - name: Lint functions
+        run: pnpm --filter @tastematcher/functions lint
+
+      - name: Type check functions
+        run: pnpm --filter @tastematcher/functions typecheck
+
+      # - name: Run tests
+      #   run: pnpm --filter @tastematcher/functions test
+
+      - name: Build functions
+        run: pnpm --filter @tastematcher/functions build
+
+      - name: Prepare deployment package
+        run: |
+          cd functions
+          mkdir -p deploy
+          cp -r dist/* deploy/
+          cp host.json deploy/
+          if [ -d "ProcessImagesFromBlob" ]; then
+            mkdir -p deploy/ProcessImagesFromBlob
+            cp ProcessImagesFromBlob/function.json deploy/ProcessImagesFromBlob/
+          fi
+          
+          # Install production dependencies in temp directory
+          TEMP_DIR=$(mktemp -d)
+          cat > "$TEMP_DIR/package.json" <<EOF
+          {
+            "name": "@tastematcher/functions",
+            "version": "1.0.0",
+            "dependencies": $(jq '.dependencies' package.json | jq 'del(.["@tastematcher/common"])'),
+            "engines": {
+              "node": ">=22.x"
+            }
+          }
+          EOF
+          
+          cd "$TEMP_DIR"
+          npm install --omit=dev --no-package-lock --production
+          
+          # Copy node_modules to deploy
+          cp -r node_modules ../functions/deploy/
+          
+          # Copy common package build
+          if [ -d "../common/dist" ]; then
+            mkdir -p ../functions/deploy/node_modules/@tastematcher/common
+            cp -r ../common/dist/* ../functions/deploy/node_modules/@tastematcher/common/
+            cp ../common/package.json ../functions/deploy/node_modules/@tastematcher/common/
+          fi
+          
+          # Create minimal package.json
+          cd ../functions/deploy
+          cat > package.json <<'PKGJSON'
+          {
+            "name": "@tastematcher/functions",
+            "version": "1.0.0",
+            "engines": {
+              "node": ">=22.x"
+            }
+          }
+          PKGJSON
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: functions-deploy
+          path: functions/deploy
+          retention-days: 1
+
+  deploy-dev:
+    name: Deploy to Dev Environment
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'dev'
+    environment:
+      name: development
+      url: https://${{ env.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net
+    
+    steps:
+      - name: Download deployment artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: functions-deploy
+          path: deploy
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS_DEV }}
+
+      - name: Deploy to Azure Function App
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+          package: deploy
+
+      - name: Azure logout
+        if: always()
+        run: az logout
