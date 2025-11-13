@@ -68,10 +68,10 @@ jobs:
           name: frontend-dist
           path: dist
 
-      - name: Create deployment package with serve
+      - name: Create deployment package with dependencies
         run: |
           cd dist
-          # Create package.json for serve
+          # Create package.json with serve dependency
           cat > package.json <<'EOF'
           {
             "name": "tastematcher-frontend",
@@ -80,12 +80,21 @@ jobs:
               "start": "serve -s . -l 8080"
             },
             "dependencies": {
-              "serve": "^14.2.0"
+              "serve": "^14.2.3"
             }
           }
           EOF
           
-          # Create web.config for Azure (optional fallback)
+          # Install dependencies so they're included in the zip
+          npm install --production --no-package-lock
+          
+          # Create .deployment file to tell Azure to skip build
+          cat > .deployment <<'EOF'
+          [config]
+          SCM_DO_BUILD_DURING_DEPLOYMENT = false
+          EOF
+          
+          # Create web.config for proper SPA routing
           cat > web.config <<'EOF'
           <?xml version="1.0"?>
           <configuration>
@@ -101,6 +110,9 @@ jobs:
                   </rule>
                 </rules>
               </rewrite>
+              <staticContent>
+                <mimeMap fileExtension=".json" mimeType="application/json" />
+              </staticContent>
             </system.webServer>
           </configuration>
           EOF
