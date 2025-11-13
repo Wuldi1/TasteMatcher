@@ -69,8 +69,10 @@ jobs:
           path: dist
 
       - name: Archive build output
-        run: zip -r dist.zip dist
-
+        run: |
+          cd dist
+          zip -r ../dist.zip .
+          cd ..
 
       - name: Login to Azure
         uses: azure/login@v2
