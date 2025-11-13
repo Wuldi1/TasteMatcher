@@ -46,6 +46,7 @@ export const AISuggestionsPage = () => {
       return users.find((u) => u.id === (selectedUser || user?.id));
     }
     return user;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDomainOwner, selectedUser, user?.id]);
 
   useEffect(() => {

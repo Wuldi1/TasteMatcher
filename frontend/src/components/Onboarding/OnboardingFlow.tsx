@@ -66,6 +66,7 @@ export function OnboardingFlow() {
         console.log('User data refreshed for onboarding edit mode');
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, isLoading]); // Don't include refreshUser or user to avoid loops
 
   useEffect(() => {
