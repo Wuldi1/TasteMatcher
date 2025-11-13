@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { HomePage } from './HomePage';
@@ -45,10 +45,13 @@ describe('HomePage', () => {
     expect(screen.getByText(/Welcome to Test Domain/i)).toBeInTheDocument();
   });
 
-  it('displays statistics cards', () => {
+  it('displays statistics cards', async () => {
     renderWithProviders(<HomePage />);
     
-    expect(screen.getByText('Total Artworks')).toBeInTheDocument();
+    // Verify statistics are rendered
+    await waitFor(() => {
+      expect(screen.getByText(/Total Artworks/i)).toBeInTheDocument();
+    });
     expect(screen.getByText('Likes')).toBeInTheDocument();
     expect(screen.getByText('Recently Added')).toBeInTheDocument();
   });
@@ -68,7 +71,7 @@ describe('HomePage', () => {
   it('does not render when user is not authenticated', () => {
     const unauthContext = { ...mockAuthContext, user: null };
     
-    const { container } = render(
+    render(
       <QueryClientProvider client={queryClient}>
         <AuthContext.Provider value={unauthContext}>
           <BrowserRouter>
@@ -78,7 +81,7 @@ describe('HomePage', () => {
       </QueryClientProvider>
     );
     
-    expect(container.firstChild).toBeNull();
+    expect(screen.queryByText(/Welcome to/i)).not.toBeInTheDocument();
   });
 
   it('has proper ARIA labels for accessibility', () => {

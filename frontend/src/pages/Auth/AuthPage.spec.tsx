@@ -35,7 +35,7 @@ describe('AuthPage', () => {
   it('renders DomainRegistration component', () => {
     renderWithProviders(<AuthPage />);
     
-    // Verify the component renders (adjust based on DomainRegistration content)
-    expect(document.querySelector('.App')).toBeInTheDocument();
+    // Verify the component renders using Testing Library queries
+    expect(screen.getByRole('main')).toBeInTheDocument();
   });
 });

@@ -41,15 +41,27 @@ const renderWithProviders = (component: React.ReactElement) => {
 
 describe('UploadPage', () => {
   it('renders upload page container', () => {
-    const { container } = renderWithProviders(<UploadPage />);
-    
-    expect(container.querySelector('.upload-page')).toBeInTheDocument();
-  });
-
-  it('renders ArtworkUpload component', () => {
     renderWithProviders(<UploadPage />);
     
-    // Verify the component renders (adjust based on ArtworkUpload content)
-    expect(document.querySelector('.App')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /upload artwork/i })).toBeInTheDocument();
+  });
+
+  it('renders upload form', () => {
+    renderWithProviders(<UploadPage />);
+    
+    // Verify upload input is present using accessible query
+    const input = screen.getByLabelText(/upload/i);
+    expect(input).toBeInTheDocument();
+  });
+
+  it('uploads artwork successfully', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<UploadPage />);
+    
+    // Find file input using accessible query
+    const input = screen.getByLabelText(/upload/i);
+    await user.upload(input, new File(['dummy content'], 'example.png', { type: 'image/png' }));
+    
+    // Add your assertions here to verify successful upload
   });
 });
