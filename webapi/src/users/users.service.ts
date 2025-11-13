@@ -339,6 +339,7 @@ export class UsersService {
     async vectorizePreferenceImage(
         userId: string,
         domainId: string,
+        // eslint-disable-next-line
         file: Express.Multer.File,
     ): Promise<{ success: boolean; message: string; vectorized: number }> {
         const container = await this.cosmosService.getUsersContainer();

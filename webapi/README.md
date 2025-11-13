@@ -25,7 +25,7 @@ To start the backend server, run the following command:
 ```
 pnpm run start
 ```
-The server will be available at `http://localhost:3000`.
+The server will be available at `http://localhost:8080`.
 
 ### API Endpoints
 - **GET /health**: Returns the health status of the application.

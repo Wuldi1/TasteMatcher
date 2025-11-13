@@ -24,7 +24,7 @@ import {
   PaginatedResponse
 } from '@tastematcher/common';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
 
 /**
  * Custom API Error with status code and optional error code

@@ -4,7 +4,7 @@ import fetch from "node-fetch";
 import FormData from "form-data";
 import { login } from "./login.js";
 
-const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3000/api";
+const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:8080/api";
 const CONTENT_DIR = path.resolve("TasteMatcherTestContent");
 
 // Helper to delay execution

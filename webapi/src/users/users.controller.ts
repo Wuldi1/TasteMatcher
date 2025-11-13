@@ -137,6 +137,7 @@ export class UsersController {
   @HttpCode(HttpStatus.OK)
   async vectorizePreferenceImage(
     @Request() req: AuthenticatedRequest,
+    // eslint-disable-next-line
     @UploadedFile() file: Express.Multer.File,
   ): Promise<{ success: boolean; message: string; vectorized: number }> {
     if (!file) {

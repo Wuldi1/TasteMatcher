@@ -28,6 +28,7 @@ export class UploadController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadArtwork(
     @Param('domainId') domainId: string,
+    // eslint-disable-next-line
     @UploadedFile() file: Express.Multer.File,
     @Body() body: Record<string, unknown>,
   ): Promise<ProcessingStatus> {
