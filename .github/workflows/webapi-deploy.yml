@@ -55,23 +55,22 @@ jobs:
       - name: Prepare deployment package
         run: |
           cd ${{ env.WEBAPI_DIR }}
+          rm -rf deploy
           mkdir -p deploy
-          
-          # Copy built files
+
+          # Copy built files and app manifest
           cp -r build deploy/
-          
-          # Copy package.json and lock file
           cp package.json deploy/
-          cp ../pnpm-lock.yaml deploy/ || true
-          
-          # Copy the built common package
-          mkdir -p deploy/node_modules/@tastematcher
-          cp -r ../common deploy/node_modules/@tastematcher/common
-          
-          # Install production dependencies only using pnpm
+
+          # Install production dependencies (no workspace context here)
           cd deploy
           corepack enable
-          pnpm install --prod --frozen-lockfile
+          pnpm install --prod --frozen-lockfile || pnpm install --prod
+
+          # Inject built @tastematcher/common AFTER install so pnpm doesn't prune it
+          mkdir -p node_modules/@tastematcher/common/build
+          cp ../../common/package.json node_modules/@tastematcher/common/package.json
+          cp -r ../../common/build/* node_modules/@tastematcher/common/build/
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

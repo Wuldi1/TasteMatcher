@@ -130,7 +130,7 @@ jobs:
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: build.zip
-          startup-command: 'npm run dev'
+          startup-command: 'npm start'
 
       - name: Azure logout
         if: always()

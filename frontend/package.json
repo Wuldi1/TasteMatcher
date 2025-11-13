@@ -5,6 +5,7 @@
   "scripts": {
     "build": "react-scripts build",
     "lint": "eslint src --ext .ts,.tsx",
+    "start": "react-scripts start",
     "dev": "react-scripts start",
     "test": "react-scripts test",
     "typecheck": "tsc --noEmit",
