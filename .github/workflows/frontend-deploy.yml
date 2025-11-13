@@ -14,7 +14,7 @@ env:
   NODE_VERSION: '22.x'
   PNPM_VERSION: '8'
   FRONTEND_DIR: frontend
-  BUILD_OUTPUT: frontend/dist
+  BUILD_OUTPUT: frontend/build
   AZURE_WEBAPP_NAME: tastematcher-dev-web
 
 jobs:
