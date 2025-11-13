@@ -7,7 +7,7 @@
     "start": "node build/main.js",
     "dev": "ts-node-dev --respawn src/main.ts",
     "test": "jest",
-    "lint": "eslint src",
+    "lint": "eslint \"src/**/*.ts\" --ignore-pattern \"**/*.spec.ts\" --ignore-pattern \"**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
