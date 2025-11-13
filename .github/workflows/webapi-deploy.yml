@@ -60,12 +60,13 @@ jobs:
           # Copy built files
           cp -r dist deploy/
           
-          # Copy package.json and create production-only version
+          # Copy package.json
           cp package.json deploy/
           
-          # Install production dependencies only
+          # Install production dependencies only using pnpm
           cd deploy
-          pnpm install --omit=dev --production
+          corepack enable
+          pnpm install --prod --frozen-lockfile
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
