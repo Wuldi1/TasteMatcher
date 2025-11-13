@@ -3,7 +3,7 @@
         "target": "ES2022",
         "module": "nodenext",
         "lib": ["ES2022"],
-        "outDir": "./dist",
+        "outDir": "./build",
         "rootDir": "./src",
         "strict": true,
         "esModuleInterop": true,
@@ -24,7 +24,7 @@
         }
     },
     "include": ["src/**/*", "../common/src/utils/retry.ts", "../common/src/lib"],
-    "exclude": ["node_modules", "dist", "**/*.spec.ts"],
+    "exclude": ["node_modules", "build", "**/*.spec.ts"],
     "references": [
         {
             "path": "../common"

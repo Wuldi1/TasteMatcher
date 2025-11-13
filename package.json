@@ -2,19 +2,15 @@
   "name": "tastematcher",
   "version": "1.0.0",
   "private": true,
-  "workspaces": [
-    "webapi",
-    "functions",
-    "frontend",
-    "common"
-  ],
   "scripts": {
-    "install:all": "npm install",
-    "build:common": "npm run build --workspace=common",
-    "build:webapi": "npm run build:common && npm run build --workspace=webapi",
-    "build:functions": "npm run build:common && npm run build --workspace=functions",
-    "dev:webapi": "npm run build:common && npm run dev --workspace=webapi",
-    "dev:functions": "npm run build:common && npm run dev --workspace=functions"
+    "install:all": "pnpm install",
+    "build:common": "pnpm --filter @tastematcher/common build",
+    "build:webapi": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/webapi build",
+    "build:frontend": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/frontend build",
+    "build:functions": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/functions build",
+    "dev:webapi": "pnpm run build:webapi && pnpm --filter @tastematcher/webapi dev",
+    "dev:frontend": "pnpm run build:frontend && pnpm --filter @tastematcher/frontend dev",
+    "dev:functions": "pnpm run build:functions && pnpm --filter @tastematcher/functions dev"
   },
   "devDependencies": {
     "eslint": "^9.38.0",

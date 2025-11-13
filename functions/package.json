@@ -2,11 +2,11 @@
   "name": "@tastematcher/functions",
   "version": "1.0.0",
   "description": "Azure Functions for TasteMatcher image processing",
-  "main": "dist/index.js",
+  "main": "build/index.js",
   "scripts": {
     "build": "tsc && npm run copy-files",
     "watch": "tsc --watch",
-    "clean": "rimraf dist",
+    "clean": "rimraf build",
     "prestart": "npm run build",
     "start": "func start",
     "test": "jest",
@@ -15,7 +15,7 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "dev": "npm run build && func start",
-    "copy-files": "cp host.json dist/ && cp local.settings.json dist/"
+    "copy-files": "cp host.json build/ && cp local.settings.json build/"
   },
   "dependencies": {
     "@azure-rest/ai-vision-image-analysis": "^1.0.0-beta.3",

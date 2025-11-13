@@ -70,7 +70,7 @@ jobs:
         run: |
           cd functions
           mkdir -p deploy
-          cp -r dist/* deploy/
+          cp -r build/* deploy/
           cp host.json deploy/
           if [ -d "ProcessImagesFromBlob" ]; then
             mkdir -p deploy/ProcessImagesFromBlob
@@ -100,9 +100,9 @@ jobs:
           cp -r "$TEMP_DIR/node_modules" deploy/
           
           # Copy common package build
-          if [ -d "$GITHUB_WORKSPACE/common/dist" ]; then
+          if [ -d "$GITHUB_WORKSPACE/common/build" ]; then
             mkdir -p deploy/node_modules/@tastematcher/common
-            cp -r $GITHUB_WORKSPACE/common/dist/* deploy/node_modules/@tastematcher/common/
+            cp -r $GITHUB_WORKSPACE/common/build/* deploy/node_modules/@tastematcher/common/
             cp $GITHUB_WORKSPACE/common/package.json deploy/node_modules/@tastematcher/common/
           fi
           

@@ -427,7 +427,7 @@ echo "Configuring Backend API Web App settings..."
 az webapp config set \
   --resource-group "$RG_NAME" \
   --name "$WEBAPP_API_NAME" \
-  --startup-file "node dist/main.js" \
+  --startup-file "node build/main.js" \
   --always-on true \
   --ftps-state Disabled \
   --http20-enabled true \
@@ -564,7 +564,7 @@ echo "Configuring Frontend Web App settings..."
 az webapp config set \
   --resource-group "$RG_NAME" \
   --name "$WEBAPP_FRONTEND_NAME" \
-  --startup-file "npx serve -s dist -l 8080" \
+  --startup-file "npx serve -s build -l 8080" \
   --always-on true \
   --ftps-state Disabled \
   --http20-enabled true \
@@ -833,8 +833,8 @@ echo " 6. Use .env.${ENV} in your backend for local testing (but prefer Key Vaul
 echo " 7. Set up GitHub Actions workflows for CI/CD deployment"
 echo ""
 echo "Deployment commands:"
-echo " - Backend API: cd webapi && pnpm build && az webapp deploy --resource-group $RG_NAME --name $WEBAPP_API_NAME --src-path dist.zip --type zip"
-echo " - Frontend: cd frontend && pnpm build && az webapp deploy --resource-group $RG_NAME --name $WEBAPP_FRONTEND_NAME --src-path dist.zip --type zip"
+echo " - Backend API: cd webapi && pnpm build && az webapp deploy --resource-group $RG_NAME --name $WEBAPP_API_NAME --src-path build.zip --type zip"
+echo " - Frontend: cd frontend && pnpm build && az webapp deploy --resource-group $RG_NAME --name $WEBAPP_FRONTEND_NAME --src-path build.zip --type zip"
 echo ""
 echo "Health check URLs:"
 echo " - Backend API: ${BACKEND_API_URL}/health"

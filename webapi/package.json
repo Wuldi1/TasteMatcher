@@ -1,10 +1,10 @@
 {
   "name": "@tastematcher/webapi",
   "version": "1.0.0",
-  "main": "dist/main.js",
+  "main": "build/main.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/main.js",
+    "start": "node build/main.js",
     "dev": "ts-node-dev --respawn src/main.ts",
     "test": "jest",
     "lint": "eslint src",
@@ -32,6 +32,7 @@
     "multer": "2.0.2",
     "p-retry": "^7.1.0",
     "passport-jwt": "^4.0.1",
+    "pino-pretty": "^13.1.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "uuid": "^10.0.0"

@@ -15,7 +15,7 @@ export default [
   // Ignore patterns
   {
     ignores: [
-      'dist/**',
+      'build/**',
       'node_modules/**',
       'coverage/**',
       '*.config.js',

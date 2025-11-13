@@ -14,7 +14,7 @@ env:
   NODE_VERSION: '22.x'
   PNPM_VERSION: '8'
   WEBAPI_DIR: webapi
-  BUILD_OUTPUT: webapi/dist
+  BUILD_OUTPUT: webapi/build
   AZURE_WEBAPP_NAME: tastematcher-dev-api
 
 jobs:
@@ -58,10 +58,15 @@ jobs:
           mkdir -p deploy
           
           # Copy built files
-          cp -r dist deploy/
+          cp -r build deploy/
           
-          # Copy package.json
+          # Copy package.json and lock file
           cp package.json deploy/
+          cp ../pnpm-lock.yaml deploy/ || true
+          
+          # Copy the built common package
+          mkdir -p deploy/node_modules/@tastematcher
+          cp -r ../common deploy/node_modules/@tastematcher/common
           
           # Install production dependencies only using pnpm
           cd deploy
@@ -71,7 +76,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: webapi-dist
+          name: webapi-build
           path: ${{ env.WEBAPI_DIR }}/deploy
           retention-days: 1
 
@@ -87,7 +92,7 @@ jobs:
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          name: webapi-dist
+          name: webapi-build
           path: deploy
 
       - name: Login to Azure
@@ -100,7 +105,7 @@ jobs:
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: deploy
-          startup-command: 'node dist/main.js'
+          startup-command: 'node build/main.js'
 
       - name: Azure logout
         if: always()

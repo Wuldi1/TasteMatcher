@@ -53,8 +53,8 @@ echo "📦 Compiling TypeScript..."
 pnpm run build
 
 # Verify build output exists
-if [ ! -d "dist" ]; then
-  echo "❌ Error: dist directory not found after build"
+if [ ! -d "build" ]; then
+  echo "❌ Error: build directory not found after build"
   exit 1
 fi
 
@@ -67,7 +67,7 @@ mkdir -p deploy
 
 # Copy built files
 echo "📦 Copying compiled JavaScript files..."
-cp -r dist/* deploy/
+cp -r build/* deploy/
 
 # Copy function metadata files
 echo "📦 Copying function configuration..."
@@ -124,13 +124,13 @@ echo "🧹 Cleaning up temporary installation directory..."
 rm -rf "$TEMP_DIR"
 
 # Copy common package to override any issues
-if [ -d "../common/dist" ]; then
+if [ -d "../common/build" ]; then
   echo "📦 Bundling common package build output..."
   rm -rf deploy/node_modules/@tastematcher/common
   mkdir -p deploy/node_modules/@tastematcher/common
   
   # Copy built files directly to common package root
-  cp -r ../common/dist/* deploy/node_modules/@tastematcher/common/
+  cp -r ../common/build/* deploy/node_modules/@tastematcher/common/
   
   # Copy package.json from common
   cp ../common/package.json deploy/node_modules/@tastematcher/common/

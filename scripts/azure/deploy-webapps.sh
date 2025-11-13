@@ -36,7 +36,7 @@ cd "$PROJECT_ROOT"
 
 echo "📦 Preparing Web API deployment package..."
 API_DIR="${PROJECT_ROOT}/webapi"
-API_BUILD_DIR="${API_DIR}/dist"
+API_BUILD_DIR="${API_DIR}/build"
 API_DEPLOY_DIR="$(mktemp -d)"
 (
   cd "$API_DIR"
@@ -49,7 +49,7 @@ API_DEPLOY_DIR="$(mktemp -d)"
   pnpm prune --prod
 
   mkdir -p "$API_DEPLOY_DIR"
-  cp -r dist "$API_DEPLOY_DIR/"
+  cp -r build "$API_DEPLOY_DIR/"
   cp package.json "$API_DEPLOY_DIR/"
   if [ -f pnpm-lock.yaml ]; then
     cp pnpm-lock.yaml "$API_DEPLOY_DIR/"

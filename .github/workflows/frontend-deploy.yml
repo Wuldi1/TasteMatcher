@@ -49,7 +49,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-dist
+          name: frontend-build
           path: ${{ env.BUILD_OUTPUT }}
           retention-days: 1
 
@@ -65,19 +65,19 @@ jobs:
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          name: frontend-dist
-          path: dist
+          name: frontend-build
+          path: build
 
       - name: Create deployment package with dependencies
         run: |
-          cd dist
+          cd build
           # Create package.json with serve dependency
           cat > package.json <<'EOF'
           {
             "name": "tastematcher-frontend",
             "version": "1.0.0",
             "scripts": {
-              "start": "serve -s . -l 8080"
+              "start": "serve -s . -l tcp://0.0.0.0:${PORT:-8080}"
             },
             "dependencies": {
               "serve": "^14.2.3"
@@ -117,7 +117,7 @@ jobs:
           </configuration>
           EOF
           
-          zip -r ../dist.zip .
+          zip -r ../build.zip .
           cd ..
 
       - name: Login to Azure
@@ -129,7 +129,8 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: dist.zip
+          package: build.zip
+          startup-command: 'npm run dev'
 
       - name: Azure logout
         if: always()
