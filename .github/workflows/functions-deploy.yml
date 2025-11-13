@@ -6,7 +6,7 @@
 # 5. CI-friendly: runs lint, typecheck, and tests
 # -----------------------------------------------------------
 
-name: Deploy Azure Functions
+name: Functions CI/CD
 
 on:
   push:

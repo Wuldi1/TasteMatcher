@@ -27,8 +27,10 @@ async function bootstrap() {
   );
 
   const port = process.env.PORT || 8080;
-  await app.listen(port);
+  const host = '0.0.0.0'; // Required for Azure Web Apps
   
-  console.log(`Application is running on: http://localhost:${port}`);
+  await app.listen(port, host);
+  
+  console.log(`Application is running on: http://${host}:${port}`);
 }
 bootstrap();
