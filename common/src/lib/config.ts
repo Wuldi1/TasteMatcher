@@ -98,8 +98,6 @@ export function loadConfig(): AppConfig {
   // Debug: Log that we're loading config (remove in production)
   if (process.env.NODE_ENV === 'development') {
     console.log('[Config] Loading configuration from environment...');
-    console.log('[Config] Current working directory:', process.cwd());
-    console.log('[Config] AzureWebJobsStorage present:', !!process.env.AzureWebJobsStorage);
   }
 
   return {
