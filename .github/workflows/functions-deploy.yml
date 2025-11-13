@@ -93,18 +93,21 @@ jobs:
           cd "$TEMP_DIR"
           npm install --omit=dev --no-package-lock --production
           
+          # Get back to project root to access functions/deploy
+          cd $GITHUB_WORKSPACE/functions
+          
           # Copy node_modules to deploy
-          cp -r node_modules ../functions/deploy/
+          cp -r "$TEMP_DIR/node_modules" deploy/
           
           # Copy common package build
-          if [ -d "../common/dist" ]; then
-            mkdir -p ../functions/deploy/node_modules/@tastematcher/common
-            cp -r ../common/dist/* ../functions/deploy/node_modules/@tastematcher/common/
-            cp ../common/package.json ../functions/deploy/node_modules/@tastematcher/common/
+          if [ -d "$GITHUB_WORKSPACE/common/dist" ]; then
+            mkdir -p deploy/node_modules/@tastematcher/common
+            cp -r $GITHUB_WORKSPACE/common/dist/* deploy/node_modules/@tastematcher/common/
+            cp $GITHUB_WORKSPACE/common/package.json deploy/node_modules/@tastematcher/common/
           fi
           
           # Create minimal package.json
-          cd ../functions/deploy
+          cd deploy
           cat > package.json <<'PKGJSON'
           {
             "name": "@tastematcher/functions",
