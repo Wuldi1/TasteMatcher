@@ -89,6 +89,7 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: ${{ env.WEBAPI_DIR }}/webapi-build.zip
           startup-command: 'npm start'
+          type: 'zip'
 
       - name: Azure logout
         if: always()
