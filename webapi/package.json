@@ -4,6 +4,7 @@
   "main": "build/main.js",
   "scripts": {
     "build": "tsc",
+    "start": "node build/main.js",
     "start:dev": "node --env-file=.env.dev build/main.js",
     "start:local": "node --env-file=.env.local ./node_modules/ts-node-dev/lib/bin.js --respawn src/main.ts",
     "test": "jest",
