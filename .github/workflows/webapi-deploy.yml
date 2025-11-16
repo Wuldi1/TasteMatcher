@@ -40,15 +40,16 @@ jobs:
       - name: Build common + Web API packages
         run: pnpm run build:webapi
 
-      - name: Pack common package
-        run: cd common && npm pack --silent
-
       - name: Prepare deployment package
         run: |
           cd ${{ env.WEBAPI_DIR }}
           cp package.json build/
-          mkdir build/node_modules
-          cp -r node_modules/* build/node_modules/
+          cd build
+
+          pnpm install --prod --frozen-lockfile
+
+          mkdir -p node_modules/@tastematcher
+          cp -r ../../common/build node_modules/@tastematcher/common
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
