@@ -83,14 +83,11 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS_DEV }}
 
-      - name: Enable Corepack
-        run: corepack enable
-
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: ${{ env.WEBAPI_DIR }}
+          package: ${{ env.BUILD_OUTPUT }}
           startup-command: 'npm run start:dev'
 
       - name: Azure logout
