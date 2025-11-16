@@ -44,27 +44,18 @@ jobs:
         run: |
           cd ${{ env.WEBAPI_DIR }}
           cp package.json build/
-          cp .env.dev build/
-          sed -i 's|build/main.js|main.js|g' build/package.json
-
-          # Check node_modules before copying
-          echo "Listing node_modules before copying:"
-          ls -la node_modules
 
           # Ensure all node_modules files are copied successfully
           mkdir -p build/node_modules
           rsync -a node_modules/ ../node_modules/ build/node_modules/
 
-          # Check node_modules after copying
-          echo "Listing node_modules after copying:"
-          ls -la build/node_modules
+          # Copy @tastematcher/common into node_modules
+          rm -rf build/node_modules/@tastematcher/common
+          mkdir -p build/node_modules/@tastematcher/common
+          rsync -a ../common/build/ build/node_modules/@tastematcher/common
 
           cd build
-
-          # Ensure zip operation completes successfully
-          echo "Creating deployment zip file..."
           zip -r ../webapi-build.zip . > /dev/null
-          echo "Zip file created successfully."
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
