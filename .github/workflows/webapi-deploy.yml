@@ -87,7 +87,7 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: ${{ github.workspace }}
+          package: 'build'
           startup-command: 'npm run start:dev'
 
       - name: Azure logout
