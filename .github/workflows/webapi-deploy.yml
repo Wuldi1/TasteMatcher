@@ -50,7 +50,7 @@ jobs:
           mkdir build/node_modules
           cp -r node_modules/* build/node_modules/
           mkdir -p build/node_modules/@tastematcher
-          cp -r ../../common/build build/node_modules/@tastematcher/common
+          cp -r ../common/build build/node_modules/@tastematcher/common
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
