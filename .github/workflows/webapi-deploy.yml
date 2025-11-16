@@ -49,18 +49,14 @@ jobs:
           cp package.json build/
           cp .env.dev build/
 
-          # Install production dependencies (no workspace context here)
-          cd build
-          corepack enable
-
-          mkdir node_modules
-          cp -r ../node_modules/* node_modules/
+          mkdir build/node_modules
+          cp -r node_modules/* build/node_modules/
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: webapi-build
-          path: ${{ env.WEBAPI_DIR }}/build
+          path: ${{ env.BUILD_OUTPUT }}
           retention-days: 1
 
   deploy-dev:
@@ -88,7 +84,7 @@ jobs:
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: 'build'
-          startup-command: 'cd ${{ env.WEBAPI_DIR }} && npm run start:dev'
+          startup-command: 'npm run start:dev'
 
       - name: Azure logout
         if: always()
