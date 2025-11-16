@@ -46,12 +46,8 @@ jobs:
           cp package.json build/
           cp .env.dev build/
 
-          mkdir -p build/node_modules
-          cp -r node_modules/* build/node_modules/
-
           cd build
-
-          # Create the zip file for deployment
+          npm install --omit=dev --no-audit --no-fund
           zip -r ../webapi-build.zip .
 
       - name: Upload build artifact
