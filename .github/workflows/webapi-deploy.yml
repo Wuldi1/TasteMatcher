@@ -90,8 +90,8 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: ${{ github.workspace }}
-          startup-command: 'pnpm run start:dev:webapi'
+          package: ${{ env.WEBAPI_DIR }}
+          startup-command: 'npm run start:dev'
 
       - name: Azure logout
         if: always()
