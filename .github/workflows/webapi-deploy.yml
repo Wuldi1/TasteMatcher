@@ -53,7 +53,7 @@ jobs:
 
           # Ensure all node_modules files are copied successfully
           mkdir -p build/node_modules
-          rsync -a node_modules/ build/node_modules/
+          rsync -a node_modules/ ../node_modules/ build/node_modules/
 
           # Check node_modules after copying
           echo "Listing node_modules after copying:"
