@@ -44,6 +44,7 @@ jobs:
         run: |
           cd ${{ env.WEBAPI_DIR }}
           cp package.json build/
+          sed -i 's|build/main.js|main.js|g' build/package.json
 
           # Ensure all node_modules files are copied successfully
           mkdir -p build/node_modules
