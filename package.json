@@ -5,7 +5,7 @@
   "scripts": {
     "install:all": "pnpm install",
     "build:common": "pnpm --filter @tastematcher/common build",
-    "build:webapi": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/webapi build",
+    "build:webapi": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/webapi build && cp ./webapi/package.json ./webapi/build/package.json && cp ./webapi/.env.dev ./webapi/build/.env.dev",
     "build:frontend": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/frontend build",
     "build:functions": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/functions build",
     "start:local:webapi": "pnpm run build:webapi && pnpm --filter @tastematcher/webapi start:local",
