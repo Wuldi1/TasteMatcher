@@ -137,7 +137,7 @@ export class EmailService {
       throw new Error('Invalid recipient email address');
     }
 
-    const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:8080'}/login?email=${encodeURIComponent(email)}`;
+    const inviteLink = `${process.env.FRONTEND_URL}/login?email=${encodeURIComponent(email)}`;
 
     const subject = 'You\'ve been invited to TasteMatcher';
     const textBody = [

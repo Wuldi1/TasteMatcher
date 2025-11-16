@@ -24,9 +24,6 @@ import {
   PaginatedResponse
 } from '@tastematcher/common';
 
-// const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
-const API_BASE_URL = "https://tastematcher-dev-api.azurewebsites.net";
-
 /**
  * Custom API Error with status code and optional error code
  */
@@ -49,8 +46,8 @@ class BaseApiClient {
   protected baseURL: string;
   protected authToken: string | null = null;
 
-  constructor(baseURL: string) {
-    this.baseURL = baseURL;
+  constructor() {
+    this.baseURL = process.env.REACT_APP_API_URL!;
     this.loadAuthToken();
   }
 
@@ -594,7 +591,7 @@ class ApiClient extends BaseApiClient {
 /**
  * Singleton API client instance
  */
-export const apiClient = new ApiClient(API_BASE_URL);
+export const apiClient = new ApiClient();
 
 /**
  * Legacy function for artwork stats (for backward compatibility)

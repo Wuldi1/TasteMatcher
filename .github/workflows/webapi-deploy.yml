@@ -37,25 +37,17 @@ jobs:
       - name: Install dependencies
         run: pnpm run install:all
 
-      - name: Build common package
-        run: pnpm --filter @tastematcher/common build
-
-      - name: Lint Web API
-        run: pnpm --filter @tastematcher/webapi lint
-
-      - name: Type check Web API
-        run: pnpm --filter @tastematcher/webapi typecheck
+      - name: Build common + Web API packages
+        run: pnpm run build:webapi
 
       # - name: Test Web API
       #   run: pnpm --filter @tastematcher/webapi test -- --ci
-
-      - name: Build Web API
-        run: pnpm --filter @tastematcher/webapi build
 
       - name: Prepare deployment package
         run: |
           cd ${{ env.WEBAPI_DIR }}
           cp package.json build/
+          cp .env.dev build/.env.dev
 
           # Install production dependencies (no workspace context here)
           cd build
@@ -97,8 +89,8 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: build
-          startup-command: 'node main.js'
+          package: ${{ github.workspace }}
+          startup-command: 'pnpm run start:dev:webapi'
 
       - name: Azure logout
         if: always()

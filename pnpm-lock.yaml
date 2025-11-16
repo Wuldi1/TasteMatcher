@@ -17,9 +17,6 @@ importers:
       '@azure/storage-blob':
         specifier: ^12.29.1
         version: 12.29.1
-      dotenv:
-        specifier: ^17.2.3
-        version: 17.2.3
       functions:
         specifier: ^1.0.9
         version: 1.0.9
@@ -303,9 +300,6 @@ importers:
       class-validator:
         specifier: ^0.14.2
         version: 0.14.2
-      dotenv:
-        specifier: ^17.2.3
-        version: 17.2.3
       jimp:
         specifier: ^0.22.12
         version: 0.22.12
@@ -4552,10 +4546,6 @@ packages:
 
   dotenv@16.4.7:
     resolution: {integrity: sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ==}
-    engines: {node: '>=12'}
-
-  dotenv@17.2.3:
-    resolution: {integrity: sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==}
     engines: {node: '>=12'}
 
   dunder-proto@1.0.1:
@@ -14466,8 +14456,6 @@ snapshots:
   dotenv@10.0.0: {}
 
   dotenv@16.4.7: {}
-
-  dotenv@17.2.3: {}
 
   dunder-proto@1.0.1:
     dependencies:

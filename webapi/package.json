@@ -4,8 +4,8 @@
   "main": "build/main.js",
   "scripts": {
     "build": "tsc",
-    "start": "node build/main.js",
-    "dev": "ts-node-dev --respawn src/main.ts",
+    "start:dev": "node --env-file=.env.dev build/main.js",
+    "start:local": "node --env-file=.env.local ./node_modules/ts-node-dev/lib/bin.js --respawn src/main.ts",
     "test": "jest",
     "lint": "eslint \"src/**/*.ts\" --ignore-pattern \"**/*.spec.ts\" --ignore-pattern \"**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
@@ -26,7 +26,6 @@
     "@tastematcher/common": "workspace:*",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
-    "dotenv": "^17.2.3",
     "jimp": "^0.22.12",
     "jsonwebtoken": "^9.0.2",
     "multer": "2.0.2",

@@ -8,7 +8,8 @@
     "build:webapi": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/webapi build",
     "build:frontend": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/frontend build",
     "build:functions": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/functions build",
-    "dev:webapi": "pnpm run build:webapi && pnpm --filter @tastematcher/webapi dev",
+    "start:local:webapi": "pnpm run build:webapi && pnpm --filter @tastematcher/webapi start:local",
+    "start:dev:webapi": "pnpm --filter @tastematcher/webapi start:dev",
     "dev:frontend": "pnpm run build:frontend && pnpm --filter @tastematcher/frontend dev",
     "dev:functions": "pnpm run build:functions && pnpm --filter @tastematcher/functions dev"
   },
@@ -24,7 +25,6 @@
     "@azure/functions": "^4.8.0",
     "@azure/search-documents": "^12.2.0",
     "@azure/storage-blob": "^12.29.1",
-    "dotenv": "^17.2.3",
     "functions": "^1.0.9",
     "path": "^0.12.7",
     "pino": "^10.1.0"
