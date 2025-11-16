@@ -47,13 +47,16 @@ jobs:
           cp .env.dev build/
           sed -i 's|build/main.js|main.js|g' build/package.json
 
+          # Ensure all node_modules files are copied successfully
           mkdir -p build/node_modules
-          cp -a -R node_modules/* build/node_modules/
+          rsync -a node_modules/ build/node_modules/
 
           cd build
 
-          # Create the zip file for deployment
-          zip -r ../webapi-build.zip .
+          # Ensure zip operation completes successfully
+          echo "Creating deployment zip file..."
+          zip -r ../webapi-build.zip . > /dev/null
+          echo "Zip file created successfully."
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -87,8 +90,8 @@ jobs:
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: webapi-build.zip
-          startup-command: 'npm start'
           type: 'zip'
+          startup-command: 'npm start'
 
       - name: Azure logout
         if: always()
