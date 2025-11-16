@@ -44,12 +44,12 @@ jobs:
         run: |
           cd ${{ env.WEBAPI_DIR }}
           cp package.json build/
+          cp .env.dev build/
+          cp -r node_modules/* build/node_modules/
+
           cd build
 
-          pnpm install --prod --frozen-lockfile
-
-          mkdir -p node_modules/@tastematcher
-          cp -r ../../common/build node_modules/@tastematcher/common
+          zip -r webapi-build.zip .
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -71,7 +71,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: webapi-build
-          path: build
+          path: ${{ env.WEBAPI_DIR }}/webapi-build.zip
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -82,8 +82,9 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: 'build'
+          package: '${{ env.WEBAPI_DIR }}/webapi-build.zip'
           startup-command: 'npm start'
+          deployment-method: 'zip'
 
       - name: Azure logout
         if: always()
