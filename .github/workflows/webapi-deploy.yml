@@ -40,16 +40,18 @@ jobs:
       - name: Build common + Web API packages
         run: pnpm run build:webapi
 
-      # - name: Test Web API
-      #   run: pnpm --filter @tastematcher/webapi test -- --ci
+      - name: Pack common package
+        run: cd common && npm pack --silent
 
       - name: Prepare deployment package
         run: |
           cd ${{ env.WEBAPI_DIR }}
           cp package.json build/
-          cp .env.dev build/.env.dev
-          mkdir build/node_modules
-          cp -r node_modules/* build/node_modules/
+          cp ../common/common-*.tgz build/
+          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('build/package.json','utf8')); p.dependencies['@tastematcher/common']='file:./common-1.0.0.tgz'; fs.writeFileSync('build/package.json', JSON.stringify(p,null,2));"
+          cd build
+          npm install --omit=dev --no-audit --no-fund
+          rm common-*.tgz
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
