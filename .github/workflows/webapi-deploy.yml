@@ -48,8 +48,7 @@ jobs:
           sed -i 's|build/main.js|main.js|g' build/package.json
 
           mkdir -p build/node_modules
-          cp -r node_modules/* build/node_modules/
-
+          cp -a -R node_modules/* build/node_modules/
 
           cd build
 
@@ -76,6 +75,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: webapi-build
+          path: ${{ env.WEBAPI_DIR }}/webapi-build.zip
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -86,8 +86,9 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: webapi-build.zip
+          package: ${{ env.WEBAPI_DIR }}/webapi-build.zip
           startup-command: 'npm start'
+          type: 'zip'
 
       - name: Azure logout
         if: always()
