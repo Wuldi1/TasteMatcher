@@ -75,7 +75,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: webapi-build
-          path: ${{ env.WEBAPI_DIR }}/webapi-build.zip
+          path: webapi-build.zip
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -86,7 +86,7 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: ${{ env.WEBAPI_DIR }}/webapi-build.zip
+          package: webapi-build.zip
           startup-command: 'npm start'
           type: 'zip'
 
