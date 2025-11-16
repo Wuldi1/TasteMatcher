@@ -45,13 +45,13 @@ jobs:
           cd ${{ env.WEBAPI_DIR }}
           cp package.json build/
           cp .env.dev build/
-
-          # Replace all occurrences of "build/main.js" with "main.js" in package.json
           sed -i 's|build/main.js|main.js|g' build/package.json
 
-          # Install production dependencies directly in the build folder
+          mkdir -p build/node_modules
+          cp -r node_modules/* build/node_modules/
+
+
           cd build
-          npm install --omit=dev --no-audit --no-fund
 
           # Create the zip file for deployment
           zip -r ../webapi-build.zip .
