@@ -47,11 +47,10 @@ jobs:
         run: |
           cd ${{ env.WEBAPI_DIR }}
           cp package.json build/
-          cp ../common/common-*.tgz build/
-          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('build/package.json','utf8')); p.dependencies['@tastematcher/common']='file:./common-1.0.0.tgz'; fs.writeFileSync('build/package.json', JSON.stringify(p,null,2));"
-          cd build
-          npm install --omit=dev --no-audit --no-fund
-          rm common-*.tgz
+          mkdir build/node_modules
+          cp -r node_modules/* build/node_modules/
+          mkdir -p build/node_modules/@tastematcher
+          cp -r ../../common/build build/node_modules/@tastematcher/common
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
