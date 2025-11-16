@@ -48,6 +48,9 @@ jobs:
           cd ${{ env.WEBAPI_DIR }}
           cp package.json build/
           cp .env.dev build/
+
+          cp .env.dev ../
+
           mkdir build/node_modules
           cp -r node_modules/* build/node_modules/
 
