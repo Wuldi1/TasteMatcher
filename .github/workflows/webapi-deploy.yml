@@ -47,9 +47,17 @@ jobs:
           cp .env.dev build/
           sed -i 's|build/main.js|main.js|g' build/package.json
 
+          # Check node_modules before copying
+          echo "Listing node_modules before copying:"
+          ls -la node_modules
+
           # Ensure all node_modules files are copied successfully
           mkdir -p build/node_modules
           rsync -a node_modules/ build/node_modules/
+
+          # Check node_modules after copying
+          echo "Listing node_modules after copying:"
+          ls -la build/node_modules
 
           cd build
 
@@ -78,7 +86,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: webapi-build
-          path: webapi-build.zip
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -90,7 +97,6 @@ jobs:
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: webapi-build.zip
-          type: 'zip'
           startup-command: 'npm start'
 
       - name: Azure logout
