@@ -47,7 +47,7 @@ jobs:
         run: |
           cd ${{ env.WEBAPI_DIR }}
           cp package.json build/
-          cp .env.dev build/.env.dev
+          cp .env.dev build/
 
           # Install production dependencies (no workspace context here)
           cd build
