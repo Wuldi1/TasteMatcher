@@ -168,9 +168,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isInitializing,
       logout,
       setUserFromToken,
+      setUserFromUser, // Ensure this is included
       refreshUser,
     }),
-    [user, isInitializing, logout, setUserFromToken, refreshUser],
+    [user, isInitializing, logout, setUserFromToken, setUserFromUser, refreshUser],
   );
 
   return (
