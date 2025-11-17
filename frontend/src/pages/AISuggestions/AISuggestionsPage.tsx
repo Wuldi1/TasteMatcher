@@ -101,7 +101,7 @@ export const AISuggestionsPage = () => {
     };
 
     void fetchRecommendations();
-  }, [isDomainOwner, targetUserId, user]);
+  }, [isDomainOwner, targetUserId, user, targetUser]);
 
   const formatMatchPercentage = (score?: number): string => {
     if (typeof score !== 'number' || Number.isNaN(score)) {
