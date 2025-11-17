@@ -36,8 +36,6 @@ export function HomePage() {
     // Refresh user data to get latest personalQuestionnaire from backend
     if (refreshUser && user) {
       refreshUser().then((freshUser: Partial<User>) => {
-        console.log('User data refreshed for onboarding', freshUser, freshUser.role, freshUser.onboardingStatus);
-
         // Redirect customers to onboarding only if they haven't started or are in progress
         // Users who skipped or completed can access the home page
         // When they manually navigate to /onboarding, they can edit their answers
@@ -67,8 +65,6 @@ export function HomePage() {
     console.log('HomePage - No user, returning null');
     return null;
   }
-
-  console.log('HomePage - Rendering home page');
 
   return (
     <div className="home-page p-4 sm:p-6 md:p-8">

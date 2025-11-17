@@ -8,10 +8,12 @@ export function getAIRecommendationsEligibility(
   user: User
 ): { isEligible: boolean; reasons: string[] } {
   const reasons: string[] = [];
-  let isEligible = true;
-
-  if ((user?.swipeCount || 0) < 20) {
-    isEligible = false;
+  let isEligible = false;
+  console.log('Checking AI Recommendations eligibility for user:', user);
+  if ((user?.swipeCount || 0) >= 20) {
+    isEligible = true;
+  }
+  else {
     reasons.push('You need at least 20 swipes to unlock AI suggestions');
   }
 

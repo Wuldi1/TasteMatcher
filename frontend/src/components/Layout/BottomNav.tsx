@@ -1,82 +1,122 @@
-import { NavLink } from 'react-router-dom';
-import { Home, Compass, Upload, LayoutGrid, Users, Sparkles, Lock } from 'lucide-react';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useWelcomeTour } from '../../hooks/useWelcomeTour';
+import { NAVIGATION_LINKS } from '../../constants/navigation';
+import { Lock, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
 import { getAIRecommendationsEligibility } from '../../utils/recommendations';
-import { User } from '@tastematcher/common';
-
-const navLinks = [
-  { name: 'Home', href: '/home', icon: Home, lockReason: undefined },
-  { name: 'Upload', href: '/upload', icon: Upload, lockReason: undefined },
-  { name: 'Catalog', href: '/catalog', icon: LayoutGrid, lockReason: undefined },
-  { name: 'Taster', href: '/taster', icon: Compass, lockReason: undefined },
-];
-
-const domainOwnerLinks = [
-  { name: 'Management', href: '/management', icon: Users, lockReason: undefined },
-];
 
 export const BottomNav = () => {
   const { user } = useAuth();
-  const { isEligible, reasons } = getAIRecommendationsEligibility(user as User);
+  const location = useLocation(); // Get the current route
+  const { currentStep, nextStep, skipTour, isTourActive, previousStep } = useWelcomeTour();
 
-  const aiLink =
-    user?.role !== 'customer'
-      ? { name: 'AI', href: '/ai-suggestions', icon: Sparkles }
-      : {
-          name: 'AI',
-          href: '/ai-suggestions',
-          icon: Sparkles,
-          locked: !isEligible,
-          lockReason: reasons[0] ?? '',
-        };
+  const [isModalOpen, setIsModalOpen] = useState(false); // State to manage modal visibility
 
-  const allLinks =
-    user?.role !== 'customer'
-      ? [...navLinks, aiLink, ...domainOwnerLinks]
-      : [...navLinks, aiLink];
+  // Filter links based on user role
+  const filteredLinks = NAVIGATION_LINKS.filter((link) => link.roles.includes(user?.role || ''));
+
+  const handleLockedClick = () => {
+    setIsModalOpen(true);
+  };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 z-50 md:hidden">
-      {allLinks.map((link) => {
-        const isLocked = 'locked' in link && link.locked;
+    <>
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 z-50 md:hidden">
+        {filteredLinks.map((link) => {
+          const isLocked = link.id === 'ai-suggestions' && user?.role === 'customer' && !getAIRecommendationsEligibility(user!).isEligible;
+          const isActiveBubble = isTourActive && currentStep === link.id;
+          const isActive = location.pathname === link.href || location.pathname.startsWith(`${link.href}/`); // Custom isActive logic
 
-        return (
-          <div key={link.name} className="relative group flex-1">
-            <NavLink
-              to={link.href}
-              className={({ isActive }) =>
-                `flex flex-col items-center justify-center h-full w-full text-xs transition-colors ${
-                  isActive ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'
-                }`
-              }
-              aria-disabled={!!isLocked}
-              onClick={(event) => {
-                if (isLocked) {
-                  event.preventDefault();
+          return (
+            <div key={link.id} className="relative group flex-1">
+              <NavLink
+                to={isLocked ? '#' : link.href}
+                className={() =>
+                  `flex flex-col items-center justify-center h-full w-full text-xs transition-colors ${
+                    isActiveBubble
+                      ? 'text-purple-600 bg-purple-50 border-t-4 border-purple-500'
+                      : isActive
+                      ? 'text-blue-600 bg-blue-50 border-t-4 border-blue-500'
+                      : 'text-gray-500 hover:text-blue-600'
+                  }`
                 }
-              }}
-            >
-              <div className="relative">
-                <link.icon className="mb-1 h-6 w-6" strokeWidth={2} />
-                {!!isLocked && (
-                  <Lock className="absolute -right-1 -top-1 h-3 w-3 text-gray-500" aria-hidden="true" />
-                )}
-              </div>
-              <span>{link.name}</span>
-              {isLocked && !!link.lockReason && (
-                <span className="sr-only">{`Locked: ${link.lockReason}`}</span>
-              )}
-            </NavLink>
+                aria-disabled={isLocked}
+                onClick={(event) => {
+                  if (isLocked) {
+                    event.preventDefault();
+                    handleLockedClick();
+                  }
+                }}
+              >
+                <div className="relative">
+                  <link.icon className="mb-1 h-6 w-6" strokeWidth={2} />
+                  {isLocked && (
+                    <Lock className="absolute -right-1 -top-1 h-3 w-3 text-gray-500" aria-hidden="true" />
+                  )}
+                </div>
+                <span>{link.name}</span>
+              </NavLink>
 
-            {isLocked && !!link.lockReason && (
-              <div className="pointer-events-none absolute bottom-full left-1/2 mb-3 w-max max-w-[14rem] -translate-x-1/2 rounded-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 px-4 py-3 text-[11px] font-semibold leading-snug text-white opacity-0 shadow-xl transition-opacity duration-200 group-hover:opacity-100">
-                <span className="block text-center whitespace-normal break-words">{link.lockReason}</span>
-                <div className="absolute left-1/2 top-full h-3 w-3 -translate-x-1/2 rotate-45 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500" />
-              </div>
-            )}
+              {/* Welcome Tour Bubble */}
+              {isActiveBubble && (
+                <div
+                  className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-50 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg rounded-lg p-4 w-24 text-center"
+                >
+                  {/* X Button */}
+                  <button
+                    onClick={skipTour}
+                    className="absolute top-4 right-4 text-sm text-red-300 hover:text-red-200"
+                    aria-label="Close tour"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+
+                  {/* Bubble Text */}
+                  <p className="text-sm font-medium mt-2">{link.bubbleText}</p>
+
+                  <div className="flex justify-between mt-4">
+                    {/* Left Arrow */}
+                    <button
+                      onClick={previousStep}
+                      className="text-sm text-gray-200 hover:text-gray-100"
+                      disabled={currentStep === filteredLinks[0].id} // Disable "Back" on the first step
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+
+                    {/* Right Arrow */}
+                    <button
+                      onClick={nextStep}
+                      className="text-sm text-yellow-300 hover:text-yellow-200"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-80">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">Access Denied</h2>
+            <p className="text-sm text-gray-600">{getAIRecommendationsEligibility(user!).reasons.join('. ')}</p>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded hover:bg-blue-600"
+              >
+                Close
+              </button>
+            </div>
           </div>
-        );
-      })}
-    </nav>
+        </div>
+      )}
+    </>
   );
 };
