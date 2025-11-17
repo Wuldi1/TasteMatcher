@@ -20,7 +20,7 @@ export const BottomNav = () => {
   const { isEligible, reasons } = getAIRecommendationsEligibility(user as User);
 
   const aiLink =
-    user?.role === 'domain_owner' || user?.role === 'global_admin'
+    user?.role !== 'customer'
       ? { name: 'AI', href: '/ai-suggestions', icon: Sparkles }
       : {
           name: 'AI',
@@ -31,7 +31,7 @@ export const BottomNav = () => {
         };
 
   const allLinks =
-    user?.role === 'domain_owner' || user?.role === 'global_admin'
+    user?.role !== 'customer'
       ? [...navLinks, aiLink, ...domainOwnerLinks]
       : [...navLinks, aiLink];
 

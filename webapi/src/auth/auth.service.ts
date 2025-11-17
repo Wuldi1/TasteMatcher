@@ -144,12 +144,11 @@ export class AuthService {
       await domainsContainer.item(domain.id, domain.adminEmail).replace(updatedDomain);
     }
 
-    // Generate JWT token
     const token = this.generateUserToken(updatedUser);
 
     this.logger.log(`User ${user.id} logged in successfully`);
 
-    return { token };
+    return { token, user: updatedUser };
   }
 
   /**

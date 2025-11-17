@@ -20,7 +20,8 @@ interface AuthContextType {
   isInitializing: boolean; // Single loading state for initial auth check
   logout: () => void;
   setUserFromToken: (token: string) => void;
-  refreshUser: () => Promise<void>;
+  setUserFromUser: (user: Partial<User>) => void;
+  refreshUser: () => Promise<Partial<User>>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -78,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  const refreshUser = useCallback(async () => {
+  const refreshUser = useCallback(async (user: Partial<User>) => {
     const token = localStorage.getItem('tm_auth_token');
     if (!token) {
       console.log('No token found in refreshUser');
@@ -88,7 +89,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       // Fetch fresh user data with new token from backend
       const { user: freshUser, token: newToken } = await apiClient.refreshCurrentUser();
-
       // Update stored tokens
       localStorage.setItem('token', newToken);
       localStorage.setItem('tm_auth_token', newToken);
@@ -97,36 +97,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       apiClient.setAuthToken(newToken);
 
       // Update user state with fresh data including personalQuestionnaire
-      setUser({
-        id: freshUser.id,
-        email: freshUser.email,
-        domainId: freshUser.domainId,
-        role: freshUser.role,
-        name: freshUser.name,
-        onboardingStatus: freshUser.onboardingStatus || 'not_started',
-        personalQuestionnaire: freshUser.personalQuestionnaire,
-        swipeCount: freshUser.swipeCount || 0,
-      });
-
-      console.log('Refreshed user with new token:', freshUser);
+      setUserFromUser(freshUser);
+      console.log('Refreshed user and token', freshUser);
+      return freshUser;
     } catch (error) {
       console.error('Failed to refresh user:', error);
       // If refresh fails, try parsing existing token
-      try {
-        const decoded = parseToken(token);
-        if (decoded) {
-          setUser({
-            id: decoded.id,
-            email: decoded.email,
-            domainId: decoded.domainId,
-            role: decoded.role,
-            name: decoded.name || decoded.email
-          });
-        }
-      } catch (parseError) {
-        console.error('Failed to parse token:', parseError);
-      }
+      setUserFromToken(token);
+      return user;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const setUserFromUser = useCallback((userData: Partial<User>) => {
+    console.log('Setting user from user data:', userData);
+    setUser({
+      id: userData.id,
+      email: userData.email,
+      domainId: userData.domainId,
+      role: userData.role,
+      name: userData.name,
+      onboardingStatus: userData.onboardingStatus || 'not_started',
+      personalQuestionnaire: userData.personalQuestionnaire,
+      swipeCount: userData.swipeCount || 0,
+    });
+
   }, []);
 
   const setUserFromToken = useCallback((token: string) => {

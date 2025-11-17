@@ -16,7 +16,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { ArrowRight, Upload, Grid, Heart } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../../services/api';
-import type { ArtworkStats } from '@tastematcher/common';
+import type { ArtworkStats, User } from '@tastematcher/common';
 import './HomePage.css';
 import { useDomain } from '../../contexts/DomainContext';
 import { useEffect } from 'react';
@@ -35,22 +35,20 @@ export function HomePage() {
   useEffect(() => {
     // Refresh user data to get latest personalQuestionnaire from backend
     if (refreshUser && user) {
-      refreshUser().then(() => {
-        console.log('User data refreshed for onboarding', user.role, user.onboardingStatus);
+      refreshUser().then((freshUser: Partial<User>) => {
+        console.log('User data refreshed for onboarding', freshUser, freshUser.role, freshUser.onboardingStatus);
 
         // Redirect customers to onboarding only if they haven't started or are in progress
         // Users who skipped or completed can access the home page
         // When they manually navigate to /onboarding, they can edit their answers
-        if (user.role === 'customer' && (user.onboardingStatus !== 'completed' && user.onboardingStatus !== 'skipped')) {
-          console.log('HomePage - Redirecting to onboarding');
+        if (freshUser.role === 'customer' && (freshUser.onboardingStatus !== 'completed' && freshUser.onboardingStatus !== 'skipped')) {
+          console.log('HomePage - Redirecting to onboarding', freshUser);
           navigate('/onboarding', { replace: true });
         }
-
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
-
 
   // Fetch domain stats from API using unified client
   const { data: stats, isLoading } = useQuery<ArtworkStats>({

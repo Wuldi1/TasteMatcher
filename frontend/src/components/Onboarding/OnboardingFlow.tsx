@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { PersonalDetails, CollectingPreferences, ArtworkPreferences } from '@tastematcher/common';
+import { PersonalDetails, CollectingPreferences, ArtworkPreferences, User } from '@tastematcher/common';
 import { WelcomeStep } from './steps/WelcomeStep';
 import { PersonalDetailsStep } from './steps/PersonalDetailsStep';
 import { CollectingPreferencesStep } from './steps/CollectingPreferencesStep';
@@ -62,8 +62,8 @@ export function OnboardingFlow() {
 
     // Only refresh if we're in edit mode to get latest data
     if (isEditMode && refreshUser) {
-      refreshUser().then(() => {
-        console.log('User data refreshed for onboarding edit mode');
+      refreshUser().then((user: Partial<User>) => {
+        console.log('User data refreshed for onboarding edit mode', user);
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,6 +130,7 @@ export function OnboardingFlow() {
       // In edit mode, user already has completed/skipped status
       if (!isEditMode) {
         await apiClient.completeOnboarding();
+        await refreshUser?.();
       }
 
       // Navigate to home with replace to prevent back navigation
@@ -140,6 +141,7 @@ export function OnboardingFlow() {
     } finally {
       setIsSubmitting(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, personalDetails, collectingPreferences, artworkPreferences, isEditMode, navigate]);
 
   const handleSkip = useCallback(async () => {

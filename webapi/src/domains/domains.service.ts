@@ -118,7 +118,7 @@ export class DomainsService {
 
     this.logger.log(`Verified domain ${domain.id} for user ${user.id}`);
 
-    return { token };
+    return { token, user };
   }
 
   // ========== Global Admin Operations ==========

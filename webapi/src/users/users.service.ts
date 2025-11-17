@@ -6,6 +6,7 @@ import { UpdateQuestionnaireDto } from './dto/update-questionnaire.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { EmailService } from '../email/email.service';
 import { ArtworksService } from '../artworks/artworks.service';
+import { AuthenticatedUser } from '../auth/types/authenticated-request.interface';
 
 @Injectable()
 export class UsersService {
@@ -23,22 +24,39 @@ export class UsersService {
     /**
      * Get all users in a domain
      */
-    async findAllInDomain(domainId: string, withStats: boolean = false): Promise<User[]> {
+    async findAllInDomain(domainId: string, askingUser: AuthenticatedUser, withStats: boolean = false): Promise<User[]> {
         const container = await this.cosmosService.getUsersContainer();
 
         try {
-            const query = {
+            let query = {
                 query: 'SELECT * FROM c WHERE c.domainId = @domainId ORDER BY c.createdAt DESC',
                 parameters: [{ name: '@domainId', value: domainId }],
             };
+
+            // If the user is a dealer, filter by invitedBy and role
+            if (askingUser?.role === 'dealer') {
+                query = {
+                    query: 'SELECT * FROM c WHERE c.domainId = @domainId AND c.invitedBy = @invitedBy AND c.role = @role ORDER BY c.createdAt DESC',
+                    parameters: [
+                        { name: '@domainId', value: domainId },
+                        { name: '@invitedBy', value: askingUser.id },
+                        { name: '@role', value: 'customer' },
+                    ],
+                };
+            }
+
             const { resources } = await container.items.query<User>(query).fetchAll();
 
             if (withStats) {
                 // Fetch swipe counts for all users in parallel
-                await Promise.all(resources.map(async (user) => {
-                    const numberOfSwipes = await this.artworksService.getStats(domainId, user.id).then(stats => stats.totalSwiped);
-                    user.swipeCount = numberOfSwipes;
-                }));
+                await Promise.all(
+                    resources.map(async (user) => {
+                        const numberOfSwipes = await this.artworksService
+                            .getStats(domainId, user.id)
+                            .then((stats) => stats.totalSwiped);
+                        user.swipeCount = numberOfSwipes;
+                    }),
+                );
             }
 
             this.logger.log(`Fetched ${resources.length} users for domain ${domainId}`);
@@ -302,7 +320,7 @@ export class UsersService {
             // patch specifically to set onboardingStatus to completed and completedAt timestamp
             const { resource } = await container.item(userId, domainId).patch([
                 { op: 'set', path: '/onboardingStatus', value: 'completed' },
-                { op: 'replace', path: '/personalQuestionnaire/completedAt', value: Date.now() },
+                { op: 'set', path: '/personalQuestionnaire/completedAt', value: Date.now() },
                 { op: 'replace', path: '/updatedAt', value: Date.now() }
             ]);
 

@@ -435,7 +435,7 @@ export function Management() {
   }, [domainRequests, requestSearchQuery, requestStatusFilter, requestSortBy, requestSortOrder]);
 
   // Check authorization - AFTER all hooks
-  if (!user || (user.role !== 'domain_owner' && user.role !== 'global_admin')) {
+  if (!user || (user.role === 'customer')) {
     return <Navigate to="/home" replace />;
   }
 
@@ -1276,7 +1276,8 @@ export function Management() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="customer">Customer</option>
-                  <option value="dealer">Dealer</option>
+                  {/* Hide the dealer option if the current user is a dealer */}
+                  {user?.role !== 'dealer' && <option value="dealer">Dealer</option>}
                 </select>
               </div>
 

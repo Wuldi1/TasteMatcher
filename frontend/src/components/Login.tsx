@@ -12,7 +12,7 @@ type UserIntent = 'buy' | 'sell' | null;
  */
 export function Login() {
   const navigate = useNavigate();
-  const { setUserFromToken } = useAuth();
+  const { setUserFromUser } = useAuth();
 
   const [email, setEmail] = useState<string>('');
   const [verificationCode, setVerificationCode] = useState<string>('');
@@ -73,7 +73,7 @@ export function Login() {
       localStorage.setItem('tm_auth_token', result.token);
       
       // Update auth context
-      setUserFromToken(result.token);
+      setUserFromUser(result.user);
       
       // Configure API client
       apiClient.setAuthToken(result.token);
@@ -86,7 +86,7 @@ export function Login() {
     } finally {
       setIsLoading(false);
     }
-  }, [email, verificationCode, navigate, setUserFromToken]);
+  }, [email, verificationCode, navigate, setUserFromUser]);
 
   const handleResendCode = useCallback(async () => {
     setIsLoading(true);

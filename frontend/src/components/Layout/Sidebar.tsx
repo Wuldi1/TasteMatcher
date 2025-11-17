@@ -31,7 +31,7 @@ export const Sidebar = () => {
   };
 
   const allLinks =
-    user?.role === 'domain_owner' || user?.role === 'global_admin'
+    user?.role !== 'customer'
       ? [...baseLinks, aiSuggestionsLink, ...domainOwnerLinks]
       : [...baseLinks, aiSuggestionsLink];
 

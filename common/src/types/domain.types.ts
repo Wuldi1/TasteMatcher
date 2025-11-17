@@ -1,3 +1,5 @@
+import { User } from "./user.types";
+
 /**
  * Status of a domain
  */
@@ -50,8 +52,9 @@ export interface Domain {
 }
 
 export interface DomainVerificationResultResponse {
+  user: User;
   token: string;
-} // we need to late
+}
 
 /**
  * Status of a domain creation request

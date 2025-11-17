@@ -13,6 +13,7 @@ import {
   UploadedFile,
   UseInterceptors,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
@@ -38,9 +39,9 @@ export class UsersController {
    * Get all users in the current domain (domain_owner and global_admin only)
    */
   @Get()
-  @Roles('domain_owner', 'global_admin')
+  @Roles('domain_owner', 'global_admin', 'dealer')
   async findAll(@Request() req: AuthenticatedRequest): Promise<User[]> {
-    return this.usersService.findAllInDomain(req.user.domainId, true);
+    return this.usersService.findAllInDomain(req.user.domainId, req.user, true);
   }
 
   /**
@@ -49,9 +50,10 @@ export class UsersController {
   @Get('domain/:domainId')
   @Roles('global_admin')
   async findAllInSpecificDomain(
+    @Request() req: AuthenticatedRequest,
     @Param('domainId') domainId: string,
   ): Promise<User[]> {
-    return this.usersService.findAllInDomain(domainId, true);
+    return this.usersService.findAllInDomain(domainId, req.user, true);
   }
 
   /**
@@ -90,8 +92,14 @@ export class UsersController {
    * Invite a new user to the domain (domain_owner and global_admin only)
    */
   @Post('invite')
-  @Roles('domain_owner', 'global_admin')
+  @Roles('domain_owner', 'global_admin', 'dealer') // Add dealer role
   async invite(@Request() req: AuthenticatedRequest, @Body() inviteDto: InviteUserDto): Promise<User> {
+    const currentUser = req.user as User;
+
+    if (currentUser.role === 'dealer' && inviteDto.role !== 'customer') {
+      throw new ForbiddenException('Dealers can only invite customers.');
+    }
+
     return this.usersService.inviteUser(req.user.domainId, inviteDto, req.user.id);
   }
 

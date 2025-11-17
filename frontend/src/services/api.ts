@@ -530,12 +530,12 @@ class ApiClient extends BaseApiClient {
   /**
    * Verify login code and get JWT token
    */
-  async verifyLoginCode(email: string, code: string): Promise<{ token: string }> {
+  async verifyLoginCode(email: string, code: string): Promise<DomainVerificationResultResponse> {
     this.validateEmail(email);
     if (!code || code.length !== 6) {
       throw new ApiError('Verification code must be 6 digits', 400);
     }
-    return this.request<{ token: string }>('/api/auth/login/verify', {
+    return this.request<DomainVerificationResultResponse>('/api/auth/login/verify', {
       method: 'POST',
       body: JSON.stringify({ email, code }),
     });
