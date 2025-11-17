@@ -97,7 +97,8 @@ export class EmailService {
     };
 
     try {
-      const poller = await this.emailClient.beginSend(message);
+      // TODO : enable actual email sending
+      // const poller = await this.emailClient.beginSend(message);
       // await poller.pollUntilDone(); // TODO : maybe remove for faster UI response
 
       this.logger.log({
@@ -186,7 +187,8 @@ export class EmailService {
     };
 
     try {
-      const poller = await this.emailClient.beginSend(message);
+      // TODO : enable actual email sending
+      // const poller = await this.emailClient.beginSend(message);
       // await poller.pollUntilDone(); // Optional: wait for email to be sent
 
       this.logger.log({
