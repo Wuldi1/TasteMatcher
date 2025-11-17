@@ -30,7 +30,7 @@ export class ArtworksService {
    * Fetch artworks with generic query parameters using CosmosQueryBuilder
    */
   async findAll(domainId: string, queryParams: QueryParams<Artwork>): Promise<PaginatedResponse<Artwork>> {
-    const container = await this.cosmosService.getContainer('Artworks');
+    const container = await this.cosmosService.getArtworksContainer();
 
     try {
       const result = await executeCosmosQuery<Artwork>(
@@ -58,7 +58,7 @@ export class ArtworksService {
    * Get single artwork by ID
    */
   async findOne(domainId: string, artworkId: string): Promise<Artwork> {
-    const container = await this.cosmosService.getContainer('Artworks');
+    const container = await this.cosmosService.getArtworksContainer();
 
     try {
       const { resource } = await container.item(artworkId, domainId).read();
@@ -85,7 +85,7 @@ export class ArtworksService {
     artworkId: string,
     updateDto: UpdateArtworkDto,
   ): Promise<Artwork> {
-    const container = await this.cosmosService.getContainer('Artworks');
+    const container = await this.cosmosService.getArtworksContainer();
 
     try {
       const { resource: existing } = await container.item(artworkId, domainId).read();
@@ -118,7 +118,7 @@ export class ArtworksService {
    * Delete artwork
    */
   async remove(domainId: string, artworkId: string): Promise<void> {
-    const container = await this.cosmosService.getContainer('Artworks');
+    const container = await this.cosmosService.getArtworksContainer();
 
     try {
       await container.item(artworkId, domainId).delete();
@@ -134,8 +134,8 @@ export class ArtworksService {
    * Uses efficient Cosmos DB aggregation queries
    */
   async getStats(domainId: string, userId: string): Promise<ArtworkStats> {
-    const artworksContainer = await this.cosmosService.getContainer('Artworks');
-    const artworksPreferencesContainer = await this.cosmosService.getContainer('ArtworkPreferences');
+    const artworksContainer = await this.cosmosService.getArtworksContainer();
+    const artworkPreferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
 
     try {
       // Calculate date 7 days ago (in milliseconds since epoch)
@@ -165,7 +165,7 @@ export class ArtworksService {
       // Execute queries in parallel for better performance
       const [totalResult, swipeResult, recentResult] = await Promise.all([
         artworksContainer.items.query(totalQuery).fetchAll(),
-        artworksPreferencesContainer.items.query(swipeQuery).fetchAll(),
+        artworkPreferencesContainer.items.query(swipeQuery).fetchAll(),
         artworksContainer.items.query(recentQuery).fetchAll(),
       ]);
 
@@ -193,8 +193,8 @@ export class ArtworksService {
     userId: string,
     limit: number = 20,
   ): Promise<UntastedArtworksResponse> {
-    const artworksContainer = await this.cosmosService.getContainer('Artworks');
-    const preferencesContainer = await this.cosmosService.getContainer('ArtworkPreferences');
+    const artworksContainer = await this.cosmosService.getArtworksContainer();
+    const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
 
     try {
       // Step 1: Get all artwork IDs the user has already tasted
@@ -259,7 +259,7 @@ export class ArtworksService {
    * Save or update artwork preference (like/dislike) for a user
    */
   async savePreference(domainId: string, userId: string, artworkId: string, saveDto: SavePreferenceDto): Promise<ArtworkPreference> {
-    const container = await this.cosmosService.getContainer('ArtworkPreferences');
+    const container = await this.cosmosService.getArtworkPreferencesContainer();
 
     try {
       // Check if preference already exists
@@ -325,12 +325,7 @@ export class ArtworksService {
     });
 
     try {
-      const usersContainer = await this.cosmosService.getUsersContainer();
-      const { resource: userRecord } = await usersContainer.item(resolvedUserId, domainId).read();
-
-      if (!userRecord) {
-        throw new NotFoundException(`User ${resolvedUserId} not found in domain ${domainId}`);
-      }
+      const userRecord = await this.cosmosService.getUser(domainId, resolvedUserId);
 
       const { totalArtworks, totalSwiped, recentlyAdded  } = await this.getStats(domainId, resolvedUserId);
       userRecord.swipeCount = totalSwiped;

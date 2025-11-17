@@ -5,6 +5,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateQuestionnaireDto } from './dto/update-questionnaire.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { EmailService } from '../email/email.service';
+import { ArtworksService } from '../artworks/artworks.service';
 
 @Injectable()
 export class UsersService {
@@ -13,7 +14,7 @@ export class UsersService {
     private readonly vectorizationService: VectorizationService;
     private readonly blobService: BlobService;
 
-    constructor(private readonly emailService: EmailService) {
+    constructor(private readonly emailService: EmailService, private readonly artworksService: ArtworksService) {
         this.cosmosService = new CosmosService();
         this.vectorizationService = new VectorizationService();
         this.blobService = new BlobService();
@@ -22,16 +23,23 @@ export class UsersService {
     /**
      * Get all users in a domain
      */
-    async findAllInDomain(domainId: string): Promise<User[]> {
-        const container = await this.cosmosService.getContainer('Users');
+    async findAllInDomain(domainId: string, withStats: boolean = false): Promise<User[]> {
+        const container = await this.cosmosService.getUsersContainer();
 
         try {
             const query = {
                 query: 'SELECT * FROM c WHERE c.domainId = @domainId ORDER BY c.createdAt DESC',
                 parameters: [{ name: '@domainId', value: domainId }],
             };
-
             const { resources } = await container.items.query<User>(query).fetchAll();
+
+            if (withStats) {
+                // Fetch swipe counts for all users in parallel
+                await Promise.all(resources.map(async (user) => {
+                    const numberOfSwipes = await this.artworksService.getStats(domainId, user.id).then(stats => stats.totalSwiped);
+                    user.swipeCount = numberOfSwipes;
+                }));
+            }
 
             this.logger.log(`Fetched ${resources.length} users for domain ${domainId}`);
             return resources;
@@ -44,8 +52,8 @@ export class UsersService {
     /**
      * Get a single user by ID
      */
-    async findOne(domainId: string, userId: string): Promise<User> {
-        const container = await this.cosmosService.getContainer('Users');
+    async findOne(domainId: string, userId: string, withStats: boolean = false): Promise<User> {
+        const container = await this.cosmosService.getUsersContainer();
 
         try {
             const { resource } = await container.item(userId, domainId).read<User>();
@@ -53,9 +61,13 @@ export class UsersService {
             if (!resource) {
                 throw new NotFoundException(`User ${userId} not found`);
             }
-
+            
+            if (withStats) {
+                const numberOfSwipes = await this.artworksService.getStats(domainId, userId).then(stats => stats.totalSwiped);
+                resource.swipeCount = numberOfSwipes;
+            }
+            
             this.logger.log(`Fetched user ${userId} from domain ${domainId}`);
-
             return resource;
         } catch (error) {
             if (error instanceof NotFoundException) {
@@ -75,7 +87,7 @@ export class UsersService {
         updateDto: UpdateUserDto,
         requestingUserId: string,
     ): Promise<User> {
-        const container = await this.cosmosService.getContainer('Users');
+        const container = await this.cosmosService.getUsersContainer();
 
         try {
             const user = await this.findOne(domainId, userId);
@@ -106,7 +118,7 @@ export class UsersService {
      * Delete a user and all their preferences
      */
     async remove(domainId: string, userId: string, requestingUserId: string): Promise<void> {
-        const usersContainer = await this.cosmosService.getContainer('Users');
+        const usersContainer = await this.cosmosService.getUsersContainer();
         const preferencesContainer = await this.cosmosService.getContainer('ArtworkPreferences');
 
         try {
@@ -163,7 +175,7 @@ export class UsersService {
         inviteDto: InviteUserDto,
         invitedById: string,
     ): Promise<User> {
-        const container = await this.cosmosService.getContainer('Users');
+        const container = await this.cosmosService.getUsersContainer();
 
         try {
             // Check if user with this email already exists in the domain
@@ -241,7 +253,7 @@ export class UsersService {
         domainId: string,
         questionnaireDto: UpdateQuestionnaireDto,
     ): Promise<User> {
-        
+
         try {
             const container = await this.cosmosService.getUsersContainer();
 

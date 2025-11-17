@@ -26,7 +26,7 @@ interface DomainUserOption {
 export const AISuggestionsPage = () => {
   const { user } = useAuth();
   const [recommendations, setRecommendations] = useState<Artwork[]>([]);
-  const [selectedUser, setSelectedUser] = useState<string | undefined>(undefined);
+  const [selectedUser, setSelectedUser] = useState<string | undefined>(undefined); // Default to undefined
   const [users, setUsers] = useState<DomainUserOption[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +91,10 @@ export const AISuggestionsPage = () => {
         setRecommendations(recommendations);
       } catch (err) {
         console.error('Failed to load AI suggestions', err);
-        setError('Unable to load AI suggestions. Please try again.');
+        // No need to display error if user is not eligible
+        if (getAIRecommendationsEligibility(targetUser as User).isEligible) {
+          setError('Unable to load AI suggestions. Please try again.');
+        }
       } finally {
         setLoading(false);
       }
@@ -143,9 +146,10 @@ export const AISuggestionsPage = () => {
           <select
             id="ai-suggestions-user"
             className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-            value={targetUserId}
-            onChange={(event) => setSelectedUser(event.target.value)}
+            value={selectedUser || ''} // Default to empty string if undefined
+            onChange={(event) => setSelectedUser(event.target.value || undefined)}
           >
+            {!selectedUser && <option value="">Select a user</option>}
             <option value={user?.id}>Myself</option>
             {users
               .filter((option) => option.id !== user?.id)
@@ -164,22 +168,37 @@ export const AISuggestionsPage = () => {
         </div>
       )}
 
-      {!getAIRecommendationsEligibility(targetUser as User).isEligible && (
+      {!selectedUser && isDomainOwner && (
         <div
-          className="mx-auto mb-6 max-w-2xl rounded-lg border border-yellow-200 bg-yellow-50 p-6"
+          className="mx-auto mb-6 max-w-xl rounded-lg border border-blue-200 bg-blue-50 p-4 text-center"
           role="alert"
           aria-live="polite"
         >
-          <h2 className="mb-3 text-lg font-semibold text-yellow-900">
-            This profile is almost ready for AI suggestions
+          <h2 className="text-base font-medium text-blue-900">
+            Please select a user to view AI suggestions
           </h2>
-          <ul className="list-disc space-y-2 pl-5 text-yellow-800">
-            {getAIRecommendationsEligibility(targetUser as User).reasons.map((reason) => (
-              <li key={reason}>{reason}</li>
-            ))}
-          </ul>
         </div>
       )}
+
+      {selectedUser &&
+        !getAIRecommendationsEligibility(targetUser as User).isEligible && (
+          <div
+            className="mx-auto mb-6 max-w-2xl rounded-lg border border-yellow-200 bg-yellow-50 p-6"
+            role="alert"
+            aria-live="polite"
+          >
+            <h2 className="mb-3 text-lg font-semibold text-yellow-900">
+              This profile is almost ready for AI suggestions
+            </h2>
+            <ul className="list-disc space-y-2 pl-5 text-yellow-800">
+              {getAIRecommendationsEligibility(targetUser as User).reasons.map(
+                (reason) => (
+                  <li key={reason}>{reason}</li>
+                ),
+              )}
+            </ul>
+          </div>
+        )}
 
       {getAIRecommendationsEligibility(targetUser as User).isEligible && recommendations.length > 0 && (
         <section

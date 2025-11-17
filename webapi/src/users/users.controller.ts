@@ -40,7 +40,7 @@ export class UsersController {
   @Get()
   @Roles('domain_owner', 'global_admin')
   async findAll(@Request() req: AuthenticatedRequest): Promise<User[]> {
-    return this.usersService.findAllInDomain(req.user.domainId);
+    return this.usersService.findAllInDomain(req.user.domainId, true);
   }
 
   /**
@@ -51,7 +51,7 @@ export class UsersController {
   async findAllInSpecificDomain(
     @Param('domainId') domainId: string,
   ): Promise<User[]> {
-    return this.usersService.findAllInDomain(domainId);
+    return this.usersService.findAllInDomain(domainId, true);
   }
 
   /**
@@ -171,10 +171,7 @@ export class UsersController {
    */
   @Get('me/refresh')
   async refreshCurrentUser(@Request() req: AuthenticatedRequest): Promise<{ user: User; token: string }> {
-    const user = await this.usersService.findOne(req.user.domainId, req.user.id);
-    const numberOfSwipes = await this.artworksService.getStats(req.user.domainId, req.user.id).then(stats => stats.totalSwiped);
-    user.swipeCount = numberOfSwipes;
-
+    const user = await this.usersService.findOne(req.user.domainId, req.user.id, true);
     const token = this.authService.generateUserToken(user);
 
     return { user, token };

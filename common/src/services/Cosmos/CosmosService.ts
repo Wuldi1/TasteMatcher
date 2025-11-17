@@ -2,6 +2,7 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { CosmosClient, CosmosClientOptions, Container, Database, PartitionKeyKind } from '@azure/cosmos';
 import { AppConfig, loadConfig } from '../../lib/config';
 import { createLogger } from '../../lib/logger';
+import { User } from '../../types/user.types';
 
 const USER_AGENT_SUFFIX = 'TasteMatcher-WebAPI';
 const logger = createLogger('CosmosService');
@@ -110,6 +111,16 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
    */
   async getUsersContainer(): Promise<Container> {
     return this.getContainer('Users');
+  }
+
+  async getUser(domainId: string, userId: string): Promise<User> {
+    const usersContainer = await this.getUsersContainer();
+    const { resource } = await usersContainer.item(userId, domainId).read<User>();
+    if (!resource) {
+      throw new Error(`User not found: ${userId} in domain ${domainId}`);
+    }
+    logger.info({ msg: 'Fetched user from Cosmos DB', resource });
+    return resource;
   }
 
   private async ensureClient(): Promise<void> {

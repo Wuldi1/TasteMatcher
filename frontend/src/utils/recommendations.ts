@@ -10,12 +10,12 @@ export function getAIRecommendationsEligibility(
   const reasons: string[] = [];
   let isEligible = true;
 
-  if ((user.swipeCount || 0) < 20) {
+  if ((user?.swipeCount || 0) < 20) {
     isEligible = false;
     reasons.push('You need at least 20 swipes to unlock AI suggestions');
   }
 
-  if (user.onboardingStatus !== 'completed') {
+  if (user?.onboardingStatus !== 'completed') {
     isEligible = false;
     reasons.push('Complete onboarding to unlock AI suggestions');
   }
