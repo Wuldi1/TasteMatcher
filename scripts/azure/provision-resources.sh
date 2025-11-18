@@ -269,7 +269,7 @@ else
     --resource-group "$RG_NAME" \
     --location "$LOCATION" \
     --number-of-workers 1 \
-    --sku EP1 \
+    --sku B1 \
     --is-linux \
     -o none
   echo "✅ Function App Service plan $APP_PLAN created successfully"
