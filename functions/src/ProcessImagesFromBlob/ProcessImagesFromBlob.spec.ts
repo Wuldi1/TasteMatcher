@@ -1,10 +1,7 @@
 import { InvocationContext } from '@azure/functions';
 import { processImagesFromBlob } from './ProcessImagesFromBlob';
-import { ThumbnailService } from '../services/Thumbnail/ThumbnailService';
-import { VectorizationService } from '../services/Vectorization/VectorizationService';
-import { SearchIndexService } from '../services/SearchIndex/SearchIndexService';
-import { BlobService } from '../services/Blob/BlobService';
 import type { ImageProcessingQueueMessage } from '@tastematcher/common';
+import { ThumbnailService, VectorizationService, SearchIndexService, BlobService } from '@tastematcher/common';
 
 jest.mock('./services/ThumbnailService');
 jest.mock('./services/VectorizationService');
@@ -20,22 +17,21 @@ describe('ProcessImagesFromBlob', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     mockContext = {
       invocationId: 'test-invocation-id',
       functionName: 'ProcessImagesFromBlob',
-      logHandler: jest.fn(),
       traceContext: {
-        traceparent: 'test-trace',
-        tracestate: '',
+        traceParent: 'test-trace',
+        traceState: '',
         attributes: {},
       },
     };
 
-    mockBlobService = new BlobService({} as any) as jest.Mocked<BlobService>;
-    mockThumbnailService = new ThumbnailService({} as any) as jest.Mocked<ThumbnailService>;
-    mockVectorizationService = new VectorizationService({} as any) as jest.Mocked<VectorizationService>;
-    mockSearchIndexService = new SearchIndexService({} as any) as jest.Mocked<SearchIndexService>;
+    mockBlobService = new BlobService() as jest.Mocked<BlobService>;
+    mockThumbnailService = new ThumbnailService() as jest.Mocked<ThumbnailService>;
+    mockVectorizationService = new VectorizationService() as jest.Mocked<VectorizationService>;
+    mockSearchIndexService = new SearchIndexService() as jest.Mocked<SearchIndexService>;
   });
 
   it('should process valid message with thumbnails and vectorization', async () => {
@@ -43,17 +39,15 @@ describe('ProcessImagesFromBlob', () => {
       messageId: 'msg-123',
       artworkId: 'artwork-456',
       domainId: 'domain-789',
-      containerName: 'uploads',
       blobName: 'test-image.jpg',
-      contentType: 'image/jpeg',
-      uploadedAt: new Date().toISOString(),
-      correlationId: 'corr-123',
+      uploadedAt: new Date().getTime(),
+      fileUrl: 'https://blobstorage/test-image.jpg'
     };
 
     const mockImageBuffer = Buffer.from('fake-image-data');
     const mockThumbnails = [
-      { blobUrl: 'https://blob/small.jpg', width: 150, height: 150 },
-      { blobUrl: 'https://blob/medium.jpg', width: 300, height: 300 },
+      { url: 'https://blob/small.jpg', width: 150, height: 150 },
+      { url: 'https://blob/medium.jpg', width: 300, height: 300 },
     ];
     const mockVector = { vector: new Array(1536).fill(0.1), model: 'ada-002' };
 
@@ -80,10 +74,9 @@ describe('ProcessImagesFromBlob', () => {
       messageId: 'msg-fail',
       artworkId: 'artwork-fail',
       domainId: 'domain-789',
-      containerName: 'uploads',
       blobName: 'missing.jpg',
-      contentType: 'image/jpeg',
       uploadedAt: new Date().getTime(),
+      fileUrl: 'https://blobstorage/missing.jpg'
     };
 
     mockBlobService.downloadBlob.mockRejectedValue(new Error('Blob not found'));
@@ -100,10 +93,9 @@ describe('ProcessImagesFromBlob', () => {
       messageId: 'msg-thumb-fail',
       artworkId: 'artwork-thumb',
       domainId: 'domain-789',
-      containerName: 'uploads',
       blobName: 'corrupt.jpg',
-      contentType: 'image/jpeg',
-      uploadedAt: new Date().toISOString(),
+      uploadedAt: new Date().getTime(),
+      fileUrl: 'https://blobstorage/corrupt.jpg'
     };
 
     mockBlobService.downloadBlob.mockResolvedValue(Buffer.from('fake'));
@@ -130,11 +122,9 @@ describe('ProcessImagesFromBlob', () => {
       messageId: 'msg-trace',
       artworkId: 'artwork-trace',
       domainId: 'domain-789',
-      containerName: 'uploads',
       blobName: 'trace.jpg',
-      contentType: 'image/jpeg',
-      uploadedAt: new Date().toISOString(),
-      correlationId: 'correlation-abc',
+      uploadedAt: new Date().getTime(),
+      fileUrl: 'https://blobstorage/trace.jpg'
     };
 
     mockBlobService.downloadBlob.mockResolvedValue(Buffer.from('fake'));

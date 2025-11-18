@@ -134,6 +134,42 @@ export function CatalogPage() {
     },
   });
 
+  // Add mutation for saving preferences (like/dislike)
+  const savePreferenceMutation = useMutation({
+    mutationFn: async ({ artworkId, liked }: { artworkId: string; liked: boolean }) => {
+      if (!user?.domainId || !user?.id) throw new Error('User not authenticated');
+      return apiClient.saveArtworkPreference(user.domainId, user.id, { artworkId, liked });
+    },
+    onMutate: async ({ artworkId, liked }) => {
+      // Optionally optimistic update for modal if open
+      await queryClient.cancelQueries({ queryKey: ['artworks', user?.domainId] });
+      const previous = queryClient.getQueriesData(['artworks', user?.domainId]);
+
+      // update selectedArtwork locally for immediate feedback
+      if (selectedArtwork && selectedArtwork.id === artworkId) {
+        setSelectedArtwork({
+          ...selectedArtwork,
+          // @ts-ignore - frontend expects likedStatus string ('Liked'|'Disliked'|'NotTasted')
+          likedStatus: liked ? 'Liked' : 'Disliked',
+        });
+      }
+
+      return { previous };
+    },
+    onError: (_err, _variables, context) => {
+      // revert if needed - simple approach: invalidate to refetch the truth
+      if (context?.previous) {
+        queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
+      }
+    },
+    onSuccess: () => {
+      // Refresh artworks so lists show updated status
+      queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
+      // Invalidate untasted as well to keep Taster in sync
+      queryClient.invalidateQueries({ queryKey: ['untasted-artworks', user?.domainId, user?.id] });
+    },
+  });
+
   const handleLoadMore = () => {
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
@@ -162,6 +198,14 @@ export function CatalogPage() {
     if (window.confirm(`Are you sure you want to delete "${artwork.title}"?`)) {
       deleteMutation.mutate(artwork.id);
     }
+  };
+
+  // Handler to like/dislike from catalog or modal
+  const handlePreferenceClick = (artworkId: string, liked: boolean, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!user || user.role !== 'customer') return;
+    if (savePreferenceMutation.isLoading) return;
+    savePreferenceMutation.mutate({ artworkId, liked });
   };
 
   return (
@@ -333,14 +377,29 @@ export function CatalogPage() {
                   <div className="catalog-item__actions">
                     {isCustomer && (
                       <div className="catalog-item__preference flex items-center gap-2 mr-2" aria-hidden="true">
-                        <ThumbsUp
-                          className={`w-5 h-5 ${likedStatus === 'Liked' ? 'text-green-500' : 'text-gray-400'}`}
-                          aria-label="Liked"
-                        />
-                        <ThumbsDown
-                          className={`w-5 h-5 ${likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'}`}
-                          aria-label="Disliked"
-                        />
+                        <button
+                          type="button"
+                          onClick={(e) => handlePreferenceClick(artwork.id, true, e)}
+                          className="p-1"
+                          aria-label={`Like ${artwork.title}`}
+                          title="Like"
+                        >
+                          <ThumbsUp
+                            className={`w-5 h-5 ${likedStatus === 'Liked' ? 'text-green-500' : 'text-gray-400'}`}
+                          />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handlePreferenceClick(artwork.id, false, e)}
+                          className="p-1"
+                          aria-label={`Dislike ${artwork.title}`}
+                          title="Dislike"
+                        >
+                          <ThumbsDown
+                            className={`w-5 h-5 ${likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'}`}
+                          />
+                        </button>
                       </div>
                     )}
 
@@ -403,6 +462,7 @@ export function CatalogPage() {
               >
                 <X aria-hidden="true" />
               </button>
+
               <img
                 src={selectedArtwork.thumbnails?.[2]?.url || selectedArtwork.filename}
                 alt={selectedArtwork.title}
@@ -421,7 +481,36 @@ export function CatalogPage() {
                 {selectedArtwork.description && (
                   <p className="catalog-modal__description">{selectedArtwork.description}</p>
                 )}
-                
+
+                {/* Customer actionable thumbs inside modal */}
+                {user?.role === 'customer' && (
+                  <div className="catalog-modal__preference mt-4 flex items-center justify-center gap-6">
+                    <button
+                      type="button"
+                      onClick={() => handlePreferenceClick(selectedArtwork.id, true)}
+                      aria-label="Like artwork"
+                      className="p-2"
+                      disabled={savePreferenceMutation.isLoading}
+                    >
+                      <ThumbsUp
+                        className={`w-6 h-6 ${selectedArtwork.likedStatus === 'Liked' ? 'text-green-500' : 'text-gray-400'}`}
+                      />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handlePreferenceClick(selectedArtwork.id, false)}
+                      aria-label="Dislike artwork"
+                      className="p-2"
+                      disabled={savePreferenceMutation.isLoading}
+                    >
+                      <ThumbsDown
+                        className={`w-6 h-6 ${selectedArtwork.likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'}`}
+                      />
+                    </button>
+                  </div>
+                )}
+
                 {/* Metadata badges */}
                 {(selectedArtwork.classification || selectedArtwork.department || selectedArtwork.country) && (
                   <div className="catalog-modal__metadata">
