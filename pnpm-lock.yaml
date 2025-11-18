@@ -198,7 +198,7 @@ importers:
         specifier: ^12.29.1
         version: 12.29.1
       '@azure/storage-queue':
-        specifier: ^12.23.0
+        specifier: ^12.28.1
         version: 12.28.1
       '@nestjs/common':
         specifier: ^11.1.8
@@ -218,6 +218,9 @@ importers:
       pino-pretty:
         specifier: ^13.1.2
         version: 13.1.2
+      uuid:
+        specifier: ^10.0.0
+        version: 10.0.0
     devDependencies:
       '@eslint/js':
         specifier: ^9.38.0
