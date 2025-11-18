@@ -14,7 +14,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
-import { Heart, X, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiClient } from '../../services/api';
 import './TasterPage.css';
 
@@ -147,7 +147,7 @@ export function TasterPage() {
     return (
       <div className="taster-page taster-page--empty">
         <div className="taster-empty">
-          <Heart className="taster-empty__icon" aria-hidden="true" />
+          <ThumbsUp className="taster-empty__icon" aria-hidden="true" />
           <h2 className="taster-empty__title">No Untasted Artworks</h2>
           <p className="taster-empty__description">
             You've already rated all available artworks! Upload more to continue building your taste profile.
@@ -161,7 +161,7 @@ export function TasterPage() {
     return (
       <div className="taster-page taster-page--complete">
         <div className="taster-complete">
-          <Heart className="taster-complete__icon" aria-hidden="true" />
+          <ThumbsUp className="taster-complete__icon" aria-hidden="true" />
           <h2 className="taster-complete__title">All Done!</h2>
           <p className="taster-complete__description">
             You've rated all available artworks. Great job building your taste profile!
@@ -246,11 +246,11 @@ export function TasterPage() {
 
               {/* Swipe indicators */}
               <div className="taster-card__indicator taster-card__indicator--like">
-                <Heart aria-hidden="true" />
+                <ThumbsUp aria-hidden="true" />
                 <span>LIKE</span>
               </div>
               <div className="taster-card__indicator taster-card__indicator--dislike">
-                <X aria-hidden="true" />
+                <ThumbsDown aria-hidden="true" />
                 <span>NOPE</span>
               </div>
             </div>
@@ -278,7 +278,7 @@ export function TasterPage() {
             disabled={!currentArtwork || !!swipeDirection}
             aria-label="Dislike this artwork (left arrow key)"
           >
-            <X aria-hidden="true" />
+            <ThumbsDown aria-hidden="true" />
           </button>
 
           <button
@@ -288,7 +288,7 @@ export function TasterPage() {
             disabled={!currentArtwork || !!swipeDirection}
             aria-label="Like this artwork (right arrow key)"
           >
-            <Heart aria-hidden="true" />
+            <ThumbsUp aria-hidden="true" />
           </button>
         </div>
 

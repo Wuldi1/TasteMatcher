@@ -10,7 +10,8 @@ import {
   CosmosService,
   SearchIndexService,
   executeCosmosQuery,
-  getAIRecommendationsEligibility
+  getAIRecommendationsEligibility,
+  LikedStatus
 } from '@tastematcher/common';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
@@ -28,8 +29,13 @@ export class ArtworksService {
 
   /**
    * Fetch artworks with generic query parameters using CosmosQueryBuilder
+   * If requestedUserId is provided (customer), attach likedStatus per artwork by joining user's preferences.
    */
-  async findAll(domainId: string, queryParams: QueryParams<Artwork>): Promise<PaginatedResponse<Artwork>> {
+  async findAll(
+    domainId: string,
+    queryParams: QueryParams<Artwork>,
+    requestedUserId?: string, // optional: if provided will enrich artworks with likedStatus for that user
+  ): Promise<PaginatedResponse<Artwork>> {
     const container = await this.cosmosService.getArtworksContainer();
 
     try {
@@ -42,6 +48,46 @@ export class ArtworksService {
       );
 
       this.logger.log(`Fetched ${result.items.length} artworks for domain ${domainId}`);
+
+      // If requestedUserId provided, fetch that user's preferences and map them
+      if (requestedUserId) {
+        try {
+          const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
+
+          // Query preferences for this user (partitioned by userId)
+          const prefQuery = {
+            query: 'SELECT c.artworkId, c.liked FROM c WHERE c.userId = @userId',
+            parameters: [{ name: '@userId', value: requestedUserId }],
+          };
+
+          const { resources: prefs } = await preferencesContainer.items
+            .query(prefQuery, { partitionKey: requestedUserId })
+            .fetchAll();
+
+          const prefMap = new Map<string, boolean>();
+          for (const p of prefs) {
+            if (p && p.artworkId) prefMap.set(p.artworkId, !!p.liked);
+          }
+
+          // Attach likedStatus to each artwork
+          result.items = result.items.map((art) => {
+            const liked = prefMap.has(art.id) ? prefMap.get(art.id) : undefined;
+
+            const artAny = art as Artwork;
+            if (liked === undefined) {
+              artAny.likedStatus = LikedStatus.NotTasted;
+            } else if (liked === true) {
+              artAny.likedStatus = LikedStatus.Liked;
+            } else {
+              artAny.likedStatus = LikedStatus.Disliked;
+            }
+            return artAny as Artwork;
+          });
+        } catch (prefErr) {
+          this.logger.warn(`Failed to enrich artworks with user preferences for user ${requestedUserId}`, prefErr);
+          // continue without likedStatus
+        }
+      }
 
       return {
         items: result.items || [],
@@ -62,7 +108,7 @@ export class ArtworksService {
 
     try {
       const { resource } = await container.item(artworkId, domainId).read();
-      
+
       if (!resource) {
         throw new NotFoundException(`Artwork ${artworkId} not found`);
       }
@@ -89,7 +135,7 @@ export class ArtworksService {
 
     try {
       const { resource: existing } = await container.item(artworkId, domainId).read();
-      
+
       if (!existing) {
         throw new NotFoundException(`Artwork ${artworkId} not found`);
       }
@@ -264,7 +310,7 @@ export class ArtworksService {
     try {
       // Check if preference already exists
       const { resource: existingPreference } = await container.item(artworkId, userId).read();
-      
+
       const preferenceId = generatePreferenceId(userId, artworkId);
 
       if (existingPreference) {
@@ -327,7 +373,7 @@ export class ArtworksService {
     try {
       const userRecord = await this.cosmosService.getUser(domainId, resolvedUserId);
 
-      const { totalArtworks, totalSwiped, recentlyAdded  } = await this.getStats(domainId, resolvedUserId);
+      const { totalArtworks, totalSwiped, recentlyAdded } = await this.getStats(domainId, resolvedUserId);
       userRecord.swipeCount = totalSwiped;
 
       const { isEligible, reasons } = getAIRecommendationsEligibility(userRecord);

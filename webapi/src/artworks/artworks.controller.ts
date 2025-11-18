@@ -95,7 +95,9 @@ export class ArtworksController {
       filters: filterBy ? [this.parseFilterBy(filterBy)] : undefined,
     };
     
-    return this.artworksService.findAll(domainId, queryParams);
+    // Only supply requesterId for customers (so service can compute likedStatus for that user)
+    const requesterId = req.user.role === 'customer' ? req.user.id : undefined;
+    return this.artworksService.findAll(domainId, queryParams, requesterId);
   }
 
   /**

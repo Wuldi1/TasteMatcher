@@ -19,6 +19,7 @@ export interface Artwork {
   probabilityMatch?: number; // confidence score for AI-generated tags
   createdAt?: number; // timestamp
   metadata?: ArtworkMetadata; // allow additional metadata fields
+  likedStatus?: LikedStatus; // customer's like/dislike status for the artwork
 }
 
 export interface ThumbnailSize {
@@ -33,6 +34,12 @@ export interface ThumbnailInfo extends ThumbnailSize {
 export interface ThumbnailGenerationResult extends ThumbnailInfo {
   buffer: Buffer;
   sizeBytes: number;
+}
+
+export enum LikedStatus {
+  Liked = 'Liked',
+  NotTasted = 'NotTasted',
+  Disliked = 'Disliked',
 }
 
 /**

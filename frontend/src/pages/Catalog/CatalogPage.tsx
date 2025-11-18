@@ -14,7 +14,7 @@
 import { useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
-import { Search, X, Trash2, Edit } from 'lucide-react';
+import { Search, X, Trash2, Edit, ThumbsUp, ThumbsDown } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
 import { apiClient } from '../../services/api';
 import { EditArtworkModal } from '../../components/EditArtworkModal/EditArtworkModal';
@@ -299,7 +299,11 @@ export function CatalogPage() {
         ) : (
           <>
             <div className="catalog-grid" role="list">
-              {filteredArtworks.map((artwork) => (
+              {filteredArtworks.map((artwork) => {
+                const likedStatus = artwork.likedStatus ?? 'NotTasted';
+                const isCustomer = user?.role === 'customer';
+
+                return (
                 <div
                   key={artwork.id}
                   className="catalog-item"
@@ -325,8 +329,22 @@ export function CatalogPage() {
                     </div>
                   </button>
 
-                  {/* Action buttons */}
+                  {/* Action buttons + customer thumbs */}
                   <div className="catalog-item__actions">
+                    {isCustomer && (
+                      <div className="catalog-item__preference flex items-center gap-2 mr-2" aria-hidden="true">
+                        <ThumbsUp
+                          className={`w-5 h-5 ${likedStatus === 'Liked' ? 'text-green-500' : 'text-gray-400'}`}
+                          aria-label="Liked"
+                        />
+                        <ThumbsDown
+                          className={`w-5 h-5 ${likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'}`}
+                          aria-label="Disliked"
+                        />
+                      </div>
+                    )}
+
+                    {/* Owner/manager actions (edit/delete) */}
                     <button
                       type="button"
                       className="catalog-item__action catalog-item__action--edit"
@@ -347,7 +365,7 @@ export function CatalogPage() {
                     </button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
 
             {/* Load more button */}
