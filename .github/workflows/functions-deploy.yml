@@ -159,41 +159,30 @@ jobs:
 
       - name: Zip deployment artifact
         run: |
-          # package the downloaded deploy directory into a zip for zip-deploy
+          # package the downloaded deploy directory into a zip for Kudu upload
           cd deploy
           zip -r ../functions-deploy.zip . -x "*.map" -x "*.spec.js" -x "test/*" -x "__tests__/*"
           cd ..
           ls -lh functions-deploy.zip
 
-      - name: Deploy zip via Azure CLI (zip-deploy -> Kudu extracts to wwwroot)
+      - name: Deploy zip via Kudu API (force extraction into wwwroot)
         run: |
-          az functionapp deployment source config-zip \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
-            --src functions-deploy.zip
-
-      - name: Restart Function App
-        run: |
-          az functionapp restart --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
-
-      - name: Verify files in /home/site/wwwroot via Kudu (diagnostic)
-        run: |
-          echo "=== Kudu wwwroot listing ==="
+          set -e
           KUDU_USER=$(az webapp deployment list-publishing-credentials --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query publishingUserName -o tsv)
           KUDU_PASS=$(az webapp deployment list-publishing-credentials --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query publishingPassword -o tsv)
           SITE_SCM="https://${{ env.AZURE_FUNCTIONAPP_NAME }}.scm.azurewebsites.net"
-          # List top-level entries in wwwroot
-          curl -s -u "$KUDU_USER:$KUDU_PASS" "$SITE_SCM/api/vfs/site/wwwroot/" | sed -n '1,200p' || true
-          # Check specifically for node_modules presence
-          if curl -s -u "$KUDU_USER:$KUDU_PASS" "$SITE_SCM/api/vfs/site/wwwroot/node_modules/" | grep -q '"name"' ; then
-            echo "✅ node_modules present in wwwroot"
-          else
-            echo "❌ node_modules NOT found in wwwroot — deployment may be mounted or extraction failed"
-            echo "Listing /home/data/SitePackages for mounted packages:"
-            curl -s -u "$KUDU_USER:$KUDU_PASS" "$SITE_SCM/api/vfs/site/data/SitePackages/" | sed -n '1,200p' || true
-            exit 1
-          fi
 
-      - name: Azure logout
-        if: always()
-        run: az logout
+          # Upload and extract the zip into /site/wwwroot via Kudu's zip push API
+          curl --fail --show-error -u "$KUDU_USER:$KUDU_PASS" -X POST -H "Content-Type: application/zip" --data-binary @functions-deploy.zip "$SITE_SCM/api/zip/site/wwwroot/" || {
+            echo "Kudu upload failed, retrying once..."
+            sleep 3
+            curl --fail --show-error -u "$KUDU_USER:$KUDU_PASS" -X POST -H "Content-Type: application/zip" --data-binary @functions-deploy.zip "$SITE_SCM/api/zip/site/wwwroot/"
+          }
+
+          echo "Uploaded and forced extraction via Kudu; WEBSITE_RUN_FROM_PACKAGE set to 0"
+
+      - name: Restart Function App
+        run: |
+          az functionapp restart \
+            --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
