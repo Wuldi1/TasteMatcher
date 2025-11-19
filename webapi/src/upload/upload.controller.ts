@@ -22,7 +22,7 @@ export class UploadController {
   constructor() {
     this.blobService = new BlobService();
     this.cosmosService = new CosmosService();
-   }
+  }
 
   @Post()
   @UseInterceptors(FileInterceptor('file'))
@@ -47,20 +47,8 @@ export class UploadController {
     try {
       this.blobService.validateImageFile(file);
 
-      // Extract fields from form data body
-      const artworkData = {
-        title: body.title as string,
-        artist: body.artist as string,
-        description: body.description as string,
-        classification: body.classification as string,
-        department: body.department as string,
-        country: body.country as string,
-        date: body.date as string,
-        tags: body.tags ? JSON.parse(body.tags as string) : [],
-        category: body.category as string,
-      };
-
-      const artworkMetadata = this.parseArtworkPayload({ artwork: artworkData }, domainId);
+      // Pass artworkData directly, not wrapped
+      const artworkMetadata = this.parseArtworkPayload(body, domainId);
       const blobName = getOriginalBlobPath(domainId, artworkMetadata.id, file.mimetype);
 
       this.logger.debug({
@@ -71,6 +59,7 @@ export class UploadController {
         containerId: "originals",
         fileSize: file.size,
         fileMimeType: file.mimetype,
+        artworkObject: artworkMetadata,
       });
 
       // upload file to blob storage
@@ -87,8 +76,8 @@ export class UploadController {
         action: 'createArtworkRecord.success',
         artworkId: artworkMetadata.id,
       });
-      
-      
+
+
       // send message to queue for additional processing (thumbnail generation, vectorization, indexing)
       const imageProcessingQueueMessage: ImageProcessingQueueMessage = {
         messageId: uuidv4(),
@@ -126,19 +115,27 @@ export class UploadController {
     }
   }
 
-  private parseArtworkPayload(body: Record<string, unknown>, domainId: string): Artwork {
-    const raw = body.artwork ?? body.metadata;
-    let parsed: Partial<Artwork> = {};
+  private parseArtworkPayload(body: any, domainId: string): Artwork {
+    // Accept direct artwork object or legacy { artwork } or { metadata }
 
-    if (typeof raw === 'string') {
+    if (typeof body === 'string') {
       try {
-        parsed = JSON.parse(raw) as Partial<Artwork>;
+        body = JSON.parse(body);
       } catch {
         throw new BadRequestException('Invalid artwork metadata payload');
       }
-    } else if (raw && typeof raw === 'object') {
-      parsed = raw as Partial<Artwork>;
+    } else if (body && typeof body === 'object') {
+      // If body has 'artwork' or 'metadata', use it; otherwise, use body directly
+      if ('artwork' in body) {
+        body = (body as any).artwork as Partial<Artwork>;
+      } else if ('metadata' in body) {
+        body = (body as any).metadata as Partial<Artwork>;
+      } else {
+        body = body as Partial<Artwork>;
+      }
     }
+
+    const parsed: Partial<Artwork> = JSON.parse(body as string) as Partial<Artwork>;
 
     return {
       id: uuidv4(),

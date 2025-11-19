@@ -15,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { DomainsService } from './domains.service';
-import { Domain, DomainVerificationResultResponse, DomainRequest } from '@tastematcher/common';
+import { Domain, DomainRequest } from '@tastematcher/common';
 import { CreateDomainRequestDto } from './dto/create-domain-request.dto';
 import { UpdateDomainDto } from './dto/update-domain.dto';
 import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
