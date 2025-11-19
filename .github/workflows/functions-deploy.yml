@@ -167,19 +167,60 @@ jobs:
 
       - name: Deploy zip via Kudu API (force extraction into wwwroot)
         run: |
-          set -e
-          KUDU_USER=$(az webapp deployment list-publishing-credentials --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query publishingUserName -o tsv)
-          KUDU_PASS=$(az webapp deployment list-publishing-credentials --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query publishingPassword -o tsv)
+          set -euo pipefail
+
+          # Ensure Azure login succeeded
+          echo "Verifying Azure login..."
+          az account show --output table || { echo "Azure login failed — ensure azure/login step ran and creds are valid"; exit 1; }
+
+          KUDU_USER=$(az webapp deployment list-publishing-credentials --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query publishingUserName -o tsv || echo "")
+          KUDU_PASS=$(az webapp deployment list-publishing-credentials --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query publishingPassword -o tsv || echo "")
           SITE_SCM="https://${{ env.AZURE_FUNCTIONAPP_NAME }}.scm.azurewebsites.net"
 
-          # Upload and extract the zip into /site/wwwroot via Kudu's zip push API
-          curl --fail --show-error -u "$KUDU_USER:$KUDU_PASS" -X POST -H "Content-Type: application/zip" --data-binary @functions-deploy.zip "$SITE_SCM/api/zip/site/wwwroot/" || {
-            echo "Kudu upload failed, retrying once..."
-            sleep 3
-            curl --fail --show-error -u "$KUDU_USER:$KUDU_PASS" -X POST -H "Content-Type: application/zip" --data-binary @functions-deploy.zip "$SITE_SCM/api/zip/site/wwwroot/"
-          }
+          # Sanity checks: Kudu creds must be present
+          if [ -z "$KUDU_USER" ] || [ -z "$KUDU_PASS" ]; then
+            echo "❌ Publishing credentials are empty. Cannot call Kudu API."
+            echo "Common causes:"
+            echo " - Service Principal used by azure/login lacks permission to list publishing credentials."
+            echo " - Wrong subscription / context used by az login."
+            echo "Debug info:"
+            az account show --output json
+            echo "Listing role assignments for the logged in principal (may help identify missing role):"
+            az role assignment list --assignee "$(az account show --query user.name -o tsv)" --output json | jq -r '.[0:5]'
+            echo ""
+            echo "If using a Service Principal, ensure it has at least 'Contributor' on the resource group or 'Website Contributor' + Microsoft.Web/sites/publish permission."
+            echo "As an alternative, you can provide the publish profile as a secret and parse it in the workflow."
+            exit 1
+          fi
 
-          echo "Uploaded and forced extraction via Kudu; WEBSITE_RUN_FROM_PACKAGE set to 0"
+          echo "KUDU user and password fetched (masked). Proceeding with upload..."
+          # Upload and extract the zip into /site/wwwroot via Kudu's zip push API (verbose for diagnostics)
+          set +e
+          HTTP_OUTPUT=$(mktemp)
+          curl --fail --show-error -v -u "$KUDU_USER:$KUDU_PASS" -X POST -H "Content-Type: application/zip" --data-binary @functions-deploy.zip "$SITE_SCM/api/zip/site/wwwroot/" -o "$HTTP_OUTPUT" 2>&1
+          CURL_EXIT=$?
+          set -e
+
+          if [ $CURL_EXIT -ne 0 ]; then
+            echo "❌ Kudu upload failed (curl exit $CURL_EXIT). Full curl output:"
+            sed -n '1,400p' "$HTTP_OUTPUT" || true
+            echo ""
+            echo "HTTP response body (if any):"
+            sed -n '1,200p' "$HTTP_OUTPUT" || true
+            rm -f "$HTTP_OUTPUT"
+            exit 1
+          else
+            echo "✅ Kudu upload succeeded. Server response:"
+            sed -n '1,200p' "$HTTP_OUTPUT" || true
+            rm -f "$HTTP_OUTPUT"
+          fi
+
+          # Ensure app isn't pinned to a mounted package (keep files extracted)
+          az functionapp config appsettings set \
+            --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --settings WEBSITE_RUN_FROM_PACKAGE=0
+          echo "✅ Uploaded and forced extraction via Kudu; WEBSITE_RUN_FROM_PACKAGE set to 0"
 
       - name: Restart Function App
         run: |

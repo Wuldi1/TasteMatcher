@@ -269,7 +269,7 @@ else
     --resource-group "$RG_NAME" \
     --location "$LOCATION" \
     --number-of-workers 1 \
-    --sku B1 \
+    --sku P0V3 \
     --is-linux \
     -o none
   echo "✅ Function App Service plan $APP_PLAN created successfully"
@@ -390,7 +390,7 @@ else
   if [ "$ENV" = "prod" ]; then
     WEB_APP_SKU="P1V3"  # Production: Premium V3 tier
   else
-    WEB_APP_SKU="B1"    # Dev/Staging: Basic tier
+    WEB_APP_SKU="P0V3"    # Dev/Staging: Basic tier
   fi
 
   az appservice plan create \
