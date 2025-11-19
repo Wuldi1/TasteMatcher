@@ -15,7 +15,7 @@ on:
     paths:
       - 'functions/**'
       - 'common/**'
-      - '.github/workflows/deploy-functions.yml'
+      - '.github/workflows/functions-deploy.yml'
   workflow_dispatch:
     inputs:
       environment:
@@ -30,6 +30,7 @@ on:
 env:
   NODE_VERSION: '22.x'
   AZURE_FUNCTIONAPP_NAME: tastematcher-dev-func
+  AZURE_RESOURCE_GROUP: tastematcher-dev-rg
 
 jobs:
   build:
@@ -154,6 +155,41 @@ jobs:
         with:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
           package: deploy
+
+      - name: Inspect Function App settings (diagnostic)
+        run: |
+          echo "=== App settings ==="
+          az functionapp config appsettings list \
+            --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            -o table
+
+      - name: Ensure app is not pinned to run-from-package (optional)
+        run: |
+          # If you prefer extracted files under /home/site/wwwroot after deployment, disable run-from-package.
+          # This step sets WEBSITE_RUN_FROM_PACKAGE=0 and restarts the function app.
+          echo "Checking WEBSITE_RUN_FROM_PACKAGE..."
+          CURRENT=$(az functionapp config appsettings list --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "[?name=='WEBSITE_RUN_FROM_PACKAGE'].value | [0]" -o tsv)
+          echo "Current WEBSITE_RUN_FROM_PACKAGE: '$CURRENT'"
+          if [ "$CURRENT" != "0" ]; then
+            echo "Setting WEBSITE_RUN_FROM_PACKAGE=0 and restarting app..."
+            az functionapp config appsettings set \
+              --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --settings WEBSITE_RUN_FROM_PACKAGE=0
+            az functionapp restart --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
+          else
+            echo "WEBSITE_RUN_FROM_PACKAGE already 0 — no change."
+          fi
+
+      - name: Confirm files in wwwroot (Kudu)
+        run: |
+          echo "Listing /home/site/wwwroot (via Kudu API)..."
+          KUDU_USER=$(az webapp deployment list-publishing-credentials --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query publishingUserName -o tsv)
+          KUDU_PASS=$(az webapp deployment list-publishing-credentials --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query publishingPassword -o tsv)
+          SITE_SCM="https://${{ env.AZURE_FUNCTIONAPP_NAME }}.scm.azurewebsites.net"
+          # Use the Kudu VFS API to list the wwwroot directory
+          curl -s -u "$KUDU_USER:$KUDU_PASS" "$SITE_SCM/api/vfs/site/wwwroot/" | sed -n '1,200p' || true
 
       - name: Azure logout
         if: always()
