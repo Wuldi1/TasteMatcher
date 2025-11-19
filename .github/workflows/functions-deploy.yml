@@ -83,6 +83,7 @@ jobs:
           {
             "name": "@tastematcher/functions",
             "version": "1.0.0",
+            "main": "index.js",
             "dependencies": $(jq '.dependencies' package.json | jq 'del(.["@tastematcher/common"])'),
             "engines": {
               "node": ">=22.x"
@@ -112,6 +113,7 @@ jobs:
           {
             "name": "@tastematcher/functions",
             "version": "1.0.0",
+            "main": "index.js",
             "engines": {
               "node": ">=22.x"
             }

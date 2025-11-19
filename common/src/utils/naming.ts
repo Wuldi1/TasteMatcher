@@ -11,17 +11,15 @@
 // -----------------------------------------------------------
 
 import { BadRequestException } from '@nestjs/common/exceptions/bad-request.exception';
-import assert from 'node:assert/strict';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Ensures IDs follow UUID-like format for naming functions.
  */
 const validateId = (label: string, value: string): void => {
-  assert.ok(
-    typeof value === 'string' && value.trim().length > 0,
-    `${label} must be a non-empty string`,
-  );
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new BadRequestException(`${label} must be a non-empty string`);
+  }
 };
 
 export const extractFileExtension = (mimeType: string): string => {
@@ -44,7 +42,9 @@ export const getTemporaryBlobFolder = (domainId: string, userId: string): string
 export const getTemporaryBlobPath = (domainId: string, userId: string, mimeType: string): string => {
   validateId('domainId', domainId);
   validateId('userId', userId);
-  assert.ok(mimeType, 'mimeType required');
+  if (!mimeType) {
+    throw new BadRequestException('mimeType required');
+  }
 
   return `${getTemporaryBlobFolder(domainId, userId)}/${uuidv4()}.${extractFileExtension(mimeType)}`;
 };
@@ -57,7 +57,9 @@ export const getDomainBlobFolder = (domainId: string): string => {
 export const getOriginalBlobPath = (domainId: string, artworkId: string, mimeType: string): string => {
   validateId('domainId', domainId);
   validateId('artworkId', artworkId);
-  assert.ok(mimeType, 'mimeType required');
+  if (!mimeType) {
+    throw new BadRequestException('mimeType required');
+  }
 
   return `${getDomainBlobFolder(domainId)}/${artworkId}/original.${extractFileExtension(mimeType)}`;
 };
@@ -69,8 +71,10 @@ export const getDerivativeBlobPath = (
 ): string => {
   validateId('domainId', domainId);
   validateId('artworkId', artworkId);
-  // size can be only Small, Medium, Large as per ThumbnailSize type
-  assert.ok(['Small', 'Medium', 'Large'].includes(size), `Invalid size: ${size}. Allowed values are Small, Medium, Large.`);
+  // size must be one of Small, Medium, Large
+  if (!['Small', 'Medium', 'Large'].includes(size)) {
+    throw new BadRequestException(`Invalid size: ${size}. Allowed values are Small, Medium, Large.`);
+  }
   return `${getDomainBlobFolder(domainId)}/${artworkId}/${size.toLocaleLowerCase()}.jpg`;
 };
 
@@ -82,7 +86,9 @@ export const getSearchDocId = (domainId: string, artworkId: string): string => {
 
 export const getQueueName = (env: string): string => {
   const normalized = env.trim().toLowerCase();
-  assert.ok(normalized, 'env required');
+  if (!normalized) {
+    throw new BadRequestException('env required');
+  }
   return `tastematcher-${normalized}-queue-indexing`;
 };
 
