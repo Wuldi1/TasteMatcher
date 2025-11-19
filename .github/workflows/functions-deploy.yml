@@ -105,6 +105,7 @@ jobs:
             mkdir -p deploy/node_modules/@tastematcher/common
             cp -r $GITHUB_WORKSPACE/common/build/* deploy/node_modules/@tastematcher/common/
             cp $GITHUB_WORKSPACE/common/package.json deploy/node_modules/@tastematcher/common/
+            sed -i 's|build/index.|index.|g' deploy/node_modules/@tastematcher/common/package.json
           fi
           
           # Create minimal package.json
