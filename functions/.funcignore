@@ -4,7 +4,6 @@
 # 3. Follows Azure Functions best practices
 # -----------------------------------------------------------
 
-node_modules/
 .git/
 .vscode/
 *.log
