@@ -150,46 +150,49 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS_DEV }}
 
-      - name: Deploy to Azure Function App
-        uses: Azure/functions-action@v1
-        with:
-          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
-          package: deploy
-
-      - name: Inspect Function App settings (diagnostic)
+      - name: Ensure WEBSITE_RUN_FROM_PACKAGE is disabled (so files are extracted)
         run: |
-          echo "=== App settings ==="
-          az functionapp config appsettings list \
+          az functionapp config appsettings set \
             --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            -o table
+            --settings WEBSITE_RUN_FROM_PACKAGE=0
 
-      - name: Ensure app is not pinned to run-from-package (optional)
+      - name: Zip deployment artifact
         run: |
-          # If you prefer extracted files under /home/site/wwwroot after deployment, disable run-from-package.
-          # This step sets WEBSITE_RUN_FROM_PACKAGE=0 and restarts the function app.
-          echo "Checking WEBSITE_RUN_FROM_PACKAGE..."
-          CURRENT=$(az functionapp config appsettings list --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "[?name=='WEBSITE_RUN_FROM_PACKAGE'].value | [0]" -o tsv)
-          echo "Current WEBSITE_RUN_FROM_PACKAGE: '$CURRENT'"
-          if [ "$CURRENT" != "0" ]; then
-            echo "Setting WEBSITE_RUN_FROM_PACKAGE=0 and restarting app..."
-            az functionapp config appsettings set \
-              --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
-              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-              --settings WEBSITE_RUN_FROM_PACKAGE=0
-            az functionapp restart --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
-          else
-            echo "WEBSITE_RUN_FROM_PACKAGE already 0 — no change."
-          fi
+          # package the downloaded deploy directory into a zip for zip-deploy
+          cd deploy
+          zip -r ../functions-deploy.zip . -x "*.map" -x "*.spec.js" -x "test/*" -x "__tests__/*"
+          cd ..
+          ls -lh functions-deploy.zip
 
-      - name: Confirm files in wwwroot (Kudu)
+      - name: Deploy zip via Azure CLI (zip-deploy -> Kudu extracts to wwwroot)
         run: |
-          echo "Listing /home/site/wwwroot (via Kudu API)..."
+          az functionapp deployment source config-zip \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+            --src functions-deploy.zip
+
+      - name: Restart Function App
+        run: |
+          az functionapp restart --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
+
+      - name: Verify files in /home/site/wwwroot via Kudu (diagnostic)
+        run: |
+          echo "=== Kudu wwwroot listing ==="
           KUDU_USER=$(az webapp deployment list-publishing-credentials --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query publishingUserName -o tsv)
           KUDU_PASS=$(az webapp deployment list-publishing-credentials --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query publishingPassword -o tsv)
           SITE_SCM="https://${{ env.AZURE_FUNCTIONAPP_NAME }}.scm.azurewebsites.net"
-          # Use the Kudu VFS API to list the wwwroot directory
+          # List top-level entries in wwwroot
           curl -s -u "$KUDU_USER:$KUDU_PASS" "$SITE_SCM/api/vfs/site/wwwroot/" | sed -n '1,200p' || true
+          # Check specifically for node_modules presence
+          if curl -s -u "$KUDU_USER:$KUDU_PASS" "$SITE_SCM/api/vfs/site/wwwroot/node_modules/" | grep -q '"name"' ; then
+            echo "✅ node_modules present in wwwroot"
+          else
+            echo "❌ node_modules NOT found in wwwroot — deployment may be mounted or extraction failed"
+            echo "Listing /home/data/SitePackages for mounted packages:"
+            curl -s -u "$KUDU_USER:$KUDU_PASS" "$SITE_SCM/api/vfs/site/data/SitePackages/" | sed -n '1,200p' || true
+            exit 1
+          fi
 
       - name: Azure logout
         if: always()
