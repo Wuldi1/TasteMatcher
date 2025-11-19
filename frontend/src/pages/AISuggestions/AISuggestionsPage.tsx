@@ -11,7 +11,7 @@
 // 10. Frontend-specific: UI changes must be responsive (mobile + desktop) and smooth (no visual regressions). Include accessibility considerations (semantic markup, aria attributes, keyboard navigation, focus management) and automated accessibility checks (axe, Playwright/accessibility audit) where applicable.
 // -----------------------------------------------------------
 import { useEffect, useMemo, useState } from 'react';
-import { apiClient } from '../../services/api';
+import { apiClient } from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Artwork, User } from '@tastematcher/common';
 import { getAIRecommendationsEligibility } from '../../utils/recommendations';
@@ -23,7 +23,12 @@ interface DomainUserOption {
   swipeCount?: number;
 }
 
-export const AISuggestionsPage = () => {
+/**
+ * AISuggestionsPage
+ * - If `userId` prop is provided, fetch suggestions for that user (used by SalesPage).
+ * - If `userId` prop is not provided, keep existing domain-owner selection behavior.
+ */
+export const AISuggestionsPage = ({ userId }: { userId?: string } = {}) => {
   const { user } = useAuth();
   const [recommendations, setRecommendations] = useState<Artwork[]>([]);
   const [selectedUser, setSelectedUser] = useState<string | undefined>(undefined); // Default to undefined
@@ -34,35 +39,51 @@ export const AISuggestionsPage = () => {
   const isDomainOwner =
     user?.role === 'domain_owner' || user?.role === 'global_admin';
 
+  // targetUserId: if prop `userId` supplied, use it; otherwise fall back to existing logic
   const targetUserId = useMemo(() => {
+    if (userId) return userId;
     if (isDomainOwner) {
       return selectedUser || user?.id;
     }
     return user?.id;
-  }, [isDomainOwner, selectedUser, user?.id]);
+  }, [userId, isDomainOwner, selectedUser, user?.id]);
 
   const targetUser = useMemo(() => {
+    if (userId) {
+      // when a userId prop is provided we may not have full user object in `users` list;
+      // leave targetUser undefined (eligibility checks will be skipped in prop mode)
+      return users.find((u) => u.id === (selectedUser || user?.id));
+    }
     if (isDomainOwner) {
       return users.find((u) => u.id === (selectedUser || user?.id));
     }
     return user;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDomainOwner, selectedUser, user?.id]);
+  }, [isDomainOwner, selectedUser, user?.id, users, userId]);
+
+  // compute eligibility: when userId prop is provided we assume recommendations fetch is forced
+  const eligibility = useMemo(() => {
+    if (userId) {
+      return { isEligible: true, reasons: [] as string[] };
+    }
+    return getAIRecommendationsEligibility(targetUser as User);
+  }, [userId, targetUser]);
 
   useEffect(() => {
-    if (!isDomainOwner) {
+    // Load domain users only if domain owner AND no explicit prop userId was provided
+    if (!isDomainOwner || userId) {
       return;
     }
 
     const fetchUsers = async () => {
       try {
-        const domainUsers = await apiClient.getAllUsers();
+        const domainUsers = await apiClient.getAllUsers(user?.domainId);
         setUsers(
-          domainUsers.map((u) => ({
-            id: u.id,
-            label: u.name ?? u.email ?? u.id,
-            onboardingStatus: (u as any).onboardingStatus,
-            swipeCount: (u as any).swipeCount,
+          domainUsers.map((domainUser) => ({
+            id: domainUser.id,
+            label: domainUser.name ?? domainUser.email ?? domainUser.id,
+            onboardingStatus: (domainUser as any).onboardingStatus,
+            swipeCount: (domainUser as any).swipeCount,
           })),
         );
       } catch (err) {
@@ -72,10 +93,13 @@ export const AISuggestionsPage = () => {
     };
 
     void fetchUsers();
-  }, [isDomainOwner]);
+    // stable dependencies only (primitives) to avoid re-running on user object identity changes
+  }, [isDomainOwner, user?.domainId, userId]);
 
   useEffect(() => {
+    // Use only stable primitives in deps to avoid effect re-running due to object identity changes.
     if (!targetUserId || !user?.domainId) {
+      setRecommendations([]);
       return;
     }
 
@@ -84,24 +108,28 @@ export const AISuggestionsPage = () => {
       setError(null);
 
       try {
+        // If userId prop provided, always request recommendations for that user
         const recommendations = await apiClient.getRecommendations(
           user.domainId!,
-          isDomainOwner && targetUserId !== user.id ? targetUserId : undefined,
+          // if domain owner and selectedUser differs from current user, pass the target user id
+          targetUserId !== user?.id ? targetUserId : undefined,
         );
         setRecommendations(recommendations);
       } catch (err) {
         console.error('Failed to load AI suggestions', err);
-        // No need to display error if user is not eligible
-        if (getAIRecommendationsEligibility(targetUser as User).isEligible) {
+        // Only show an error when eligibility indicates we should have suggestions (skip when forced-by-prop)
+        if (!userId && eligibility.isEligible) {
           setError('Unable to load AI suggestions. Please try again.');
         }
+        setRecommendations([]);
       } finally {
         setLoading(false);
       }
     };
 
     void fetchRecommendations();
-  }, [isDomainOwner, targetUserId, user, targetUser]);
+  // only depend on stable primitives: domain id, targetUserId prop, eligibility flag and userId prop
+  }, [targetUserId, user?.domainId, user?.id, eligibility.isEligible, userId]);
 
   const formatMatchPercentage = (score?: number): string => {
     if (typeof score !== 'number' || Number.isNaN(score)) {
@@ -135,7 +163,8 @@ export const AISuggestionsPage = () => {
         </p>
       </header>
 
-      {isDomainOwner && (
+      {/* Show domain-owner selector only when prop userId is not provided */}
+      {!userId && isDomainOwner && (
         <div className="mb-6">
           <label
             htmlFor="ai-suggestions-user"
@@ -168,7 +197,8 @@ export const AISuggestionsPage = () => {
         </div>
       )}
 
-      {!selectedUser && isDomainOwner && (
+      {/* Informational messages */}
+      {!userId && !selectedUser && isDomainOwner && (
         <div
           className="mx-auto mb-6 max-w-xl rounded-lg border border-blue-200 bg-blue-50 p-4 text-center"
           role="alert"
@@ -180,27 +210,25 @@ export const AISuggestionsPage = () => {
         </div>
       )}
 
-      {selectedUser &&
-        !getAIRecommendationsEligibility(targetUser as User).isEligible && (
-          <div
-            className="mx-auto mb-6 max-w-2xl rounded-lg border border-yellow-200 bg-yellow-50 p-6"
-            role="alert"
-            aria-live="polite"
-          >
-            <h2 className="mb-3 text-lg font-semibold text-yellow-900">
-              This profile is almost ready for AI suggestions
-            </h2>
-            <ul className="list-disc space-y-2 pl-5 text-yellow-800">
-              {getAIRecommendationsEligibility(targetUser as User).reasons.map(
-                (reason) => (
-                  <li key={reason}>{reason}</li>
-                ),
-              )}
-            </ul>
-          </div>
-        )}
+      {/* Eligibility warning (only when not forced by prop) */}
+      {!userId && selectedUser && !eligibility.isEligible && (
+        <div
+          className="mx-auto mb-6 max-w-2xl rounded-lg border border-yellow-200 bg-yellow-50 p-6"
+          role="alert"
+          aria-live="polite"
+        >
+          <h2 className="mb-3 text-lg font-semibold text-yellow-900">
+            This profile is almost ready for AI suggestions
+          </h2>
+          <ul className="list-disc space-y-2 pl-5 text-yellow-800">
+            {eligibility.reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
-      {getAIRecommendationsEligibility(targetUser as User).isEligible && recommendations.length > 0 && (
+      {eligibility.isEligible && recommendations.length > 0 && (
         <section
           aria-label="AI suggested artworks"
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
@@ -240,7 +268,7 @@ export const AISuggestionsPage = () => {
         </section>
       )}
 
-      {getAIRecommendationsEligibility(targetUser as User).isEligible && recommendations.length === 0 && (
+      {eligibility.isEligible && recommendations.length === 0 && (
         <p className="py-12 text-center text-gray-600">
           No AI suggestions yet. Encourage additional tasting activity to enrich personalization.
         </p>

@@ -14,9 +14,9 @@
 import { useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
-import { Search, X, Trash2, Edit, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Search, X, ThumbsUp, ThumbsDown, Edit, Trash2 } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
-import { apiClient } from '../../services/api';
+import { apiClient } from '../../utils/api';
 import { EditArtworkModal } from '../../components/EditArtworkModal/EditArtworkModal';
 import './CatalogPage.css';
 
@@ -35,15 +35,15 @@ export function CatalogPage() {
   const [editingArtwork, setEditingArtwork] = useState<Artwork | null>(null);
 
   // Debug logging to check auth state
-  console.log('CatalogPage render:', { 
-    user, 
-    domainId: user?.domainId, 
+  console.log('CatalogPage render:', {
+    user,
+    domainId: user?.domainId,
     authLoading,
     isEnabled: !!user?.domainId && !authLoading
   });
 
   // Debug: Force log on every render
-  console.log('[CatalogPage] Render state:', { 
+  console.log('[CatalogPage] Render state:', {
     hasUser: !!user,
     userId: user?.id,
     domainId: user?.domainId,
@@ -62,11 +62,11 @@ export function CatalogPage() {
     isFetching,
     status,
   } = useInfiniteQuery({
-    queryKey: ['artworks', user?.domainId, searchQuery, sortBy, sortOrder, filterBy],
+    queryKey: ['artworks', user?.domainId, searchQuery, sortBy, sortOrder],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
-      console.log('[Query] Executing queryFn:', { 
-        domainId: user?.domainId, 
-        pageParam, 
+      console.log('[Query] Executing queryFn:', {
+        domainId: user?.domainId,
+        pageParam,
         searchQuery,
         sortBy,
         sortOrder,
@@ -76,13 +76,12 @@ export function CatalogPage() {
       if (!user?.domainId) {
         throw new Error('No domain ID');
       }
-      
+
       const result = await apiClient.getArtworks(user.domainId, {
         limit: 20,
         continuationToken: pageParam,
         sortBy,
         sortOrder,
-        filterBy: filterBy || undefined,
       });
 
       return result;
@@ -95,7 +94,7 @@ export function CatalogPage() {
   });
 
   // Debug query state
-  console.log('[Query] State:', { 
+  console.log('[Query] State:', {
     status,
     queryLoading,
     isFetching,
@@ -110,16 +109,16 @@ export function CatalogPage() {
   // Filter artworks by search query (client-side)
   const filteredArtworks = searchQuery
     ? allArtworks.filter((artwork) => {
-        const query = searchQuery.toLowerCase();
-        return (
-          artwork.title?.toLowerCase().includes(query) ||
-          artwork.artist?.toLowerCase().includes(query) ||
-          artwork.description?.toLowerCase().includes(query) ||
-          artwork.classification?.toLowerCase().includes(query) ||
-          artwork.department?.toLowerCase().includes(query) ||
-          artwork.tags?.some(tag => tag.toLowerCase().includes(query))
-        );
-      })
+      const query = searchQuery.toLowerCase();
+      return (
+        artwork.title?.toLowerCase().includes(query) ||
+        artwork.artist?.toLowerCase().includes(query) ||
+        artwork.description?.toLowerCase().includes(query) ||
+        artwork.classification?.toLowerCase().includes(query) ||
+        artwork.department?.toLowerCase().includes(query) ||
+        artwork.tags?.some(tag => tag.toLowerCase().includes(query))
+      );
+    })
     : allArtworks;
 
   // Delete mutation
@@ -204,7 +203,7 @@ export function CatalogPage() {
   const handlePreferenceClick = (artworkId: string, liked: boolean, e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (!user || user.role !== 'customer') return;
-    if (savePreferenceMutation.isLoading) return;
+    if (!savePreferenceMutation.isSuccess) return;
     savePreferenceMutation.mutate({ artworkId, liked });
   };
 
@@ -213,7 +212,7 @@ export function CatalogPage() {
       <div className="catalog-page">
         <header className="catalog-header">
           <h1 className="catalog-title">Artwork Catalog</h1>
-          
+
           {/* Search and Filter Bar */}
           <div className="catalog-controls">
             <div className="catalog-search">
@@ -329,8 +328,8 @@ export function CatalogPage() {
         ) : error ? (
           <div className="catalog-error" role="alert">
             <p>Error loading artworks: {error.message}</p>
-            <button 
-              onClick={() => queryClient.invalidateQueries({ queryKey: ['artworks'] })}
+            <button
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] })}
               className="catalog-retry-button"
             >
               Retry
@@ -342,89 +341,82 @@ export function CatalogPage() {
           </div>
         ) : (
           <>
-            <div className="catalog-grid" role="list">
-              {filteredArtworks.map((artwork) => {
-                const likedStatus = artwork.likedStatus ?? 'NotTasted';
-                const isCustomer = user?.role === 'customer';
-
-                return (
-                <div
-                  key={artwork.id}
-                  className="catalog-item"
-                  role="listitem"
-                >
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredArtworks.map((artwork) => (
+                <div key={artwork.id} className="border rounded overflow-hidden bg-white shadow-sm">
                   <button
                     type="button"
-                    className="catalog-item__image-wrapper"
+                    className="block w-full h-40 bg-gray-100 overflow-hidden"
                     onClick={() => handleArtworkClick(artwork)}
-                    aria-label={`View ${artwork.title}`}
+                    aria-label={`Open artwork ${artwork.title ?? artwork.id}`}
                   >
-                    <img
-                      src={artwork.thumbnails?.[0]?.url || artwork.filename}
-                      alt={artwork.title}
-                      className="catalog-item__image"
-                      loading="lazy"
-                    />
-                    <div className="catalog-item__overlay">
-                      <span className="catalog-item__title">{artwork.title}</span>
-                      {artwork.artist && (
-                        <span className="catalog-item__artist">{artwork.artist}</span>
-                      )}
-                    </div>
+                    {artwork.filename ? (
+                      <img src={artwork.filename} alt={artwork.title} className="object-cover w-full h-full" />
+                    ) : (
+                      <div className="text-sm text-gray-500 p-4 h-full flex items-center justify-center">No image</div>
+                    )}
                   </button>
 
-                  {/* Action buttons + customer thumbs */}
-                  <div className="catalog-item__actions">
-                    {isCustomer && (
-                      <div className="catalog-item__preference flex items-center gap-2 mr-2" aria-hidden="true">
-                        <button
-                          type="button"
-                          onClick={(e) => handlePreferenceClick(artwork.id, true, e)}
-                          className="p-1"
-                          aria-label={`Like ${artwork.title}`}
-                          title="Like"
-                        >
-                          <ThumbsUp
-                            className={`w-5 h-5 ${likedStatus === 'Liked' ? 'text-green-500' : 'text-gray-400'}`}
-                          />
-                        </button>
+                  <div className="p-3">
+                    <div className="text-sm font-semibold truncate">{artwork.title}</div>
+                    <div className="text-xs text-gray-500 mt-1">{artwork.artist}</div>
 
-                        <button
-                          type="button"
-                          onClick={(e) => handlePreferenceClick(artwork.id, false, e)}
-                          className="p-1"
-                          aria-label={`Dislike ${artwork.title}`}
-                          title="Dislike"
-                        >
+                    <div className="mt-3 flex items-center justify-between">
+                      {/* Thumbs Up/Down for customers */}
+                      {user?.role === 'customer' && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => handlePreferenceClick(artwork.id, true, e)}
+                            aria-label={`Like ${artwork.title}`}
+                            className="p-1"
+                            disabled={savePreferenceMutation.isPending}
+                          >
+                            <ThumbsUp
+                              className={`w-5 h-5 ${artwork.likedStatus === 'Liked' ? 'text-green-600' : 'text-gray-300'
+                                }`}
+                          />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handlePreferenceClick(artwork.id, false, e)}
+                            aria-label={`Dislike ${artwork.title}`}
+                            className="p-1"
+                            disabled={savePreferenceMutation.isPending}
+                          >
+                          </button>
                           <ThumbsDown
-                            className={`w-5 h-5 ${likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'}`}
+                            className={`w-5 h-5 ${artwork.likedStatus === 'Disliked' ? 'text-red-600' : 'text-gray-300'
+                              }`}
                           />
-                        </button>
-                      </div>
-                    )}
+                        </div>
+                      )}
 
-                    {/* Owner/manager actions (edit/delete) */}
-                    <button
-                      type="button"
-                      className="catalog-item__action catalog-item__action--edit"
-                      onClick={(e) => handleEditClick(artwork, e)}
-                      aria-label="Edit artwork"
-                      title="Edit"
-                    >
-                      <Edit aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      className="catalog-item__action catalog-item__action--delete"
-                      onClick={(e) => handleDeleteClick(artwork, e)}
-                      aria-label="Delete artwork"
-                      title="Delete"
-                    >
-                      <Trash2 aria-hidden="true" />
-                    </button>
+                      {/* Edit/Delete for non-customers */}
+                      {user?.role !== 'customer' && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => handleEditClick(artwork, e)}
+                            aria-label="Edit"
+                            className="p-1 text-blue-600 hover:text-blue-800"
+                          >
+                            <Edit className="w-5 h-5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteClick(artwork, e)}
+                            aria-label="Delete"
+                            className="p-1 text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              )})}
+              ))}
             </div>
 
             {/* Load more button */}
@@ -444,101 +436,141 @@ export function CatalogPage() {
           </>
         )}
 
-        {/* Full-size modal */}
+        {/* Redesigned Full-size modal */}
         {selectedArtwork && (
           <div
-            className="catalog-modal"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
             onClick={handleCloseModal}
           >
-            <div className="catalog-modal__content" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="relative bg-white rounded-lg shadow-lg w-full max-w-4xl p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
               <button
                 type="button"
-                className="catalog-modal__close"
+                className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
                 onClick={handleCloseModal}
                 aria-label="Close modal"
               >
-                <X aria-hidden="true" />
+                <X className="w-6 h-6" />
               </button>
 
-              <img
-                src={selectedArtwork.thumbnails?.[2]?.url || selectedArtwork.filename}
-                alt={selectedArtwork.title}
-                className="catalog-modal__image"
-              />
-              <div className="catalog-modal__info">
-                <h2 id="modal-title" className="catalog-modal__title">
-                  {selectedArtwork.title}
-                </h2>
-                {selectedArtwork.artist && (
-                  <p className="catalog-modal__artist">by {selectedArtwork.artist}</p>
-                )}
-                {selectedArtwork.date && (
-                  <p className="catalog-modal__date">{selectedArtwork.date}</p>
-                )}
-                {selectedArtwork.description && (
-                  <p className="catalog-modal__description">{selectedArtwork.description}</p>
-                )}
+              <div className="flex flex-col md:flex-row gap-6">
+                {/* Artwork Image */}
+                <div className="flex-shrink-0 w-full md:w-1/2">
+                  <img
+                    src={selectedArtwork.thumbnails?.[2]?.url || selectedArtwork.filename}
+                    alt={selectedArtwork.title}
+                    className="rounded-lg object-cover w-full h-96"
+                  />
+                </div>
 
-                {/* Customer actionable thumbs inside modal */}
-                {user?.role === 'customer' && (
-                  <div className="catalog-modal__preference mt-4 flex items-center justify-center gap-6">
-                    <button
-                      type="button"
-                      onClick={() => handlePreferenceClick(selectedArtwork.id, true)}
-                      aria-label="Like artwork"
-                      className="p-2"
-                      disabled={savePreferenceMutation.isLoading}
-                    >
-                      <ThumbsUp
-                        className={`w-6 h-6 ${selectedArtwork.likedStatus === 'Liked' ? 'text-green-500' : 'text-gray-400'}`}
-                      />
-                    </button>
+                {/* Artwork Details */}
+                <div className="flex-1 flex flex-col">
+                  <h2 id="modal-title" className="text-2xl font-bold text-gray-900 mb-4">
+                    {selectedArtwork.title}
+                  </h2>
+                  {selectedArtwork.artist && (
+                    <p className="text-lg text-gray-700 mb-2">
+                      <span className="font-semibold">Artist:</span> {selectedArtwork.artist}
+                    </p>
+                  )}
+                  {selectedArtwork.date && (
+                    <p className="text-lg text-gray-700 mb-2">
+                      <span className="font-semibold">Date:</span> {selectedArtwork.date}
+                    </p>
+                  )}
+                  {selectedArtwork.description && (
+                    <p className="text-sm text-gray-600 mb-4">{selectedArtwork.description}</p>
+                  )}
 
-                    <button
-                      type="button"
-                      onClick={() => handlePreferenceClick(selectedArtwork.id, false)}
-                      aria-label="Dislike artwork"
-                      className="p-2"
-                      disabled={savePreferenceMutation.isLoading}
-                    >
-                      <ThumbsDown
-                        className={`w-6 h-6 ${selectedArtwork.likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'}`}
-                      />
-                    </button>
-                  </div>
-                )}
-
-                {/* Metadata badges */}
-                {(selectedArtwork.classification || selectedArtwork.department || selectedArtwork.country) && (
-                  <div className="catalog-modal__metadata">
+                  {/* Metadata */}
+                  <div className="flex flex-wrap gap-2 mb-4">
                     {selectedArtwork.classification && (
-                      <span className="catalog-modal__badge catalog-modal__badge--classification">
+                      <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
                         {selectedArtwork.classification}
                       </span>
                     )}
                     {selectedArtwork.department && (
-                      <span className="catalog-modal__badge catalog-modal__badge--department">
+                      <span className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">
                         {selectedArtwork.department}
                       </span>
                     )}
                     {selectedArtwork.country && (
-                      <span className="catalog-modal__badge catalog-modal__badge--country">
+                      <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
                         {selectedArtwork.country}
                       </span>
                     )}
+                    {selectedArtwork.tags &&
+                      selectedArtwork.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-3 py-1 bg-gray-100 text-gray-800 text-sm rounded-full"
+                        >
+                          {tag}
+                        </span>
+                      ))}
                   </div>
-                )}
-                
-                {selectedArtwork.tags && selectedArtwork.tags.length > 0 && (
-                  <div className="catalog-modal__tags">
-                    {selectedArtwork.tags.map((tag) => (
-                      <span key={tag} className="catalog-modal__tag">{tag}</span>
-                    ))}
-                  </div>
-                )}
+
+                  {/* Thumbs Up/Down */}
+                  {user?.role === 'customer' && (
+                    <div className="mt-4 flex items-center justify-center gap-6">
+                      <button
+                        type="button"
+                        onClick={() => handlePreferenceClick(selectedArtwork.id, true)}
+                        aria-label="Like artwork"
+                        className="p-2"
+                        disabled={savePreferenceMutation.isPending}
+                      >
+                        <ThumbsUp
+                          className={`w-6 h-6 ${selectedArtwork.likedStatus === 'Liked' ? 'text-green-500' : 'text-gray-400'
+                            }`}
+                        />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handlePreferenceClick(selectedArtwork.id, false)}
+                        aria-label="Dislike artwork"
+                        className="p-2"
+                        disabled={savePreferenceMutation.isPending}
+                      >
+                        <ThumbsDown
+                          className={`w-6 h-6 ${selectedArtwork.likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'
+                            }`}
+                        />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Actions (restricted for customers) */}
+                  {user?.role !== 'customer' && (
+                    <div className="mt-auto flex items-center gap-4">
+                      <button
+                        type="button"
+                        onClick={(e) => handleEditClick(selectedArtwork, e)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                        aria-label="Edit artwork"
+                      >
+                        <Edit className="w-5 h-5" />
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteClick(selectedArtwork, e)}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                        aria-label="Delete artwork"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -14,6 +14,7 @@ import {
   UseInterceptors,
   BadRequestException,
   ForbiddenException,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
@@ -31,9 +32,9 @@ import { ArtworksService } from '../artworks/artworks.service';
 @Controller('api/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService, 
+  constructor(private readonly usersService: UsersService,
     private readonly authService: AuthService,
-    private readonly artworksService: ArtworksService) {}
+    private readonly artworksService: ArtworksService) { }
 
   /**
    * Get all users in the current domain (domain_owner and global_admin only)
@@ -60,9 +61,15 @@ export class UsersController {
    * Get a specific user by ID (domain_owner and global_admin only)
    */
   @Get(':id')
-  @Roles('domain_owner', 'global_admin')
-  async findOne(@Request() req: AuthenticatedRequest, @Param('id') userId: string): Promise<User> {
-    return this.usersService.findOne(req.user.domainId, userId);
+  @Roles('dealer', 'domain_owner', 'global_admin')
+  async findOne(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') userId: string,
+    @Query('domainId') domainId?: string): Promise<User> {
+      if (domainId && req.user.domainId !== domainId && req.user.role !== 'global_admin') {
+        throw new ForbiddenException('You are not authorized to access this domain.');
+      }
+    return this.usersService.findOne(domainId ?? req.user.domainId, userId);
   }
 
   /**

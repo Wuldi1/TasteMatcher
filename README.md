@@ -60,6 +60,21 @@ To get started with the TasteMatcher application, follow these steps:
 3. **Set Up Environment Variables**: Copy `.env.example` to `.env` and configure your environment variables as needed.
 4. **Run the Application**: Use the provided `scripts/dev.sh` to start both the backend and frontend applications concurrently.
 
+## New: Sales page (dealer flow)
+
+We added a new Sales page (frontend/src/pages/SalesPage.tsx) that provides:
+- User selector (dropdown)
+- Tabs: Details, Catalog, AI Suggestions, Sale Proposal
+
+Backend endpoints (skeleton) were added under backend/src/sales:
+- GET /api/domains/:domainId/sales/users
+- GET /api/domains/:domainId/sales/catalog?userId=&hasFeedback=
+- GET /api/domains/:domainId/sales/ai-suggestions?userId=&limit=
+- POST /api/domains/:domainId/sales/proposals
+- GET /api/domains/:domainId/sales/proposals/:proposalId
+
+Please wire the controller to your existing services (UserService, CatalogService, AISuggestionService, ProposalService) and update frontend Catalog usage to reuse the existing Catalog component by passing userId and hasFeedback filter.
+
 ## Contributing
 
 We welcome contributions to the TasteMatcher application! Please feel free to submit issues or pull requests.

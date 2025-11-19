@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut, ChevronsLeft, ChevronsRight, User as UserIcon, X, Lock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWelcomeTour } from '../../hooks/useWelcomeTour';
@@ -10,7 +10,8 @@ export const Sidebar = () => {
   const { user, logout } = useAuth();
   const location = useLocation(); // Get the current route
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { currentStep, nextStep, skipTour, isTourActive, previousStep } = useWelcomeTour();
+  const { currentStep, isTourActive, previousStep, nextStep, skipTour } = useWelcomeTour(); // Hook to start the onboarding guide
+  const navigate = useNavigate();
   const [bubblePosition, setBubblePosition] = useState<number | null>(null);
 
   // Filter links based on user role
@@ -43,7 +44,8 @@ export const Sidebar = () => {
 
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         {filteredLinks.map((link) => {
-          const isLocked = link.id === 'ai-suggestions' && user?.role === 'customer' && getAIRecommendationsEligibility(user).isEligible;
+          // Lock AI Suggestions for customers that are NOT yet eligible
+          const isLocked = link.id === 'ai-suggestions' && user?.role === 'customer' && !getAIRecommendationsEligibility(user!).isEligible;
           const isActive = location.pathname === link.href || location.pathname.startsWith(`${link.href}/`); // Custom isActive logic
           const isActiveBubble = isTourActive && currentStep === link.id;
 
@@ -52,6 +54,7 @@ export const Sidebar = () => {
               <NavLink
                 to={isLocked ? '#' : link.href}
                 data-id={link.id}
+                aria-label={link.ariaLabel}
                 className={() =>
                   `flex items-center px-4 py-2.5 rounded-lg transition-colors duration-200 ease-in-out font-medium ${isActiveBubble
                     ? 'bg-purple-50 text-purple-600 border-l-4 border-purple-500'
@@ -119,26 +122,39 @@ export const Sidebar = () => {
       </nav>
 
       <div className="p-4 border-t border-gray-200 flex-shrink-0">
-        {user && (
-          <div className={`flex items-center mb-4 ${isCollapsed ? 'justify-center' : ''}`}>
-            {!isCollapsed ? (
-              <div className="flex items-center w-full group relative">
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
-                  <UserIcon className="w-5 h-5 text-blue-600" />
-                </div>
-                <div className="overflow-hidden flex-1">
-                  <p className="text-sm font-semibold text-gray-800 truncate">{user.name || user.email}</p>
-                  <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                  <p className="text-xs text-gray-400 capitalize mt-0.5">{user.role}</p>
-                </div>
-              </div>
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <UserIcon className="w-5 h-5 text-blue-600" />
-              </div>
-            )}
+        <div
+          className={`relative flex items-center mb-4 ${isCollapsed ? 'justify-center' : ''} ${
+            user && user.role === 'customer' ? 'cursor-pointer' : ''
+          } group`}
+          onClick={() => {
+            if (user?.role === 'customer') {
+              navigate('/onboarding', { replace: true });
+            }
+          }}
+          role={user?.role === 'customer' ? 'button' : undefined}
+          tabIndex={user?.role === 'customer' ? 0 : undefined}
+          aria-label={user?.role === 'customer' ? 'Reopen onboarding guide' : undefined}
+        >
+          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
+            <UserIcon className="w-5 h-5 text-blue-600" />
           </div>
-        )}
+          {!isCollapsed && (
+            <div className="overflow-hidden flex-1">
+              <p className="text-sm font-semibold text-gray-800 truncate">{user.name || user.email}</p>
+              <p className="text-xs text-gray-500 truncate">{user.email}</p>
+              <p className="text-xs text-gray-400 capitalize mt-0.5">{user.role}</p>
+            </div>
+          )}
+          {user && user.role === 'customer' && (
+            <div
+              className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 rounded-md bg-purple-700 text-white px-4 py-2 text-xs shadow opacity-0 scale-95 transform transition-all duration-150 ease-out group-hover:opacity-100 group-hover:scale-100"
+              role="tooltip"
+              style={{ width: '190px', textAlign: 'center', whiteSpace: 'normal' }}>
+              Do you want to re-live the onboarding experience? ✨
+            </div>
+          )}
+        </div>
+
         <button
           onClick={logout}
           className={`flex items-center w-full px-4 py-2.5 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors duration-200 font-medium ${isCollapsed ? 'justify-center' : ''
@@ -149,6 +165,6 @@ export const Sidebar = () => {
           {!isCollapsed && <span>Logout</span>}
         </button>
       </div>
-    </aside>
+    </aside >
   );
 };

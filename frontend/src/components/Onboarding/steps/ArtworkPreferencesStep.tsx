@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { ArtworkPreferences } from '@tastematcher/common';
-import { apiClient, ApiError } from '../../../services/api';
+import { apiClient, ApiError } from '../../../utils/api';
 
 interface ArtworkPreferencesStepProps {
   data: ArtworkPreferences;

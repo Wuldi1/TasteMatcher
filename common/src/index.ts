@@ -5,6 +5,7 @@ export * from './types/processing.types';
 export * from './types/queue.types';
 export * from './types/user.types';
 export * from './types/query.types';
+export * from './types/sales.types';
 
 // utils
 export * from './utils/naming';

@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
 import { useAuth } from '../../hooks/useAuth';
 import './EditArtworkModal.css';
-import { apiClient } from '../../services/api';
+import { apiClient } from '../../utils/api';
 
 interface EditArtworkModalProps {
   artwork: Artwork;

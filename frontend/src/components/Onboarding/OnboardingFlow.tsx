@@ -7,7 +7,7 @@ import { PersonalDetailsStep } from './steps/PersonalDetailsStep';
 import { CollectingPreferencesStep } from './steps/CollectingPreferencesStep';
 import { ArtworkPreferencesStep } from './steps/ArtworkPreferencesStep';
 import { CompletionStep } from './steps/CompletionStep';
-import { apiClient, ApiError } from '../../services/api';
+import { apiClient, ApiError } from '../../utils/api';
 
 type OnboardingStep = 'welcome' | 'personal' | 'collecting' | 'artwork' | 'completion';
 

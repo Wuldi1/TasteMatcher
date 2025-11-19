@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { ArrowRight, Upload, Grid, Heart } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { apiClient } from '../../services/api';
+import { apiClient } from '../../utils/api';
 import type { ArtworkStats, User } from '@tastematcher/common';
 import './HomePage.css';
 import { useDomain } from '../../contexts/DomainContext';

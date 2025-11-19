@@ -13,7 +13,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Artwork } from '@tastematcher/common';
 import { useDomain } from '../contexts/DomainContext';
-import { apiClient, ApiError } from '../services/api';
+import { apiClient, ApiError } from '../utils/api';
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 

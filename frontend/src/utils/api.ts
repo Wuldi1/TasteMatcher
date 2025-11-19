@@ -21,7 +21,8 @@ import {
   ArtworkStats,
   UntastedArtworksResponse,
   SavePreferenceRequest,
-  PaginatedResponse
+  PaginatedResponse,
+  Proposal
 } from '@tastematcher/common';
 
 /**
@@ -47,8 +48,8 @@ class BaseApiClient {
   protected authToken: string | null = null;
 
   constructor() {
-    // this.baseURL = process.env.REACT_APP_API_URL!;
-    this.baseURL = 'https://tastematcher-dev-api.azurewebsites.net';
+    this.baseURL = process.env.REACT_APP_API_URL!;
+    // this.baseURL = 'https://tastematcher-dev-api.azurewebsites.net';
     this.loadAuthToken();
   }
 
@@ -312,9 +313,10 @@ class ApiClient extends BaseApiClient {
    * Create domain by admin (global admin only)
    */
   async createDomainByAdmin(data: {
-    userName: string;
+    name: string;
     email: string;
     domainName: string;
+    proposedDomainName: string;
   }): Promise<Domain> {
     return this.request<Domain>('/api/domains/create', {
       method: 'POST',
@@ -357,9 +359,10 @@ class ApiClient extends BaseApiClient {
   /**
    * Get user by ID
    */
-  async getUser(userId: string): Promise<User> {
+  async getUser(userId: string, domainId?: string): Promise<User> {
     this.validateRequired(userId, 'User ID');
-    return this.request<User>(`/api/users/${userId}`, { method: 'GET' });
+    const url = domainId ? `/api/users/${userId}?domainId=${domainId}` : `/api/users/${userId}`;
+    return this.request<User>(url, { method: 'GET' });
   }
 
   /**
@@ -428,6 +431,9 @@ class ApiClient extends BaseApiClient {
 
   /**
    * Get artworks for a domain with optional pagination and filtering
+   *
+   * If `options.userId` is provided and the caller is authorized (domain_owner/global_admin or dealer where allowed),
+   * the backend may include per-artwork liked/disliked status for that user.
    */
   async getArtworks(
     domainId: string,
@@ -437,6 +443,7 @@ class ApiClient extends BaseApiClient {
       sortBy?: string;
       sortOrder?: 'asc' | 'desc';
       filterBy?: string;
+      userId?: string;
     }
   ): Promise<PaginatedResponse<Artwork>> {
     this.validateRequired(domainId, 'Domain ID');
@@ -447,6 +454,7 @@ class ApiClient extends BaseApiClient {
     if (options?.sortBy) params.append('sortBy', options.sortBy);
     if (options?.sortOrder) params.append('sortOrder', options.sortOrder);
     if (options?.filterBy) params.append('filterBy', options.filterBy);
+    if (options?.userId) params.append('userId', options.userId);
     
     const queryString = params.toString();
     const endpoint = `/api/domains/${domainId}/artworks${queryString ? `?${queryString}` : ''}`;
@@ -514,7 +522,70 @@ class ApiClient extends BaseApiClient {
     );
   }
 
-  // ======= Authentication Endpoints (Public) ==========
+  // ========== Sales / Proposals Endpoints ==========
+
+
+  /**
+   * List proposals for a domain (optionally filter by userId)
+   */
+  async listProposals(domainId: string, userId?: string): Promise<Proposal[]> {
+    this.validateRequired(domainId, 'Domain ID');
+    const params = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+    return this.request<Proposal[]>(`/api/domains/${domainId}/sales/proposals${params}`, { method: 'GET' });
+  }
+
+  /**
+   * Get a specific proposal by ID
+   */
+  async getProposal(domainId: string, proposalId: string): Promise<Proposal> {
+    this.validateRequired(domainId, 'Domain ID');
+    this.validateRequired(proposalId, 'Proposal ID');
+    return this.request<Proposal>(`/api/domains/${domainId}/sales/proposals/${proposalId}`, { method: 'GET' });
+  }
+
+  /**
+   * Create a new proposal
+   */
+  async createProposal(domainId: string, proposal: Partial<Proposal>): Promise<Proposal> {
+    this.validateRequired(domainId, 'Domain ID');
+    this.validateRequired(proposal.userId, 'User ID');
+    return this.request<Proposal>(`/api/domains/${domainId}/sales/proposals`, {
+      method: 'POST',
+      body: JSON.stringify(proposal),
+    });
+  }
+
+  /**
+   * Update an existing proposal
+   */
+  async updateProposal(domainId: string, proposalId: string, update: Partial<Proposal>): Promise<Proposal> {
+    this.validateRequired(domainId, 'Domain ID');
+    this.validateRequired(proposalId, 'Proposal ID');
+    return this.request<Proposal>(`/api/domains/${domainId}/sales/proposals/${proposalId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(update),
+    });
+  }
+
+  /**
+   * Delete a proposal
+   */
+  async deleteProposal(domainId: string, proposalId: string): Promise<void> {
+    this.validateRequired(domainId, 'Domain ID');
+    this.validateRequired(proposalId, 'Proposal ID');
+    await this.request<void>(`/api/domains/${domainId}/sales/proposals/${proposalId}`, { method: 'DELETE' });
+  }
+
+  /**
+   * Ping a customer about a proposal (send reminder)
+   */
+  async pingProposal(domainId: string, proposalId: string): Promise<void> {
+    this.validateRequired(domainId, 'Domain ID');
+    this.validateRequired(proposalId, 'Proposal ID');
+    await this.request<void>(`/api/domains/${domainId}/sales/proposals/${proposalId}/ping`, { method: 'POST' });
+  }
+
+  // ========== Authentication Endpoints (Public) ==========
 
   /**
    * Request login verification code

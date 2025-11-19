@@ -15,7 +15,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { ThumbsUp, ThumbsDown, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
-import { apiClient } from '../../services/api';
+import { apiClient } from '../../utils/api';
 import './TasterPage.css';
 
 type SwipeDirection = 'left' | 'right' | null;

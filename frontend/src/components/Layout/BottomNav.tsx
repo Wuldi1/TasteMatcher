@@ -32,6 +32,7 @@ export const BottomNav = () => {
             <div key={link.id} className="relative group flex-1">
               <NavLink
                 to={isLocked ? '#' : link.href}
+                aria-label={link.ariaLabel}
                 className={() =>
                   `flex flex-col items-center justify-center h-full w-full text-xs transition-colors ${
                     isActiveBubble

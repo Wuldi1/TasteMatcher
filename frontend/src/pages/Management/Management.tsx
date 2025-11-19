@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Role, Domain, DomainRequest, DomainRequestStatus } from '@tastematcher/common';
-import { useAuth } from '../contexts/AuthContext';
-import { apiClient, ApiError } from '../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { apiClient, ApiError } from '../../utils/api';
 import { Navigate } from 'react-router-dom';
 import './Management.css';
 
@@ -177,9 +177,10 @@ export function Management() {
       setCreateDomainError(null);
       
       await apiClient.createDomainByAdmin({
-        userName: createDomainUserName.trim(),
+        name: createDomainUserName.trim(),
         email: createDomainEmail.trim().toLowerCase(),
         domainName: createDomainName.trim(),
+        proposedDomainName: "JaclynsArtGallery", // Temporary placeholder until UI is updated
       });
 
       setCreateDomainUserName('');

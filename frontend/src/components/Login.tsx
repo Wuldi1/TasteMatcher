@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { apiClient, ApiError } from '../services/api';
+import { apiClient, ApiError } from '../utils/api';
 
 type Phase = 'email' | 'code-entry' | 'user-not-found' | 'buyer-info' | 'seller-form' | 'seller-success';
 type UserIntent = 'buy' | 'sell' | null;

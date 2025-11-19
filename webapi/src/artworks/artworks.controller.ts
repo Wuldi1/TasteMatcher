@@ -40,7 +40,7 @@ export class ArtworksController {
     @Request() req: AuthenticatedRequest,
     @Param('domainId') domainId: string,
   ): Promise<ArtworkStats> {
-    if (req.user.domainId !== domainId) {
+    if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
     return this.artworksService.getStats(domainId, req.user.id);
@@ -54,12 +54,12 @@ export class ArtworksController {
     @Param('domainId') domainId: string,
     @Query('userId') targetUserId?: string,
   ): Promise<Array<Artwork>> {
-    if (req.user.domainId !== domainId) {
+    if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
 
     const isDomainOwner =
-      req.user.role === 'domain_owner' || req.user.role === 'global_admin';
+      req.user.role === 'dealer' || req.user.role === 'domain_owner' || req.user.role === 'global_admin';
 
     if (!isDomainOwner && targetUserId && targetUserId !== req.user.id) {
       throw new ForbiddenException('Customers cannot request suggestions for other users.');
@@ -79,24 +79,45 @@ export class ArtworksController {
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: 'asc' | 'desc',
     @Query('filterBy') filterBy?: string,
+    @Query('userId') userId?: string, // optional user target for dealer/domain_owner
   ): Promise<PaginatedResponse<Artwork>> {
-    if (req.user.domainId !== domainId) {
+    if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
-    
+
     // Convert simple query params to QueryParams format
     const queryParams: QueryParams<Artwork> = {
       limit: limit ? parseInt(limit, 10) : 20,
       continuationToken: continuationToken || undefined,
-      sort: sortBy ? {
-        field: sortBy as keyof Artwork,
-        order: sortOrder || 'desc'
-      } : undefined,
+      sort: sortBy
+        ? {
+            field: sortBy as keyof Artwork,
+            order: sortOrder || 'desc',
+          }
+        : undefined,
       filters: filterBy ? [this.parseFilterBy(filterBy)] : undefined,
     };
-    
-    // Only supply requesterId for customers (so service can compute likedStatus for that user)
-    const requesterId = req.user.role === 'customer' ? req.user.id : undefined;
+
+    // Determine requesterId used to compute likedStatus / preference per-artwork
+    let requesterId: string | undefined;
+
+    // If the caller is a customer, they can only request their own data
+    if (req.user.role === 'customer') {
+      requesterId = req.user.id;
+    } else if (userId) {
+      // If caller provided userId and is domain owner / global admin allow
+      // Allow dealers for now — TODO: verify dealer invited the target user before allowing
+      if (req.user.role === 'domain_owner' || req.user.role === 'global_admin' || req.user.role === 'dealer') {
+        requesterId = userId;
+      } else {
+        // other roles are not allowed to request other user's view
+        throw new ForbiddenException('You are not authorized to request artworks for another user.');
+      }
+    } else {
+      // no requesterId provided and caller not a customer -> undefined
+      requesterId = undefined;
+    }
+
     return this.artworksService.findAll(domainId, queryParams, requesterId);
   }
 
@@ -109,7 +130,7 @@ export class ArtworksController {
     if (!field || !value) {
       throw new BadRequestException('Invalid filterBy format. Expected "field:value"');
     }
-    
+
     // Use contains operator for flexible, case-insensitive matching
     return {
       field: field as keyof Artwork,
@@ -127,7 +148,7 @@ export class ArtworksController {
     @Param('domainId') domainId: string,
     @Param('artworkId') artworkId: string,
   ): Promise<Artwork> {
-    if (req.user.domainId !== domainId) {
+    if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
     return this.artworksService.findOne(domainId, artworkId);
@@ -143,7 +164,7 @@ export class ArtworksController {
     @Param('artworkId') artworkId: string,
     @Body() updateDto: UpdateArtworkDto,
   ): Promise<Artwork> {
-    if (req.user.domainId !== domainId) {
+    if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
     return this.artworksService.update(domainId, artworkId, updateDto);
@@ -159,7 +180,7 @@ export class ArtworksController {
     @Param('domainId') domainId: string,
     @Param('artworkId') artworkId: string,
   ): Promise<void> {
-    if (req.user.domainId !== domainId) {
+    if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
     return this.artworksService.remove(domainId, artworkId);

@@ -185,6 +185,16 @@ else
       --partition-key-path "/userId" \
       --throughput 400 \
       -o none || echo "ArtworkPreferences container already exists or creation failed - continuing..."
+
+    # SalesProposals container - partition by /domainId for multi-tenant isolation
+    az cosmosdb sql container create \
+      --account-name "$COSMOS_NAME" \
+      --resource-group "$RG_NAME" \
+      --database-name "$COSMOS_DATABASE" \
+      --name "SalesProposals" \
+      --partition-key-path "/domainId" \
+      --throughput 400 \
+      -o none || echo "SalesProposals container already exists or creation failed - continuing..."
   fi
 
 # Get Cosmos DB connection string and keys

@@ -10,8 +10,8 @@
     "build:functions": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/functions build",
     "start:local:webapi": "pnpm run build:webapi && pnpm --filter @tastematcher/webapi start:local",
     "start:dev:webapi": "pnpm --filter @tastematcher/webapi start:dev",
-    "dev:frontend": "pnpm run build:frontend && pnpm --filter @tastematcher/frontend dev",
-    "dev:functions": "pnpm run build:functions && pnpm --filter @tastematcher/functions dev"
+    "start:local:frontend": "pnpm run build:frontend && pnpm --filter @tastematcher/frontend dev",
+    "start:local:functions": "pnpm run build:functions && pnpm --filter @tastematcher/functions dev"
   },
   "devDependencies": {
     "eslint": "^9.38.0",

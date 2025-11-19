@@ -1,4 +1,4 @@
-import { Home, Compass, Upload, LayoutGrid, Users, Sparkles } from 'lucide-react';
+import { Home, Compass, Upload, LayoutGrid, Users, Sparkles, ShoppingCart } from 'lucide-react';
 
 export interface NavigationLink {
     id: string;
@@ -55,6 +55,15 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
         roles: ['customer'], 
         ariaLabel: 'Navigate to AI Suggestions page',
         bubbleText: 'This is the AI Suggestions page. Get personalized recommendations.' 
+    },
+    {
+        id: 'sales',
+        name: 'Sales',
+        href: '/sales',
+        icon: ShoppingCart,
+        roles: ['dealer', 'domain_owner', 'global_admin'],
+        ariaLabel: 'Navigate to sales page',
+        bubbleText: 'This is the Sales page. Select a user, view catalog, AI suggestions and manage sale proposals.'
     },
     { 
         id: 'management', 

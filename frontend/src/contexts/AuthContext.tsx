@@ -11,7 +11,7 @@
 // -----------------------------------------------------------
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import { apiClient } from '../services/api';
+import { apiClient } from '../utils/api';
 import { User } from '@tastematcher/common';
 
 interface AuthContextType {

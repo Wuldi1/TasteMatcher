@@ -10,8 +10,9 @@ import { useAuth } from '../hooks/useAuth';
 import { CatalogPage } from '../pages/Catalog/CatalogPage';
 import { TasterPage } from '../pages/Taster/TasterPage';
 import { UploadPage } from '../pages/Upload/UploadPage';
-import { Management } from '../components/Management';
+import { Management } from '../pages/Management/Management';
 import { AISuggestionsPage } from '../pages/AISuggestions/AISuggestionsPage';
+import SalesPage from '../pages/SalesPage';
 
 /**
  * Wrapper component that redirects authenticated users away from auth pages
@@ -148,6 +149,17 @@ export function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <AISuggestionsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/sales"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <SalesPage />
             </AppLayout>
           </ProtectedRoute>
         }

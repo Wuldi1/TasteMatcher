@@ -358,7 +358,7 @@ export class ArtworksService {
     targetUserId?: string,
   ): Promise<Array<Artwork>> {
     const resolvedUserId =
-      (requester.role === 'domain_owner' || requester.role === 'global_admin') && targetUserId
+      (requester.role === 'dealer' || requester.role === 'domain_owner' || requester.role === 'global_admin') && targetUserId
         ? targetUserId
         : requester.id;
 

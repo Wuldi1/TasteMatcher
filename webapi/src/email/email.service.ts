@@ -11,7 +11,7 @@
 // -----------------------------------------------------------
 import { Injectable, Logger } from '@nestjs/common';
 import { EmailClient, EmailMessage } from '@azure/communication-email';
-import { Role } from '@tastematcher/common';
+import { Role, Proposal } from '@tastematcher/common';
 
 export interface SendVerificationEmailPayload {
   recipient: string;
@@ -202,6 +202,105 @@ export class EmailService {
         action: 'sendUserInvitation',
         recipient: email,
         role,
+        errMessage: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Send proposal notification email to customer.
+   * action: 'created' | 'updated' | 'deleted' | 'ping'
+   */
+  async sendProposalNotification(recipient: string, proposal: Proposal, action: 'created' | 'updated' | 'deleted' | 'ping'): Promise<void> {
+    const start = Date.now();
+    this.logger.debug({
+      action: 'sendProposalNotification',
+      recipient,
+      proposalId: proposal.id,
+      domainId: proposal.domainId,
+      notificationType: action,
+    });
+
+    if (!recipient || !recipient.includes('@')) {
+      throw new Error('Invalid recipient email address for proposal notification');
+    }
+
+    const baseUrl = process.env.FRONTEND_URL ?? '';
+    const proposalLink = `${baseUrl}/sales/proposals/${proposal.id}`;
+
+    let subject = 'Proposal update from TasteMatcher';
+    let textBody = '';
+    let htmlBody = '';
+
+    switch (action) {
+      case 'created':
+        subject = 'A new proposal has been created for you';
+        textBody = `Hello,\n\nA new proposal has been created for you. View it here: ${proposalLink}\n\nThank you,\nTasteMatcher`;
+        htmlBody = `<p>Hello,</p><p>A new proposal has been created for you. <a href="${proposalLink}">View proposal</a></p><p>Thank you,<br/>TasteMatcher</p>`;
+        break;
+      case 'updated':
+        subject = 'Your proposal has been updated';
+        textBody = `Hello,\n\nYour proposal has been updated. View the latest version here: ${proposalLink}\n\nThank you,\nTasteMatcher`;
+        htmlBody = `<p>Hello,</p><p>Your proposal has been updated. <a href="${proposalLink}">View proposal</a></p><p>Thank you,<br/>TasteMatcher</p>`;
+        break;
+      case 'deleted':
+        subject = 'A proposal has been removed';
+        textBody = `Hello,\n\nA proposal for you was deleted by the dealer. If you have questions, contact support.\n\nThank you,\nTasteMatcher`;
+        htmlBody = `<p>Hello,</p><p>A proposal for you was deleted by the dealer. If you have questions, contact support.</p><p>Thank you,<br/>TasteMatcher</p>`;
+        break;
+      case 'ping':
+        subject = 'Reminder: please review your proposal';
+        textBody = `Hello,\n\nThis is a reminder to review your proposal: ${proposalLink}\n\nThank you,\nTasteMatcher`;
+        htmlBody = `<p>Hello,</p><p>This is a reminder to review your proposal: <a href="${proposalLink}">View proposal</a></p><p>Thank you,<br/>TasteMatcher</p>`;
+        break;
+      default:
+        subject = 'Proposal notification';
+        textBody = `Hello,\n\nThere is an update regarding your proposal. View it here: ${proposalLink}\n\nThank you,\nTasteMatcher`;
+        htmlBody = `<p>Hello,</p><p>There is an update regarding your proposal. <a href="${proposalLink}">View proposal</a></p><p>Thank you,<br/>TasteMatcher</p>`;
+    }
+
+    if (!this.emailClient || !this.senderAddress) {
+      this.logger.log({
+        action: 'sendProposalNotification',
+        mode: 'log-only',
+        recipient,
+        subject,
+        proposalId: proposal.id,
+        durationMs: Date.now() - start,
+      });
+      return;
+    }
+
+    const message: EmailMessage = {
+      senderAddress: this.senderAddress,
+      content: {
+        subject,
+        plainText: textBody,
+        html: htmlBody,
+      },
+      recipients: {
+        to: [{ address: recipient }],
+      },
+    };
+
+    try {
+      // TODO: enable actual send when ready
+      // const poller = await this.emailClient.beginSend(message);
+      // await poller.pollUntilDone();
+
+      this.logger.log({
+        action: 'sendProposalNotification',
+        recipient,
+        proposalId: proposal.id,
+        notificationType: action,
+        durationMs: Date.now() - start,
+      });
+    } catch (error) {
+      this.logger.error({
+        action: 'sendProposalNotification',
+        recipient,
+        proposalId: proposal.id,
         errMessage: (error as Error).message,
       });
       throw error;

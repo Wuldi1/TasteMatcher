@@ -13,7 +13,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { Domain } from '@tastematcher/common';
 import { useAuth } from './AuthContext';
-import { apiClient } from '../services/api';
+import { apiClient } from '../utils/api';
 
 interface DomainContextType {
   currentDomain: Domain | null;
