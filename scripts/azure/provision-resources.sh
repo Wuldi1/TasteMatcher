@@ -322,7 +322,6 @@ az functionapp config appsettings set \
     FUNCTIONS_WORKER_RUNTIME="node" \
     WEBSITE_NODE_DEFAULT_VERSION="~22" \
     FUNCTIONS_EXTENSION_VERSION="~4" \
-    WEBSITE_RUN_FROM_PACKAGE="0" \
     SCM_DO_BUILD_DURING_DEPLOYMENT="true" \
     ENABLE_ORYX_BUILD="true" \
     AzureWebJobsStorage="$STORAGE_CONNECTION_STRING" \
@@ -771,7 +770,6 @@ cat > "$FUNCTIONS_SETTINGS" <<EOF
     "FUNCTIONS_WORKER_RUNTIME": "node",
     "WEBSITE_NODE_DEFAULT_VERSION": "~22",
     "FUNCTIONS_EXTENSION_VERSION": "~4",
-    "WEBSITE_RUN_FROM_PACKAGE": "0",
     "SCM_DO_BUILD_DURING_DEPLOYMENT": "true",
     "ENABLE_ORYX_BUILD": "true",
     "AzureWebJobsStorage": "${STORAGE_CONNECTION_STRING}",
@@ -854,4 +852,5 @@ echo " - Frontend: $FRONTEND_URL"
 # In case of registration issues, you can run "az provider register --namespace Microsoft.KeyVault" and similar for other services.
 # In case of registration issues, you can run "az provider register --namespace Microsoft.DocumentDB" and similar for other services.
 # In case of registration issues, you can run "az provider register --namespace Microsoft.CognitiveServices" for Computer Vision.
+# If function app deployment fails (or succeeded but doesn't really work) - change WEBSITE_RUN_FROM_PACKAGE to 0 in app settings and redeploy. (if it still doesn't work, delete it entirely and recreate).
 ###
