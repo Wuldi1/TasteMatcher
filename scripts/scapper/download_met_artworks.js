@@ -25,13 +25,13 @@ async function main() {
   const searchQueries = [
     { query: "painting", label: "Paintings" },
     // { query: "landscape", label: "Landscapes" },
-    // { query: "nature", label: "Nature" },
-    // { query: "modern art", label: "Modern Art" },
+    { query: "nature", label: "Nature" },
+    { query: "modern art", label: "Modern Art" },
     // { query: "sculpture", label: "Sculptures" },
-    // { query: "photography", label: "Photography" },
+    { query: "photography", label: "Photography" },
     // { query: "abstract", label: "Abstract Art" },
     // { query: "portrait", label: "Portraits" },
-    // { query: "flowers", label: "Flowers" },
+    { query: "flowers", label: "Flowers" },
     // { query: "architecture", label: "Architecture" },
   ];
 
@@ -47,8 +47,8 @@ async function main() {
       const { objectIDs } = await searchRes.json();
       
       if (objectIDs?.length) {
-        // Take up to 100 from each category
-        const categoryIds = shuffleArray(objectIDs).slice(0, 100);
+        // Take up to 50 from each category
+        const categoryIds = shuffleArray(objectIDs).slice(0, 50);
         allIds.push(...categoryIds);
         console.log(`   Found ${objectIDs.length} total, selected ${categoryIds.length}`);
       }
