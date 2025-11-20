@@ -284,7 +284,10 @@ export function CatalogPage() {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredArtworks.map((artwork) => (
-                <div key={artwork.id} className="border rounded overflow-hidden bg-white shadow-sm">
+                <div
+                  key={artwork.id}
+                  className="border rounded overflow-hidden bg-white shadow-sm flex flex-col h-full"
+                >
                   <button
                     type="button"
                     className="block w-full h-40 bg-gray-100 overflow-hidden"
@@ -298,9 +301,12 @@ export function CatalogPage() {
                     )}
                   </button>
 
-                  <div className="p-3">
+                  <div className="p-3 flex flex-col flex-1">
                     <div className="text-sm font-semibold truncate">{artwork.title}</div>
                     <div className="text-xs text-gray-500 mt-1">{artwork.artist}</div>
+
+                    <div className="flex-1" />
+                    {/* Spacer to push buttons to bottom */}
 
                     <div className="mt-3 flex items-center justify-between">
                       {/* Thumbs Up/Down for customers */}
@@ -317,7 +323,7 @@ export function CatalogPage() {
                             disabled={savePreferenceMutation.isPending}
                           >
                             <ThumbsUp
-                              className={`w-5 h-5 ${artwork.likedStatus === 'Liked' ? 'text-green-600' : 'text-gray-300'
+                              className={`w-5 h-5 hover:text-green-500 ${artwork.likedStatus === 'Liked' ? 'text-green-600' : 'text-gray-300'
                                 }`}
                             />
                           </button>
@@ -340,27 +346,30 @@ export function CatalogPage() {
                       )}
 
                       {/* Edit/Delete for non-customers */}
-                      {user?.role !== 'customer' && (
+                      {/* Move to bottom right, styled like thumbs */}
+                    </div>
+                    {user?.role !== 'customer' && (
+                      <div className="flex justify-end mt-2">
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={(e) => handleEditClick(artwork, e)}
                             aria-label="Edit"
-                            className="p-1 text-blue-600 hover:text-blue-800"
+                            className="p-2 rounded-full hover:bg-blue-200"
                           >
-                            <Edit className="w-5 h-5" />
+                            <Edit className="w-5 h-5 text-blue-600" />
                           </button>
                           <button
                             type="button"
                             onClick={(e) => handleDeleteClick(artwork, e)}
                             aria-label="Delete"
-                            className="p-1 text-red-600 hover:text-red-800"
+                            className="p-2 rounded-full hover:bg-red-200"
                           >
-                            <Trash2 className="w-5 h-5" />
+                            <Trash2 className="w-5 h-5 text-red-600" />
                           </button>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
