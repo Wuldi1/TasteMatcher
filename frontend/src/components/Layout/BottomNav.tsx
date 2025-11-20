@@ -5,6 +5,7 @@ import { NAVIGATION_LINKS } from '../../constants/navigation';
 import { Lock, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { getAIRecommendationsEligibility } from '../../utils/recommendations';
+import { useHasSubmittedProposal } from '../../hooks/useHasSubmittedProposal'; // Import the new hook
 
 export const BottomNav = () => {
   const { user } = useAuth();
@@ -16,6 +17,9 @@ export const BottomNav = () => {
   // Filter links based on user role
   const filteredLinks = NAVIGATION_LINKS.filter((link) => link.roles.includes(user?.role || ''));
 
+  // Fetch if the user has a submitted proposal
+  const hasSubmittedProposal = useHasSubmittedProposal(user?.id, user?.domainId);
+
   const handleLockedClick = () => {
     setIsModalOpen(true);
   };
@@ -24,6 +28,11 @@ export const BottomNav = () => {
     <>
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 z-50 md:hidden">
         {filteredLinks.map((link) => {
+          // Add dynamic check for submitted proposals
+          if (link.id === 'buying-proposal' && !hasSubmittedProposal) {
+            return null;
+          }
+
           const isLocked = link.id === 'ai-suggestions' && user?.role === 'customer' && !getAIRecommendationsEligibility(user!).isEligible;
           const isActiveBubble = isTourActive && currentStep === link.id;
           const isActive = location.pathname === link.href || location.pathname.startsWith(`${link.href}/`); // Custom isActive logic

@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useWelcomeTour } from '../../hooks/useWelcomeTour';
 import { NAVIGATION_LINKS } from '../../constants/navigation';
 import { getAIRecommendationsEligibility } from '../../utils/recommendations';
+import { useHasSubmittedProposal } from '../../hooks/useHasSubmittedProposal'; // Import the new hook
 
 export const Sidebar = () => {
   const { user, logout } = useAuth();
@@ -16,6 +17,9 @@ export const Sidebar = () => {
 
   // Filter links based on user role
   const filteredLinks = NAVIGATION_LINKS.filter((link) => link.roles.includes(user?.role || ''));
+
+  // Fetch if the user has a submitted proposal
+  const hasSubmittedProposal = useHasSubmittedProposal(user?.id, user?.domainId);
 
   useEffect(() => {
     if (isTourActive && currentStep) {
@@ -44,6 +48,11 @@ export const Sidebar = () => {
 
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         {filteredLinks.map((link) => {
+          // Add dynamic check for submitted proposals
+          if (link.id === 'buying-proposal' && !hasSubmittedProposal) {
+            return null;
+          }
+
           // Lock AI Suggestions for customers that are NOT yet eligible
           const isLocked = link.id === 'ai-suggestions' && user?.role === 'customer' && !getAIRecommendationsEligibility(user!).isEligible;
           const isActive = location.pathname === link.href || location.pathname.startsWith(`${link.href}/`); // Custom isActive logic
@@ -140,9 +149,9 @@ export const Sidebar = () => {
           </div>
           {!isCollapsed && (
             <div className="overflow-hidden flex-1">
-              <p className="text-sm font-semibold text-gray-800 truncate">{user.name || user.email}</p>
-              <p className="text-xs text-gray-500 truncate">{user.email}</p>
-              <p className="text-xs text-gray-400 capitalize mt-0.5">{user.role}</p>
+              <p className="text-sm font-semibold text-gray-800 truncate">{user?.name || user?.email}</p>
+              <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+              <p className="text-xs text-gray-400 capitalize mt-0.5">{user?.role}</p>
             </div>
           )}
           {user && user.role === 'customer' && (

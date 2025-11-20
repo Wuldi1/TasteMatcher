@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiClient } from '../utils/api';
 import type { Proposal, ProposalItem, Comment, Artwork } from '@tastematcher/common';
-import { Trash2, Bell, Save, CheckCircle, XCircle, Clock, Send } from 'lucide-react';
+import { Trash2, Bell, Save, CheckCircle, Send, Clock, XCircle } from 'lucide-react';
 
 export default function SaleProposal({
     domainId,
@@ -254,12 +254,28 @@ export default function SaleProposal({
                     <div>No items tagged yet.</div>
                 ) : (
                     items.map((item: ProposalItem) => {
-                        const statusIcon = {
-                            pending: <Clock className="text-gray-500" />,
-                            approved: <CheckCircle className="text-green-600" />,
-                            rejected: <XCircle className="text-red-600" />,
-                        };
                         const artwork = artworkDataById[item.artworkId];
+
+                        // Determine the status badge color, text, and icon
+                        const statusConfig = {
+                            pending: {
+                                color: 'bg-gray-200 text-gray-600',
+                                text: 'Pending',
+                                icon: <Clock className="w-4 h-4 text-gray-600" />,
+                            },
+                            approved: {
+                                color: 'bg-green-100 text-green-600',
+                                text: 'Accepted',
+                                icon: <CheckCircle className="w-4 h-4 text-green-600" />,
+                            },
+                            rejected: {
+                                color: 'bg-red-100 text-red-600',
+                                text: 'Rejected',
+                                icon: <XCircle className="w-4 h-4 text-red-600" />,
+                            },
+                        };
+
+                        const { color, text, icon } = statusConfig[item.status];
 
                         return (
                             <article key={item.artworkId} className="bg-white border rounded p-4 shadow-sm">
@@ -276,12 +292,13 @@ export default function SaleProposal({
 
                                     <div className="md:w-1/3">
                                         <h3 className="text-base font-semibold">{artwork?.title ?? item.artworkId}</h3>
-                                        <div className="mt-4 flex items-center gap-2">
-                                            <span className="flex items-center gap-1">
-                                                {statusIcon[item.status]}
-                                                <span className="text-sm capitalize">{item.status}</span>
-                                            </span>
-                                        </div>
+                                        {/* Status Badge with Icon */}
+                                        <span
+                                            className={`inline-flex items-center gap-2 mt-2 px-3 py-1 text-sm font-medium rounded-full ${color}`}
+                                        >
+                                            {icon}
+                                            {text}
+                                        </span>
                                     </div>
 
                                     <div className="md:flex-1 flex flex-col">
@@ -303,7 +320,7 @@ export default function SaleProposal({
                                         {/* Add new comment input */}
                                         <form
                                             className="flex items-center gap-2 mt-2"
-                                            onSubmit={e => {
+                                            onSubmit={(e) => {
                                                 e.preventDefault();
                                                 handleAddComment(item.artworkId);
                                             }}
@@ -313,7 +330,7 @@ export default function SaleProposal({
                                                 className="flex-1 border rounded px-2 py-1 text-sm"
                                                 placeholder="Add a comment..."
                                                 value={newComments[item.artworkId] || ''}
-                                                onChange={e =>
+                                                onChange={(e) =>
                                                     setNewComments((prev) => ({
                                                         ...prev,
                                                         [item.artworkId]: e.target.value,
@@ -322,7 +339,7 @@ export default function SaleProposal({
                                             />
                                             <button
                                                 type="submit"
-                                                className="p-2 bg-blue-100 rounded-full"
+                                                className="p-2 bg-blue-100 rounded-full hover:bg-blue-200"
                                                 title="Add comment"
                                                 disabled={!newComments[item.artworkId]?.trim()}
                                             >
@@ -336,10 +353,11 @@ export default function SaleProposal({
                                         <button
                                             type="button"
                                             onClick={() => handleDeleteArtwork(item.artworkId)}
-                                            className="p-2 bg-red-100 rounded-full"
+                                            className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-600 rounded hover:bg-red-200"
                                             title="Remove artwork from proposal"
                                         >
-                                            <Trash2 className="text-red-600" />
+                                            <Trash2 className="w-4 h-4" />
+                                            Remove
                                         </button>
                                     </div>
                                 </div>
@@ -349,39 +367,40 @@ export default function SaleProposal({
                 )}
             </div>
 
-            <div className="flex justify-end gap-4">
-                <div className="relative group">
-                    <button onClick={handlePingProposal} disabled={!proposalId} className="p-2 bg-yellow-100 rounded-full">
-                        <Bell className="text-yellow-600" />
-                    </button>
-                    <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 rounded-md bg-gray-800 text-white px-2 py-1 text-xs opacity-0 group-hover:opacity-100">
-                        Ping customer
-                    </div>
-                </div>
-                <div className="relative group">
-                    <button onClick={saveProposal} disabled={saving || items.length === 0} className="p-2 bg-blue-100 rounded-full">
-                        <Save className="text-blue-600" />
-                    </button>
-                    <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 rounded-md bg-gray-800 text-white px-2 py-1 text-xs opacity-0 group-hover:opacity-100">
-                        Save proposal
-                    </div>
-                </div>
-                <div className="relative group">
-                    <button onClick={handleDeleteProposal} disabled={!proposalId} className="p-2 bg-red-100 rounded-full">
-                        <Trash2 className="text-red-600" />
-                    </button>
-                    <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 rounded-md bg-gray-800 text-white px-2 py-1 text-xs opacity-0 group-hover:opacity-100">
-                        Delete proposal
-                    </div>
-                </div>
-                <div className="relative group">
-                    <button onClick={() => setIsSubmitModalOpen(true)} disabled={!proposalId} className="p-2 bg-green-100 rounded-full">
-                        <CheckCircle className="text-green-600" />
-                    </button>
-                    <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 rounded-md bg-gray-800 text-white px-2 py-1 text-xs opacity-0 group-hover:opacity-100">
-                        Submit proposal
-                    </div>
-                </div>
+            {/* Sticky Bottom Actions */}
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 py-4 flex justify-end gap-4">
+                <button
+                    onClick={handlePingProposal}
+                    className="flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-600 rounded hover:bg-yellow-200"
+                    disabled={!proposalId}
+                >
+                    <Bell className="w-4 h-4" />
+                    Ping Customer
+                </button>
+                <button
+                    onClick={saveProposal}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                    disabled={saving || items.length === 0}
+                >
+                    <Save className="w-4 h-4" />
+                    Save Proposal
+                </button>
+                <button
+                    onClick={handleDeleteProposal}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                    disabled={!proposalId}
+                >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Proposal
+                </button>
+                <button
+                    onClick={() => setIsSubmitModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-600 rounded hover:bg-green-200"
+                    disabled={!proposalId}
+                >
+                    <CheckCircle className="w-4 h-4" />
+                    Submit Proposal
+                </button>
             </div>
 
             {/* Submit Modal */}
@@ -403,7 +422,7 @@ export default function SaleProposal({
                                 onClick={handleSubmitProposal}
                                 className="px-4 py-2 bg-green-600 text-white rounded"
                             >
-                                Approve
+                                Submit
                             </button>
                         </div>
                     </div>

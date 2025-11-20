@@ -1,4 +1,4 @@
-import { Home, Compass, Upload, LayoutGrid, Users, Sparkles, ShoppingCart } from 'lucide-react';
+import { Home, Compass, Upload, LayoutGrid, Users, Sparkles, ShoppingCart, FileText } from 'lucide-react';
 
 export interface NavigationLink {
     id: string;
@@ -73,5 +73,14 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
         roles: ['dealer', 'domain_owner', 'global_admin'], 
         ariaLabel: 'Navigate to management page',
         bubbleText: 'This is the Management page. Manage users and domains here.' 
+    },
+    {
+        id: 'buying-proposal',
+        name: 'Proposal',
+        href: '/buying-proposal',
+        icon: FileText, // Updated icon
+        roles: ['customer'],
+        ariaLabel: 'Navigate to Proposal page',
+        bubbleText: 'This is the Proposal page. Review and respond to proposals from dealers.',
     },
 ];

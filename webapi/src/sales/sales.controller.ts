@@ -30,7 +30,7 @@ export class SalesController {
 
   // List proposals for domain (optionally filter by userId)
   @Get('proposals')
-  @Roles('dealer', 'domain_owner', 'global_admin')
+  @Roles('customer', 'dealer', 'domain_owner', 'global_admin')
   @ApiOperation({ summary: 'List proposals for domain (optionally filter by userId)' })
   async listProposals(
     @Request() req: AuthenticatedRequest,
@@ -40,11 +40,14 @@ export class SalesController {
     if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
+    if (req.user.role === 'customer' && req.user.id !== userId) {
+      throw new ForbiddenException('Customers can only access their own proposals.');
+    }
     return this.salesService.findAll(domainId ?? req.user.domainId, userId ?? req.user.id);
   }
 
   @Get('proposals/:proposalId')
-  @Roles('dealer', 'domain_owner', 'global_admin')
+  @Roles('customer', 'dealer', 'domain_owner', 'global_admin')
   async getProposal(
     @Request() req: AuthenticatedRequest,
     @Param('domainId') domainId: string,
@@ -53,7 +56,11 @@ export class SalesController {
     if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
-    return this.salesService.getProposal(domainId, proposalId);
+    const proposal = await this.salesService.getProposal(domainId, proposalId);
+    if (req.user.role === 'customer' && req.user.id !== proposal.userId) {
+      throw new ForbiddenException('Customers can only access their own proposals.');
+    }
+    return proposal;
   }
 
   @Post('proposals')
@@ -72,7 +79,7 @@ export class SalesController {
   }
 
   @Patch('proposals/:proposalId')
-  @Roles('dealer', 'domain_owner', 'global_admin')
+  @Roles('customer', 'dealer', 'domain_owner', 'global_admin')
   @ApiOperation({ summary: 'Update proposal' })
   async updateProposal(
     @Request() req: AuthenticatedRequest,
@@ -82,6 +89,11 @@ export class SalesController {
   ): Promise<Proposal> {
     if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
+    }
+
+    const proposal = await this.salesService.getProposal(domainId, proposalId);
+    if (req.user.role === 'customer' && req.user.id !== proposal.userId) {
+      throw new ForbiddenException('Customers can only access their own proposals.');
     }
 
     return this.salesService.updateProposal(domainId, proposalId, update, req.user);

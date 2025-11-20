@@ -13,6 +13,7 @@ import { UploadPage } from '../pages/Upload/UploadPage';
 import { Management } from '../pages/Management/Management';
 import { AISuggestionsPage } from '../pages/AISuggestions/AISuggestionsPage';
 import SalesPage from '../pages/SalesPage';
+import { BuyingProposalPage } from '../pages/BuyingProposal/BuyingProposalPage';
 
 /**
  * Wrapper component that redirects authenticated users away from auth pages
@@ -159,6 +160,17 @@ export function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <SalesPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/buying-proposal"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <BuyingProposalPage />
             </AppLayout>
           </ProtectedRoute>
         }
