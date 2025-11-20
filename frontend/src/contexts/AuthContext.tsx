@@ -98,7 +98,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Update user state with fresh data including personalQuestionnaire
       setUserFromUser(freshUser);
-      console.log('Refreshed user and token', freshUser);
       return freshUser;
     } catch (error) {
       console.error('Failed to refresh user:', error);
@@ -110,7 +109,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setUserFromUser = useCallback((userData: Partial<User>) => {
-    console.log('Setting user from user data:', userData);
     setUser({
       id: userData.id,
       email: userData.email,
@@ -144,7 +142,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // personalQuestionnaire will be loaded when needed via refreshUser
         };
 
-        console.log('Setting user from token:', userData);
         setUser(userData);
       }
     } catch (error) {

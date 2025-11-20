@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { apiClient } from '../utils/api';
 import type { Proposal, ProposalItem, Comment, Artwork } from '@tastematcher/common';
-import { Trash2, Bell, Save, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Trash2, Bell, Save, CheckCircle, XCircle, Clock, Send } from 'lucide-react';
 
 export default function SaleProposal({
     domainId,
     userId,
+    userName,
     draftItems = [],
     onDraftChange,
     proposalId,
 }: {
     domainId: string;
     userId: string;
+    userName?: string;
     draftItems?: ProposalItem[];
     onDraftChange?: (items: ProposalItem[]) => void;
     proposalId?: string;
@@ -23,6 +25,9 @@ export default function SaleProposal({
 
     const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
     const [artworkDataById, setArtworkDataById] = useState<Record<string, Artwork>>({});
+
+    // Track new comments for each artworkId
+    const [newComments, setNewComments] = useState<Record<string, string>>({});
 
     // Sync incoming draft changes
     useEffect(() => {
@@ -127,11 +132,11 @@ export default function SaleProposal({
             if (proposalId) {
                 // update existing proposal
                 data = await apiClient.updateProposal(domainId, proposalId, payload);
-                alert('Proposal updated: ' + data.id);
+                showProposalSummaryAlert('Proposal updated', data);
             } else {
                 // create new
                 data = await apiClient.createProposal(domainId, payload);
-                alert('Proposal created: ' + data.id);
+                showProposalSummaryAlert('Proposal created', data);
             }
             // if created, you may want to set up the proposalId for further edits (left to consumer)
         } catch (err) {
@@ -182,13 +187,55 @@ export default function SaleProposal({
         }
 
         try {
-            await apiClient.updateProposal(domainId, proposalId, { status: 'submitted' });
-            alert('Proposal submitted successfully!');
+            const updated = await apiClient.updateProposal(domainId, proposalId, { status: 'submitted' });
+            showProposalSummaryAlert('Proposal submitted successfully!', updated);
             setIsSubmitModalOpen(false);
         } catch (err) {
             console.error('Failed to submit proposal', err);
             alert('Failed to submit proposal');
         }
+    }
+
+    // Helper to show a summary alert for a proposal
+    function showProposalSummaryAlert(title: string, proposal: Proposal) {
+        const summary = [
+            `Status: ${proposal.status}`,
+            `Number of artworks: ${proposal.items?.length ?? 0}`,
+        ].join('\n');
+        alert(`${title}\n\n${summary}`);
+    }
+
+    // Handler to add a comment to an item
+    function handleAddComment(artworkId: string) {
+        const commentText = (newComments[artworkId] || '').trim();
+        if (!commentText) return;
+        isLocalChangeRef.current = true;
+        setItems((prev) =>
+            prev.map((item) =>
+                item.artworkId === artworkId
+                    ? {
+                        ...item,
+                        comments: [
+                            ...(item.comments || []),
+                            {
+                                author: userName ?? 'Dealer',
+                                text: commentText,
+                                createdAt: Date.now(),
+                            },
+                        ],
+                    }
+                    : item
+            )
+        );
+        setNewComments((prev) => ({ ...prev, [artworkId]: '' }));
+    }
+
+    // Handler to delete an artwork from the proposal
+    function handleDeleteArtwork(artworkId: string) {
+        if (!window.confirm('Remove this artwork from the proposal?')) return;
+        isLocalChangeRef.current = true;
+        setItems((prev) => prev.filter((item) => item.artworkId !== artworkId));
+        if (onDraftChange) onDraftChange(items.filter((item) => item.artworkId !== artworkId));
     }
 
     // Determine overall proposal status based on items' status
@@ -229,7 +276,6 @@ export default function SaleProposal({
 
                                     <div className="md:w-1/3">
                                         <h3 className="text-base font-semibold">{artwork?.title ?? item.artworkId}</h3>
-
                                         <div className="mt-4 flex items-center gap-2">
                                             <span className="flex items-center gap-1">
                                                 {statusIcon[item.status]}
@@ -238,7 +284,7 @@ export default function SaleProposal({
                                         </div>
                                     </div>
 
-                                    <div className="md:flex-1">
+                                    <div className="md:flex-1 flex flex-col">
                                         <div className="text-sm font-medium mb-2">Comments</div>
                                         <div className="space-y-2 max-h-44 overflow-auto">
                                             {item.comments.length === 0 ? (
@@ -254,6 +300,47 @@ export default function SaleProposal({
                                                 ))
                                             )}
                                         </div>
+                                        {/* Add new comment input */}
+                                        <form
+                                            className="flex items-center gap-2 mt-2"
+                                            onSubmit={e => {
+                                                e.preventDefault();
+                                                handleAddComment(item.artworkId);
+                                            }}
+                                        >
+                                            <input
+                                                type="text"
+                                                className="flex-1 border rounded px-2 py-1 text-sm"
+                                                placeholder="Add a comment..."
+                                                value={newComments[item.artworkId] || ''}
+                                                onChange={e =>
+                                                    setNewComments((prev) => ({
+                                                        ...prev,
+                                                        [item.artworkId]: e.target.value,
+                                                    }))
+                                                }
+                                            />
+                                            <button
+                                                type="submit"
+                                                className="p-2 bg-blue-100 rounded-full"
+                                                title="Add comment"
+                                                disabled={!newComments[item.artworkId]?.trim()}
+                                            >
+                                                <Send className="w-4 h-4 text-blue-600" />
+                                            </button>
+                                        </form>
+                                    </div>
+
+                                    {/* Delete artwork button */}
+                                    <div className="flex flex-col items-end md:items-start md:justify-start">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDeleteArtwork(item.artworkId)}
+                                            className="p-2 bg-red-100 rounded-full"
+                                            title="Remove artwork from proposal"
+                                        >
+                                            <Trash2 className="text-red-600" />
+                                        </button>
                                     </div>
                                 </div>
                             </article>

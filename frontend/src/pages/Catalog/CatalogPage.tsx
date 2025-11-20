@@ -18,6 +18,7 @@ import { Search, X, ThumbsUp, ThumbsDown, Edit, Trash2 } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
 import { apiClient } from '../../utils/api';
 import { EditArtworkModal } from '../../components/EditArtworkModal/EditArtworkModal';
+import { useSavePreference } from '../../utils/savePreference';
 import './CatalogPage.css';
 
 /**
@@ -34,23 +35,6 @@ export function CatalogPage() {
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [editingArtwork, setEditingArtwork] = useState<Artwork | null>(null);
 
-  // Debug logging to check auth state
-  console.log('CatalogPage render:', {
-    user,
-    domainId: user?.domainId,
-    authLoading,
-    isEnabled: !!user?.domainId && !authLoading
-  });
-
-  // Debug: Force log on every render
-  console.log('[CatalogPage] Render state:', {
-    hasUser: !!user,
-    userId: user?.id,
-    domainId: user?.domainId,
-    authLoading,
-    queryEnabled: !!user?.domainId,
-  });
-
   // Fetch artworks with infinite scroll
   const {
     data,
@@ -59,19 +43,9 @@ export function CatalogPage() {
     isFetchingNextPage,
     isLoading: queryLoading,
     error,
-    isFetching,
-    status,
   } = useInfiniteQuery({
     queryKey: ['artworks', user?.domainId, searchQuery, sortBy, sortOrder],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
-      console.log('[Query] Executing queryFn:', {
-        domainId: user?.domainId,
-        pageParam,
-        searchQuery,
-        sortBy,
-        sortOrder,
-        filterBy
-      });
 
       if (!user?.domainId) {
         throw new Error('No domain ID');
@@ -91,17 +65,6 @@ export function CatalogPage() {
     enabled: !!user?.domainId,
     staleTime: 30000,
     retry: 2,
-  });
-
-  // Debug query state
-  console.log('[Query] State:', {
-    status,
-    queryLoading,
-    isFetching,
-    error: error?.message,
-    dataPages: data?.pages?.length,
-    totalItems: data?.pages.flatMap(p => p.items || []).length,
-    enabled: !!user?.domainId && !authLoading,
   });
 
   const allArtworks = data?.pages.flatMap((page) => page.items || []) || [];
@@ -133,39 +96,17 @@ export function CatalogPage() {
     },
   });
 
-  // Add mutation for saving preferences (like/dislike)
-  const savePreferenceMutation = useMutation({
-    mutationFn: async ({ artworkId, liked }: { artworkId: string; liked: boolean }) => {
-      if (!user?.domainId || !user?.id) throw new Error('User not authenticated');
-      return apiClient.saveArtworkPreference(user.domainId, user.id, { artworkId, liked });
-    },
-    onMutate: async ({ artworkId, liked }) => {
-      // Optionally optimistic update for modal if open
-      await queryClient.cancelQueries({ queryKey: ['artworks', user?.domainId] });
-      const previous = queryClient.getQueriesData(['artworks', user?.domainId]);
-
-      // update selectedArtwork locally for immediate feedback
+  const savePreferenceMutation = useSavePreference({
+    domainId: user?.domainId!,
+    userId: user?.id!,
+    onOptimisticUpdate: (artworkId, liked) => {
       if (selectedArtwork && selectedArtwork.id === artworkId) {
         setSelectedArtwork({
           ...selectedArtwork,
-          // @ts-ignore - frontend expects likedStatus string ('Liked'|'Disliked'|'NotTasted')
+          // @ts-ignore Optimistic update of likedStatus (using the ENUM)
           likedStatus: liked ? 'Liked' : 'Disliked',
         });
       }
-
-      return { previous };
-    },
-    onError: (_err, _variables, context) => {
-      // revert if needed - simple approach: invalidate to refetch the truth
-      if (context?.previous) {
-        queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
-      }
-    },
-    onSuccess: () => {
-      // Refresh artworks so lists show updated status
-      queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
-      // Invalidate untasted as well to keep Taster in sync
-      queryClient.invalidateQueries({ queryKey: ['untasted-artworks', user?.domainId, user?.id] });
     },
   });
 
@@ -203,7 +144,7 @@ export function CatalogPage() {
   const handlePreferenceClick = (artworkId: string, liked: boolean, e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (!user || user.role !== 'customer') return;
-    if (!savePreferenceMutation.isSuccess) return;
+
     savePreferenceMutation.mutate({ artworkId, liked });
   };
 
@@ -369,26 +310,32 @@ export function CatalogPage() {
                             type="button"
                             onClick={(e) => handlePreferenceClick(artwork.id, true, e)}
                             aria-label={`Like ${artwork.title}`}
-                            className="p-1"
+                            className={`p-2 rounded-full ${artwork.likedStatus === 'Liked'
+                              ? 'hover:bg-green-300'
+                              : 'hover:bg-green-200'
+                              }`}
                             disabled={savePreferenceMutation.isPending}
                           >
                             <ThumbsUp
                               className={`w-5 h-5 ${artwork.likedStatus === 'Liked' ? 'text-green-600' : 'text-gray-300'
                                 }`}
-                          />
+                            />
                           </button>
                           <button
                             type="button"
                             onClick={(e) => handlePreferenceClick(artwork.id, false, e)}
                             aria-label={`Dislike ${artwork.title}`}
-                            className="p-1"
+                            className={`p-2 rounded-full ${artwork.likedStatus === 'Disliked'
+                              ? 'hover:bg-red-300'
+                              : 'hover:bg-red-200'
+                              }`}
                             disabled={savePreferenceMutation.isPending}
                           >
+                            <ThumbsDown
+                              className={`w-5 h-5 hover:text-red-500 ${artwork.likedStatus === 'Disliked' ? 'text-red-600' : 'text-gray-300'
+                                }`}
+                            />
                           </button>
-                          <ThumbsDown
-                            className={`w-5 h-5 ${artwork.likedStatus === 'Disliked' ? 'text-red-600' : 'text-gray-300'
-                              }`}
-                          />
                         </div>
                       )}
 
@@ -523,7 +470,7 @@ export function CatalogPage() {
                         type="button"
                         onClick={() => handlePreferenceClick(selectedArtwork.id, true)}
                         aria-label="Like artwork"
-                        className="p-2"
+                        className={`p-2 rounded-full ${selectedArtwork.likedStatus === 'Liked' ? 'hover:bg-green-300' : 'hover:bg-green-200'}`}
                         disabled={savePreferenceMutation.isPending}
                       >
                         <ThumbsUp
@@ -536,11 +483,11 @@ export function CatalogPage() {
                         type="button"
                         onClick={() => handlePreferenceClick(selectedArtwork.id, false)}
                         aria-label="Dislike artwork"
-                        className="p-2"
+                        className={`p-2 rounded-full ${selectedArtwork.likedStatus === 'Disliked' ? 'hover:bg-red-300' : 'hover:bg-red-200'}`}
                         disabled={savePreferenceMutation.isPending}
                       >
                         <ThumbsDown
-                          className={`w-6 h-6 ${selectedArtwork.likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'
+                          className={`w-6 h-6 hover:text-red-500 ${selectedArtwork.likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'
                             }`}
                         />
                       </button>

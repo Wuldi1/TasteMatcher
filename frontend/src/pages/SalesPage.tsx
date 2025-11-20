@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react';
 import { apiClient } from '../utils/api';
 import SaleProposal from '../components/SaleProposal';
 import { useAuth } from '../contexts/AuthContext';
-import { ArtworkStats, Proposal, ProposalItem, User } from '@tastematcher/common';
+import { ArtworkStats, Proposal, ProposalItem, User, Artwork } from '@tastematcher/common';
 import { AISuggestionsPage } from './AISuggestions/AISuggestionsPage';
 import CatalogForUser from '../components/Catalog/CatalogForUser';
 
@@ -70,7 +70,8 @@ export default function SalesPage() {
                             proposal.items.map((item) => ({
                                 artworkId: item.artworkId,
                                 comments: item.comments ?? [],
-                                status: item.status ?? 'pending'                            }))
+                                status: item.status ?? 'pending'
+                            }))
                         );
                     } else {
                         setProposalDetails(null);
@@ -120,11 +121,19 @@ export default function SalesPage() {
                         return;
                     }
                     const usersResponse = await apiClient.getAllUsers(selectedDomainId);
-                    setUsers(usersResponse.map((userItem) => ({ id: userItem.id, name: userItem.name ?? userItem.email })));
+                    setUsers(
+                        usersResponse
+                            .filter((userItem) => userItem.role === 'customer') // Filter only customers
+                            .map((userItem) => ({ id: userItem.id, name: userItem.name ?? userItem.email }))
+                    );
                 } else {
                     // domain_owner / dealer: call without domainId so backend uses caller's domain
                     const usersResponse = await apiClient.getAllUsers();
-                    setUsers(usersResponse.map((userItem) => ({ id: userItem.id, name: userItem.name ?? userItem.email })));
+                    setUsers(
+                        usersResponse
+                            .filter((userItem) => userItem.role === 'customer') // Filter only customers
+                            .map((userItem) => ({ id: userItem.id, name: userItem.name ?? userItem.email }))
+                    );
                 }
             } catch (err) {
                 console.error('Failed to load users for sales page', err);
@@ -233,6 +242,35 @@ export default function SalesPage() {
         if (typeof v === 'object') return JSON.stringify(v);
         return String(v);
     }
+
+    // Proposal items as artwork IDs for easy lookup
+    const proposalArtworkIds = proposalItem.map((item) => item.artworkId);
+
+    // Add/remove artwork from proposal
+    const handleProposalToggle = (artwork: Artwork) => {
+        setProposalItem((currentDraft) => {
+            const isAlreadyInProposal = currentDraft.some(
+                (draftItem) => draftItem.artworkId === artwork.id
+            );
+            if (isAlreadyInProposal) {
+                // Remove from proposal
+                return currentDraft.filter((draftItem) => draftItem.artworkId !== artwork.id);
+            } else {
+                // Add to proposal
+                return [
+                    {
+                        artworkId: artwork.id,
+                        comments: [],
+                        status: 'pending',
+                        taggedAt: Date.now(),
+                        title: artwork.title,
+                        filename: artwork.filename,
+                    },
+                    ...currentDraft,
+                ];
+            }
+        });
+    };
 
     // --- New styled tab bar and enhanced Details panel UI ---
     return (
@@ -505,7 +543,14 @@ export default function SalesPage() {
                         hidden={activeTab !== 'ai'}
                     >
                         {!selectedUserId && <div>Please select a user to see AI suggestions.</div>}
-                        {selectedUserId && <AISuggestionsPage userId={selectedUserId} />}
+                        {selectedUserId && (
+                            <AISuggestionsPage
+                                userId={selectedUserId}
+                                proposalItems={proposalArtworkIds}
+                                onAddToProposal={handleProposalToggle}
+                                readonlyThumbs={true}
+                            />
+                        )}
                     </div>
 
 
@@ -539,6 +584,7 @@ export default function SalesPage() {
                                 <SaleProposal
                                     domainId={effectiveDomainId ?? domainId}
                                     userId={selectedUserId}
+                                    userName={userDetails?.name ?? userDetails?.email ?? 'Dealer'}
                                     draftItems={proposalItem}
                                     onDraftChange={(items: ProposalItem[]) => setProposalItem(items)}
                                     proposalId={proposalDetails?.id}

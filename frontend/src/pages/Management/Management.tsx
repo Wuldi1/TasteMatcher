@@ -664,6 +664,7 @@ export function Management() {
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last update</th>
                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                           </tr>
                         </thead>
@@ -687,6 +688,7 @@ export function Management() {
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(u.createdAt)}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(u.updatedAt)}</td>
                               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 {u.role !== 'domain_owner' && u.role !== 'global_admin' && u.id !== user.id && (
                                   <div className="flex justify-end gap-2">

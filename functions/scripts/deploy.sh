@@ -1,1 +1,0 @@
-func azure functionapp publish tastematcher-dev-func --typescript

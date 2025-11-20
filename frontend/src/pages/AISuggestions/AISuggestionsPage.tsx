@@ -15,6 +15,8 @@ import { apiClient } from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Artwork, User } from '@tastematcher/common';
 import { getAIRecommendationsEligibility } from '../../utils/recommendations';
+import { ThumbsUp, ThumbsDown, FileText, X } from 'lucide-react';
+import { useSavePreference } from '../../utils/savePreference';
 
 interface DomainUserOption {
   id: string;
@@ -23,15 +25,23 @@ interface DomainUserOption {
   swipeCount?: number;
 }
 
-/**
- * AISuggestionsPage
- * - If `userId` prop is provided, fetch suggestions for that user (used by SalesPage).
- * - If `userId` prop is not provided, keep existing domain-owner selection behavior.
- */
-export const AISuggestionsPage = ({ userId }: { userId?: string } = {}) => {
+export const AISuggestionsPage = ({
+  userId,
+  proposalItems,
+  onAddToProposal,
+  onArtworkClick,
+  readonlyThumbs = false,
+}: {
+  userId?: string;
+  proposalItems?: string[]; // List of artwork IDs already in the proposal
+  onAddToProposal?: (artwork: Artwork) => void; // Callback to add artwork to the proposal
+  onArtworkClick?: (artwork: Artwork) => void; // Callback to open artwork details
+  readonlyThumbs?: boolean;
+} = {}) => {
   const { user } = useAuth();
   const [recommendations, setRecommendations] = useState<Artwork[]>([]);
-  const [selectedUser, setSelectedUser] = useState<string | undefined>(undefined); // Default to undefined
+  const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
+  const [selectedUser] = useState<string | undefined>(undefined);
   const [users, setUsers] = useState<DomainUserOption[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +49,6 @@ export const AISuggestionsPage = ({ userId }: { userId?: string } = {}) => {
   const isDomainOwner =
     user?.role === 'domain_owner' || user?.role === 'global_admin';
 
-  // targetUserId: if prop `userId` supplied, use it; otherwise fall back to existing logic
   const targetUserId = useMemo(() => {
     if (userId) return userId;
     if (isDomainOwner) {
@@ -50,18 +59,14 @@ export const AISuggestionsPage = ({ userId }: { userId?: string } = {}) => {
 
   const targetUser = useMemo(() => {
     if (userId) {
-      // when a userId prop is provided we may not have full user object in `users` list;
-      // leave targetUser undefined (eligibility checks will be skipped in prop mode)
       return users.find((u) => u.id === (selectedUser || user?.id));
     }
     if (isDomainOwner) {
       return users.find((u) => u.id === (selectedUser || user?.id));
     }
     return user;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDomainOwner, selectedUser, user?.id, users, userId]);
+  }, [isDomainOwner, selectedUser, user, users, userId]);
 
-  // compute eligibility: when userId prop is provided we assume recommendations fetch is forced
   const eligibility = useMemo(() => {
     if (userId) {
       return { isEligible: true, reasons: [] as string[] };
@@ -70,7 +75,6 @@ export const AISuggestionsPage = ({ userId }: { userId?: string } = {}) => {
   }, [userId, targetUser]);
 
   useEffect(() => {
-    // Load domain users only if domain owner AND no explicit prop userId was provided
     if (!isDomainOwner || userId) {
       return;
     }
@@ -93,11 +97,9 @@ export const AISuggestionsPage = ({ userId }: { userId?: string } = {}) => {
     };
 
     void fetchUsers();
-    // stable dependencies only (primitives) to avoid re-running on user object identity changes
   }, [isDomainOwner, user?.domainId, userId]);
 
   useEffect(() => {
-    // Use only stable primitives in deps to avoid effect re-running due to object identity changes.
     if (!targetUserId || !user?.domainId) {
       setRecommendations([]);
       return;
@@ -108,16 +110,13 @@ export const AISuggestionsPage = ({ userId }: { userId?: string } = {}) => {
       setError(null);
 
       try {
-        // If userId prop provided, always request recommendations for that user
         const recommendations = await apiClient.getRecommendations(
           user.domainId!,
-          // if domain owner and selectedUser differs from current user, pass the target user id
           targetUserId !== user?.id ? targetUserId : undefined,
         );
         setRecommendations(recommendations);
       } catch (err) {
         console.error('Failed to load AI suggestions', err);
-        // Only show an error when eligibility indicates we should have suggestions (skip when forced-by-prop)
         if (!userId && eligibility.isEligible) {
           setError('Unable to load AI suggestions. Please try again.');
         }
@@ -128,8 +127,30 @@ export const AISuggestionsPage = ({ userId }: { userId?: string } = {}) => {
     };
 
     void fetchRecommendations();
-  // only depend on stable primitives: domain id, targetUserId prop, eligibility flag and userId prop
   }, [targetUserId, user?.domainId, user?.id, eligibility.isEligible, userId]);
+
+
+  const savePreferenceMutation = useSavePreference({
+    domainId: user?.domainId!,
+    userId: user?.id!,
+    onOptimisticUpdate: (artworkId, liked) => {
+      // @ts-ignore Optimistic update of likedStatus
+      setRecommendations((prev) =>
+        prev.map((artwork) =>
+          artwork.id === artworkId
+            ? { ...artwork, likedStatus: liked ? 'Liked' : 'Disliked' }
+            : artwork,
+        ),
+      );
+      // @ts-ignore Optimistic update of likedStatus
+      setSelectedArtwork((prev) =>
+        prev && prev.id === artworkId
+          ? { ...prev, likedStatus: liked ? 'Liked' : 'Disliked' }
+          : prev,
+      );
+    },
+  });
+
 
   const formatMatchPercentage = (score?: number): string => {
     if (typeof score !== 'number' || Number.isNaN(score)) {
@@ -154,6 +175,20 @@ export const AISuggestionsPage = ({ userId }: { userId?: string } = {}) => {
     );
   }
 
+  const handleCloseModal = () => {
+    setSelectedArtwork(null);
+  };
+
+  const handlePreferenceClick = (artworkId: string, liked: boolean) => {
+    savePreferenceMutation.mutate({ artworkId, liked });
+  };
+
+  const handleProposalToggle = (artwork: Artwork) => {
+    if (onAddToProposal) {
+      onAddToProposal(artwork);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
       <header className="mb-6 sm:mb-8">
@@ -163,68 +198,9 @@ export const AISuggestionsPage = ({ userId }: { userId?: string } = {}) => {
         </p>
       </header>
 
-      {/* Show domain-owner selector only when prop userId is not provided */}
-      {!userId && isDomainOwner && (
-        <div className="mb-6">
-          <label
-            htmlFor="ai-suggestions-user"
-            className="mb-2 block text-sm font-medium text-gray-700"
-          >
-            View suggestions for
-          </label>
-          <select
-            id="ai-suggestions-user"
-            className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-            value={selectedUser || ''} // Default to empty string if undefined
-            onChange={(event) => setSelectedUser(event.target.value || undefined)}
-          >
-            {!selectedUser && <option value="">Select a user</option>}
-            <option value={user?.id}>Myself</option>
-            {users
-              .filter((option) => option.id !== user?.id)
-              .map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-          </select>
-        </div>
-      )}
-
       {error && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4" role="alert">
-          <p className="text-red-800">{error}</p>
-        </div>
-      )}
-
-      {/* Informational messages */}
-      {!userId && !selectedUser && isDomainOwner && (
-        <div
-          className="mx-auto mb-6 max-w-xl rounded-lg border border-blue-200 bg-blue-50 p-4 text-center"
-          role="alert"
-          aria-live="polite"
-        >
-          <h2 className="text-base font-medium text-blue-900">
-            Please select a user to view AI suggestions
-          </h2>
-        </div>
-      )}
-
-      {/* Eligibility warning (only when not forced by prop) */}
-      {!userId && selectedUser && !eligibility.isEligible && (
-        <div
-          className="mx-auto mb-6 max-w-2xl rounded-lg border border-yellow-200 bg-yellow-50 p-6"
-          role="alert"
-          aria-live="polite"
-        >
-          <h2 className="mb-3 text-lg font-semibold text-yellow-900">
-            This profile is almost ready for AI suggestions
-          </h2>
-          <ul className="list-disc space-y-2 pl-5 text-yellow-800">
-            {eligibility.reasons.map((reason) => (
-              <li key={reason}>{reason}</li>
-            ))}
-          </ul>
+        <div className="text-red-600 mb-4">
+          {error}
         </div>
       )}
 
@@ -233,38 +209,106 @@ export const AISuggestionsPage = ({ userId }: { userId?: string } = {}) => {
           aria-label="AI suggested artworks"
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
         >
-          {recommendations.map((item) => (
-            <article
-              key={item.id}
-              className="group flex flex-col overflow-hidden rounded-lg shadow transition hover:shadow-lg focus-within:ring-2 focus-within:ring-primary"
-              tabIndex={0}
-              aria-label={`${item.title} - similarity ${formatMatchPercentage(item.probabilityMatch)}`}
-            >
-              {item.filename ? (
-                <img
-                  src={item.filename}
-                  alt={item.title}
-                  className="h-48 w-full object-cover sm:h-60"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="flex h-48 w-full items-center justify-center bg-gray-100 text-sm text-gray-500 sm:h-60">
-                  No image available
+          {recommendations.map((item) => {
+            const isInProposal = proposalItems?.includes(item.id);
+
+            return (
+              <article
+                key={item.id}
+                className="group flex flex-col overflow-hidden rounded-lg shadow transition hover:shadow-lg focus-within:ring-2 focus-within:ring-primary relative"
+                tabIndex={0}
+                aria-label={`${item.title} - similarity ${formatMatchPercentage(item.probabilityMatch)}`}
+              >
+                {/* Proposal Badge */}
+                {isInProposal && (
+                  <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs font-semibold px-2 py-1 rounded">
+                    In Proposal
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedArtwork(item);
+                    onArtworkClick?.(item);
+                  }}
+                  className="block w-full h-48 bg-gray-100 overflow-hidden sm:h-60"
+                >
+                  {item.filename ? (
+                    <img
+                      src={item.filename}
+                      alt={item.title}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-gray-100 text-sm text-gray-500">
+                      No image available
+                    </div>
+                  )}
+                </button>
+                <div className="flex flex-1 flex-col p-4">
+                  <h3 className="mb-2 line-clamp-2 text-base font-semibold text-gray-900">
+                    {item.title}
+                  </h3>
+                  <div className="mt-auto flex items-center justify-between text-sm text-gray-600">
+                    <span>Match</span>
+                    <span className="font-medium text-primary">
+                      {formatMatchPercentage(item.probabilityMatch)}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={readonlyThumbs}
+                        onClick={() => !readonlyThumbs && handlePreferenceClick(item.id, true)}
+                        className={`p-2 rounded-full ${item.likedStatus === 'Liked'
+                          ? 'hover:bg-green-300'
+                          : (readonlyThumbs ? '' : 'hover:bg-green-200')
+                          }`}
+                        aria-label="Thumbs up"
+                        tabIndex={readonlyThumbs ? -1 : 0}
+                      >
+                        <ThumbsUp
+                          className={`w-5 h-5 ${readonlyThumbs ? '' : 'hover:text-green-500'} ${item.likedStatus === 'Liked' ? 'text-green-600' : 'text-gray-400'}`}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={readonlyThumbs}
+                        onClick={() => !readonlyThumbs && handlePreferenceClick(item.id, false)}
+                        className={`p-2 rounded-full ${item.likedStatus === 'Disliked'
+                          ? 'hover:bg-red-300'
+                          : (readonlyThumbs ? '' : 'hover:bg-red-200')}`}
+                        aria-label="Thumbs down"
+                        tabIndex={readonlyThumbs ? -1 : 0}
+                      >
+                        <ThumbsDown
+                          className={`w-5 h-5 ${readonlyThumbs ? '' : 'hover:text-red-500'} ${item.likedStatus === 'Disliked' ? 'text-red-600' : 'text-gray-400'}`}
+                        />
+                      </button>
+                    </div>
+                    {onAddToProposal && (
+                      <button
+                        type="button"
+                        onClick={() => handleProposalToggle(item)}
+                        className={`p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-1 ${isInProposal
+                            ? 'bg-red-100 hover:bg-red-200 focus:ring-red-500'
+                            : 'bg-blue-100 hover:bg-blue-200 focus:ring-blue-500'
+                          }`}
+                        aria-label={isInProposal ? 'Remove from Proposal' : 'Add to Proposal'}
+                      >
+                        <FileText
+                          className={`w-5 h-5 ${isInProposal ? 'text-red-600' : 'text-blue-600'}`}
+                        />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              )}
-              <div className="flex flex-1 flex-col p-4">
-                <h3 className="mb-2 line-clamp-2 text-base font-semibold text-gray-900">
-                  {item.title}
-                </h3>
-                <div className="mt-auto flex items-center justify-between text-sm text-gray-600">
-                  <span>Match</span>
-                  <span className="font-medium text-primary">
-                    {formatMatchPercentage(item.probabilityMatch)}
-                  </span>
-                </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </section>
       )}
 
@@ -272,6 +316,107 @@ export const AISuggestionsPage = ({ userId }: { userId?: string } = {}) => {
         <p className="py-12 text-center text-gray-600">
           No AI suggestions yet. Encourage additional tasting activity to enrich personalization.
         </p>
+      )}
+
+      {/* Modal for artwork details */}
+      {selectedArtwork && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title"
+          onClick={handleCloseModal}
+        >
+          <div
+            className="relative bg-white rounded-lg shadow-lg w-full max-w-4xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+              onClick={handleCloseModal}
+              aria-label="Close modal"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="flex flex-col md:flex-row gap-6">
+              <div className="flex-shrink-0 w-full md:w-1/2">
+                <img
+                  src={selectedArtwork.filename}
+                  alt={selectedArtwork.title}
+                  className="rounded-lg object-cover w-full h-96"
+                />
+              </div>
+              <div className="flex-1 flex flex-col">
+                <h2 id="modal-title" className="text-2xl font-bold text-gray-900 mb-4">
+                  {selectedArtwork.title}
+                </h2>
+                {selectedArtwork.artist && (
+                  <p className="text-lg text-gray-700 mb-2">
+                    <span className="font-semibold">Artist:</span> {selectedArtwork.artist}
+                  </p>
+                )}
+                {selectedArtwork.date && (
+                  <p className="text-lg text-gray-700 mb-2">
+                    <span className="font-semibold">Date:</span> {selectedArtwork.date}
+                  </p>
+                )}
+                {selectedArtwork.description && (
+                  <p className="text-sm text-gray-600 mb-4">{selectedArtwork.description}</p>
+                )}
+
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {selectedArtwork.classification && (
+                    <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
+                      {selectedArtwork.classification}
+                    </span>
+                  )}
+                  {selectedArtwork.department && (
+                    <span className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">
+                      {selectedArtwork.department}
+                    </span>
+                  )}
+                  {selectedArtwork.country && (
+                    <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
+                      {selectedArtwork.country}
+                    </span>
+                  )}
+                  {selectedArtwork.tags &&
+                    selectedArtwork.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-3 py-1 bg-gray-100 text-gray-800 text-sm rounded-full"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                </div>
+
+                <div className="mt-4 flex items-center justify-center gap-6">
+                  <button
+                    type="button"
+                    disabled={readonlyThumbs}
+                    onClick={() => handlePreferenceClick(selectedArtwork.id, true)}
+                    aria-label="Like artwork"
+                    className={`p-2 rounded-full ${readonlyThumbs ? '' : 'hover:bg-green-100'} ${selectedArtwork.likedStatus === 'Liked' ? 'bg-green-100' : 'bg-gray-100'}`}
+                  >
+                    <ThumbsUp className={`w-6 h-6 ${readonlyThumbs ? '' : 'hover:text-green-500'} ${selectedArtwork.likedStatus === 'Liked' ? 'text-green-500' : 'text-gray-400'}`} />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={readonlyThumbs}
+                    onClick={() => handlePreferenceClick(selectedArtwork.id, false)}
+                    aria-label="Dislike artwork"
+                    className={`p-2 rounded-full ${readonlyThumbs ? '' : 'hover:bg-red-100'} ${selectedArtwork.likedStatus === 'Disliked' ? 'bg-red-100' : 'bg-gray-100'}`}
+                  >
+                    <ThumbsDown className={`w-6 h-6 ${readonlyThumbs ? '' : 'hover:text-red-500'} ${selectedArtwork.likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'}`} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

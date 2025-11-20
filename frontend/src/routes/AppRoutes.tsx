@@ -21,7 +21,6 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
   if (user) {
-    console.log('PublicRoute - User authenticated, redirecting to /home');
     return <Navigate to="/home" replace />;
   }
 

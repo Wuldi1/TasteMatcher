@@ -40,7 +40,6 @@ export function HomePage() {
         // Users who skipped or completed can access the home page
         // When they manually navigate to /onboarding, they can edit their answers
         if (freshUser.role === 'customer' && (freshUser.onboardingStatus !== 'completed' && freshUser.onboardingStatus !== 'skipped')) {
-          console.log('HomePage - Redirecting to onboarding', freshUser);
           navigate('/onboarding', { replace: true });
         }
       });
@@ -62,7 +61,6 @@ export function HomePage() {
 
   // Don't render anything while user is loading
   if (!user) {
-    console.log('HomePage - No user, returning null');
     return null;
   }
 

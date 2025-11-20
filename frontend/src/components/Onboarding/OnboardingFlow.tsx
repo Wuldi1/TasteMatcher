@@ -71,10 +71,7 @@ export function OnboardingFlow() {
 
   useEffect(() => {
     if (!user?.personalQuestionnaire) return;
-
     const { personalDetails: pd, collectingPreferences: cp, artworkPreferences: ap } = user.personalQuestionnaire;
-    
-    console.log('Loading questionnaire data:', { pd, cp, ap });
     
     if (pd) {
       setPersonalDetails(pd);

@@ -308,10 +308,12 @@ export class ArtworksService {
     const container = await this.cosmosService.getArtworkPreferencesContainer();
 
     try {
-      // Check if preference already exists
-      const { resource: existingPreference } = await container.item(artworkId, userId).read();
-
+      
       const preferenceId = generatePreferenceId(userId, artworkId);
+      
+      // Check if preference already exists
+      const { resource: existingPreference } = await container.item(preferenceId, userId).read();
+
 
       if (existingPreference) {
         // Update existing preference
@@ -321,7 +323,7 @@ export class ArtworksService {
           updatedAt: Date.now(),
         };
 
-        const { resource } = await container.item(artworkId, userId).replace(updatedPreference);
+        const { resource } = await container.item(preferenceId, userId).replace(updatedPreference);
 
         this.logger.log(`Updated preference for artwork ${artworkId} by user ${userId}`);
 
@@ -410,7 +412,23 @@ export class ArtworksService {
       );
 
       const artworksContainer = await this.cosmosService.getArtworksContainer();
+      const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
       const recommendedArtworks: Artwork[] = [];
+
+      // Fetch preferences for the user
+      const preferencesQuery = {
+        query: 'SELECT c.artworkId, c.liked FROM c WHERE c.userId = @userId',
+        parameters: [{ name: '@userId', value: resolvedUserId }],
+      };
+
+      const { resources: preferences } = await preferencesContainer.items
+        .query(preferencesQuery, { partitionKey: resolvedUserId })
+        .fetchAll();
+
+      const preferencesMap = new Map<string, boolean>();
+      preferences.forEach((pref) => {
+        preferencesMap.set(pref.artworkId, pref.liked);
+      });
 
       for (const match of matches) {
         try {
@@ -420,6 +438,17 @@ export class ArtworksService {
 
           if (artwork) {
             artwork.probabilityMatch = match.score;
+
+            // Attach liked status to the artwork
+            const liked = preferencesMap.get(artwork.id);
+            if (liked === undefined) {
+              artwork.likedStatus = LikedStatus.NotTasted;
+            } else if (liked) {
+              artwork.likedStatus = LikedStatus.Liked;
+            } else {
+              artwork.likedStatus = LikedStatus.Disliked;
+            }
+
             recommendedArtworks.push(artwork);
           }
         } catch (lookupError) {

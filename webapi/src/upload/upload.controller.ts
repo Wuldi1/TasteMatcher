@@ -36,8 +36,7 @@ export class UploadController {
     this.logger.debug({
       route: '/api/domains/:domainId/uploads',
       method: 'POST',
-      domainId,
-      metadataKeys: Object.keys(body),
+      domainId
     });
 
     if (!file) {
@@ -58,8 +57,7 @@ export class UploadController {
         blobName,
         containerId: "originals",
         fileSize: file.size,
-        fileMimeType: file.mimetype,
-        artworkObject: artworkMetadata,
+        fileMimeType: file.mimetype
       });
 
       // upload file to blob storage

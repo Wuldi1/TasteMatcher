@@ -113,6 +113,38 @@ export default function CatalogForUser({
                                     showPreferenceButtons ? (
                                         // Actionable buttons for customers
                                         <div className="flex items-center gap-2" aria-hidden="false">
+
+                                            <button
+                                                type="button"
+                                                disabled={showReadOnly}
+                                                onClick={() => !showReadOnly && onPreferenceClick?.(artwork.id, true)}
+                                                className={`p-2 rounded-full ${artwork.likedStatus === 'Liked'
+                                                    ? 'hover:bg-green-300'
+                                                    : (showReadOnly ? '' : 'hover:bg-green-200')
+                                                    }`}
+                                                aria-label="Thumbs up"
+                                                tabIndex={showReadOnly ? -1 : 0}
+                                            >
+                                                <ThumbsUp
+                                                    className={`w-5 h-5 ${showReadOnly ? '' : 'hover:text-green-500'} ${artwork.likedStatus === 'Liked' ? 'text-green-600' : 'text-gray-400'}`}
+                                                />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={showReadOnly}
+                                                onClick={() => !showReadOnly && onPreferenceClick?.(artwork.id, false)}
+                                                className={`p-2 rounded-full ${artwork.likedStatus === 'Disliked'
+                                                    ? 'hover:bg-red-300'
+                                                    : (showReadOnly ? '' : 'hover:bg-red-200')}`}
+                                                aria-label="Thumbs down"
+                                                tabIndex={showReadOnly ? -1 : 0}
+                                            >
+                                                <ThumbsDown
+                                                    className={`w-5 h-5 ${showReadOnly ? '' : 'hover:text-red-500'} ${artwork.likedStatus === 'Disliked' ? 'text-red-600' : 'text-gray-400'}`}
+                                                />
+                                            </button>
+
+
                                             <button
                                                 type="button"
                                                 onClick={(e) => onPreferenceClick?.(artwork.id, true, e)}
@@ -145,21 +177,19 @@ export default function CatalogForUser({
                                 <div className="flex items-center gap-2">
                                     {onAddToDraft && (
                                         <button
-                                            aria-label={`Toggle ${artwork.title ?? artwork.id} in proposal`}
+                                            type="button"
+                                            aria-label={isInProposal?.(artwork.id) ? 'Remove from Proposal' : 'Add to Proposal'}
                                             onClick={() => onAddToDraft(artwork)}
-                                            className={`p-2 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                                                isInProposal?.(artwork.id)
-                                                    ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
-                                                    : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
-                                            }`}
-                                            title={
-                                                isInProposal?.(artwork.id)
-                                                    ? 'Remove from proposal'
-                                                    : 'Add to proposal'
-                                            }
+                                            className={`p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-1 ${isInProposal?.(artwork.id)
+                                                ? 'bg-red-100 hover:bg-red-200 focus:ring-red-500'
+                                                : 'bg-blue-100 hover:bg-blue-200 focus:ring-blue-500'
+                                                }`}
                                         >
-                                            <FileText className="w-4 h-4" />
+                                            <FileText
+                                                className={`w-5 h-5 ${isInProposal?.(artwork.id) ? 'text-red-600' : 'text-blue-600'}`}
+                                            />
                                         </button>
+
                                     )}
 
                                     {onEditClick && (

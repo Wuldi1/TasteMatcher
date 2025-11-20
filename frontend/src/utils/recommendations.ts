@@ -9,7 +9,7 @@ export function getAIRecommendationsEligibility(
 ): { isEligible: boolean; reasons: string[] } {
   const reasons: string[] = [];
   let isEligible = false;
-  console.log('Checking AI Recommendations eligibility for user:', user);
+
   if ((user?.swipeCount || 0) >= 20) {
     isEligible = true;
   }

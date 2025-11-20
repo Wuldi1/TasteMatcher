@@ -52,6 +52,9 @@ async function uploadArtwork(folderPath, token, domainId) {
     formData.append("department", metadata.department || "");
     formData.append("country", metadata.country || "");
     formData.append("date", metadata.date || "");
+    formData.append("description", metadata.description || "");
+    formData.append("tags", JSON.stringify(metadata.tags || []));
+    formData.append("metadata", JSON.stringify(metadata));
 
     // Upload to API with domainId
     const res = await fetch(`${API_BASE_URL}/domains/${domainId}/uploads`, {
@@ -87,10 +90,6 @@ async function main() {
         console.log(`\n📤 Starting upload of ${folders.length} artworks...\n`);
 
         for (const folder of folders) {
-            if (uploadCount == 50) {
-                console.log("⏸️  Reached 50 uploads, taking a short break...");
-                return;
-            }
             const folderPath = path.join(CONTENT_DIR, folder);
             const stat = await fs.stat(folderPath);
 

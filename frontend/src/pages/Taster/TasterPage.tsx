@@ -55,8 +55,6 @@ export function TasterPage() {
     mutationFn: async ({ artworkId, liked }: { artworkId: string; liked: boolean }) => {
       if (!user?.domainId || !user?.id) throw new Error('User not authenticated');
       
-      console.log(`Saving preference: ${artworkId} - ${liked ? 'liked' : 'disliked'}`);
-      
       await apiClient.saveArtworkPreference(user.domainId, user.id, {
         artworkId,
         liked,

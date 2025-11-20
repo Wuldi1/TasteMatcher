@@ -119,7 +119,7 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
     if (!resource) {
       throw new Error(`User not found: ${userId} in domain ${domainId}`);
     }
-    logger.info({ msg: 'Fetched user from Cosmos DB', resource });
+    logger.info({ msg: 'Fetched user from Cosmos DB' });
     return resource;
   }
 
