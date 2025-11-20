@@ -148,6 +148,7 @@ export class UploadController {
       filename: parsed.filename ?? 'unknown',
       tags: parsed.tags ?? [],
       createdAt: new Date().getTime(),
+      updatedAt: new Date().getTime(),
       metadata: parsed.metadata,
       category: parsed.category ?? 'uncategorized',
       vector: [],
