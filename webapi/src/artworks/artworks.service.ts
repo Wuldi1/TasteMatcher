@@ -305,14 +305,15 @@ export class ArtworksService {
    * Save or update artwork preference (like/dislike) for a user
    */
   async savePreference(domainId: string, userId: string, artworkId: string, saveDto: SavePreferenceDto): Promise<ArtworkPreference> {
-    const container = await this.cosmosService.getArtworkPreferencesContainer();
+    const artworkPreferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
 
     try {
-      
+
       const preferenceId = generatePreferenceId(userId, artworkId);
-      
+      let updatedResource;
+
       // Check if preference already exists
-      const { resource: existingPreference } = await container.item(preferenceId, userId).read();
+      const { resource: existingPreference } = await artworkPreferencesContainer.item(preferenceId, userId).read();
 
 
       if (existingPreference) {
@@ -323,11 +324,10 @@ export class ArtworksService {
           updatedAt: Date.now(),
         };
 
-        const { resource } = await container.item(preferenceId, userId).replace(updatedPreference);
+        const { resource: updatedResource } = await artworkPreferencesContainer.item(preferenceId, userId).replace(updatedPreference);
 
         this.logger.log(`Updated preference for artwork ${artworkId} by user ${userId}`);
 
-        return resource;
       } else {
         // Create new preference
         const newPreference = {
@@ -339,12 +339,38 @@ export class ArtworksService {
           updatedAt: Date.now(),
         };
 
-        const { resource } = await container.items.create(newPreference);
+        const { resource: updatedResource } = await artworkPreferencesContainer.items.create(newPreference);
 
         this.logger.log(`Saved new preference for artwork ${artworkId} by user ${userId}`);
-
-        return resource!;
       }
+
+      // first, get the user preferenceVector from his existing record
+      const usersContainer = await this.cosmosService.getUsersContainer();
+      const { resource: userRecord } = await usersContainer.item(userId, domainId).read();
+      const userPreferenceVector = userRecord.preferenceVector;
+
+      const imageVector = await this.searchIndexService.getArtworkVector(artworkId);
+
+      // if preferenceVector exists and is valid, update it using the new preference
+      if (Array.isArray(userPreferenceVector) && userPreferenceVector.length === 1024 &&
+        imageVector && imageVector.length === 1024) {
+        // Here you would implement the logic to update the user's preference vector
+        // based on the new preference. This could involve calling an external service
+        // or running a local algorithm to adjust the vector.
+        const updatedPreferenceVector = this.searchIndexService.calculateUpdatedPreferenceVector(
+          userPreferenceVector,
+          imageVector,
+          saveDto.liked
+        );
+
+        // store updated preference vector back to user record
+        userRecord.preferenceVector = updatedPreferenceVector;
+        await usersContainer.item(userId, domainId).replace(userRecord);
+
+        this.logger.log(`Updated preference vector for user ${userId} after saving preference for artwork ${artworkId}`);
+      }
+
+      return updatedResource!;
     } catch (error) {
       this.logger.error(`Failed to save preference for artwork ${artworkId} by user ${userId}`, error);
       throw error;
@@ -405,10 +431,16 @@ export class ArtworksService {
         return [];
       }
 
+      this.logger.debug({
+        msg: 'Generating AI suggestions using preference vector',
+        domainId,
+        targetUserId: resolvedUserId,
+        preferenceVector: preferenceVector,
+      });
+
       const matches = await this.searchIndexService.searchSimilarArtworks(
         domainId,
-        preferenceVector,
-        10,
+        preferenceVector
       );
 
       const artworksContainer = await this.cosmosService.getArtworksContainer();
@@ -468,6 +500,19 @@ export class ArtworksService {
         recommendationCount: recommendedArtworks.length,
         durationMs: Date.now() - start,
       });
+      // return the top 10 recommended artworks. We prefer those with highest probabilityMatch and not yet tasted, but the results will always be 10.
+      const topArtworks = recommendedArtworks.slice(0, 10);
+      const topArtworksWithoutTasted = recommendedArtworks.filter(art => art.likedStatus === LikedStatus.NotTasted);
+
+      // if topArtworksWithoutTasted has less than 10, fill the rest with tasted artworks that have highest probabilityMatch and not already included
+      if (topArtworksWithoutTasted.length < 10) {
+        const needed = 10 - topArtworksWithoutTasted.length;
+        const tastedArtworks = topArtworks
+          .filter(art => art.likedStatus !== LikedStatus.NotTasted)
+          .slice(0, needed);
+
+        return [...topArtworksWithoutTasted, ...tastedArtworks].sort((a, b) => (b.probabilityMatch || 0) - (a.probabilityMatch || 0));
+      }
 
       return recommendedArtworks;
 

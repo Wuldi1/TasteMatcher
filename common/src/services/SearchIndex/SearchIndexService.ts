@@ -7,9 +7,10 @@ import { VectorEmbedding } from '../../types/processing.types';
 const logger = createLogger('SearchIndexService');
 
 interface ArtworkSearchDocument {
-  artworkId: string;
-  domainId: string;
-  imageVector: number[]; // Azure AI Vision produces 1024-dimension vectors
+  artworkId: string; // Unique identifier for the artwork
+  domainId: string; // Domain ID to which the artwork belongs
+  imageVector: number[]; // 1024-dimension vector for the artwork
+  // Ensure all fields are explicitly defined and match the expected structure
 }
 
 interface IndexArtworkInput {
@@ -108,7 +109,7 @@ export class SearchIndexService {
   async searchSimilarArtworks(
     domainId: string,
     userVector: number[],
-    topK: number = 10
+    topK: number = 15
   ): Promise<Array<{ artworkId: string; score: number }>> {
     logger.debug({
       msg: 'Searching similar artworks',
@@ -156,7 +157,8 @@ export class SearchIndexService {
         count: results.length,
       });
 
-      return results;
+      // return sorted results by score descending
+      return results.sort((a, b) => b.score - a.score);
     } catch (err) {
       logger.error({
         msg: 'Failed to search similar artworks',
@@ -165,5 +167,64 @@ export class SearchIndexService {
       });
       throw err;
     }
+  }
+
+  /**
+   * Retrieves the image vector for a given artwork from the search index.
+   * Returns the vector array if found, or null if not found.
+   */
+  async getArtworkVector(artworkId: string): Promise<number[] | null> {
+    try {
+      const result = await this.searchClient.getDocument(artworkId);
+      return result.imageVector;
+    } catch (err: any) {
+      if (err.statusCode === 404) {
+        logger.warn({
+          msg: 'Artwork not found in search index',
+          artworkId,
+        });
+        return null;
+      }
+      logger.error({
+        msg: 'Failed to get artwork vector from search index',
+        artworkId,
+        err,
+      });
+      throw err;
+    }
+  }
+
+  /**
+   * L2-normalizes the input vector.
+   * Returns a new vector with unit length (or all zeros if input is zero vector).
+   */
+  normalizeVector(vector: number[]): number[] {
+    const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
+    if (magnitude === 0) {
+      return new Array(vector.length).fill(0);
+    }
+    return vector.map(val => val / magnitude);
+  }
+
+  /**
+   * Updates the user's preference vector based on a swipe.
+   * If liked=true, moves the vector toward the image vector.
+   * If liked=false, moves the vector away from the image vector.
+   * Both vectors must be the same length.
+   * Returns the new normalized preference vector.
+   */
+  calculateUpdatedPreferenceVector(
+    userVector: number[],
+    imageVector: number[],
+    liked: boolean
+  ): number[] {
+    if (userVector.length !== imageVector.length) {
+      throw new Error('Vector dimensions do not match');
+    }
+    // Move toward or away from the image vector
+    const updated = userVector.map((v, i) =>
+      liked ? v + imageVector[i] : v - imageVector[i]
+    );
+    return this.normalizeVector(updated);
   }
 }
