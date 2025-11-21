@@ -10,7 +10,7 @@ import { CompletionStep } from './steps/CompletionStep';
 import { apiClient, ApiError } from '../../utils/api';
 
 type OnboardingStep = 'welcome' | 'personal' | 'collecting' | 'artwork' | 'completion';
-
+const steps: OnboardingStep[] = ['welcome', 'personal', 'collecting', 'artwork', 'completion'];
 /**
  * Onboarding flow for new customer users
  * Multi-step questionnaire with image upload and vectorization
@@ -18,7 +18,7 @@ type OnboardingStep = 'welcome' | 'personal' | 'collecting' | 'artwork' | 'compl
 export function OnboardingFlow() {
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
-  
+
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('welcome');
   const [personalDetails, setPersonalDetails] = useState<PersonalDetails>({});
   const [collectingPreferences, setCollectingPreferences] = useState<CollectingPreferences>({});
@@ -66,13 +66,13 @@ export function OnboardingFlow() {
         console.log('User data refreshed for onboarding edit mode', user);
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, isLoading]); // Don't include refreshUser or user to avoid loops
 
   useEffect(() => {
     if (!user?.personalQuestionnaire) return;
     const { personalDetails: pd, collectingPreferences: cp, artworkPreferences: ap } = user.personalQuestionnaire;
-    
+
     if (pd) {
       setPersonalDetails(pd);
     }
@@ -85,7 +85,7 @@ export function OnboardingFlow() {
   }, [user?.personalQuestionnaire]);
 
   const handleNext = useCallback(() => {
-    const steps: OnboardingStep[] = ['welcome', 'personal', 'collecting', 'artwork', 'completion'];
+
     const currentIndex = steps.indexOf(currentStep);
     if (currentIndex < steps.length - 1) {
       setCurrentStep(steps[currentIndex + 1]);
@@ -94,7 +94,6 @@ export function OnboardingFlow() {
   }, [currentStep]);
 
   const handleBack = useCallback(() => {
-    const steps: OnboardingStep[] = ['welcome', 'personal', 'collecting', 'artwork', 'completion'];
     const currentIndex = steps.indexOf(currentStep);
     if (currentIndex > 0) {
       setCurrentStep(steps[currentIndex - 1]);
@@ -125,10 +124,7 @@ export function OnboardingFlow() {
 
       // Only update onboarding status if NOT in edit mode
       // In edit mode, user already has completed/skipped status
-      if (!isEditMode) {
-        await apiClient.completeOnboarding();
-        await refreshUser?.();
-      }
+      await apiClient.completeOnboarding();
 
       // Navigate to home with replace to prevent back navigation
       navigate('/home', { replace: true });
@@ -167,7 +163,6 @@ export function OnboardingFlow() {
   }, [user, isEditMode, navigate]);
 
   const getProgress = useCallback(() => {
-    const steps: OnboardingStep[] = ['welcome', 'personal', 'collecting', 'artwork', 'completion'];
     return ((steps.indexOf(currentStep) + 1) / steps.length) * 100;
   }, [currentStep]);
 
