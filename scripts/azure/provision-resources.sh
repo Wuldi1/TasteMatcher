@@ -6,14 +6,31 @@ set -euo pipefail
 
 ENV=${1:-dev}
 LOCATION=${2:-israelcentral}
-EMAIL_LOCATION=${3:-"global"} # not supported in israelcentral as of now
-EMAIL_DATA_LOCATION=${4:-"UnitedStates"} # not supported in israelcentral as of now
-COMPUTER_VISION_LOCATION=${5:-"francecentral"} # not supported in israelcentral as of now
+COMPUTER_VISION_LOCATION=${3:-"francecentral"} # not supported in israelcentral as of now
+EMAIL_LOCATION=${4:-"global"} # not supported in israelcentral as of now
+EMAIL_DATA_LOCATION=${5:-"UnitedStates"} # not supported in israelcentral as of now
 
 if [ -z "$ENV" ]; then
   echo "Usage: $0 <env> <location>"
   exit 1
 fi
+
+# Set subscription and location based on environment
+if [ "$ENV" = "stg" ]; then
+  SUBSCRIPTION_ID="0531979e-9645-4a62-a894-ecb44f04412b"
+  LOCATION="eastus"
+  COMPUTER_VISION_LOCATION="eastus"
+else
+  SUBSCRIPTION_ID="e105e38a-7820-4c7e-b1da-de05227d6355"
+fi
+
+# Set the subscription
+az account set --subscription "$SUBSCRIPTION_ID"
+
+echo "Using subscription: $SUBSCRIPTION_ID"
+echo "Using environment: $ENV"
+echo "Using location: $LOCATION"
+echo "Using Computer Vision location: $COMPUTER_VISION_LOCATION"
 
 # Resource name patterns (user-visible names follow tastematcher-[env]-[resource-type])
 RG_NAME="tastematcher-${ENV}-rg"
@@ -80,6 +97,9 @@ echo "Creating queue $QUEUE_NAME..."
 az storage queue create --name "$QUEUE_NAME" --account-name "$STORAGE_ACCOUNT_NAME" --account-key "$STORAGE_KEY" -o none
 
 # Create Key Vault
+echo "registering Microsoft.KeyVault provider..."
+az provider register --namespace Microsoft.KeyVault -o none
+
 echo "Creating Key Vault $KV_NAME..."
 if az keyvault show --name "$KV_NAME" --resource-group "$RG_NAME" >/dev/null 2>&1; then
   echo "Key Vault $KV_NAME already exists. Skipping creation."
@@ -108,6 +128,10 @@ COMMUNICATION_CONNECTION_STRING=$(az communication list-key \
 
 # TODO - need to create custom domain
 AZURE_EMAIL_SENDER_ADDRESS=${AZURE_EMAIL_SENDER_ADDRESS:-"donotreply@2fd3f94e-2fdf-4c93-80bd-b396997b5bdd.azurecomm.net"}
+
+# Register Microsoft.DocumentDB provider
+echo "registering Microsoft.DocumentDB provider..."
+az provider register --namespace Microsoft.DocumentDB -o none
 
 # Create Azure Cosmos DB account
 echo "Creating Azure Cosmos DB account: $COSMOS_NAME ..."
@@ -232,6 +256,10 @@ EOF
 # Remove old PostgreSQL functions and replace with Cosmos DB setup
 setup_cosmos_data
 
+# Register Microsoft.CognitiveServices provider
+echo "registering Microsoft.CognitiveServices provider..."
+az provider register --namespace Microsoft.CognitiveServices -o none
+
 # Create Azure Cognitive Search service
 # Note: vector capabilities may require a certain SKUs or regions - check availability
 echo "Creating Azure Cognitive Search service: $SEARCH_NAME (SKU: basic)..."
@@ -246,6 +274,71 @@ az search service create \
 
 # Get search admin key
 SEARCH_KEY=$(az search admin-key show --service-name "$SEARCH_NAME" --resource-group "$RG_NAME" --query primaryKey -o tsv)
+
+# Create Azure Cognitive Search index
+echo "Creating Azure Cognitive Search index: $INDEX_NAME..."
+INDEX_SCHEMA=$(cat <<'EOF'
+{
+  "name": "artworks-index",
+  "fields": [
+    {
+      "name": "artworkId",
+      "type": "Edm.String",
+      "key": true,
+      "searchable": false,
+      "filterable": true,
+      "sortable": false,
+      "facetable": false
+    },
+    {
+      "name": "domainId",
+      "type": "Edm.String",
+      "searchable": false,
+      "filterable": true,
+      "sortable": false,
+      "facetable": true
+    },
+    {
+      "name": "imageVector",
+      "type": "Collection(Edm.Single)",
+      "searchable": true,
+      "filterable": false,
+      "sortable": false,
+      "facetable": false,
+      "dimensions": 1024,
+      "vectorSearchProfile": "artwork-vector-profile"
+    }
+  ],
+  "vectorSearch": {
+    "algorithms": [
+      {
+        "name": "artwork-vector-algorithm",
+        "kind": "hnsw",
+        "hnswParameters": {
+          "metric": "cosine",
+          "m": 4,
+          "efConstruction": 400,
+          "efSearch": 500
+        }
+      }
+    ],
+    "profiles": [
+      {
+        "name": "artwork-vector-profile",
+        "algorithm": "artwork-vector-algorithm"
+      }
+    ]
+  }
+}
+EOF
+)
+
+curl -X PUT "${SEARCH_ENDPOINT}/indexes/${INDEX_NAME}?api-version=2023-11-01" \
+  -H "Content-Type: application/json" \
+  -H "api-key: ${SEARCH_KEY}" \
+  -d "$INDEX_SCHEMA"
+
+echo "✅ Azure Cognitive Search index created successfully!"
 
 # Create Azure Computer Vision (AI Vision) resource
 echo "Creating Azure Computer Vision resource: $VISION_NAME (SKU: S1)..."
@@ -848,10 +941,6 @@ echo " 4. Deploy your Azure Function code to $FUNCAPP_NAME"
 echo " 5. Configure Computer Vision for image vectorization in your Functions app"
 echo " 6. Use .env.${ENV} in your backend for local testing (but prefer Key Vault in prod)"
 echo " 7. Set up GitHub Actions workflows for CI/CD deployment"
-echo ""
-echo "Deployment commands:"
-echo " - Backend API: cd webapi && pnpm build && az webapp deploy --resource-group $RG_NAME --name $WEBAPP_API_NAME --src-path build.zip --type zip"
-echo " - Frontend: cd frontend && pnpm build && az webapp deploy --resource-group $RG_NAME --name $WEBAPP_FRONTEND_NAME --src-path build.zip --type zip"
 echo ""
 echo "Health check URLs:"
 echo " - Backend API: ${BACKEND_API_URL}/health"

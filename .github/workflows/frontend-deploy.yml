@@ -9,13 +9,22 @@ on:
       - 'common/**'
       - '.github/workflows/frontend-deploy.yml'
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - stg
+          - prd
 
 env:
   NODE_VERSION: '22.x'
   PNPM_VERSION: '8'
   FRONTEND_DIR: frontend
   BUILD_OUTPUT: frontend/build
-  AZURE_WEBAPP_NAME: tastematcher-dev-web
 
 jobs:
   build-test:
@@ -53,15 +62,28 @@ jobs:
           path: ${{ env.BUILD_OUTPUT }}
           retention-days: 1
 
-  deploy-dev:
-    name: Deploy to tastematcher-dev-web
+  deploy:
+    name: Deploy to Azure Web App
     runs-on: ubuntu-latest
     needs: build-test
     environment:
-      name: development
-      url: https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net
+      name: ${{ github.event.inputs.environment || 'dev' }}
+      url: ${{ github.event.inputs.environment == 'stg' && 'https://tastematcher-stg-web.azurewebsites.net' || github.event.inputs.environment == 'prd' && 'https://tastematcher-prd-web.azurewebsites.net' || 'https://tastematcher-dev-web.azurewebsites.net' }}
 
     steps:
+      - name: Set Environment Variables
+        run: |
+          if [ "${{ github.event.inputs.environment }}" == "stg" ]; then
+            echo "AZURE_WEBAPP_NAME=tastematcher-stg-web" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=0531979e-9645-4a62-a894-ecb44f04412b" >> $GITHUB_ENV
+          elif [ "${{ github.event.inputs.environment }}" == "prd" ]; then
+            echo "AZURE_WEBAPP_NAME=tastematcher-prd-web" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=your-prod-subscription-id" >> $GITHUB_ENV
+          else
+            echo "AZURE_WEBAPP_NAME=tastematcher-dev-web" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=${{ secrets.AZURE_SUBSCRIPTION_DEV }}" >> $GITHUB_ENV
+          fi
+
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
@@ -123,7 +145,7 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS_DEV }}
+          creds: ${{ github.event.inputs.environment == 'stg' && secrets.AZURE_CREDENTIALS_STG || github.event.inputs.environment == 'prd' && secrets.AZURE_CREDENTIALS_PRD || secrets.AZURE_CREDENTIALS_DEV }}
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
