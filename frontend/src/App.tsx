@@ -14,6 +14,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts/AuthContext';
 import { DomainProvider } from './contexts/DomainContext';
+import { UserStatsProvider } from './contexts/UserStatsContext';
 import { queryClient } from './utils/react-query';
 import { AppRoutes } from './routes/AppRoutes';
 
@@ -26,9 +27,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <DomainProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
+          <UserStatsProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </UserStatsProvider>
         </DomainProvider>
       </AuthProvider>
     </QueryClientProvider>

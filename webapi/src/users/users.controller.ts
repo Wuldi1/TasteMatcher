@@ -24,7 +24,7 @@ import { UpdateQuestionnaireDto } from './dto/update-questionnaire.dto';
 import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
 import { RolesGuard } from '../auth/utils/roles.guard';
 import { Roles } from '../auth/utils/roles.decorator';
-import { User } from '@tastematcher/common';
+import { User, UserStatsResponse } from '@tastematcher/common';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
 import { AuthService } from '../auth/auth.service';
 import { ArtworksService } from '../artworks/artworks.service';
@@ -58,6 +58,23 @@ export class UsersController {
   }
 
   /**
+   * Get aggregated stats for the current user
+   */
+  @Get('stats')
+  async getUserStats(@Request() req: AuthenticatedRequest): Promise<UserStatsResponse> {
+    const { id: userId, domainId } = req.user;
+
+    // Fetch swiping stats
+    const stats = await this.artworksService.getStats(domainId, userId);
+
+    // Return only necessary data
+    return {
+      ...stats,
+      // TODO : TBD
+    };
+  }
+
+  /**
    * Get a specific user by ID (domain_owner and global_admin only)
    */
   @Get(':id')
@@ -66,9 +83,9 @@ export class UsersController {
     @Request() req: AuthenticatedRequest,
     @Param('id') userId: string,
     @Query('domainId') domainId?: string): Promise<User> {
-      if (domainId && req.user.domainId !== domainId && req.user.role !== 'global_admin') {
-        throw new ForbiddenException('You are not authorized to access this domain.');
-      }
+    if (domainId && req.user.domainId !== domainId && req.user.role !== 'global_admin') {
+      throw new ForbiddenException('You are not authorized to access this domain.');
+    }
     return this.usersService.findOne(domainId ?? req.user.domainId, userId);
   }
 

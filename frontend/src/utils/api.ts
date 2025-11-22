@@ -22,7 +22,8 @@ import {
   UntastedArtworksResponse,
   SavePreferenceRequest,
   PaginatedResponse,
-  Proposal
+  Proposal,
+  UserStatsResponse
 } from '@tastematcher/common';
 
 /**
@@ -48,8 +49,7 @@ class BaseApiClient {
   protected authToken: string | null = null;
 
   constructor() {
-    // this.baseURL = process.env.REACT_APP_API_URL!;
-    this.baseURL = 'https://tastematcher-dev-api.azurewebsites.net';
+    this.baseURL = process.env.REACT_APP_API_URL!;
     this.loadAuthToken();
   }
 
@@ -113,9 +113,6 @@ class BaseApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
-    const method = options.method || 'GET';
-
-    console.debug('API Request:', { method, url });
 
     try {
       const response = await fetch(url, {
@@ -131,7 +128,7 @@ class BaseApiClient {
       }
 
       const data = await response.json();
-      console.debug('API Response:', { url, status: response.status });
+
       return data;
     } catch (error) {
       if (error instanceof ApiError) {
@@ -405,6 +402,15 @@ class ApiClient extends BaseApiClient {
     });
   }
 
+  /**
+   * Fetch user stats for the current user.
+   * @param domainId - The domain ID.
+   * @returns User stats including total likes, dislikes, swipes, and recently added artworks.
+   */
+  async getUserStats(): Promise<UserStatsResponse> {
+    return this.request<UserStatsResponse>('/api/users/stats', { method: 'GET' });
+  }
+
   // ========== Artwork Endpoints ==========
 
   /**
@@ -448,14 +454,14 @@ class ApiClient extends BaseApiClient {
   ): Promise<PaginatedResponse<Artwork>> {
     this.validateRequired(domainId, 'Domain ID');
     const params = new URLSearchParams();
-    
+
     if (options?.limit !== undefined) params.append('limit', String(options.limit));
     if (options?.continuationToken) params.append('continuationToken', options.continuationToken);
     if (options?.sortBy) params.append('sortBy', options.sortBy);
     if (options?.sortOrder) params.append('sortOrder', options.sortOrder);
     if (options?.filterBy) params.append('filterBy', options.filterBy);
     if (options?.userId) params.append('userId', options.userId);
-    
+
     const queryString = params.toString();
     const endpoint = `/api/domains/${domainId}/artworks${queryString ? `?${queryString}` : ''}`;
     return this.request<PaginatedResponse<Artwork>>(endpoint, { method: 'GET' });
@@ -503,12 +509,12 @@ class ApiClient extends BaseApiClient {
   }
 
   async saveArtworkPreference(
-  domainId: string,
-  userId: string,
-  preference: SavePreferenceRequest
-): Promise<void> {
-  await this.request<UntastedArtworksResponse>(`/api/domains/${domainId}/artworks/preferences/${userId}`, { method: 'POST', body: JSON.stringify(preference) });
-}
+    domainId: string,
+    userId: string,
+    preference: SavePreferenceRequest
+  ): Promise<void> {
+    await this.request<UntastedArtworksResponse>(`/api/domains/${domainId}/artworks/preferences/${userId}`, { method: 'POST', body: JSON.stringify(preference) });
+  }
 
   /**
    * Get recommendations for a domain
@@ -528,9 +534,14 @@ class ApiClient extends BaseApiClient {
   /**
    * List proposals for a domain (optionally filter by userId)
    */
-  async listProposals(domainId: string, userId?: string): Promise<Proposal[]> {
+  async listProposals(domainId: string, userId?: string, dealerUserId?: string): Promise<Proposal[]> {
     this.validateRequired(domainId, 'Domain ID');
-    const params = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+    let params = '';
+    if (dealerUserId) {
+      params = `?dealerUserId=${encodeURIComponent(dealerUserId)}`;
+    } else if (userId) {
+      params = `?userId=${encodeURIComponent(userId)}`;
+    }
     return this.request<Proposal[]>(`/api/domains/${domainId}/sales/proposals${params}`, { method: 'GET' });
   }
 

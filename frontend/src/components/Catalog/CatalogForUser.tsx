@@ -82,7 +82,7 @@ export default function CatalogForUser({
                 const inProposal = isInProposal?.(artwork.id) ?? false;
 
                 return (
-                    <div key={artwork.id} className="relative border rounded overflow-hidden bg-white shadow-sm">
+                    <div key={artwork.id} className="relative border rounded overflow-hidden bg-white shadow-sm flex flex-col">
                         {/* Proposal Badge */}
                         {inProposal && (
                             <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs font-semibold px-2 py-1 rounded">
@@ -103,17 +103,17 @@ export default function CatalogForUser({
                             )}
                         </button>
 
-                        <div className="p-3">
+                        <div className="p-3 flex flex-col flex-1">
                             <div className="text-sm font-semibold truncate">{artwork.title}</div>
                             <div className="text-xs text-gray-500 mt-1">{artwork.artist}</div>
 
-                            <div className="mt-3 flex items-center justify-between">
+                            {/* Actions at the bottom */}
+                            <div className="mt-auto flex items-center justify-between pt-3 gap-2">
                                 {/* Single pair of thumbs (either actionable for customers or read-only indicator for owners/dealers) */}
                                 {showThumbs ? (
                                     showPreferenceButtons ? (
                                         // Actionable buttons for customers
-                                        <div className="flex items-center gap-2" aria-hidden="false">
-
+                                        <div className="flex items-center gap-2">
                                             <button
                                                 type="button"
                                                 disabled={showReadOnly}
@@ -143,24 +143,6 @@ export default function CatalogForUser({
                                                     className={`w-5 h-5 ${showReadOnly ? '' : 'hover:text-red-500'} ${artwork.likedStatus === 'Disliked' ? 'text-red-600' : 'text-gray-400'}`}
                                                 />
                                             </button>
-
-
-                                            <button
-                                                type="button"
-                                                onClick={(e) => onPreferenceClick?.(artwork.id, true, e)}
-                                                aria-label={`Like ${artwork.title}`}
-                                                className="p-1"
-                                            >
-                                                <ThumbsUp className={`w-5 h-5 ${likedStatus === 'Liked' ? 'text-green-600' : 'text-gray-300'}`} />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={(e) => onPreferenceClick?.(artwork.id, false, e)}
-                                                aria-label={`Dislike ${artwork.title}`}
-                                                className="p-1"
-                                            >
-                                                <ThumbsDown className={`w-5 h-5 ${likedStatus === 'Disliked' ? 'text-red-600' : 'text-gray-300'}`} />
-                                            </button>
                                         </div>
                                     ) : (
                                         // Read-only indicator (for Sales/owners/dealers)
@@ -181,15 +163,14 @@ export default function CatalogForUser({
                                             aria-label={isInProposal?.(artwork.id) ? 'Remove from Proposal' : 'Add to Proposal'}
                                             onClick={() => onAddToDraft(artwork)}
                                             className={`p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-1 ${isInProposal?.(artwork.id)
-                                                ? 'bg-red-100 hover:bg-red-200 focus:ring-red-500'
+                                                ? 'bg-green-100 hover:bg-green-200 focus:ring-green-500'
                                                 : 'bg-blue-100 hover:bg-blue-200 focus:ring-blue-500'
                                                 }`}
                                         >
                                             <FileText
-                                                className={`w-5 h-5 ${isInProposal?.(artwork.id) ? 'text-red-600' : 'text-blue-600'}`}
+                                                className={`w-5 h-5 ${isInProposal?.(artwork.id) ? 'text-green-600' : 'text-blue-600'}`}
                                             />
                                         </button>
-
                                     )}
 
                                     {onEditClick && (

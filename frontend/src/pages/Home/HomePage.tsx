@@ -11,145 +11,21 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
-import { ArrowRight, Upload, Grid, Heart } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
-import { apiClient } from '../../utils/api';
-import type { ArtworkStats, User } from '@tastematcher/common';
-import './HomePage.css';
-import { useDomain } from '../../contexts/DomainContext';
-import { useEffect } from 'react';
+import { CustomerHomePage } from './CustomerHomePage';
+import { DealerHomePage } from './DealerHomePage';
 
-/**
- * Home page displaying domain information and quick action cards.
- * Shows domain name, statistics, and navigation shortcuts.
- * Redirects customers to onboarding if not yet completed.
- */
 export function HomePage() {
-  const { user, refreshUser } = useAuth();
-  const { currentDomain } = useDomain();
-  const navigate = useNavigate();
+  const { user } = useAuth();
 
-  // Load existing questionnaire data if user has already completed or is editing
-  useEffect(() => {
-    // Refresh user data to get latest personalQuestionnaire from backend
-    if (refreshUser && user) {
-      refreshUser().then((freshUser: Partial<User>) => {
-        // Redirect customers to onboarding only if they haven't started or are in progress
-        // Users who skipped or completed can access the home page
-        // When they manually navigate to /onboarding, they can edit their answers
-        if (freshUser.role === 'customer' && (freshUser.onboardingStatus !== 'completed' && freshUser.onboardingStatus !== 'skipped')) {
-          navigate('/onboarding', { replace: true });
-        }
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
-
-  // Fetch domain stats from API using unified client
-  const { data: stats, isLoading } = useQuery<ArtworkStats>({
-    queryKey: ['artwork-stats', user?.domainId],
-    queryFn: async () => {
-      if (!user?.domainId) throw new Error('No domain ID');
-      return apiClient.getArtworkStats(user.domainId);
-    },
-    enabled: !!user?.domainId,
-    staleTime: 60000,
-    refetchOnWindowFocus: true,
-  });
-
-  // Don't render anything while user is loading
   if (!user) {
     return null;
   }
 
-  return (
-    <div className="home-page p-4 sm:p-6 md:p-8">
-      <header className="home-header">
-        <h1 className="home-title">Welcome to {currentDomain?.name || 'TasteMatcher'}</h1>
-        <p className="home-subtitle">
-          Manage your artwork collection and discover your taste preferences
-        </p>
-      </header>
-
-      {/* Statistics cards */}
-      <section className="home-stats" aria-label="Domain statistics">
-        <div className="stat-card">
-          <div className="stat-card__icon stat-card__icon--primary">
-            <Grid aria-hidden="true" />
-          </div>
-          <div className="stat-card__content">
-            <h2 className="stat-card__value">
-              {isLoading ? '...' : stats?.totalArtworks || 0}
-            </h2>
-            <p className="stat-card__label">Total Artworks</p>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-card__icon stat-card__icon--success">
-            <Heart aria-hidden="true" />
-          </div>
-          <div className="stat-card__content">
-            <h2 className="stat-card__value">
-              {isLoading ? '...' : stats?.totalSwiped || 0}
-            </h2>
-            <p className="stat-card__label">Swiped Artworks</p>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-card__icon stat-card__icon--warning">
-            <Upload aria-hidden="true" />
-          </div>
-          <div className="stat-card__content">
-            <h2 className="stat-card__value">
-              {isLoading ? '...' : stats?.recentlyAdded || 0}
-            </h2>
-            <p className="stat-card__label">Added This Week</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Quick action cards */}
-      <section className="home-actions" aria-label="Quick actions">
-        <h2 className="home-actions__title">Quick Actions</h2>
-        <div className="action-cards">
-          <Link to="/upload" className="action-card" aria-label="Upload new artworks">
-            <div className="action-card__icon">
-              <Upload aria-hidden="true" />
-            </div>
-            <h3 className="action-card__title">Upload Pictures</h3>
-            <p className="action-card__description">
-              Add new artworks to your collection
-            </p>
-            <ArrowRight className="action-card__arrow" aria-hidden="true" />
-          </Link>
-
-          <Link to="/catalog" className="action-card" aria-label="Browse your catalog">
-            <div className="action-card__icon">
-              <Grid aria-hidden="true" />
-            </div>
-            <h3 className="action-card__title">Browse Catalog</h3>
-            <p className="action-card__description">
-              View all your uploaded artworks
-            </p>
-            <ArrowRight className="action-card__arrow" aria-hidden="true" />
-          </Link>
-
-          <Link to="/taster" className="action-card" aria-label="Start tasting artworks">
-            <div className="action-card__icon">
-              <Heart aria-hidden="true" />
-            </div>
-            <h3 className="action-card__title">Start Taster</h3>
-            <p className="action-card__description">
-              Swipe through artworks and build your taste profile
-            </p>
-            <ArrowRight className="action-card__arrow" aria-hidden="true" />
-          </Link>
-        </div>
-      </section>
-    </div>
-  );
+  if (user.role === 'customer') {
+    return <CustomerHomePage />;
+  }
+  else {
+    return <DealerHomePage />;
+  }
 }

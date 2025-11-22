@@ -177,29 +177,44 @@ export class ArtworksService {
 
   /**
    * Get aggregated statistics for artworks in a domain
-   * Uses efficient Cosmos DB aggregation queries
+   * Includes total likes, dislikes, swipes, and recently added artworks.
    */
   async getStats(domainId: string, userId: string): Promise<ArtworkStats> {
     const artworksContainer = await this.cosmosService.getArtworksContainer();
-    const artworkPreferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
+    const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
 
     try {
-      // Calculate date 7 days ago (in milliseconds since epoch)
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
-      // Query 1: Total artworks count
       const totalQuery = {
         query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId',
         parameters: [{ name: '@domainId', value: domainId }],
       };
 
-      // Query 2: Total liked artworks (likeCount > 0)
-      const swipeQuery = {
-        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId and c.userId = @userId',
-        parameters: [{ name: '@domainId', value: domainId }, { name: '@userId', value: userId }],
+      const likesQuery = {
+        query: `
+          SELECT VALUE COUNT(1) 
+          FROM c 
+          WHERE c.userId = @userId AND c.domainId = @domainId AND c.liked = true
+        `,
+        parameters: [
+          { name: '@userId', value: userId },
+          { name: '@domainId', value: domainId },
+        ],
       };
 
-      // Query 3: Recently added (last 7 days)
+      const dislikesQuery = {
+        query: `
+          SELECT VALUE COUNT(1) 
+          FROM c 
+          WHERE c.userId = @userId AND c.domainId = @domainId AND c.liked = false
+        `,
+        parameters: [
+          { name: '@userId', value: userId },
+          { name: '@domainId', value: domainId },
+        ],
+      };
+
       const recentQuery = {
         query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.createdAt >= @sevenDaysAgo',
         parameters: [
@@ -208,16 +223,18 @@ export class ArtworksService {
         ],
       };
 
-      // Execute queries in parallel for better performance
-      const [totalResult, swipeResult, recentResult] = await Promise.all([
+      const [totalResult, likesResult, dislikesResult, recentResult] = await Promise.all([
         artworksContainer.items.query(totalQuery).fetchAll(),
-        artworkPreferencesContainer.items.query(swipeQuery).fetchAll(),
+        preferencesContainer.items.query(likesQuery).fetchAll(),
+        preferencesContainer.items.query(dislikesQuery).fetchAll(),
         artworksContainer.items.query(recentQuery).fetchAll(),
       ]);
 
       const stats: ArtworkStats = {
         totalArtworks: totalResult.resources[0] || 0,
-        totalSwiped: swipeResult.resources[0] || 0,
+        totalLikes: likesResult.resources[0] || 0,
+        totalDislikes: dislikesResult.resources[0] || 0,
+        totalSwiped: (likesResult.resources[0] || 0) + (dislikesResult.resources[0] || 0),
         recentlyAdded: recentResult.resources[0] || 0,
       };
 

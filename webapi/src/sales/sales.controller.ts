@@ -36,14 +36,40 @@ export class SalesController {
     @Request() req: AuthenticatedRequest,
     @Param('domainId') domainId?: string,
     @Query('userId') userId?: string,
-  ) {
+    @Query('dealerUserId') dealerUserId?: string,
+  ): Promise<Proposal[]> {
     if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
     if (req.user.role === 'customer' && req.user.id !== userId) {
       throw new ForbiddenException('Customers can only access their own proposals.');
     }
-    return this.salesService.findAll(domainId ?? req.user.domainId, userId ?? req.user.id);
+    let requestedDomainId;
+    let requestedUserId;
+    let requestedDealerUserId;
+
+    if (req.user.role === 'customer') {
+      requestedDomainId = req.user.domainId;
+      requestedUserId = req.user.id;
+    }
+    else if (req.user.role === 'dealer') {
+      requestedDomainId = req.user.domainId;
+      requestedUserId = undefined;
+      requestedDealerUserId = req.user.id;
+    }
+    else if (req.user.role === 'domain_owner') {
+      requestedDomainId = req.user.domainId;
+      requestedUserId = undefined;
+      requestedDealerUserId = undefined;
+    }
+    else {
+      // global_admin
+      requestedDomainId = domainId ?? req.user.domainId;
+      requestedUserId = userId ?? undefined;
+      requestedDealerUserId = dealerUserId ?? undefined;
+    }
+
+    return this.salesService.findAll(requestedDomainId, requestedUserId, requestedDealerUserId);
   }
 
   @Get('proposals/:proposalId')

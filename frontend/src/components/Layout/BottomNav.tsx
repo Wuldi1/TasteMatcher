@@ -5,7 +5,7 @@ import { NAVIGATION_LINKS } from '../../constants/navigation';
 import { Lock, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { getAIRecommendationsEligibility } from '../../utils/recommendations';
-import { useHasSubmittedProposal } from '../../hooks/useHasSubmittedProposal'; // Import the new hook
+import { useProposalData } from '../../hooks/useProposalData';
 
 export const BottomNav = () => {
   const { user } = useAuth();
@@ -18,7 +18,7 @@ export const BottomNav = () => {
   const filteredLinks = NAVIGATION_LINKS.filter((link) => link.roles.includes(user?.role || ''));
 
   // Fetch if the user has a submitted proposal
-  const hasSubmittedProposal = useHasSubmittedProposal(user?.id, user?.domainId);
+  const { hasSubmittedProposal } = useProposalData(user?.domainId, user?.id);
 
   const handleLockedClick = () => {
     setIsModalOpen(true);
@@ -43,10 +43,9 @@ export const BottomNav = () => {
                 to={isLocked ? '#' : link.href}
                 aria-label={link.ariaLabel}
                 className={() =>
-                  `flex flex-col items-center justify-center h-full w-full text-xs transition-colors ${
-                    isActiveBubble
-                      ? 'text-purple-600 bg-purple-50 border-t-4 border-purple-500'
-                      : isActive
+                  `flex flex-col items-center justify-center h-full w-full text-xs transition-colors ${isActiveBubble
+                    ? 'text-purple-600 bg-purple-50 border-t-4 border-purple-500'
+                    : isActive
                       ? 'text-blue-600 bg-blue-50 border-t-4 border-blue-500'
                       : 'text-gray-500 hover:text-blue-600'
                   }`

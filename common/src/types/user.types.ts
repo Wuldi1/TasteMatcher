@@ -2,6 +2,9 @@
 // 1. Uses TypeScript strict types (no `any`).
 // 2. Defines the core User entity for shared use.
 // 3. Includes JSDoc for all properties.
+
+import { ArtworkStats } from "./artwork.types";
+
 // -----------------------------------------------------------
 export type Role = 'global_admin' | 'domain_owner' | 'dealer' | 'customer';
 
@@ -154,4 +157,13 @@ export interface User {
    * The user's amount of swipe interactions used for recommendations.
    */
   swipeCount?: number;
+}
+
+/**
+ * Represents the response structure for the /api/users/stats endpoint.
+ */
+export interface UserStatsResponse extends ArtworkStats {
+  totalLikes: number; // Total number of artworks liked by the user
+  totalDislikes: number; // Total number of artworks disliked by the user
+  recentlyAdded: number; // Number of artworks added in the last 7 days
 }

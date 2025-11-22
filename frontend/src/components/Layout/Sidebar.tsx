@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useWelcomeTour } from '../../hooks/useWelcomeTour';
 import { NAVIGATION_LINKS } from '../../constants/navigation';
 import { getAIRecommendationsEligibility } from '../../utils/recommendations';
-import { useHasSubmittedProposal } from '../../hooks/useHasSubmittedProposal'; // Import the new hook
+import { useProposalData } from '../../hooks/useProposalData';
 
 export const Sidebar = () => {
   const { user, logout } = useAuth();
@@ -19,7 +19,7 @@ export const Sidebar = () => {
   const filteredLinks = NAVIGATION_LINKS.filter((link) => link.roles.includes(user?.role || ''));
 
   // Fetch if the user has a submitted proposal
-  const hasSubmittedProposal = useHasSubmittedProposal(user?.id, user?.domainId);
+  const { hasSubmittedProposal } = useProposalData(user?.domainId, user?.id);
 
   useEffect(() => {
     if (isTourActive && currentStep) {
@@ -132,9 +132,8 @@ export const Sidebar = () => {
 
       <div className="p-4 border-t border-gray-200 flex-shrink-0">
         <div
-          className={`relative flex items-center mb-4 ${isCollapsed ? 'justify-center' : ''} ${
-            user && user.role === 'customer' ? 'cursor-pointer' : ''
-          } group`}
+          className={`relative flex items-center mb-4 ${isCollapsed ? 'justify-center' : ''} ${user && user.role === 'customer' ? 'cursor-pointer' : ''
+            } group`}
           onClick={() => {
             if (user?.role === 'customer') {
               navigate('/onboarding', { replace: true });

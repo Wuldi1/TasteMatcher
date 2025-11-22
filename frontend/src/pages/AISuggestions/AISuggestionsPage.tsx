@@ -294,13 +294,13 @@ export const AISuggestionsPage = ({
                         type="button"
                         onClick={() => handleProposalToggle(item)}
                         className={`p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-1 ${isInProposal
-                            ? 'bg-red-100 hover:bg-red-200 focus:ring-red-500'
+                            ? 'bg-green-100 hover:bg-green-200 focus:ring-green-500'
                             : 'bg-blue-100 hover:bg-blue-200 focus:ring-blue-500'
                           }`}
                         aria-label={isInProposal ? 'Remove from Proposal' : 'Add to Proposal'}
                       >
                         <FileText
-                          className={`w-5 h-5 ${isInProposal ? 'text-red-600' : 'text-blue-600'}`}
+                          className={`w-5 h-5 ${isInProposal ? 'text-green-600' : 'text-blue-600'}`}
                         />
                       </button>
                     )}

@@ -47,6 +47,8 @@ export enum LikedStatus {
  */
 export interface ArtworkStats {
   totalArtworks: number;
+  totalLikes: number;
+  totalDislikes: number;
   totalSwiped: number;
   recentlyAdded: number; // Last 7 days
 }

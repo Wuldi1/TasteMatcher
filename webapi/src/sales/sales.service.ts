@@ -72,12 +72,36 @@ export class SalesService {
   /**
    * List proposals for a domain (optionally filtered by userId)
    */
-  async findAll(domainId: string, userId?: string): Promise<Proposal[]> {
+  async findAll(domainId: string, userId?: string, dealerUserId?: string): Promise<Proposal[]> {
     const container = await this.getContainer();
-    const q = userId
-      ? { query: 'SELECT * FROM c WHERE c.domainId = @domainId AND c.userId = @userId ORDER BY c.createdAt DESC', parameters: [{ name: '@domainId', value: domainId }, { name: '@userId', value: userId }] }
-      : { query: 'SELECT * FROM c WHERE c.domainId = @domainId ORDER BY c.createdAt DESC', parameters: [{ name: '@domainId', value: domainId }] };
-    const { resources } = await container.items.query<Proposal>(q).fetchAll();
+    let questProperties;
+
+    if (dealerUserId) {
+      questProperties = {
+        query: 'SELECT * FROM c WHERE c.domainId = @domainId AND c.dealerId = @dealerUserId ORDER BY c.createdAt DESC',
+        parameters: [
+          { name: '@domainId', value: domainId },
+          { name: '@dealerUserId', value: dealerUserId },
+        ],
+      };
+    } else if (userId) {
+      questProperties = {
+        query: 'SELECT * FROM c WHERE c.domainId = @domainId AND c.userId = @userId ORDER BY c.createdAt DESC',
+        parameters: [
+          { name: '@domainId', value: domainId },
+          { name: '@userId', value: userId },
+        ],
+      };
+    } else {
+      questProperties = {
+        query: 'SELECT * FROM c WHERE c.domainId = @domainId ORDER BY c.createdAt DESC',
+        parameters: [
+          { name: '@domainId', value: domainId },
+        ],
+      };
+    }
+
+    const { resources } = await container.items.query<Proposal>(questProperties).fetchAll();
     return resources;
   }
 
