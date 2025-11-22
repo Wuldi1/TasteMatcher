@@ -153,13 +153,7 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: build.zip
           startup-command: |
-            if [ "${{ github.event.inputs.environment }}" == "stg" ]; then
-              npm run start:staging
-            elif [ "${{ github.event.inputs.environment }}" == "prd" ]; then
-              npm run start:prd
-            else
-              npm run start:dev
-            fi
+            bash -c '[[ "${{ github.event.inputs.environment }}" == "stg" ]] && npm run start:staging || [[ "${{ github.event.inputs.environment }}" == "prd" ]] && npm run start:prd || npm run start:dev'
 
       - name: Azure logout
         if: always()
