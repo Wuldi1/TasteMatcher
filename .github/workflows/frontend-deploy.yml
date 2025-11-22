@@ -93,16 +93,17 @@ jobs:
       - name: Create deployment package with dependencies
         run: |
           cd build
-          # Create package.json with serve dependency
+          # Create package.json with serve dependency and env-cmd for .env loading
           cat > package.json <<'EOF'
           {
             "name": "tastematcher-frontend",
             "version": "1.0.0",
             "scripts": {
-              "start": "serve -s . -l tcp://0.0.0.0:${PORT:-8080}"
+              "start": "env-cmd -f .env serve -s . -l tcp://0.0.0.0:${PORT:-8080}"
             },
             "dependencies": {
-              "serve": "^14.2.3"
+              "serve": "^14.2.3",
+              "env-cmd": "^10.1.0"
             }
           }
           EOF
