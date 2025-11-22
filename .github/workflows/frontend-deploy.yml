@@ -27,7 +27,7 @@ env:
   BUILD_OUTPUT: frontend/build
 
 jobs:
-  build-test:
+  build-pack:
     name: Build & Test Frontend
     runs-on: ubuntu-latest
 
@@ -65,7 +65,7 @@ jobs:
   deploy:
     name: Deploy to Azure Web App
     runs-on: ubuntu-latest
-    needs: build-test
+    needs: build-pack
     environment:
       name: ${{ github.event.inputs.environment || 'dev' }}
       url: ${{ github.event.inputs.environment == 'stg' && 'https://tastematcher-stg-web.azurewebsites.net' || github.event.inputs.environment == 'prd' && 'https://tastematcher-prd-web.azurewebsites.net' || 'https://tastematcher-dev-web.azurewebsites.net' }}
@@ -110,6 +110,15 @@ jobs:
           # Install dependencies so they're included in the zip
           npm install --production --no-package-lock
           
+          # Copy the appropriate .env file based on the environment
+          if [ "${{ github.event.inputs.environment }}" == "stg" ]; then
+            cp ../.env.staging .env
+          elif [ "${{ github.event.inputs.environment }}" == "prd" ]; then
+            cp ../.env.production .env
+          elif [ "${{ github.event.inputs.environment }}" == "dev" ]; then
+            cp ../.env.development .env
+          fi
+          
           # Create .deployment file to tell Azure to skip build
           cat > .deployment <<'EOF'
           [config]
@@ -152,8 +161,7 @@ jobs:
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: build.zip
-          startup-command: |
-            bash -c '[[ "${{ github.event.inputs.environment }}" == "stg" ]] && npm run start:staging || [[ "${{ github.event.inputs.environment }}" == "prd" ]] && npm run start:prd || npm run start:dev'
+          startup-command: 'npm start'
 
       - name: Azure logout
         if: always()
