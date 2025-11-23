@@ -304,6 +304,9 @@ export function CatalogPage() {
                   <div className="p-3 flex flex-col flex-1">
                     <div className="text-sm font-semibold truncate">{artwork.title}</div>
                     <div className="text-xs text-gray-500 mt-1">{artwork.artist}</div>
+                    {artwork.price !== undefined && (
+                      <div className="text-xs text-green-700 mt-1 font-semibold">${artwork.price.toLocaleString()}</div>
+                    )}
 
                     <div className="flex-1" />
                     {/* Spacer to push buttons to bottom */}
@@ -430,6 +433,9 @@ export function CatalogPage() {
                   <h2 id="modal-title" className="text-2xl font-bold text-gray-900 mb-4">
                     {selectedArtwork.title}
                   </h2>
+                  {selectedArtwork.price !== undefined && (
+                    <div className="text-lg text-green-700 font-semibold mb-2">${selectedArtwork.price.toLocaleString()}</div>
+                  )}
                   {selectedArtwork.artist && (
                     <p className="text-lg text-gray-700 mb-2">
                       <span className="font-semibold">Artist:</span> {selectedArtwork.artist}
@@ -499,8 +505,8 @@ export function CatalogPage() {
                           className={`w-6 h-6 hover:text-red-500 ${selectedArtwork.likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'
                             }`}
                         />
-                      </button>
-                    </div>
+                        </button>
+                      </div>
                   )}
 
                   {/* Actions (restricted for customers) */}

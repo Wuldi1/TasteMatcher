@@ -106,7 +106,9 @@ export default function CatalogForUser({
                         <div className="p-3 flex flex-col flex-1">
                             <div className="text-sm font-semibold truncate">{artwork.title}</div>
                             <div className="text-xs text-gray-500 mt-1">{artwork.artist}</div>
-
+                            {artwork.price !== undefined && (
+                              <div className="text-xs text-green-700 mt-1 font-semibold">${artwork.price.toLocaleString()}</div>
+                            )}
                             {/* Actions at the bottom */}
                             <div className="mt-auto flex items-center justify-between pt-3 gap-2">
                                 {/* Single pair of thumbs (either actionable for customers or read-only indicator for owners/dealers) */}

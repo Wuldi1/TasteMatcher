@@ -20,6 +20,7 @@ export interface Artwork {
   createdAt?: number; // timestamp
   metadata?: ArtworkMetadata; // allow additional metadata fields
   likedStatus?: LikedStatus; // customer's like/dislike status for the artwork
+  price?: number; // USD price, optional
 }
 
 export interface ThumbnailSize {

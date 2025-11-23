@@ -401,6 +401,10 @@ export default function SalesPage() {
                                                 <div className="text-xs text-gray-500">Onboarding status</div>
                                                 <div className="mt-1">{(userDetails as any).onboardingStatus ?? 'unknown'}</div>
                                             </div>
+                                            <div>
+                                                <div className="text-xs text-gray-500">Price</div>
+                                                <div className="mt-1">{userDetails.price !== undefined ? `$${userDetails.price}` : '-'}</div>
+                                            </div>
                                         </div>
                                     </div>
 

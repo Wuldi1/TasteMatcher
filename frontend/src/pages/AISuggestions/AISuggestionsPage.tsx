@@ -251,6 +251,9 @@ export const AISuggestionsPage = ({
                   <h3 className="mb-2 line-clamp-2 text-base font-semibold text-gray-900">
                     {item.title}
                   </h3>
+                  {item.price !== undefined && (
+                    <div className="text-xs text-green-700 font-semibold mb-1">${item.price.toLocaleString()}</div>
+                  )}
                   <div className="mt-auto flex items-center justify-between text-sm text-gray-600">
                     <span>Match</span>
                     <span className="font-medium text-primary">
@@ -352,6 +355,9 @@ export const AISuggestionsPage = ({
                 <h2 id="modal-title" className="text-2xl font-bold text-gray-900 mb-4">
                   {selectedArtwork.title}
                 </h2>
+                {selectedArtwork.price !== undefined && (
+                  <div className="text-lg text-green-700 font-semibold mb-2">${selectedArtwork.price.toLocaleString()}</div>
+                )}
                 {selectedArtwork.artist && (
                   <p className="text-lg text-gray-700 mb-2">
                     <span className="font-semibold">Artist:</span> {selectedArtwork.artist}

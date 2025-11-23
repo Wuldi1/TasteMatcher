@@ -292,6 +292,9 @@ export default function SaleProposal({
 
                                     <div className="md:w-1/3">
                                         <h3 className="text-base font-semibold">{artwork?.title ?? item.artworkId}</h3>
+                                        {artwork?.price !== undefined && (
+                                          <div className="text-xs text-green-700 font-semibold mt-1">${artwork.price.toLocaleString()}</div>
+                                        )}
                                         {/* Status Badge with Icon */}
                                         <span
                                             className={`inline-flex items-center gap-2 mt-2 px-3 py-1 text-sm font-medium rounded-full ${color}`}

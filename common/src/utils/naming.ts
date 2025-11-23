@@ -22,6 +22,8 @@ const validateId = (label: string, value: string): void => {
   }
 };
 
+export const GlobalArtworksDomainId = '00000000-0000-0000-0000-000000000000';
+
 export const extractFileExtension = (mimeType: string): string => {
   const ext = mimeType.split('/').pop()?.toLowerCase();
   if (!ext) {

@@ -133,7 +133,7 @@ export function CustomerHomePage() {
                         <p className="text-sm text-gray-600">Artworks Disliked</p>
                     </div>
                     <div className="bg-white rounded-lg shadow-md p-4 flex flex-col items-center">
-                        <LayoutGrid className="w-10 h-10 text-blue-500" />
+                        <Sparkles className="w-10 h-10 text-yellow-500" />
                         <h3 className="text-lg font-medium mt-2">{stats?.totalSwiped || 0}</h3>
                         <p className="text-sm text-gray-600">Total Swipes</p>
                     </div>

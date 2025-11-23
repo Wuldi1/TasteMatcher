@@ -11,7 +11,8 @@ import {
   SearchIndexService,
   executeCosmosQuery,
   getAIRecommendationsEligibility,
-  LikedStatus
+  LikedStatus,
+  GlobalArtworksDomainId
 } from '@tastematcher/common';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
@@ -191,6 +192,18 @@ export class ArtworksService {
         parameters: [{ name: '@domainId', value: domainId }],
       };
 
+      const totalSwipedQuery = {
+        query: `
+          SELECT VALUE COUNT(1) 
+          FROM c 
+          WHERE c.userId = @userId AND c.domainId = @domainId AND c.liked = true
+        `,
+        parameters: [
+          { name: '@userId', value: userId },
+          { name: '@domainId', value: GlobalArtworksDomainId },
+        ],
+      };
+
       const likesQuery = {
         query: `
           SELECT VALUE COUNT(1) 
@@ -223,8 +236,9 @@ export class ArtworksService {
         ],
       };
 
-      const [totalResult, likesResult, dislikesResult, recentResult] = await Promise.all([
+      const [totalResult, totalSwipedResult, likesResult, dislikesResult, recentResult] = await Promise.all([
         artworksContainer.items.query(totalQuery).fetchAll(),
+        preferencesContainer.items.query(totalSwipedQuery).fetchAll(),
         preferencesContainer.items.query(likesQuery).fetchAll(),
         preferencesContainer.items.query(dislikesQuery).fetchAll(),
         artworksContainer.items.query(recentQuery).fetchAll(),
@@ -234,7 +248,7 @@ export class ArtworksService {
         totalArtworks: totalResult.resources[0] || 0,
         totalLikes: likesResult.resources[0] || 0,
         totalDislikes: dislikesResult.resources[0] || 0,
-        totalSwiped: (likesResult.resources[0] || 0) + (dislikesResult.resources[0] || 0),
+        totalSwiped: totalSwipedResult.resources[0] || 0,
         recentlyAdded: recentResult.resources[0] || 0,
       };
 

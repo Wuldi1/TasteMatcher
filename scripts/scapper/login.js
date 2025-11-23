@@ -1,7 +1,8 @@
 import fetch from "node-fetch";
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:8080/api";
-const EMAIL = "jaclynlavy@gmail.com";
+// const EMAIL = "jaclynlavy@gmail.com";
+const EMAIL = "galrubin15@gmail.com";
 const VERIFICATION_CODE = "000000";
 
 export async function login() {

@@ -80,7 +80,8 @@ async function main() {
         const token = await login();
 
         // Extract domainId from token
-        const domainId = getDomainIdFromToken(token);
+        // const domainId = getDomainIdFromToken(token);
+        const domainId = "00000000-0000-0000-0000-000000000000"; // Using fixed domainId for testing
         console.log(`📍 Using domain ID: ${domainId}`);
 
         // Get all artwork folders
@@ -106,6 +107,7 @@ async function main() {
                 }
             } catch (err) {
                 console.error(`❌ Error uploading ${folder}: ${err.message}`);
+                return;
             }
         }
 

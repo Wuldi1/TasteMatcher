@@ -20,7 +20,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { ArtworksService } from './artworks.service';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
-import { Artwork, PaginatedResponse, ArtworkStats, UntastedArtworksResponse, QueryParams } from '@tastematcher/common';
+import { Artwork, PaginatedResponse, ArtworkStats, UntastedArtworksResponse, QueryParams, GlobalArtworksDomainId } from '@tastematcher/common';
 import { ArtworkPreference } from '@tastematcher/common';
 import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
@@ -195,10 +195,11 @@ export class ArtworksController {
     @Param('userId') userId: string,
     @Query('limit') limit?: number,
   ): Promise<UntastedArtworksResponse> {
-    if (req.user.domainId !== domainId || req.user.id !== userId) {
+    if (req.user.id !== userId && req.user.role === 'customer') {
       throw new ForbiddenException('You are not authorized to perform this action.');
     }
-    return this.artworksService.getUntastedArtworks(domainId, userId, limit || 20);
+    // we're using GlobalArtworksDomainId for customers
+    return this.artworksService.getUntastedArtworks(GlobalArtworksDomainId, userId, limit || 20);
   }
 
   @Post('preferences/:userId')
@@ -211,7 +212,7 @@ export class ArtworksController {
     @Param('userId') userId: string,
     @Body() preferenceDto: SavePreferenceDto,
   ): Promise<ArtworkPreference> {
-    if (req.user.domainId !== domainId || req.user.id !== userId) {
+    if ((req.user.domainId !== domainId && domainId !== GlobalArtworksDomainId) || req.user.id !== userId) {
       throw new ForbiddenException('You are not authorized to save preferences for this user.');
     }
     return this.artworksService.savePreference(domainId, userId, preferenceDto.artworkId, preferenceDto);

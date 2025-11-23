@@ -8,12 +8,18 @@ import {
   UseInterceptors,
   BadRequestException,
   Logger,
+  Request,
+  UseGuards
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Artwork, BlobService, CosmosService, getOriginalBlobPath, ImageProcessingQueueMessage, ProcessingStatus } from '@tastematcher/common';
+import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
 import { v4 as uuidv4 } from 'uuid';
+import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
 
 @Controller('api/domains/:domainId/uploads')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class UploadController {
   private readonly logger = new Logger(UploadController.name);
   private readonly blobService: BlobService;
@@ -27,6 +33,7 @@ export class UploadController {
   @Post()
   @UseInterceptors(FileInterceptor('file'))
   async uploadArtwork(
+    @Request() req: AuthenticatedRequest,
     @Param('domainId') domainId: string,
     // eslint-disable-next-line
     @UploadedFile() file: Express.Multer.File,
@@ -38,6 +45,10 @@ export class UploadController {
       method: 'POST',
       domainId
     });
+
+    if (domainId !== req.user.domainId && req.user.role !== 'global_admin') {
+      throw new BadRequestException('Unauthorized domain access');
+    }
 
     if (!file) {
       throw new BadRequestException('File is required');
@@ -153,6 +164,7 @@ export class UploadController {
       category: parsed.category ?? 'uncategorized',
       vector: [],
       vectorModel: '',
+      price: parsed.price !== undefined ? Number(parsed.price) : undefined,
     } as Artwork;
   }
 }

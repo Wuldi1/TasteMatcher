@@ -14,6 +14,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Artwork } from '@tastematcher/common';
 import { useDomain } from '../contexts/DomainContext';
 import { apiClient, ApiError } from '../utils/api';
+import { FileText, User as UserIcon, Tag, DollarSign, Brush, Globe2, CalendarDays, Layers, Trash2, Upload } from 'lucide-react';
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
@@ -31,6 +32,7 @@ export function ArtworkUpload() {
   const [tagInput, setTagInput] = useState<string>('');
   const [isDragActive, setIsDragActive] = useState<boolean>(false);
   const [showSuccessToast, setShowSuccessToast] = useState<boolean>(false);
+  const [priceInput, setPriceInput] = useState<string>(''); // formatted price input
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -172,6 +174,26 @@ export function ArtworkUpload() {
     addTag();
   }, [addTag]);
 
+  // Format number with commas
+  const formatPrice = (value: string | number) => {
+    if (value === undefined || value === null || value === '') return '';
+    const num = typeof value === 'number' ? value : Number(value.replace(/,/g, ''));
+    if (isNaN(num)) return '';
+    return num.toLocaleString('en-US');
+  };
+
+  // Handle price input change
+  const handlePriceChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/,/g, '');
+    if (!raw || isNaN(Number(raw))) {
+      setPriceInput('');
+      setMetadata(prev => ({ ...prev, price: undefined }));
+      return;
+    }
+    setPriceInput(formatPrice(raw));
+    setMetadata(prev => ({ ...prev, price: Number(raw) }));
+  }, []);
+
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
@@ -271,18 +293,18 @@ export function ArtworkUpload() {
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-red-600 shadow focus:outline-none focus:ring-2 focus:ring-red-400"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow focus:outline-none focus:ring-2 focus:ring-red-400 hover:bg-red-100 transition-colors"
                   aria-label="Remove selected image"
                 >
-                  🗑️
+                  <Trash2 className="w-6 h-6 text-red-600" />
                 </button>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-blue-600 shadow focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow focus:outline-none focus:ring-2 focus:ring-blue-400 hover:bg-blue-100 transition-colors"
                   aria-label="Choose a different image"
                 >
-                  🔁
+                  <Upload className="w-6 h-6 text-blue-600" />
                 </button>
               </div>
             </div>
@@ -308,8 +330,10 @@ export function ArtworkUpload() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
+          {/* Title */}
           <div className="space-y-1">
-            <label htmlFor="metadata-title" className="text-sm font-medium text-gray-700">
+            <label htmlFor="metadata-title" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-gray-500" />
               Title
             </label>
             <input
@@ -323,9 +347,10 @@ export function ArtworkUpload() {
             />
             <p className="text-xs text-gray-500">Give the artwork a memorable name.</p>
           </div>
-
+          {/* Artist */}
           <div className="space-y-1">
-            <label htmlFor="metadata-artist" className="text-sm font-medium text-gray-700">
+            <label htmlFor="metadata-artist" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <UserIcon className="w-4 h-4 text-gray-500" />
               Artist
             </label>
             <input
@@ -339,9 +364,10 @@ export function ArtworkUpload() {
             />
             <p className="text-xs text-gray-500">Credit the creator of this piece.</p>
           </div>
-
+          {/* Classification */}
           <div className="space-y-1">
-            <label htmlFor="metadata-classification" className="text-sm font-medium text-gray-700">
+            <label htmlFor="metadata-classification" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <Layers className="w-4 h-4 text-gray-500" />
               Classification
             </label>
             <input
@@ -355,9 +381,10 @@ export function ArtworkUpload() {
             />
             <p className="text-xs text-gray-500">Type or medium of the artwork.</p>
           </div>
-
+          {/* Department */}
           <div className="space-y-1">
-            <label htmlFor="metadata-department" className="text-sm font-medium text-gray-700">
+            <label htmlFor="metadata-department" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <Brush className="w-4 h-4 text-gray-500" />
               Department
             </label>
             <input
@@ -371,9 +398,10 @@ export function ArtworkUpload() {
             />
             <p className="text-xs text-gray-500">Museum or collection department.</p>
           </div>
-
+          {/* Country */}
           <div className="space-y-1">
-            <label htmlFor="metadata-country" className="text-sm font-medium text-gray-700">
+            <label htmlFor="metadata-country" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <Globe2 className="w-4 h-4 text-gray-500" />
               Country
             </label>
             <input
@@ -387,9 +415,10 @@ export function ArtworkUpload() {
             />
             <p className="text-xs text-gray-500">Country of origin.</p>
           </div>
-
+          {/* Date */}
           <div className="space-y-1">
-            <label htmlFor="metadata-date" className="text-sm font-medium text-gray-700">
+            <label htmlFor="metadata-date" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-gray-500" />
               Date
             </label>
             <input
@@ -403,10 +432,31 @@ export function ArtworkUpload() {
             />
             <p className="text-xs text-gray-500">Creation date or period.</p>
           </div>
+          {/* Price */}
+          <div className="space-y-1">
+            <label htmlFor="metadata-price" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-blue-600" />
+              Price
+            </label>
+            <input
+              id="metadata-price"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9,]*"
+              value={priceInput}
+              onChange={handlePriceChange}
+              placeholder="e.g., 1,200"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+              disabled={status === 'uploading'}
+            />
+            <p className="text-xs text-gray-500">Set a price in USD ($). Commas are automatically added.</p>
+          </div>
         </div>
 
+        {/* Description */}
         <div className="space-y-1">
-          <label htmlFor="metadata-description" className="text-sm font-medium text-gray-700">
+          <label htmlFor="metadata-description" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <FileText className="w-4 h-4 text-gray-500" />
             Description
           </label>
           <textarea
@@ -420,8 +470,10 @@ export function ArtworkUpload() {
           />
         </div>
 
+        {/* Tags */}
         <div className="space-y-1">
-          <label htmlFor="metadata-tags" className="text-sm font-medium text-gray-700">
+          <label htmlFor="metadata-tags" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <Tag className="w-4 h-4 text-gray-500" />
             Tags
           </label>
           <div className="rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500">
