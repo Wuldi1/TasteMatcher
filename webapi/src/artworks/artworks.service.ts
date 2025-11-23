@@ -196,7 +196,7 @@ export class ArtworksService {
         query: `
           SELECT VALUE COUNT(1) 
           FROM c 
-          WHERE c.userId = @userId AND c.domainId = @domainId AND c.liked = true
+          WHERE c.userId = @userId AND c.domainId = @domainId
         `,
         parameters: [
           { name: '@userId', value: userId },
@@ -363,7 +363,6 @@ export class ArtworksService {
         // Create new preference
         const newPreference = {
           id: preferenceId,
-          domainId,
           userId,
           ...saveDto,
           createdAt: Date.now(),
@@ -380,7 +379,12 @@ export class ArtworksService {
       const { resource: userRecord } = await usersContainer.item(userId, domainId).read();
       const userPreferenceVector = userRecord.preferenceVector;
 
-      const imageVector = await this.searchIndexService.getArtworkVector(artworkId);
+      const artworkResource = await this.findOne(saveDto.domainId, artworkId);
+      if (!artworkResource) {
+        throw new NotFoundException(`Artwork ${artworkId} not found for updating preference vector`);
+      }
+
+      const imageVector = artworkResource.vector;
 
       // if preferenceVector exists and is valid, update it using the new preference
       if (Array.isArray(userPreferenceVector) && userPreferenceVector.length === 1024 &&

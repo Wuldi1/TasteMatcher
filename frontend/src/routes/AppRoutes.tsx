@@ -2,10 +2,10 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthPage } from '../pages/Auth/AuthPage';
 import { HomePage } from '../pages/Home/HomePage';
-import { ProtectedRoute } from '../components/ProtectedRoute';
+import ProtectedRoute from './ProtectedRoute';
 import { OnboardingFlow } from '../components/Onboarding/OnboardingFlow';
 import { Sidebar } from '../components/Layout/Sidebar';
-import { BottomNav } from '../components/Layout/BottomNav';
+import { MobileSidebar } from '../components/Layout/MobileSidebar';
 import { useAuth } from '../hooks/useAuth';
 import { CatalogPage } from '../pages/Catalog/CatalogPage';
 import { TasterPage } from '../pages/Taster/TasterPage';
@@ -19,8 +19,14 @@ import { BuyingProposalPage } from '../pages/BuyingProposal/BuyingProposalPage';
  * Wrapper component that redirects authenticated users away from auth pages
  */
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, isInitializing } = useAuth();
 
+  // If auth is still initializing, don't decide routing yet (prevents spurious redirects on refresh).
+  if (isInitializing) {
+    return null; // or a small spinner component if you prefer
+  }
+
+  // If we already have a user, redirect away from public auth pages to the app home.
   if (user) {
     return <Navigate to="/home" replace />;
   }
@@ -46,7 +52,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Bottom Navigation - hidden on desktop */}
       <div className="md:hidden">
-        <BottomNav />
+        <MobileSidebar />
       </div>
     </div>
   );

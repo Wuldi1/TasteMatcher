@@ -17,11 +17,11 @@ export const useSavePreference = ({
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ artworkId, liked }: { artworkId: string; liked: boolean }) => {
+    mutationFn: async ({ artworkId, domainId, liked }: { artworkId: string; domainId: string; liked: boolean }) => {
       if (!domainId || !userId) throw new Error('Domain ID and User ID are required');
-      return apiClient.saveArtworkPreference(domainId, userId, { artworkId, liked });
+      return apiClient.saveArtworkPreference(domainId, userId, { artworkId, domainId, liked });
     },
-    onMutate: async ({ artworkId, liked }) => {
+    onMutate: async ({ artworkId, domainId, liked }) => {
       // Cancel any ongoing queries for artworks
       await queryClient.cancelQueries(['artworks', domainId]);
 

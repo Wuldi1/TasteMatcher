@@ -68,14 +68,6 @@ export interface ArtworkPreference {
 }
 
 /**
- * Request to save artwork preference
- */
-export interface SavePreferenceRequest {
-  artworkId: string;
-  liked: boolean;
-}
-
-/**
  * Response with untasted artworks for user
  */
 export interface UntastedArtworksResponse {

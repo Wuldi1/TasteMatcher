@@ -6,6 +6,11 @@ export class SavePreferenceDto {
   @IsString()
   artworkId!: string;
 
+  @ApiProperty({ description: 'Domain ID' })
+  @IsString()
+  domainId!: string;
+
+
   @ApiProperty({ description: 'True for like, false for dislike' })
   @IsBoolean()
   liked!: boolean;

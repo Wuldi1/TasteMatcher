@@ -133,20 +133,22 @@ export const AISuggestionsPage = ({
   const savePreferenceMutation = useSavePreference({
     domainId: user?.domainId!,
     userId: user?.id!,
-    onOptimisticUpdate: (artworkId, liked) => {
-      // @ts-ignore Optimistic update of likedStatus
+    onOptimisticUpdate: (artworkId: string, arg2?: any, arg3?: any) => {
+      // Support both callback signatures:
+      // - onOptimisticUpdate(artworkId, liked)
+      // - onOptimisticUpdate(artworkId, domainId, liked)
+      const liked = typeof arg2 === 'boolean' ? arg2 : Boolean(arg3);
+
+      // Update recommendation list defensively
       setRecommendations((prev) =>
         prev.map((artwork) =>
-          artwork.id === artworkId
-            ? { ...artwork, likedStatus: liked ? 'Liked' : 'Disliked' }
-            : artwork,
-        ),
+          artwork.id === artworkId ? { ...artwork, likedStatus: liked ? 'Liked' : 'Disliked' } : artwork
+        )
       );
-      // @ts-ignore Optimistic update of likedStatus
+
+      // Update selected artwork if open
       setSelectedArtwork((prev) =>
-        prev && prev.id === artworkId
-          ? { ...prev, likedStatus: liked ? 'Liked' : 'Disliked' }
-          : prev,
+        prev && prev.id === artworkId ? { ...prev, likedStatus: liked ? 'Liked' : 'Disliked' } : prev
       );
     },
   });
@@ -180,7 +182,7 @@ export const AISuggestionsPage = ({
   };
 
   const handlePreferenceClick = (artworkId: string, liked: boolean) => {
-    savePreferenceMutation.mutate({ artworkId, liked });
+    savePreferenceMutation.mutate({ artworkId, domainId: user.domainId, liked });
   };
 
   const handleProposalToggle = (artwork: Artwork) => {

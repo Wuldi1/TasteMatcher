@@ -20,7 +20,7 @@ import {
   PersonalQuestionnaire,
   ArtworkStats,
   UntastedArtworksResponse,
-  SavePreferenceRequest,
+  SavePreferenceDto,
   PaginatedResponse,
   Proposal,
   UserStatsResponse
@@ -512,7 +512,7 @@ class ApiClient extends BaseApiClient {
   async saveArtworkPreference(
     domainId: string,
     userId: string,
-    preference: SavePreferenceRequest
+    preference: SavePreferenceDto
   ): Promise<void> {
     await this.request<UntastedArtworksResponse>(`/api/domains/${domainId}/artworks/preferences/${userId}`, { method: 'POST', body: JSON.stringify(preference) });
   }

@@ -11,10 +11,10 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
-import { ThumbsUp, ThumbsDown, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiClient } from '../../utils/api';
 import './TasterPage.css';
 
@@ -46,7 +46,7 @@ export function TasterPage() {
   });
 
   // Extract artworks array from response with fallback to empty array
-  const artworks = untastedData?.artworks || [];
+  const artworks = useMemo(() => untastedData?.artworks || [], [untastedData]);
   const currentArtwork = artworks[currentIndex];
   const hasMore = currentIndex < artworks.length - 1;
 
@@ -56,7 +56,8 @@ export function TasterPage() {
       if (!user?.domainId || !user?.id) throw new Error('User not authenticated');
       
       // TODO : Use from Common's Contants
-      await apiClient.saveArtworkPreference('00000000-0000-0000-0000-000000000000', user.id, {
+      await apiClient.saveArtworkPreference(user.domainId, user.id, {
+        domainId: "00000000-0000-0000-0000-000000000000",
         artworkId,
         liked,
       });
@@ -126,13 +127,28 @@ export function TasterPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleSwipe]);
 
-  const handleReset = () => {
-    setCurrentIndex(0);
-    setSwipeDirection(null);
-    setDragOffset({ x: 0, y: 0 });
-    // Refetch untasted artworks
-    queryClient.invalidateQueries({ queryKey: ['untasted-artworks', user?.domainId, user?.id] });
-  };
+  // Prefetch next batch when reaching last 3 artworks
+  useEffect(() => {
+    if (artworks.length > 0 && currentIndex >= artworks.length - 3 && !isLoading) {
+      // Fetch next batch and append to artworks
+      (async () => {
+        try {
+          const nextBatch = await apiClient.fetchUntastedArtworks(user!.domainId!, user!.id!, 20);
+          // Only append if there are new artworks
+          if (nextBatch.artworks && nextBatch.artworks.length > 0) {
+            // Avoid duplicates
+            const existingIds = new Set(artworks.map(a => a.id));
+            const newArtworks = nextBatch.artworks.filter(a => !existingIds.has(a.id));
+            if (newArtworks.length > 0) {
+              untastedData.artworks.push(...newArtworks);
+            }
+          }
+        } catch (err) {
+          // Silently ignore errors
+        }
+      })();
+    }
+  }, [currentIndex, artworks, isLoading, user, untastedData]);
 
   if (isLoading) {
     return (
@@ -165,15 +181,6 @@ export function TasterPage() {
           <p className="taster-complete__description">
             You've rated all available artworks. Great job building your taste profile!
           </p>
-          <button
-            type="button"
-            className="taster-complete__button"
-            onClick={handleReset}
-            aria-label="Check for new artworks"
-          >
-            <RotateCcw aria-hidden="true" />
-            Check for New Artworks
-          </button>
         </div>
       </div>
     );
@@ -187,7 +194,7 @@ export function TasterPage() {
       <header className="taster-header">
         <h1 className="taster-title">Taster</h1>
         <p className="taster-subtitle">
-          Swipe right to like, left to dislike • {currentIndex + 1} / {artworks.length}
+          Swipe right to like, left to dislike
         </p>
       </header>
 

@@ -3,12 +3,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useWelcomeTour } from '../../hooks/useWelcomeTour';
 import { NAVIGATION_LINKS } from '../../constants/navigation';
 import { Lock, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getAIRecommendationsEligibility } from '../../utils/recommendations';
 import { useProposalData } from '../../hooks/useProposalData';
 
-export const BottomNav = () => {
-  const { user } = useAuth();
+export const MobileSidebar = () => {
+  const { user, refreshUser } = useAuth();
   const location = useLocation(); // Get the current route
   const { currentStep, nextStep, skipTour, isTourActive, previousStep } = useWelcomeTour();
 
@@ -19,6 +19,13 @@ export const BottomNav = () => {
 
   // Fetch if the user has a submitted proposal
   const { hasSubmittedProposal } = useProposalData(user?.domainId, user?.id);
+
+    // run refreshUser() once on mount to ensure we have the latest user data
+    useEffect(() => {
+      refreshUser();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+  
 
   const handleLockedClick = () => {
     setIsModalOpen(true);

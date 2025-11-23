@@ -18,7 +18,6 @@ import { Search, X, ThumbsUp, ThumbsDown, Edit, Trash2 } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
 import { apiClient } from '../../utils/api';
 import { EditArtworkModal } from '../../components/EditArtworkModal/EditArtworkModal';
-import { useSavePreference } from '../../utils/savePreference';
 import './CatalogPage.css';
 
 /**
@@ -46,28 +45,32 @@ export function CatalogPage() {
   } = useInfiniteQuery({
     queryKey: ['artworks', user?.domainId, searchQuery, sortBy, sortOrder],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
-
       if (!user?.domainId) {
         throw new Error('No domain ID');
       }
-
       const result = await apiClient.getArtworks(user.domainId, {
         limit: 20,
         continuationToken: pageParam,
         sortBy,
         sortOrder,
       });
-
       return result;
     },
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.continuationToken,
+    getNextPageParam: (lastPage) => {
+      // Defensive: lastPage may be undefined or not an object
+      if (!lastPage || typeof lastPage !== 'object' || !('continuationToken' in lastPage)) return undefined;
+      return lastPage.continuationToken ?? undefined;
+    },
     enabled: !!user?.domainId,
     staleTime: 30000,
     retry: 2,
   });
 
-  const allArtworks = data?.pages.flatMap((page) => page.items || []) || [];
+  // Defensive: flatten pages only if data.pages is an array
+  const allArtworks = Array.isArray(data?.pages)
+    ? data.pages.flatMap((page) => Array.isArray(page?.items) ? page.items : [])
+    : [];
 
   // Filter artworks by search query (client-side)
   const filteredArtworks = searchQuery
@@ -96,17 +99,65 @@ export function CatalogPage() {
     },
   });
 
-  const savePreferenceMutation = useSavePreference({
-    domainId: user?.domainId!,
-    userId: user?.id!,
-    onOptimisticUpdate: (artworkId, liked) => {
-      if (selectedArtwork && selectedArtwork.id === artworkId) {
-        setSelectedArtwork({
-          ...selectedArtwork,
-          // @ts-ignore Optimistic update of likedStatus (using the ENUM)
-          likedStatus: liked ? 'Liked' : 'Disliked',
-        });
+  // Replace custom hook with local mutation that performs a safe optimistic update
+  const savePreferenceMutation = useMutation({
+    mutationFn: async ({ artworkId, liked }: { artworkId: string; liked: boolean }) => {
+      if (!user?.domainId || !user?.id) throw new Error('User not authenticated');
+      return apiClient.saveArtworkPreference(user.domainId, user.id, {
+        domainId: user.domainId,
+        artworkId,
+        liked,
+      });
+    },
+    // Optimistic update
+    onMutate: async ({ artworkId, liked }: { artworkId: string; liked: boolean }) => {
+      const queryKey = ['artworks', user?.domainId, searchQuery, sortBy, sortOrder];
+      await queryClient.cancelQueries({ queryKey });
+
+      const previousData = queryClient.getQueryData(queryKey);
+
+      // Defensive clone
+      let newData: any = undefined;
+      try {
+        newData = previousData ? JSON.parse(JSON.stringify(previousData)) : previousData;
+      } catch {
+        newData = previousData;
       }
+
+      if (newData && Array.isArray(newData.pages)) {
+        newData.pages = newData.pages.map((page: any) => ({
+          ...page,
+          items: Array.isArray(page?.items)
+            ? page.items.map((it: any) =>
+                it?.id === artworkId ? { ...it, likedStatus: liked ? 'Liked' : 'Disliked' } : it
+              )
+            : page.items,
+        }));
+        queryClient.setQueryData(queryKey, newData);
+      }
+
+      // Optimistically update selectedArtwork if it's open
+      const prevSelected = selectedArtwork;
+      if (prevSelected && prevSelected.id === artworkId) {
+        setSelectedArtwork({ ...prevSelected, likedStatus: liked ? 'Liked' : 'Disliked' });
+      }
+
+      return { previousData, prevSelected };
+    },
+    onError: (err, variables, context: any) => {
+      const queryKey = ['artworks', user?.domainId, searchQuery, sortBy, sortOrder];
+      if (context?.previousData) {
+        queryClient.setQueryData(queryKey, context.previousData);
+      }
+      // rollback selected artwork
+      if (context?.prevSelected) {
+        setSelectedArtwork(context.prevSelected);
+      }
+      console.error('Failed saving preference', err);
+    },
+    onSettled: () => {
+      // Refetch to ensure cache normalization
+      queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
     },
   });
 

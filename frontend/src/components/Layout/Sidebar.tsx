@@ -8,7 +8,7 @@ import { getAIRecommendationsEligibility } from '../../utils/recommendations';
 import { useProposalData } from '../../hooks/useProposalData';
 
 export const Sidebar = () => {
-  const { user, logout } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
   const location = useLocation(); // Get the current route
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { currentStep, isTourActive, previousStep, nextStep, skipTour } = useWelcomeTour(); // Hook to start the onboarding guide
@@ -20,6 +20,12 @@ export const Sidebar = () => {
 
   // Fetch if the user has a submitted proposal
   const { hasSubmittedProposal } = useProposalData(user?.domainId, user?.id);
+
+  // run refreshUser() once on mount to ensure we have the latest user data
+  useEffect(() => {
+    refreshUser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (isTourActive && currentStep) {
