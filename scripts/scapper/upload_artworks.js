@@ -3,9 +3,11 @@ import path from "path";
 import fetch from "node-fetch";
 import FormData from "form-data";
 import { login } from "./login.js";
+import { createInterface } from "node:readline/promises";
+import { stdin as input, stdout as output } from "node:process";
 
-const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:8080/api";
-const CONTENT_DIR = path.resolve("TasteMatcherTestContent");
+// will be set after prompting (depends on mode/owner)
+let CONTENT_DIR = path.resolve("TasteMatcherTestContent");
 
 // Helper to delay execution
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -13,16 +15,14 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Helper to decode JWT and extract domainId
 function getDomainIdFromToken(token) {
     try {
-        const payload = JSON.parse(
-            Buffer.from(token.split('.')[1], 'base64').toString()
-        );
+        const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
         return payload.domainId;
     } catch (err) {
         throw new Error(`Failed to decode token: ${err.message}`);
     }
 }
 
-async function uploadArtwork(folderPath, token, domainId) {
+async function uploadArtwork(folderPath, token, domainId, apiBaseUrl) {
     const metadataPath = path.join(folderPath, "metadata.json");
 
     if (!(await fs.pathExists(metadataPath))) {
@@ -34,7 +34,7 @@ async function uploadArtwork(folderPath, token, domainId) {
 
     // Find image file
     const files = await fs.readdir(folderPath);
-    const imageFile = files.find(f => f.startsWith("image."));
+    const imageFile = files.find((f) => f.startsWith("image."));
 
     if (!imageFile) {
         console.warn(`⚠️  No image file in ${folderPath}`);
@@ -57,17 +57,17 @@ async function uploadArtwork(folderPath, token, domainId) {
     formData.append("metadata", JSON.stringify(metadata));
 
     // Upload to API with domainId
-    const res = await fetch(`${API_BASE_URL}/domains/${domainId}/uploads`, {
+    const res = await fetch(`${apiBaseUrl}/domains/${domainId}/uploads`, {
         method: "POST",
         headers: {
-            "Authorization": `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
             ...formData.getHeaders(),
         },
         body: formData,
     });
 
     if (!res.ok) {
-        const errorText = await res.text();
+        const errorText = await res.text().catch(() => "");
         throw new Error(`Upload failed for ${metadata.title}: ${res.statusText} - ${errorText}`);
     }
 
@@ -75,39 +75,152 @@ async function uploadArtwork(folderPath, token, domainId) {
 }
 
 async function main() {
+    const rl = createInterface({ input, output });
+
+    // small helper to prompt numbered choices
+    async function askChoice(promptText, options, defaultIndex = 0) {
+        // options: [{ label, value }, ...]
+        console.log(promptText);
+        options.forEach((opt, i) => {
+            console.log(`  [${i + 1}] ${opt.label}`);
+        });
+
+        // Check for environment overrides that match option.value
+        for (const key of ["TM_ENV", "TM_MODE", "TM_OWNER"]) {
+            const envOverride = process.env[key];
+            if (envOverride) {
+                const found = options.find(
+                    (o) => o.value && String(envOverride).toLowerCase() === String(o.value).toLowerCase()
+                );
+                if (found) return found.value;
+            }
+        }
+
+        const raw = (await rl.question(`Choose an option [${defaultIndex + 1}]: `)).trim();
+        const idx =
+            raw === "" ? defaultIndex : Math.max(0, Math.min(options.length - 1, (parseInt(raw, 10) || 1) - 1));
+        return options[idx].value;
+    }
+
     try {
-        // Login first
-        const token = await login();
+        // Environment choices: [1] Dev [2] Prod  (default Dev)
+        const env = await askChoice(
+            "Select environment:",
+            [
+                { label: "Dev", value: "dev" },
+                { label: "Prod", value: "prd" },
+            ],
+            1
+        );
+        const apiBaseUrl =
+            env === "prd"
+                ? process.env.API_BASE_URL_PRD || "https://api.tastematcher.art"
+                : process.env.API_BASE_URL_DEV || "http://localhost:8080/api";
 
-        // Extract domainId from token
-        // const domainId = getDomainIdFromToken(token);
-        const domainId = "00000000-0000-0000-0000-000000000000"; // Using fixed domainId for testing
-        console.log(`📍 Using domain ID: ${domainId}`);
+        // Mode choices: [1] Inventory [2] Learning  (default Inventory)
+        const mode = await askChoice(
+            "Select mode:",
+            [
+                { label: "Inventory", value: "inventory" },
+                { label: "Learning", value: "learning" },
+            ],
+            0
+        );
 
-        // Get all artwork folders
+        // Owner (only asked for inventory). [1] Gal [2] Jaclyn (default Gal)
+        let ownerChoice = "gal";
+        if (mode === "inventory") {
+            ownerChoice = await askChoice(
+                "Select owner:",
+                [
+                    { label: "Gal", value: "gal" },
+                    { label: "Jaclyn", value: "jaclyn" },
+                ],
+                0
+            );
+        } else {
+            console.log("Learning mode selected — owner auto-set to 'gal'");
+            ownerChoice = "gal";
+        }
+
+        const emailMap = {
+            gal: process.env.TM_EMAIL_GAL || "galrubin15@gmail.com",
+            jaclyn: process.env.TM_EMAIL_JACLYN || "jaclynlavy@gmail.com",
+        };
+        const email = emailMap[ownerChoice];
+
+        // Verification code: allow override via env, otherwise prompt free-text (default 000000)
+        const verificationCode =
+            process.env.TM_VERIFICATION_CODE ||
+            (await rl.question("Verification code [000000]: ")) ||
+            "000000";
+
+        // compute content directory based on mode + owner (use requested folder names)
+        if (mode === "learning") {
+            CONTENT_DIR = path.resolve("learning", "TasteMatcherTestContent");
+        } else {
+            CONTENT_DIR = path.resolve("inventory", "TasteMatcherTestContent");
+        }
+
+        rl.close();
+
+        console.log(`Using environment: ${env}`);
+        console.log(`API base URL: ${apiBaseUrl}`);
+        console.log(`Mode: ${mode}`);
+        console.log(`Owner: ${ownerChoice} (${email})`);
+        console.log(`Content directory: ${CONTENT_DIR}`);
+
+        // Login first (login helper accepts apiBaseUrl, email, code)
+        const token = await login(apiBaseUrl, email, verificationCode);
+
+        // Determine domainId
+        let domainId;
+        if (mode === "learning") {
+            domainId = "00000000-0000-0000-0000-000000000000";
+            console.log(`Learning mode: using fixed domainId ${domainId}`);
+        } else {
+            domainId = getDomainIdFromToken(token);
+            console.log(`Extracted domainId from token: ${domainId}`);
+        }
+
+        // Validate content dir exists
+        if (!(await fs.pathExists(CONTENT_DIR))) {
+            console.error(`❌ Content directory not found: ${CONTENT_DIR}`);
+            process.exit(1);
+        }
+
+        // Get all artwork folders from chosen content dir
         const folders = await fs.readdir(CONTENT_DIR);
         let uploadCount = 0;
 
-        console.log(`\n📤 Starting upload of ${folders.length} artworks...\n`);
+        console.log(`\n📤 Starting upload of ${folders.length} artworks from ${CONTENT_DIR}...\n`);
 
         for (const folder of folders) {
             const folderPath = path.join(CONTENT_DIR, folder);
-            const stat = await fs.stat(folderPath);
+            let stat;
+            try {
+                stat = await fs.stat(folderPath);
+            } catch {
+                continue;
+            }
 
             if (!stat.isDirectory()) continue;
 
+            if (folder.startsWith("karmaart-basel-miami-beach2025preview")) continue; // Skip specific folder
+
             try {
-                const success = await uploadArtwork(folderPath, token, domainId);
+                const success = await uploadArtwork(folderPath, token, domainId, apiBaseUrl);
                 if (success) {
                     uploadCount++;
                     console.log(`✅ Uploaded: ${folder} (${uploadCount}/${folders.length})`);
-
                     // Add delay between uploads
                     await delay(500);
+                } else {
+                    console.warn(`⚠️  Skipped: ${folder}`);
                 }
             } catch (err) {
-                console.error(`❌ Error uploading ${folder}: ${err.message}`);
-                return;
+                console.error(`❌ Error uploading ${folder}: ${err.message || err}`);
+                // continue with next folder instead of exiting entirely
             }
         }
 
@@ -115,6 +228,10 @@ async function main() {
     } catch (err) {
         console.error("❌ Fatal error:", err);
         process.exit(1);
+    } finally {
+        try {
+            rl.close();
+        } catch { }
     }
 }
 

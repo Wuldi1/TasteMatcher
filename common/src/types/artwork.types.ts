@@ -11,16 +11,16 @@ export interface Artwork {
   department: string;
   country: string;
   date: string;
+  price?: number; // USD price, optional
+  tags?: string[];
   filename: string; // defined by service
   vector: number[]; // embedding vector for search
   vectorModel: string; // model used for vectorization
   thumbnails?: ThumbnailInfo[];
-  tags?: string[];
   probabilityMatch?: number; // confidence score for AI-generated tags
   createdAt?: number; // timestamp
   metadata?: ArtworkMetadata; // allow additional metadata fields
   likedStatus?: LikedStatus; // customer's like/dislike status for the artwork
-  price?: number; // USD price, optional
 }
 
 export interface ThumbnailSize {
