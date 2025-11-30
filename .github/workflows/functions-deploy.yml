@@ -141,13 +141,13 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.environment }}" == "stg" ]; then
             echo "AZURE_FUNCTIONAPP_NAME=tastematcher-stg-func" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=${{ secrets.AZURE_SUBSCRIPTION_STG }}" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
           elif [ "${{ github.event.inputs.environment }}" == "prd" ]; then
             echo "AZURE_FUNCTIONAPP_NAME=tastematcher-prd-func" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=${{ secrets.AZURE_SUBSCRIPTION_PROD }}" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
           else
             echo "AZURE_FUNCTIONAPP_NAME=tastematcher-dev-func" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=${{ secrets.AZURE_SUBSCRIPTION_DEV }}" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
           fi
 
       - name: Download deployment artifact
