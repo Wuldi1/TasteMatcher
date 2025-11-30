@@ -55,8 +55,10 @@ export class DomainsService {
     const domainId = uuidv4();
 
     // Create domain
-    const newDomain: Domain = {
+    const newDomain: Domain & { type: string; domainId: string } = {
       id: domainId,
+      domainId: domainId, // Partition key for Core container
+      type: 'domain',
       name: createDto.proposedDomainName,
       adminEmail: normalizedEmail,
       status: 'pending_verification',
@@ -130,7 +132,7 @@ export class DomainsService {
     const container = await this.cosmosService.getDomainsContainer();
 
     const query = {
-      query: 'SELECT * FROM c ORDER BY c.createdAt DESC',
+      query: "SELECT * FROM c WHERE c.type = 'domain' ORDER BY c.createdAt DESC",
     };
 
     const { resources } = await container.items.query<Domain>(query).fetchAll();
@@ -145,18 +147,21 @@ export class DomainsService {
   async findOne(domainId: string): Promise<Domain> {
     const container = await this.cosmosService.getDomainsContainer();
 
-    const { resources } = await container.items
-      .query({
-        query: 'SELECT * FROM c WHERE c.id = @domainId',
-        parameters: [{ name: '@domainId', value: domainId }],
-      })
-      .fetchAll();
+    const query = {
+      query: "SELECT * FROM c WHERE c.id = @id AND c.domainId = @domainId AND c.type = 'domain'",
+      parameters: [
+        { name: '@id', value: domainId },
+        { name: '@domainId', value: domainId },
+      ],
+    };
+
+    const { resources } = await container.items.query<Domain>(query).fetchAll();
 
     if (resources.length === 0) {
       throw new NotFoundException(`Domain ${domainId} not found`);
     }
 
-    return resources[0] as Domain;
+    return resources[0];
   }
 
   /**
@@ -173,7 +178,7 @@ export class DomainsService {
     };
 
     const { resource } = await container
-      .item(domainId, domain.adminEmail)
+      .item(domainId, domainId)
       .replace(updatedDomain);
 
     this.logger.log(`Updated domain ${domainId}`);
@@ -306,8 +311,10 @@ export class DomainsService {
     const domainId = uuidv4();
 
     // Create domain
-    const newDomain: Domain = {
+    const newDomain: Domain & { type: string; domainId: string } = {
       id: domainId,
+      domainId: domainId,
+      type: 'domain',
       name: dto.proposedDomainName,
       adminEmail: normalizedEmail,
       status: 'active', // Set as active immediately for testing
@@ -320,9 +327,10 @@ export class DomainsService {
 
     // Create domain_owner user with active status
     const usersContainer = await this.cosmosService.getUsersContainer();
-    const newUser: User = {
+    const newUser: User & { type: string } = {
       id: uuidv4(),
       domainId: domainId,
+      type: 'user',
       email: normalizedEmail,
       name: dto.name,
       role: 'domain_owner',
@@ -358,9 +366,10 @@ export class DomainsService {
     const normalizedEmail = adminEmail.toLowerCase().trim();
     const container = await this.cosmosService.getDomainsContainer();
 
+    // Cross-partition query (acceptable for low volume of domains)
     const { resources } = await container.items
       .query({
-        query: 'SELECT * FROM c WHERE c.adminEmail = @adminEmail',
+        query: "SELECT * FROM c WHERE c.adminEmail = @adminEmail AND c.type = 'domain'",
         parameters: [{ name: '@adminEmail', value: normalizedEmail }],
       })
       .fetchAll();
@@ -386,9 +395,10 @@ export class DomainsService {
   ): Promise<User> {
     const usersContainer = await this.cosmosService.getUsersContainer();
 
-    const newUser: User = {
+    const newUser: User & { type: string } = {
       id: uuidv4(),
       domainId,
+      type: 'user',
       email,
       name,
       role: 'domain_owner',
@@ -411,7 +421,7 @@ export class DomainsService {
 
     const { resources: users } = await usersContainer.items
       .query({
-        query: 'SELECT * FROM c WHERE c.email = @email AND c.domainId = @domainId',
+        query: "SELECT * FROM c WHERE c.email = @email AND c.domainId = @domainId AND c.type = 'user'",
         parameters: [
           { name: '@email', value: email },
           { name: '@domainId', value: domainId },
@@ -446,7 +456,7 @@ export class DomainsService {
     };
 
     await container
-      .item(updatedDomain.id, updatedDomain.adminEmail)
+      .item(updatedDomain.id, updatedDomain.id) // PK is domainId
       .replace(updatedDomain);
 
     await this.emailService.sendVerificationEmail({
@@ -475,7 +485,7 @@ export class DomainsService {
     };
 
     await container
-      .item(updatedDomain.id, updatedDomain.adminEmail)
+      .item(updatedDomain.id, updatedDomain.id) // PK is domainId
       .replace(updatedDomain);
   }
 
@@ -555,7 +565,7 @@ export class DomainsService {
     const usersContainer = await this.cosmosService.getUsersContainer();
 
     const usersQuery = {
-      query: 'SELECT * FROM c WHERE c.domainId = @domainId',
+      query: "SELECT * FROM c WHERE c.domainId = @domainId AND c.type = 'user'",
       parameters: [{ name: '@domainId', value: domainId }],
     };
 
@@ -595,6 +605,6 @@ export class DomainsService {
    */
   private async deleteDomainDocument(domain: Domain): Promise<void> {
     const domainsContainer = await this.cosmosService.getDomainsContainer();
-    await domainsContainer.item(domain.id, domain.adminEmail).delete();
+    await domainsContainer.item(domain.id, domain.id).delete(); // PK is domainId
   }
 }

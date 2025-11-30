@@ -29,14 +29,14 @@ export class UsersService {
 
         try {
             let query = {
-                query: 'SELECT * FROM c WHERE c.domainId = @domainId ORDER BY c.createdAt DESC',
+                query: "SELECT * FROM c WHERE c.domainId = @domainId AND c.type = 'user' ORDER BY c.createdAt DESC",
                 parameters: [{ name: '@domainId', value: domainId }],
             };
 
             // If the user is a dealer, filter by invitedBy and role
             if (askingUser?.role === 'dealer') {
                 query = {
-                    query: 'SELECT * FROM c WHERE c.domainId = @domainId AND c.invitedBy = @invitedBy AND c.role = @role ORDER BY c.createdAt DESC',
+                    query: "SELECT * FROM c WHERE c.domainId = @domainId AND c.type = 'user' AND c.invitedBy = @invitedBy AND c.role = @role ORDER BY c.createdAt DESC",
                     parameters: [
                         { name: '@domainId', value: domainId },
                         { name: '@invitedBy', value: askingUser.id },
@@ -198,7 +198,7 @@ export class UsersService {
         try {
             // Check if user with this email already exists in the domain
             const existingQuery = {
-                query: 'SELECT * FROM c WHERE c.domainId = @domainId AND c.email = @email',
+                query: "SELECT * FROM c WHERE c.domainId = @domainId AND c.email = @email AND c.type = 'user'",
                 parameters: [
                     { name: '@domainId', value: domainId },
                     { name: '@email', value: inviteDto.email.toLowerCase() },
@@ -225,9 +225,10 @@ export class UsersService {
             }
 
             // Create new user with pending_verification status
-            const newUser: User = {
+            const newUser: User & { type: string } = {
                 id: uuidv4(),
                 domainId,
+                type: 'user',
                 email: inviteDto.email.toLowerCase(),
                 name: inviteDto.name,
                 role: inviteDto.role,

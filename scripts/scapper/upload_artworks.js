@@ -48,9 +48,10 @@ async function uploadArtwork(folderPath, token, domainId, apiBaseUrl) {
     formData.append("file", fs.createReadStream(imagePath));
     formData.append("title", metadata.title || "");
     formData.append("artist", metadata.artist || "");
-    formData.append("classification", metadata.classification || "");
-    formData.append("department", metadata.department || "");
-    formData.append("country", metadata.country || "");
+    formData.append("signature", metadata.signature || "");
+    formData.append("medium", metadata.medium || "");
+    formData.append("width", metadata.width || null);
+    formData.append("height", metadata.height || null);
     formData.append("date", metadata.date || "");
     formData.append("description", metadata.description || "");
     formData.append("tags", JSON.stringify(metadata.tags || []));
@@ -108,14 +109,14 @@ async function main() {
             "Select environment:",
             [
                 { label: "Dev", value: "dev" },
-                { label: "Prod", value: "prd" },
+                { label: "Prod", value: "prod" },
             ],
             1
         );
         const apiBaseUrl =
-            env === "prd"
-                ? process.env.API_BASE_URL_PRD || "https://api.tastematcher.art"
-                : process.env.API_BASE_URL_DEV || "http://localhost:8080/api";
+            env === "prod"
+                ? process.env.API_BASE_URL_PROD || "https://tastematcher.art"
+                : process.env.API_BASE_URL_DEV || "http://localhost:8080";
 
         // Mode choices: [1] Inventory [2] Learning  (default Inventory)
         const mode = await askChoice(

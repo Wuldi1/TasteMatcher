@@ -160,7 +160,7 @@ export interface User {
 }
 
 /**
- * Represents the response structure for the /api/users/stats endpoint.
+ * Represents the response structure for the /users/stats endpoint.
  */
 export interface UserStatsResponse extends ArtworkStats {
   totalLikes: number; // Total number of artworks liked by the user

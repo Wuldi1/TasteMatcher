@@ -18,7 +18,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 
-@Controller('api/domains/:domainId/uploads')
+@Controller('domains/:domainId/uploads')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UploadController {
   private readonly logger = new Logger(UploadController.name);
@@ -41,7 +41,7 @@ export class UploadController {
   ): Promise<ProcessingStatus> {
     const start = Date.now();
     this.logger.debug({
-      route: '/api/domains/:domainId/uploads',
+      route: '/domains/:domainId/uploads',
       method: 'POST',
       domainId
     });
@@ -99,7 +99,7 @@ export class UploadController {
       await this.blobService.sendMessageToQueue(imageProcessingQueueMessage);
 
       this.logger.log({
-        route: '/api/domains/:domainId/uploads',
+        route: '/domains/:domainId/uploads',
         method: 'POST',
         domainId,
         durationMs: Date.now() - start,
@@ -114,7 +114,7 @@ export class UploadController {
 
     } catch (error) {
       this.logger.error({
-        route: '/api/domains/:domainId/uploads',
+        route: '/domains/:domainId/uploads',
         method: 'POST',
         domainId,
         errMessage: (error as Error).message,
@@ -152,16 +152,16 @@ export class UploadController {
       title: parsed.title!,
       artist: parsed.artist!,
       description: parsed.description!,
-      classification: parsed.classification ?? '',
-      department: parsed.department ?? '',
-      country: parsed.country ?? '',
+      signature: parsed.signature ?? '',
+      medium: parsed.medium ?? '',
+      width: parsed.width,
+      height: parsed.height,
       date: parsed.date ?? '',
       filename: parsed.filename ?? 'unknown',
       tags: parsed.tags ?? [],
       createdAt: new Date().getTime(),
       updatedAt: new Date().getTime(),
       metadata: parsed.metadata,
-      category: parsed.category ?? 'uncategorized',
       vector: [],
       vectorModel: '',
       price: parsed.price !== undefined ? Number(parsed.price) : undefined,

@@ -50,9 +50,12 @@ export default function CatalogForUser({
                 const response = await apiClient.getArtworks(domainId, options);
                 setArtworks(response.items ?? []);
                 const map: Record<string, boolean | undefined> = {};
-                (response.items ?? []).forEach((artwork: any) => {
-                    if (typeof artwork.liked === 'boolean') map[artwork.id] = artwork.liked;
-                    if (typeof artwork.likedStatus === 'boolean') map[artwork.id] = artwork.likedStatus;
+                (response.items ?? []).forEach((a) => {
+                    // normalize different API shapes for like flag
+                    if ((a as Artwork & { liked?: boolean }).liked === true) map[a.id] = true;
+                    if ((a as Artwork & { liked?: boolean }).liked === false) map[a.id] = false;
+                    if ((a as Artwork & { likedStatus?: string }).likedStatus === 'Liked') map[a.id] = true;
+                    if ((a as Artwork & { likedStatus?: string }).likedStatus === 'Disliked') map[a.id] = false;
                 });
                 setFeedbackMap(map);
             } catch (err) {
@@ -76,119 +79,137 @@ export default function CatalogForUser({
     const showThumbs = showPreferenceButtons || showReadOnly;
 
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-10">
             {visible.map((artwork) => {
-                const likedStatus = (artwork as any).likedStatus ?? (feedbackMap[artwork.id] === true ? 'Liked' : feedbackMap[artwork.id] === false ? 'Disliked' : 'NotTasted');
+                const likedStatus = artwork.likedStatus ?? (feedbackMap[artwork.id] === true ? 'Liked' : feedbackMap[artwork.id] === false ? 'Disliked' : 'NotTasted');
                 const inProposal = isInProposal?.(artwork.id) ?? false;
 
                 return (
-                    <div key={artwork.id} className="relative border rounded overflow-hidden bg-white shadow-sm flex flex-col">
-                        {/* Proposal Badge */}
-                        {inProposal && (
-                            <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs font-semibold px-2 py-1 rounded">
-                                In Proposal
+                    <article key={artwork.id} className="flex flex-col gap-3 group">
+                        {/* Image Container */}
+                        <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-gray-100 shadow-sm transition-all duration-300 group-hover:shadow-md">
+                            <button
+                                type="button"
+                                className="absolute inset-0 z-0 w-full h-full cursor-pointer focus:outline-none"
+                                onClick={() => onArtworkClick?.(artwork)}
+                                aria-label={`View details for ${artwork.title}`}
+                            >
+                                {artwork.filename ? (
+                                    <img
+                                        src={artwork.filename}
+                                        alt={artwork.title}
+                                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                        loading="lazy"
+                                    />
+                                ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-gray-400">No Image</div>
+                                )}
+                            </button>
+
+                            {/* Price Badge */}
+                            {artwork.price !== undefined && (artwork.shouldDisplayPrice ?? true) && (
+                                <div className="absolute top-3 right-3 z-10 bg-white/90 backdrop-blur-sm text-gray-900 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                                    ${artwork.price.toLocaleString()}
+                                </div>
+                            )}
+
+                            {/* Proposal Badge */}
+                            {inProposal && (
+                                <div className="absolute top-3 left-3 z-10 bg-blue-500/90 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full shadow-sm">
+                                    In Proposal
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Info & Actions Footer */}
+                        <div className="flex items-start justify-between gap-4 px-1">
+                            <div className="min-w-0 flex-1">
+                                <h3 className="font-semibold text-gray-900 truncate leading-tight" title={artwork.title}>
+                                    {artwork.title}
+                                </h3>
+                                <p className="text-sm text-gray-500 truncate mt-0.5" title={artwork.artist}>
+                                    {artwork.artist}
+                                </p>
                             </div>
-                        )}
 
-                        <button
-                            type="button"
-                            className="block w-full h-40 bg-gray-100 overflow-hidden"
-                            onClick={() => onArtworkClick?.(artwork)}
-                            aria-label={`Open artwork ${artwork.title ?? artwork.id}`}
-                        >
-                            {artwork.filename ? (
-                                <img src={artwork.filename} alt={artwork.title} className="object-cover w-full h-full" />
-                            ) : (
-                                <div className="text-sm text-gray-500 p-4 h-full flex items-center justify-center">No image</div>
-                            )}
-                        </button>
-
-                        <div className="p-3 flex flex-col flex-1">
-                            <div className="text-sm font-semibold truncate">{artwork.title}</div>
-                            <div className="text-xs text-gray-500 mt-1">{artwork.artist}</div>
-                            {artwork.price !== undefined && (
-                              <div className="text-xs text-green-700 mt-1 font-semibold">${artwork.price.toLocaleString()}</div>
-                            )}
-                            {/* Actions at the bottom */}
-                            <div className="mt-auto flex items-center justify-between pt-3 gap-2">
-                                {/* Single pair of thumbs (either actionable for customers or read-only indicator for owners/dealers) */}
+                            {/* Actions */}
+                            <div className="flex items-center gap-1 shrink-0">
                                 {showThumbs ? (
                                     showPreferenceButtons ? (
                                         // Actionable buttons for customers
-                                        <div className="flex items-center gap-2">
+                                        <>
                                             <button
                                                 type="button"
                                                 disabled={showReadOnly}
-                                                onClick={() => !showReadOnly && onPreferenceClick?.(artwork.id, true)}
-                                                className={`p-2 rounded-full ${artwork.likedStatus === 'Liked'
-                                                    ? 'hover:bg-green-300'
-                                                    : (showReadOnly ? '' : 'hover:bg-green-200')
+                                                onClick={(e) => { e.stopPropagation(); !showReadOnly && onPreferenceClick?.(artwork.id, true, e); }}
+                                                className={`p-2 rounded-full transition-colors ${artwork.likedStatus === 'Liked'
+                                                    ? 'bg-green-100 text-green-600'
+                                                    : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
                                                     }`}
                                                 aria-label="Thumbs up"
                                                 tabIndex={showReadOnly ? -1 : 0}
                                             >
-                                                <ThumbsUp
-                                                    className={`w-5 h-5 ${showReadOnly ? '' : 'hover:text-green-500'} ${artwork.likedStatus === 'Liked' ? 'text-green-600' : 'text-gray-400'}`}
-                                                />
+                                                <ThumbsUp className="w-5 h-5" />
                                             </button>
                                             <button
                                                 type="button"
                                                 disabled={showReadOnly}
-                                                onClick={() => !showReadOnly && onPreferenceClick?.(artwork.id, false)}
-                                                className={`p-2 rounded-full ${artwork.likedStatus === 'Disliked'
-                                                    ? 'hover:bg-red-300'
-                                                    : (showReadOnly ? '' : 'hover:bg-red-200')}`}
+                                                onClick={(e) => { e.stopPropagation(); !showReadOnly && onPreferenceClick?.(artwork.id, false, e); }}
+                                                className={`p-2 rounded-full transition-colors ${artwork.likedStatus === 'Disliked'
+                                                    ? 'bg-red-100 text-red-600'
+                                                    : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
                                                 aria-label="Thumbs down"
                                                 tabIndex={showReadOnly ? -1 : 0}
                                             >
-                                                <ThumbsDown
-                                                    className={`w-5 h-5 ${showReadOnly ? '' : 'hover:text-red-500'} ${artwork.likedStatus === 'Disliked' ? 'text-red-600' : 'text-gray-400'}`}
-                                                />
+                                                <ThumbsDown className="w-5 h-5" />
                                             </button>
-                                        </div>
+                                        </>
                                     ) : (
-                                        // Read-only indicator (for Sales/owners/dealers)
-                                        <div className="flex items-center gap-2" aria-hidden="true" aria-label={`Preference: ${likedStatus}`}>
-                                            <ThumbsUp className={`w-5 h-5 ${likedStatus === 'Liked' ? 'text-green-600' : 'text-gray-300'}`} />
-                                            <ThumbsDown className={`w-5 h-5 ${likedStatus === 'Disliked' ? 'text-red-600' : 'text-gray-300'}`} />
+                                        // Read-only indicator
+                                        <div className="flex gap-2 px-2 py-1">
+                                            <ThumbsUp className={`w-5 h-5 ${likedStatus === 'Liked' ? 'text-green-500' : 'text-gray-300'}`} />
+                                            <ThumbsDown className={`w-5 h-5 ${likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-300'}`} />
                                         </div>
                                     )
-                                ) : (
-                                    // placeholder to keep layout stable when thumbs are hidden
-                                    <div className="w-10" />
+                                ) : null}
+
+                                {onAddToDraft && (
+                                    <button
+                                        type="button"
+                                        aria-label={isInProposal?.(artwork.id) ? 'Remove from Proposal' : 'Add to Proposal'}
+                                        onClick={(e) => { e.stopPropagation(); onAddToDraft(artwork); }}
+                                        className={`p-2 rounded-full transition-colors ${isInProposal?.(artwork.id)
+                                            ? 'bg-blue-100 text-blue-600'
+                                            : 'text-gray-400 hover:bg-gray-100 hover:text-blue-600'
+                                            }`}
+                                    >
+                                        <FileText className="w-5 h-5" />
+                                    </button>
                                 )}
 
-                                <div className="flex items-center gap-2">
-                                    {onAddToDraft && (
-                                        <button
-                                            type="button"
-                                            aria-label={isInProposal?.(artwork.id) ? 'Remove from Proposal' : 'Add to Proposal'}
-                                            onClick={() => onAddToDraft(artwork)}
-                                            className={`p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-1 ${isInProposal?.(artwork.id)
-                                                ? 'bg-green-100 hover:bg-green-200 focus:ring-green-500'
-                                                : 'bg-blue-100 hover:bg-blue-200 focus:ring-blue-500'
-                                                }`}
-                                        >
-                                            <FileText
-                                                className={`w-5 h-5 ${isInProposal?.(artwork.id) ? 'text-green-600' : 'text-blue-600'}`}
-                                            />
-                                        </button>
-                                    )}
-
-                                    {onEditClick && (
-                                        <button type="button" onClick={(e) => onEditClick(artwork, e)} aria-label="Edit" className="p-1 text-gray-600">
-                                            <Edit className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                    {onDeleteClick && (
-                                        <button type="button" onClick={(e) => onDeleteClick(artwork, e)} aria-label="Delete" className="p-1 text-gray-600">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                </div>
+                                {onEditClick && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onEditClick(artwork, e); }}
+                                        aria-label="Edit"
+                                        className="p-2 rounded-full text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                                    >
+                                        <Edit className="w-5 h-5" />
+                                    </button>
+                                )}
+                                {onDeleteClick && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onDeleteClick(artwork, e); }}
+                                        aria-label="Delete"
+                                        className="p-2 rounded-full text-gray-400 hover:bg-gray-100 hover:text-red-600 transition-colors"
+                                    >
+                                        <Trash2 className="w-5 h-5" />
+                                    </button>
+                                )}
                             </div>
                         </div>
-                    </div>
+                    </article>
                 );
             })}
         </div>

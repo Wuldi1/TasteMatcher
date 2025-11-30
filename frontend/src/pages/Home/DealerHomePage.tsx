@@ -36,7 +36,11 @@ export function DealerHomePage() {
     const acceptedProposals = proposals?.filter((p) => p.status === 'accepted').length || 0;
 
     if (loading) {
-        return <div>Loading proposals...</div>;
+        return (
+            <div className="flex items-center justify-center min-h-[50vh]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
     }
 
     return (

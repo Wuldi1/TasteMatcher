@@ -10,11 +10,11 @@
 // 9. CI-friendly: passes typecheck and lint.
 // -----------------------------------------------------------
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Artwork } from '@tastematcher/common';
+import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
+import type { Artwork } from '@tastematcher/common';
 import { useDomain } from '../contexts/DomainContext';
 import { apiClient, ApiError } from '../utils/api';
-import { FileText, User as UserIcon, Tag, DollarSign, Brush, Globe2, CalendarDays, Layers, Trash2, Upload } from 'lucide-react';
+import { FileText, User as UserIcon, Tag, DollarSign, CalendarDays, Layers, Trash2, Upload } from 'lucide-react';
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
@@ -26,13 +26,17 @@ export function ArtworkUpload() {
   const { currentDomain } = useDomain();
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [metadata, setMetadata] = useState<Partial<Artwork>>({});
+  // default to showing price to customers; user can toggle this
+  const [metadata, setMetadata] = useState<Partial<Artwork>>({ shouldDisplayPrice: true });
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState<string>('');
   const [isDragActive, setIsDragActive] = useState<boolean>(false);
   const [showSuccessToast, setShowSuccessToast] = useState<boolean>(false);
   const [priceInput, setPriceInput] = useState<string>(''); // formatted price input
+  // preserve user-entered formatting (allow single comma) for width/height
+  const [widthInput, setWidthInput] = useState<string>('');
+  const [heightInput, setHeightInput] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -46,52 +50,66 @@ export function ArtworkUpload() {
     };
   }, [previewUrl]);
 
-  const resetForm = useCallback(
-    (options?: { preserveFeedback?: boolean }) => {
-      setFile(null);
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
+  const resetForm = useCallback((options?: { preserveFeedback?: boolean }) => {
+    setFile(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewUrl(null);
+    // reset metadata to only the allowed default (preserve shouldDisplayPrice)
+    // explicitly clear numeric fields so width/height/price are reset
+    setMetadata({
+      shouldDisplayPrice: true,
+      title: undefined,
+      artist: undefined,
+      medium: undefined,
+      signature: undefined,
+      width: undefined,
+      height: undefined,
+      date: undefined,
+      price: undefined,
+      description: undefined,
+      tags: undefined,
+    });
+    // clear formatted price input as well
+    setPriceInput('');
+    // clear width/height inputs too
+    setWidthInput('');
+    setHeightInput('');
+    setTagInput('');
+    setIsDragActive(false);
+    if (!options?.preserveFeedback) {
+      setStatus('idle');
+      setMessage(null);
+      setShowSuccessToast(false);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [previewUrl]);
+
+  const handleFiles = useCallback((files: FileList | null) => {
+    const chosenFile = files?.[0] ?? null;
+    setFile(chosenFile);
+
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    if (chosenFile) {
+      setPreviewUrl(URL.createObjectURL(chosenFile));
+      setStatus('idle');
+      setMessage(null);
+    } else {
       setPreviewUrl(null);
-      setMetadata({});
-      setTagInput('');
-      setIsDragActive(false);
-      if (!options?.preserveFeedback) {
-        setStatus('idle');
-        setMessage(null);
-        setShowSuccessToast(false);
-      }
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    },
+    }
+  },
     [previewUrl],
   );
 
-  const handleFiles = useCallback(
-    (files: FileList | null) => {
-      const chosenFile = files?.[0] ?? null;
-      setFile(chosenFile);
-
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-
-      if (chosenFile) {
-        setPreviewUrl(URL.createObjectURL(chosenFile));
-        setStatus('idle');
-        setMessage(null);
-      } else {
-        setPreviewUrl(null);
-      }
-    },
-    [previewUrl],
-  );
-
-  const handleFileChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      handleFiles(event.target.files);
-    },
+  const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    handleFiles(event.target.files);
+  },
     [handleFiles],
   );
 
@@ -107,25 +125,22 @@ export function ArtworkUpload() {
     setIsDragActive(false);
   }, []);
 
-  const handleDrop = useCallback(
-    (event: React.DragEvent<HTMLLabelElement>) => {
-      event.preventDefault();
-      event.stopPropagation();
-      setIsDragActive(false);
-      handleFiles(event.dataTransfer.files);
-    },
+  const handleDrop = useCallback((event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragActive(false);
+    handleFiles(event.dataTransfer.files);
+  },
     [handleFiles],
   );
 
-  const handleMetadataChange = useCallback(
-    (field: keyof Artwork) =>
-      (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const value = event.target.value;
-        setMetadata((prev) => ({
-          ...prev,
-          [field]: value.length > 0 ? value : undefined,
-        }));
-      },
+  const handleMetadataChange = useCallback((field: keyof Artwork) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const value = event.target.value;
+    setMetadata((prev) => ({
+      ...prev,
+      [field]: value.length > 0 ? value : undefined,
+    }));
+  },
     [],
   );
 
@@ -155,18 +170,17 @@ export function ArtworkUpload() {
     setTagInput(event.target.value);
   }, []);
 
-  const handleTagInputKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        addTag();
-      } else if (event.key === 'Backspace' && !tagInput) {
-        const tags = metadata.tags ?? [];
-        if (tags.length > 0) {
-          removeTag(tags[tags.length - 1]);
-        }
+  const handleTagInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      addTag();
+    } else if (event.key === 'Backspace' && !tagInput) {
+      const tags = metadata.tags ?? [];
+      if (tags.length > 0) {
+        removeTag(tags[tags.length - 1]);
       }
-    },
+    }
+  },
     [addTag, metadata.tags, removeTag, tagInput],
   );
 
@@ -194,39 +208,88 @@ export function ArtworkUpload() {
     setMetadata(prev => ({ ...prev, price: Number(raw) }));
   }, []);
 
-  const handleSubmit = useCallback(
-    async (event: React.FormEvent) => {
-      event.preventDefault();
+  // Numeric metadata input handler (width, height) — allow digits and a single dot (.) as decimal separator.
+  // Preserve formatted input in widthInput/heightInput and parse to Number for metadata.
+  const handleNumberMetadataChange = useCallback((field: keyof Artwork) =>
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      // sanitize: allow only digits and dot
+      let raw = event.target.value;
+      raw = raw.replace(/[^0-9.]/g, '');
+      // collapse multiple dots into a single dot (keep first)
+      const parts = raw.split('.');
+      if (parts.length > 2) {
+        raw = parts[0] + '.' + parts.slice(1).join('');
+      }
 
-      // The check for currentDomain is no longer the primary validation,
-      // as the backend handles authorization. We just need a file.
-      if (!file) {
-        setStatus('error');
-        setMessage('Please choose a file to upload.');
+      // update the appropriate input state so the UI keeps the dot formatting
+      if (field === 'width') {
+        setWidthInput(raw);
+      } else if (field === 'height') {
+        setHeightInput(raw);
+      }
+
+      // update numeric metadata (dot interpreted as decimal separator)
+      if (raw === '') {
+        setMetadata((prev) => ({ ...prev, [field]: undefined }));
         return;
       }
-
-      setStatus('uploading');
-      setMessage('Uploading artwork...');
-
-      try {
-        // The API client now sends the token, and the backend infers the domain.
-        // We no longer pass the domainId from the frontend.
-        await apiClient.uploadArtwork(currentDomain!.id, file, metadata);
-        setStatus('success');
-        setMessage('Artwork uploaded successfully!');
-        setShowSuccessToast(true);
-        resetForm({ preserveFeedback: true });
-      } catch (error) {
-        if (error instanceof ApiError) {
-          setStatus('error');
-          setMessage(error.message || 'Failed to upload artwork. Please try again.');
-        } else {
-          setStatus('error');
-          setMessage('Network error. Please check your connection and try again.');
-        }
+      const numeric = Number(raw);
+      if (Number.isNaN(numeric)) {
+        setMetadata((prev) => ({ ...prev, [field]: undefined }));
+      } else {
+        setMetadata((prev) => ({ ...prev, [field]: numeric }));
       }
     },
+    [],
+  );
+
+  // Prevent non-numeric chars in width/height inputs; allow digits, one period, navigation keys
+  const handleNumericWithPeriodKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    const key = event.key;
+    const allowedNav = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Home', 'End'];
+    if (allowedNav.includes(key)) return;
+    if (/^[0-9]$/.test(key)) return;
+    if (key === '.') {
+      // allow period only if it isn't present already in the current input
+      const value = (event.currentTarget as HTMLInputElement).value;
+      if (!value.includes('.')) return;
+    }
+    // otherwise prevent
+    event.preventDefault();
+  }, []);
+
+  const handleSubmit = useCallback(async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    // The check for currentDomain is no longer the primary validation,
+    // as the backend handles authorization. We just need a file.
+    if (!file) {
+      setStatus('error');
+      setMessage('Please choose a file to upload.');
+      return;
+    }
+
+    setStatus('uploading');
+    setMessage('Uploading artwork...');
+
+    try {
+      // The API client now sends the token, and the backend infers the domain.
+      // We no longer pass the domainId from the frontend.
+      await apiClient.uploadArtwork(currentDomain!.id, file, metadata);
+      setStatus('success');
+      setMessage('Artwork uploaded successfully!');
+      setShowSuccessToast(true);
+      resetForm({ preserveFeedback: true });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setStatus('error');
+        setMessage(error.message || 'Failed to upload artwork. Please try again.');
+      } else {
+        setStatus('error');
+        setMessage('Network error. Please check your connection and try again.');
+      }
+    }
+  },
     [file, metadata, resetForm, currentDomain],
   );
 
@@ -245,6 +308,11 @@ export function ArtworkUpload() {
 
     return () => window.clearTimeout(timeout);
   }, [showSuccessToast, status]);
+
+  // Toggle whether the price should be visible to customers
+  const toggleDisplayPrice = useCallback(() => {
+    setMetadata((prev) => ({ ...prev, shouldDisplayPrice: !(prev?.shouldDisplayPrice ?? true) }));
+  }, []);
 
   return (
     <section className="rounded-2xl bg-white p-6 shadow-xl sm:p-8">
@@ -292,7 +360,7 @@ export function ArtworkUpload() {
               <div className="absolute inset-x-0 bottom-0 flex justify-end gap-2 bg-gradient-to-t from-black/60 to-transparent px-4 pb-4 pt-8">
                 <button
                   type="button"
-                  onClick={resetForm}
+                  onClick={() => resetForm()}
                   className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow focus:outline-none focus:ring-2 focus:ring-red-400 hover:bg-red-100 transition-colors"
                   aria-label="Remove selected image"
                 >
@@ -364,69 +432,92 @@ export function ArtworkUpload() {
             />
             <p className="text-xs text-gray-500">Credit the creator of this piece.</p>
           </div>
-          {/* Classification */}
+          {/* Medium */}
           <div className="space-y-1">
-            <label htmlFor="metadata-classification" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <label htmlFor="metadata-medium" className="text-sm font-medium text-gray-700 flex items-center gap-2">
               <Layers className="w-4 h-4 text-gray-500" />
-              Classification
+              Medium
             </label>
             <input
-              id="metadata-classification"
+              id="metadata-medium"
               type="text"
-              value={metadata.classification ?? ''}
-              onChange={handleMetadataChange('classification')}
-              placeholder="e.g., Painting, Sculpture, Photography"
+              value={metadata.medium ?? ''}
+              onChange={handleMetadataChange('medium' as keyof Artwork)}
+              placeholder="e.g., Oil on canvas, Bronze, Digital print"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               disabled={status === 'uploading'}
             />
-            <p className="text-xs text-gray-500">Type or medium of the artwork.</p>
+            <p className="text-xs text-gray-500">Material or technique used for the piece (optional).</p>
           </div>
-          {/* Department */}
+          {/* Signature */}
           <div className="space-y-1">
-            <label htmlFor="metadata-department" className="text-sm font-medium text-gray-700 flex items-center gap-2">
-              <Brush className="w-4 h-4 text-gray-500" />
-              Department
+            <label htmlFor="metadata-signature" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-gray-500" />
+              Signature
             </label>
             <input
-              id="metadata-department"
+              id="metadata-signature"
               type="text"
-              value={metadata.department ?? ''}
-              onChange={handleMetadataChange('department')}
-              placeholder="e.g., Modern Art, Islamic Art"
+              value={metadata.signature ?? ''}
+              onChange={handleMetadataChange('signature' as keyof Artwork)}
+              placeholder="e.g., Signed lower-right, unsigned"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               disabled={status === 'uploading'}
             />
-            <p className="text-xs text-gray-500">Museum or collection department.</p>
+            <p className="text-xs text-gray-500">Where and how the artist signed the work (optional).</p>
           </div>
-          {/* Country */}
+          {/* Width */}
           <div className="space-y-1">
-            <label htmlFor="metadata-country" className="text-sm font-medium text-gray-700 flex items-center gap-2">
-              <Globe2 className="w-4 h-4 text-gray-500" />
-              Country
+            <label htmlFor="metadata-width" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-gray-500" />
+              Width (in)
             </label>
             <input
-              id="metadata-country"
+              id="metadata-width"
               type="text"
-              value={metadata.country ?? ''}
-              onChange={handleMetadataChange('country')}
-              placeholder="e.g., France, Japan, USA"
+              inputMode="decimal"
+              pattern="[0-9.]*"
+              value={widthInput}
+              onChange={handleNumberMetadataChange('width' as keyof Artwork)}
+              onKeyDown={handleNumericWithPeriodKeyDown}
+              placeholder="e.g., 24"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               disabled={status === 'uploading'}
             />
-            <p className="text-xs text-gray-500">Country of origin.</p>
+            <p className="text-xs text-gray-500">Width in inches (optional).</p>
           </div>
-          {/* Date */}
+          {/* Height */}
+          <div className="space-y-1">
+            <label htmlFor="metadata-height" className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-gray-500" />
+              Height (in)
+            </label>
+            <input
+              id="metadata-height"
+              type="text"
+              inputMode="decimal"
+              pattern="[0-9.]*"
+              value={heightInput}
+              onChange={handleNumberMetadataChange('height' as keyof Artwork)}
+              onKeyDown={handleNumericWithPeriodKeyDown}
+              placeholder="e.g., 18"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+              disabled={status === 'uploading'}
+            />
+            <p className="text-xs text-gray-500">Height in inches (optional).</p>
+          </div>
+          {/* Date (Year) */}
           <div className="space-y-1">
             <label htmlFor="metadata-date" className="text-sm font-medium text-gray-700 flex items-center gap-2">
               <CalendarDays className="w-4 h-4 text-gray-500" />
-              Date
+              Year of Execution and Edition
             </label>
             <input
               id="metadata-date"
               type="text"
               value={metadata.date ?? ''}
               onChange={handleMetadataChange('date')}
-              placeholder="e.g., 1889, ca. 1500-1600"
+              placeholder="e.g., 1889, ca. 1500-1600, this work is unique."
               className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               disabled={status === 'uploading'}
             />
@@ -435,7 +526,7 @@ export function ArtworkUpload() {
           {/* Price */}
           <div className="space-y-1">
             <label htmlFor="metadata-price" className="text-sm font-medium text-gray-700 flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-blue-600" />
+              <DollarSign className="w-4 h-4 text-green-600" />
               Price
             </label>
             <input
@@ -449,6 +540,23 @@ export function ArtworkUpload() {
               className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               disabled={status === 'uploading'}
             />
+            <div className="mt-2 flex items-center gap-3">
+              <label
+                className="inline-flex items-center gap-2 text-sm text-gray-700"
+                title="If unchecked, the price will be hidden from your catalog and filters."
+              >
+                <input
+                  type="checkbox"
+                  checked={metadata.shouldDisplayPrice ?? true}
+                  onChange={toggleDisplayPrice}
+                  disabled={status === 'uploading'}
+                  aria-checked={metadata.shouldDisplayPrice ?? true}
+                  aria-label="Show price to customers"
+                  className="h-4 w-4 rounded border-gray-300 focus:ring-blue-500"
+                />
+                <span>Show price to customers</span>
+              </label>
+            </div>
             <p className="text-xs text-gray-500">Set a price in USD ($). Commas are automatically added.</p>
           </div>
         </div>

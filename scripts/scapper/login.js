@@ -2,11 +2,11 @@ import fetch from "node-fetch";
 
 /**
  * login(apiBaseUrl, email, verificationCode)
- * - apiBaseUrl: base API url, e.g. http://localhost:8080/api or https://api.tastematcher.art
+ * - apiBaseUrl: base API url, e.g. http://localhost:8080 or https:/.tastematcher.art
  * - email: user email for login
  * - verificationCode: code to verify (default "000000")
  */
-export async function login(apiBaseUrl = "http://localhost:8080/api", email = "galrubin15@gmail.com", verificationCode = "000000") {
+export async function login(apiBaseUrl = "http://localhost:8080", email = "galrubin15@gmail.com", verificationCode = "000000") {
   console.log(`🔐 Logging in as ${email} against ${apiBaseUrl}...`);
   
   // Step 1: Request verification code

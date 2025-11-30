@@ -3,15 +3,17 @@ export type ArtworkMetadata = Record<string, unknown>;
 export interface Artwork {
   id: string; // UUID
   domainId: string; // UUID
+  type?: string; // Discriminator for single-table design (e.g., 'artwork')
   title: string;
   description: string;
   artist: string;
-  category: string;
-  classification: string;
-  department: string;
-  country: string;
   date: string;
+  signature?: string;
+  medium?: string;
+  width?: number;
+  height?: number;
   price?: number; // USD price, optional
+  shouldDisplayPrice?: boolean; // whether to show price to users
   tags?: string[];
   filename: string; // defined by service
   vector: number[]; // embedding vector for search

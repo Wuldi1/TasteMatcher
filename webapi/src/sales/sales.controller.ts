@@ -22,7 +22,7 @@ import { AuthenticatedRequest } from '../auth/types/authenticated-request.interf
 import { Proposal } from '@tastematcher/common';
 
 @ApiTags('sales')
-@Controller('api/domains/:domainId/sales')
+@Controller('domains/:domainId/sales')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SalesController {

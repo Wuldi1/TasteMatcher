@@ -67,11 +67,11 @@ We added a new Sales page (frontend/src/pages/SalesPage.tsx) that provides:
 - Tabs: Details, Catalog, AI Suggestions, Sale Proposal
 
 Backend endpoints (skeleton) were added under backend/src/sales:
-- GET /api/domains/:domainId/sales/users
-- GET /api/domains/:domainId/sales/catalog?userId=&hasFeedback=
-- GET /api/domains/:domainId/sales/ai-suggestions?userId=&limit=
-- POST /api/domains/:domainId/sales/proposals
-- GET /api/domains/:domainId/sales/proposals/:proposalId
+- GET /domains/:domainId/sales/users
+- GET /domains/:domainId/sales/catalog?userId=&hasFeedback=
+- GET /domains/:domainId/sales/ai-suggestions?userId=&limit=
+- POST /domains/:domainId/sales/proposals
+- GET /domains/:domainId/sales/proposals/:proposalId
 
 Please wire the controller to your existing services (UserService, CatalogService, AISuggestionService, ProposalService) and update frontend Catalog usage to reuse the existing Catalog component by passing userId and hasFeedback filter.
 

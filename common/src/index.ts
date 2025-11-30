@@ -10,6 +10,7 @@ export * from './types/sales.types';
 // utils
 export * from './utils/naming';
 export * from './utils/preference.utils';
+export * from './utils/general.utils';
 export * from './utils/recommendations.utils';
 export * from './utils/retry';
 

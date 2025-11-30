@@ -29,7 +29,7 @@ import { AuthenticatedRequest } from '../auth/types/authenticated-request.interf
 import { AuthService } from '../auth/auth.service';
 import { ArtworksService } from '../artworks/artworks.service';
 
-@Controller('api/users')
+@Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService,

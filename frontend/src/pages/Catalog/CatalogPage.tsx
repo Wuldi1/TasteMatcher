@@ -6,7 +6,7 @@
 // 5. Adds at least one assertion or guard for input validation.
 // 6. No duplicate logic — reuse existing service/util or extract shared module.
 // 7. Adds or updates README or docs if public API changes.
-// 8. Adds meaningful JSDoc for exported functions/classes.
+// 8. Adds meaningful JSDOC for exported functions/classes.
 // 9. CI-friendly: code passes lint, typecheck, and tests locally.
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
@@ -14,7 +14,7 @@
 import { useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
-import { Search, X, ThumbsUp, ThumbsDown, Edit, Trash2 } from 'lucide-react';
+import { Search, X, ThumbsUp, ThumbsDown, Edit, Trash2, CheckSquare, Square, Eye, EyeOff } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
 import { apiClient } from '../../utils/api';
 import { EditArtworkModal } from '../../components/EditArtworkModal/EditArtworkModal';
@@ -22,7 +22,7 @@ import './CatalogPage.css';
 
 /**
  * Catalog page displaying all uploaded artworks in a responsive grid.
- * Features: lazy loading, search/filter, edit, delete operations.
+ * Features: lazy loading, search/filter, edit, delete operations, multi-select with bulk actions.
  */
 export function CatalogPage() {
   const { user, isInitializing: authLoading } = useAuth();
@@ -30,9 +30,10 @@ export function CatalogPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<string>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [filterBy, setFilterBy] = useState<string>('');
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [editingArtwork, setEditingArtwork] = useState<Artwork | null>(null);
+  const [selectedArtworks, setSelectedArtworks] = useState<Set<string>>(new Set()); // For multi-select
+  const [deletingArtworks, setDeletingArtworks] = useState<Set<string>>(new Set()); // For animation
 
   // Fetch artworks with infinite scroll
   const {
@@ -80,8 +81,9 @@ export function CatalogPage() {
         artwork.title?.toLowerCase().includes(query) ||
         artwork.artist?.toLowerCase().includes(query) ||
         artwork.description?.toLowerCase().includes(query) ||
-        artwork.classification?.toLowerCase().includes(query) ||
-        artwork.department?.toLowerCase().includes(query) ||
+        artwork.medium?.toLowerCase().includes(query) ||
+        artwork.signature?.toLowerCase().includes(query) ||
+        artwork.date?.toLowerCase().includes(query) ||
         artwork.tags?.some(tag => tag.toLowerCase().includes(query))
       );
     })
@@ -93,9 +95,83 @@ export function CatalogPage() {
       if (!user?.domainId) throw new Error('No domain ID');
       return apiClient.deleteArtwork(user.domainId, artworkId);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
+    onSuccess: (_, artworkId) => {
+      // Immediately remove from cache
+      queryClient.setQueryData(['artworks', user?.domainId, searchQuery, sortBy, sortOrder], (oldData: any) => {
+        if (!oldData || !Array.isArray(oldData.pages)) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            items: Array.isArray(page.items) ? page.items.filter((item: any) => item.id !== artworkId) : page.items,
+          })),
+        };
+      });
       setSelectedArtwork(null);
+      setDeletingArtworks(prev => new Set(prev).add(artworkId));
+      setTimeout(() => setDeletingArtworks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(artworkId);
+        return newSet;
+      }), 300); // Animation duration
+      // Invalidate to ensure cache consistency
+      queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
+    },
+  });
+
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (artworkIds: string[]) => {
+      if (!user?.domainId) throw new Error('No domain ID');
+      await Promise.all(artworkIds.map(id => apiClient.deleteArtwork(user.domainId, id)));
+    },
+    onSuccess: (_, artworkIds) => {
+      // Immediately remove from cache
+      queryClient.setQueryData(['artworks', user?.domainId, searchQuery, sortBy, sortOrder], (oldData: any) => {
+        if (!oldData || !Array.isArray(oldData.pages)) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            items: Array.isArray(page.items) ? page.items.filter((item: any) => !artworkIds.includes(item.id)) : page.items,
+          })),
+        };
+      });
+      setSelectedArtworks(new Set());
+      artworkIds.forEach(id => {
+        setDeletingArtworks(prev => new Set(prev).add(id));
+        setTimeout(() => setDeletingArtworks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(id);
+          return newSet;
+        }), 300);
+      });
+      // Invalidate to ensure cache consistency
+      queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
+    },
+  });
+
+  // Bulk update price visibility
+  const bulkUpdatePriceVisibility = useMutation({
+    mutationFn: async ({ artworkIds, shouldDisplayPrice }: { artworkIds: string[]; shouldDisplayPrice: boolean }) => {
+      if (!user?.domainId) throw new Error('No domain ID');
+      await Promise.all(artworkIds.map(id => apiClient.updateArtwork(user.domainId, id, { shouldDisplayPrice })));
+    },
+    onSuccess: (_, { artworkIds, shouldDisplayPrice }) => {
+      // Update cache
+      queryClient.setQueryData(['artworks', user?.domainId, searchQuery, sortBy, sortOrder], (oldData: any) => {
+        if (!oldData || !Array.isArray(oldData.pages)) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            items: Array.isArray(page.items) ? page.items.map((item: any) =>
+              artworkIds.includes(item.id) ? { ...item, shouldDisplayPrice } : item
+            ) : page.items,
+          })),
+        };
+      });
+      setSelectedArtworks(new Set());
     },
   });
 
@@ -129,8 +205,8 @@ export function CatalogPage() {
           ...page,
           items: Array.isArray(page?.items)
             ? page.items.map((it: any) =>
-                it?.id === artworkId ? { ...it, likedStatus: liked ? 'Liked' : 'Disliked' } : it
-              )
+              it?.id === artworkId ? { ...it, likedStatus: liked ? 'Liked' : 'Disliked' } : it
+            )
             : page.items,
         }));
         queryClient.setQueryData(queryKey, newData);
@@ -139,6 +215,7 @@ export function CatalogPage() {
       // Optimistically update selectedArtwork if it's open
       const prevSelected = selectedArtwork;
       if (prevSelected && prevSelected.id === artworkId) {
+        // @ts-ignore
         setSelectedArtwork({ ...prevSelected, likedStatus: liked ? 'Liked' : 'Disliked' });
       }
 
@@ -154,10 +231,6 @@ export function CatalogPage() {
         setSelectedArtwork(context.prevSelected);
       }
       console.error('Failed saving preference', err);
-    },
-    onSettled: () => {
-      // Refetch to ensure cache normalization
-      queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
     },
   });
 
@@ -191,6 +264,45 @@ export function CatalogPage() {
     }
   };
 
+  // Multi-select handlers
+  const handleSelectArtwork = (artworkId: string, selected: boolean) => {
+    setSelectedArtworks(prev => {
+      const newSet = new Set(prev);
+      if (selected) {
+        newSet.add(artworkId);
+      } else {
+        newSet.delete(artworkId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedArtworks.size === filteredArtworks.length) {
+      setSelectedArtworks(new Set());
+    } else {
+      setSelectedArtworks(new Set(filteredArtworks.map(a => a.id)));
+    }
+  };
+
+  const handleUnselectAll = () => {
+    setSelectedArtworks(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    if (window.confirm(`Delete ${selectedArtworks.size} selected artworks?`)) {
+      bulkDeleteMutation.mutate(Array.from(selectedArtworks));
+    }
+  };
+
+  const handleBulkMakePricesVisible = () => {
+    bulkUpdatePriceVisibility.mutate({ artworkIds: Array.from(selectedArtworks), shouldDisplayPrice: true });
+  };
+
+  const handleBulkMakePricesHidden = () => {
+    bulkUpdatePriceVisibility.mutate({ artworkIds: Array.from(selectedArtworks), shouldDisplayPrice: false });
+  };
+
   // Handler to like/dislike from catalog or modal
   const handlePreferenceClick = (artworkId: string, liked: boolean, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -200,7 +312,11 @@ export function CatalogPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 md:p-8">
+    <div
+      className="p-4 sm:p-6 md:p-8"
+      // ensure page content and fixed toolbar are above mobile nav / home indicator
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 16px) + 160px)' }}
+    >
       <div className="catalog-page">
         <header className="catalog-header">
           <h1 className="catalog-title">Artwork Catalog</h1>
@@ -269,47 +385,106 @@ export function CatalogPage() {
                   </optgroup>
                 </select>
               </div>
-
-              <div className="catalog-filter-group">
-                <label htmlFor="filter-classification" className="catalog-filter-label">
-                  Classification
-                </label>
-                <select
-                  id="filter-classification"
-                  className="catalog-filter-select"
-                  value={filterBy}
-                  onChange={(e) => setFilterBy(e.target.value)}
-                >
-                  <option value="">All Types</option>
-                  <option value="classification:Painting">Paintings</option>
-                  <option value="classification:Sculpture">Sculptures</option>
-                  <option value="classification:Photography">Photography</option>
-                  <option value="classification:Drawing">Drawings</option>
-                  <option value="classification:Print">Prints</option>
-                  <option value="classification:Codices">Codices</option>
-                </select>
-              </div>
-
-              <div className="catalog-filter-group">
-                <label htmlFor="filter-department" className="catalog-filter-label">
-                  Department
-                </label>
-                <select
-                  id="filter-department"
-                  className="catalog-filter-select"
-                  value={filterBy.startsWith('department:') ? filterBy : ''}
-                  onChange={(e) => setFilterBy(e.target.value)}
-                >
-                  <option value="">All Departments</option>
-                  <option value="department:Modern">Modern Art</option>
-                  <option value="department:Islamic">Islamic Art</option>
-                  <option value="department:Asian">Asian Art</option>
-                  <option value="department:European">European Art</option>
-                  <option value="department:American">American Art</option>
-                </select>
-              </div>
             </div>
+
+            {/* Select All Checkbox */}
+            {user?.role !== 'customer' && (
+              <div className="catalog-select-all hidden md:block">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedArtworks.size === filteredArtworks.length && filteredArtworks.length > 0}
+                    onChange={handleSelectAll}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>Select All</span>
+                </label>
+              </div>)}
           </div>
+
+          {/* Multi-select toolbar */}
+          {selectedArtworks.size > 0 && user?.role !== 'customer' && (
+            <>
+              {/* Desktop Toolbar */}
+              <div className="hidden md:flex mt-4 items-center justify-between rounded-lg bg-blue-50 p-4 animate-in fade-in slide-in-from-top-2">
+                <span className="text-sm font-medium text-blue-900">
+                  {selectedArtworks.size} selected
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleUnselectAll}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                    Unselect All
+                  </button>
+                  <div className="h-8 w-px bg-blue-200 mx-2" />
+                  <button
+                    onClick={handleBulkMakePricesVisible}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium bg-white text-green-700 border border-green-200 hover:bg-green-50 transition-colors"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Show Prices
+                  </button>
+                  <button
+                    onClick={handleBulkMakePricesHidden}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 transition-colors"
+                  >
+                    <EyeOff className="w-4 h-4" />
+                    Hide Prices
+                  </button>
+                  <button
+                    onClick={handleBulkDelete}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium bg-white text-red-700 border border-red-200 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+
+              {/* Mobile Toolbar (Fixed Bottom) */}
+              <div
+                className="md:hidden fixed left-4 right-4 z-50 bg-white rounded-xl shadow-xl border border-gray-200 p-3 flex items-center justify-between animate-in slide-in-from-bottom-4"
+                // lift toolbar well above mobile navigation / home-indicator
+                style={{ bottom: 'calc(env(safe-area-inset-bottom, 16px) + 88px)' }}
+              >
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={handleUnselectAll} 
+                    className="p-2 text-gray-500 hover:bg-gray-100 rounded-full"
+                    aria-label="Unselect all"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                  <span className="text-sm font-bold text-gray-900">{selectedArtworks.size} selected</span>
+                </div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={handleBulkMakePricesVisible} 
+                    className="p-2.5 text-green-600 bg-green-50 rounded-lg active:scale-95 transition-transform"
+                    aria-label="Make prices visible"
+                  >
+                    <Eye className="w-5 h-5" />
+                  </button>
+                  <button 
+                    onClick={handleBulkMakePricesHidden} 
+                    className="p-2.5 text-gray-600 bg-gray-100 rounded-lg active:scale-95 transition-transform"
+                    aria-label="Make prices hidden"
+                  >
+                    <EyeOff className="w-5 h-5" />
+                  </button>
+                  <button 
+                    onClick={handleBulkDelete} 
+                    className="p-2.5 text-red-600 bg-red-50 rounded-lg active:scale-95 transition-transform"
+                    aria-label="Delete selected"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </header>
 
         {/* Gallery grid */}
@@ -333,100 +508,118 @@ export function CatalogPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredArtworks.map((artwork) => (
-                <div
-                  key={artwork.id}
-                  className="border rounded overflow-hidden bg-white shadow-sm flex flex-col h-full"
-                >
-                  <button
-                    type="button"
-                    className="block w-full h-40 bg-gray-100 overflow-hidden"
-                    onClick={() => handleArtworkClick(artwork)}
-                    aria-label={`Open artwork ${artwork.title ?? artwork.id}`}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-10">
+              {filteredArtworks.map((artwork) => {
+                const isSelected = selectedArtworks.has(artwork.id);
+                const isDeleting = deletingArtworks.has(artwork.id);
+
+                return (
+                  <article
+                    key={artwork.id}
+                    className={`flex flex-col gap-3 group transition-opacity duration-300 ${isDeleting ? 'opacity-0 scale-95' : 'opacity-100'}`}
                   >
-                    {artwork.filename ? (
-                      <img src={artwork.filename} alt={artwork.title} className="object-cover w-full h-full" />
-                    ) : (
-                      <div className="text-sm text-gray-500 p-4 h-full flex items-center justify-center">No image</div>
-                    )}
-                  </button>
+                    {/* Image Container */}
+                    <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-gray-100 shadow-sm transition-all duration-300 group-hover:shadow-md">
+                      {/* Select checkbox - visible on hover or if selected, top-left */}
+                      {user?.role !== 'customer' && (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectArtwork(artwork.id, !isSelected)}
+                          className={`absolute top-3 left-3 z-20 p-1 bg-white/90 backdrop-blur-sm rounded-full shadow-sm transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                          aria-label={isSelected ? 'Deselect artwork' : 'Select artwork'}
+                        >
+                          {isSelected ? <CheckSquare className="w-5 h-5 text-blue-600" /> : <Square className="w-5 h-5 text-gray-600" />}
+                        </button>)}
 
-                  <div className="p-3 flex flex-col flex-1">
-                    <div className="text-sm font-semibold truncate">{artwork.title}</div>
-                    <div className="text-xs text-gray-500 mt-1">{artwork.artist}</div>
-                    {artwork.price !== undefined && (
-                      <div className="text-xs text-green-700 mt-1 font-semibold">${artwork.price.toLocaleString()}</div>
-                    )}
+                      <button
+                        type="button"
+                        className="absolute inset-0 z-0 w-full h-full cursor-pointer focus:outline-none"
+                        onClick={() => handleArtworkClick(artwork)}
+                        aria-label={`View details for ${artwork.title}`}
+                      >
+                        {artwork.filename ? (
+                          <img
+                            src={artwork.filename}
+                            alt={artwork.title}
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-gray-400">No Image</div>
+                        )}
+                      </button>
 
-                    <div className="flex-1" />
-                    {/* Spacer to push buttons to bottom */}
-
-                    <div className="mt-3 flex items-center justify-between">
-                      {/* Thumbs Up/Down for customers */}
-                      {user?.role === 'customer' && (
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => handlePreferenceClick(artwork.id, true, e)}
-                            aria-label={`Like ${artwork.title}`}
-                            className={`p-2 rounded-full ${artwork.likedStatus === 'Liked'
-                              ? 'hover:bg-green-300'
-                              : 'hover:bg-green-200'
-                              }`}
-                            disabled={savePreferenceMutation.isPending}
-                          >
-                            <ThumbsUp
-                              className={`w-5 h-5 hover:text-green-500 ${artwork.likedStatus === 'Liked' ? 'text-green-600' : 'text-gray-300'
-                                }`}
-                            />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => handlePreferenceClick(artwork.id, false, e)}
-                            aria-label={`Dislike ${artwork.title}`}
-                            className={`p-2 rounded-full ${artwork.likedStatus === 'Disliked'
-                              ? 'hover:bg-red-300'
-                              : 'hover:bg-red-200'
-                              }`}
-                            disabled={savePreferenceMutation.isPending}
-                          >
-                            <ThumbsDown
-                              className={`w-5 h-5 hover:text-red-500 ${artwork.likedStatus === 'Disliked' ? 'text-red-600' : 'text-gray-300'
-                                }`}
-                            />
-                          </button>
+                      {/* Price Badge */}
+                      {artwork.price !== undefined && (artwork.shouldDisplayPrice ?? true) && (
+                        <div className="absolute top-3 right-3 z-10 bg-white/90 backdrop-blur-sm text-gray-900 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                          ${artwork.price.toLocaleString()}
                         </div>
                       )}
-
-                      {/* Edit/Delete for non-customers */}
-                      {/* Move to bottom right, styled like thumbs */}
                     </div>
-                    {user?.role !== 'customer' && (
-                      <div className="flex justify-end mt-2">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => handleEditClick(artwork, e)}
-                            aria-label="Edit"
-                            className="p-2 rounded-full hover:bg-blue-200"
-                          >
-                            <Edit className="w-5 h-5 text-blue-600" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteClick(artwork, e)}
-                            aria-label="Delete"
-                            className="p-2 rounded-full hover:bg-red-200"
-                          >
-                            <Trash2 className="w-5 h-5 text-red-600" />
-                          </button>
-                        </div>
+
+                    {/* Info & Actions Footer */}
+                    <div className="flex items-start justify-between gap-4 px-1">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-gray-900 truncate leading-tight" title={artwork.title}>
+                          {artwork.title}
+                        </h3>
+                        <p className="text-sm text-gray-500 truncate mt-0.5" title={artwork.artist}>
+                          {artwork.artist}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {user?.role === 'customer' ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => handlePreferenceClick(artwork.id, true, e)}
+                              className={`p-2 rounded-full transition-colors ${artwork.likedStatus === 'Liked'
+                                ? 'bg-green-100 text-green-600'
+                                : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                                }`}
+                              aria-label="Like"
+                            >
+                              <ThumbsUp className="w-5 h-5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handlePreferenceClick(artwork.id, false, e)}
+                              className={`p-2 rounded-full transition-colors ${artwork.likedStatus === 'Disliked'
+                                ? 'bg-red-100 text-red-600'
+                                : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                                }`}
+                              aria-label="Dislike"
+                            >
+                              <ThumbsDown className="w-5 h-5" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => handleEditClick(artwork, e)}
+                              className="p-2 rounded-full text-gray-400 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                              aria-label="Edit"
+                            >
+                              <Edit className="w-5 h-5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteClick(artwork, e)}
+                              className="p-2 rounded-full text-gray-400 hover:bg-gray-100 hover:text-red-600 transition-colors"
+                              aria-label="Delete"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
 
             {/* Load more button */}
@@ -481,108 +674,103 @@ export function CatalogPage() {
 
                 {/* Artwork Details */}
                 <div className="flex-1 flex flex-col">
-                  <h2 id="modal-title" className="text-2xl font-bold text-gray-900 mb-4">
-                    {selectedArtwork.title}
-                  </h2>
-                  {selectedArtwork.price !== undefined && (
-                    <div className="text-lg text-green-700 font-semibold mb-2">${selectedArtwork.price.toLocaleString()}</div>
-                  )}
-                  {selectedArtwork.artist && (
-                    <p className="text-lg text-gray-700 mb-2">
-                      <span className="font-semibold">Artist:</span> {selectedArtwork.artist}
-                    </p>
-                  )}
-                  {selectedArtwork.date && (
-                    <p className="text-lg text-gray-700 mb-2">
-                      <span className="font-semibold">Date:</span> {selectedArtwork.date}
-                    </p>
-                  )}
-                  {selectedArtwork.description && (
-                    <p className="text-sm text-gray-600 mb-4">{selectedArtwork.description}</p>
-                  )}
-
-                  {/* Metadata */}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {selectedArtwork.classification && (
-                      <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
-                        {selectedArtwork.classification}
-                      </span>
-                    )}
-                    {selectedArtwork.department && (
-                      <span className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">
-                        {selectedArtwork.department}
-                      </span>
-                    )}
-                    {selectedArtwork.country && (
-                      <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
-                        {selectedArtwork.country}
-                      </span>
-                    )}
-                    {selectedArtwork.tags &&
-                      selectedArtwork.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-3 py-1 bg-gray-100 text-gray-800 text-sm rounded-full"
-                        >
-                          {tag}
-                        </span>
-                      ))}
+                  <h2 id="modal-title" className="text-2xl font-bold text-gray-900 mb-2">{selectedArtwork.title}</h2>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="text-sm text-gray-500">{selectedArtwork.artist}</div>
+                    {selectedArtwork.date && <div className="text-sm text-gray-400">• {selectedArtwork.date}</div>}
                   </div>
 
-                  {/* Thumbs Up/Down */}
-                  {user?.role === 'customer' && (
-                    <div className="mt-4 flex items-center justify-center gap-6">
-                      <button
-                        type="button"
-                        onClick={() => handlePreferenceClick(selectedArtwork.id, true)}
-                        aria-label="Like artwork"
-                        className={`p-2 rounded-full ${selectedArtwork.likedStatus === 'Liked' ? 'hover:bg-green-300' : 'hover:bg-green-200'}`}
-                        disabled={savePreferenceMutation.isPending}
-                      >
-                        <ThumbsUp
-                          className={`w-6 h-6 ${selectedArtwork.likedStatus === 'Liked' ? 'text-green-500' : 'text-gray-400'
-                            }`}
-                        />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handlePreferenceClick(selectedArtwork.id, false)}
-                        aria-label="Dislike artwork"
-                        className={`p-2 rounded-full ${selectedArtwork.likedStatus === 'Disliked' ? 'hover:bg-red-300' : 'hover:bg-red-200'}`}
-                        disabled={savePreferenceMutation.isPending}
-                      >
-                        <ThumbsDown
-                          className={`w-6 h-6 hover:text-red-500 ${selectedArtwork.likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'
-                            }`}
-                        />
-                        </button>
-                      </div>
+                  {selectedArtwork.price !== undefined && (selectedArtwork.shouldDisplayPrice ?? true) && (
+                    <div className="text-2xl text-green-700 font-semibold mb-4">${selectedArtwork.price.toLocaleString()}</div>
                   )}
 
-                  {/* Actions (restricted for customers) */}
-                  {user?.role !== 'customer' && (
-                    <div className="mt-auto flex items-center gap-4">
-                      <button
-                        type="button"
-                        onClick={(e) => handleEditClick(selectedArtwork, e)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                        aria-label="Edit artwork"
-                      >
-                        <Edit className="w-5 h-5" />
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteClick(selectedArtwork, e)}
-                        className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                        aria-label="Delete artwork"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                        Delete
-                      </button>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-4 mb-6 text-sm border-t border-b border-gray-100 py-4">
+                    <div>
+                      <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Medium</span>
+                      <span className="text-gray-900 font-medium">{selectedArtwork.medium || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Dimensions</span>
+                      <span className="text-gray-900 font-medium">
+                        {selectedArtwork.width || selectedArtwork.height
+                          ? `${selectedArtwork.width ?? '-'} × ${selectedArtwork.height ?? '-'} in`
+                          : '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Signature</span>
+                      <span className="text-gray-900 font-medium">{selectedArtwork.signature || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Date</span>
+                      <span className="text-gray-900 font-medium">{selectedArtwork.date || '—'}</span>
+                    </div>
+                  </div>
+
+                  {selectedArtwork.description && <p className="text-sm text-gray-600 mb-6 leading-relaxed">{selectedArtwork.description}</p>}
+
+                  {selectedArtwork.tags && selectedArtwork.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      {selectedArtwork.tags.map((t) => (
+                        <span key={t} className="px-2.5 py-0.5 bg-gray-50 text-gray-600 rounded text-xs font-medium border border-gray-200">
+                          {t}
+                        </span>
+                      ))}
                     </div>
                   )}
+
+                  <div className="mt-auto flex items-center gap-4">
+                    {user?.role === 'customer' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handlePreferenceClick(selectedArtwork.id, true)}
+                          aria-label="Like artwork"
+                          className={`p-2 rounded-full ${selectedArtwork.likedStatus === 'Liked' ? 'hover:bg-green-300' : 'hover:bg-green-200'}`}
+                          disabled={savePreferenceMutation.isPending}
+                        >
+                          <ThumbsUp
+                            className={`w-6 h-6 ${selectedArtwork.likedStatus === 'Liked' ? 'text-green-500' : 'text-gray-400'
+                              }`}
+                          />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handlePreferenceClick(selectedArtwork.id, false)}
+                          aria-label="Dislike artwork"
+                          className={`p-2 rounded-full ${selectedArtwork.likedStatus === 'Disliked' ? 'hover:bg-red-300' : 'hover:bg-red-200'}`}
+                          disabled={savePreferenceMutation.isPending}
+                        >
+                          <ThumbsDown
+                            className={`w-6 h-6 hover:text-red-500 ${selectedArtwork.likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'
+                              }`}
+                          />
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-4">
+                        <button
+                          type="button"
+                          onClick={(e) => handleEditClick(selectedArtwork, e)}
+                          className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                          aria-label="Edit artwork"
+                        >
+                          <Edit className="w-5 h-5" />
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteClick(selectedArtwork, e)}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                          aria-label="Delete artwork"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -594,8 +782,12 @@ export function CatalogPage() {
           <EditArtworkModal
             artwork={editingArtwork}
             onClose={() => setEditingArtwork(null)}
-            onSave={() => {
+            onSave={(updatedArtwork) => {
               setEditingArtwork(null);
+              // Update selectedArtwork if it's the same artwork
+              if (selectedArtwork && selectedArtwork.id === updatedArtwork.id) {
+                setSelectedArtwork(updatedArtwork);
+              }
               queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
             }}
           />

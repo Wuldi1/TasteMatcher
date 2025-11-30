@@ -20,7 +20,6 @@ import {
   PersonalQuestionnaire,
   ArtworkStats,
   UntastedArtworksResponse,
-  SavePreferenceDto,
   PaginatedResponse,
   Proposal,
   UserStatsResponse
@@ -49,8 +48,8 @@ class BaseApiClient {
   protected authToken: string | null = null;
 
   constructor() {
-    // this.baseURL = process.env.REACT_APP_API_URL!;
-    this.baseURL = 'https://tastematcher-dev-api.azurewebsites.net';
+    this.baseURL = process.env.REACT_APP_API_URL!;
+    // this.baseURL = 'https://tastematcher-dev-api.azurewebsites.net';
     this.loadAuthToken();
   }
 
@@ -128,10 +127,16 @@ class BaseApiClient {
         await this.handleErrorResponse(response, url);
       }
 
+      if (response.status === 204) {
+        // No Content
+        return {} as T;
+      }
+
       const data = await response.json();
 
       return data;
     } catch (error) {
+      console.log(error)
       if (error instanceof ApiError) {
         throw error;
       }
@@ -244,7 +249,7 @@ class ApiClient extends BaseApiClient {
   async requestDomainVerification(adminEmail: string): Promise<Domain> {
     this.validateEmail(adminEmail);
     const encodedEmail = encodeURIComponent(adminEmail);
-    return this.request<Domain>(`/api/domains/auth/${encodedEmail}`, { method: 'GET' });
+    return this.request<Domain>(`/domains/auth/${encodedEmail}`, { method: 'GET' });
   }
 
   /**
@@ -253,7 +258,7 @@ class ApiClient extends BaseApiClient {
   async createDomain(request: { name: string; adminEmail: string }): Promise<Domain> {
     this.validateRequired(request.name, 'Name');
     this.validateEmail(request.adminEmail);
-    return this.request<Domain>('/api/domains', {
+    return this.request<Domain>('/domains', {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -267,7 +272,7 @@ class ApiClient extends BaseApiClient {
       throw new ApiError('Verification code must be 6 digits', 400);
     }
     const encodedEmail = encodeURIComponent(adminEmail);
-    return this.request<DomainVerificationResultResponse>(`/api/domains/verify/${encodedEmail}`, {
+    return this.request<DomainVerificationResultResponse>(`/domains/verify/${encodedEmail}`, {
       method: 'POST',
       body: JSON.stringify({ code }),
     });
@@ -278,14 +283,14 @@ class ApiClient extends BaseApiClient {
    */
   async getDomainById(domainId: string): Promise<Domain> {
     this.validateRequired(domainId, 'Domain ID');
-    return this.request<Domain>(`/api/domains/${domainId}`, { method: 'GET' });
+    return this.request<Domain>(`/domains/${domainId}`, { method: 'GET' });
   }
 
   /**
    * Get all domains (global admin only)
    */
   async getAllDomains(): Promise<Domain[]> {
-    return this.request<Domain[]>('/api/domains', { method: 'GET' });
+    return this.request<Domain[]>('/domains', { method: 'GET' });
   }
 
   /**
@@ -293,7 +298,7 @@ class ApiClient extends BaseApiClient {
    */
   async updateDomain(domainId: string, data: { name?: string }): Promise<Domain> {
     this.validateRequired(domainId, 'Domain ID');
-    return this.request<Domain>(`/api/domains/${domainId}`, {
+    return this.request<Domain>(`/domains/${domainId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -304,7 +309,7 @@ class ApiClient extends BaseApiClient {
    */
   async deleteDomain(domainId: string): Promise<void> {
     this.validateRequired(domainId, 'Domain ID');
-    await this.request<void>(`/api/domains/${domainId}`, { method: 'DELETE' });
+    await this.request<void>(`/domains/${domainId}`, { method: 'DELETE' });
   }
 
   /**
@@ -316,7 +321,7 @@ class ApiClient extends BaseApiClient {
     domainName: string;
     proposedDomainName: string;
   }): Promise<Domain> {
-    return this.request<Domain>('/api/domains/create', {
+    return this.request<Domain>('/domains/create', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -331,7 +336,7 @@ class ApiClient extends BaseApiClient {
     proposedDomainName: string;
     message?: string;
   }): Promise<DomainRequest> {
-    return this.request<DomainRequest>('/api/auth/domain-request', {
+    return this.request<DomainRequest>('/auth/domain-request', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -341,7 +346,7 @@ class ApiClient extends BaseApiClient {
    * Get all domain requests (global admin only)
    */
   async getAllDomainRequests(): Promise<DomainRequest[]> {
-    return this.request<DomainRequest[]>('/api/domains/requests/all', { method: 'GET' });
+    return this.request<DomainRequest[]>('/domains/requests/all', { method: 'GET' });
   }
 
   // ========== User Management Endpoints ==========
@@ -350,7 +355,7 @@ class ApiClient extends BaseApiClient {
    * Get all users (optionally filtered by domain for global admins)
    */
   async getAllUsers(domainId?: string): Promise<User[]> {
-    const url = domainId ? `/api/users/domain/${domainId}` : '/api/users';
+    const url = domainId ? `/users/domain/${domainId}` : '/users';
     return this.request<User[]>(url, { method: 'GET' });
   }
 
@@ -359,7 +364,7 @@ class ApiClient extends BaseApiClient {
    */
   async getUser(userId: string, domainId?: string): Promise<User> {
     this.validateRequired(userId, 'User ID');
-    const url = domainId ? `/api/users/${userId}?domainId=${domainId}` : `/api/users/${userId}`;
+    const url = domainId ? `/users/${userId}?domainId=${domainId}` : `/users/${userId}`;
     return this.request<User>(url, { method: 'GET' });
   }
 
@@ -368,7 +373,7 @@ class ApiClient extends BaseApiClient {
    */
   async updateUser(userId: string, data: { name?: string; role?: Role }): Promise<User> {
     this.validateRequired(userId, 'User ID');
-    return this.request<User>(`/api/users/${userId}`, {
+    return this.request<User>(`/users/${userId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -379,7 +384,7 @@ class ApiClient extends BaseApiClient {
    */
   async deleteUser(userId: string): Promise<void> {
     this.validateRequired(userId, 'User ID');
-    await this.request<void>(`/api/users/${userId}`, { method: 'DELETE' });
+    await this.request<void>(`/users/${userId}`, { method: 'DELETE' });
   }
 
   /**
@@ -388,7 +393,7 @@ class ApiClient extends BaseApiClient {
   async inviteUser(data: { name: string; email: string; role: Role }): Promise<User> {
     this.validateRequired(data.name, 'Name');
     this.validateEmail(data.email);
-    return this.request<User>('/api/users/invite', {
+    return this.request<User>('/users/invite', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -398,7 +403,7 @@ class ApiClient extends BaseApiClient {
    * Refresh current user and get new token
    */
   async refreshCurrentUser(): Promise<{ user: User; token: string }> {
-    return this.request<{ user: User; token: string }>('/api/users/me/refresh', {
+    return this.request<{ user: User; token: string }>('/users/me/refresh', {
       method: 'GET',
     });
   }
@@ -409,7 +414,7 @@ class ApiClient extends BaseApiClient {
    * @returns User stats including total likes, dislikes, swipes, and recently added artworks.
    */
   async getUserStats(): Promise<UserStatsResponse> {
-    return this.request<UserStatsResponse>('/api/users/stats', { method: 'GET' });
+    return this.request<UserStatsResponse>('/users/stats', { method: 'GET' });
   }
 
   // ========== Artwork Endpoints ==========
@@ -422,7 +427,7 @@ class ApiClient extends BaseApiClient {
     this.validateRequired(file, 'File');
 
     return this.uploadFile<Artwork>(
-      `/api/domains/${domainId}/uploads`,
+      `/domains/${domainId}/uploads`,
       file,
       artworkMetadata ? { artwork: artworkMetadata } : undefined
     );
@@ -433,7 +438,7 @@ class ApiClient extends BaseApiClient {
    */
   async getArtworkStats(domainId: string): Promise<ArtworkStats> {
     this.validateRequired(domainId, 'Domain ID');
-    return this.request<ArtworkStats>(`/api/domains/${domainId}/artworks/stats`, { method: 'GET' });
+    return this.request<ArtworkStats>(`/domains/${domainId}/artworks/stats`, { method: 'GET' });
   }
 
   /**
@@ -464,7 +469,7 @@ class ApiClient extends BaseApiClient {
     if (options?.userId) params.append('userId', options.userId);
 
     const queryString = params.toString();
-    const endpoint = `/api/domains/${domainId}/artworks${queryString ? `?${queryString}` : ''}`;
+    const endpoint = `/domains/${domainId}/artworks${queryString ? `?${queryString}` : ''}`;
     return this.request<PaginatedResponse<Artwork>>(endpoint, { method: 'GET' });
   }
 
@@ -474,7 +479,7 @@ class ApiClient extends BaseApiClient {
   async getArtwork(domainId: string, artworkId: string): Promise<Artwork> {
     this.validateRequired(domainId, 'Domain ID');
     this.validateRequired(artworkId, 'Artwork ID');
-    return this.request<Artwork>(`/api/domains/${domainId}/artworks/${artworkId}`, { method: 'GET' });
+    return this.request<Artwork>(`/domains/${domainId}/artworks/${artworkId}`, { method: 'GET' });
   }
 
   /**
@@ -483,7 +488,7 @@ class ApiClient extends BaseApiClient {
   async updateArtwork(domainId: string, artworkId: string, data: Partial<Artwork>): Promise<Artwork> {
     this.validateRequired(domainId, 'Domain ID');
     this.validateRequired(artworkId, 'Artwork ID');
-    return this.request<Artwork>(`/api/domains/${domainId}/artworks/${artworkId}`, {
+    return this.request<Artwork>(`/domains/${domainId}/artworks/${artworkId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -495,7 +500,7 @@ class ApiClient extends BaseApiClient {
   async deleteArtwork(domainId: string, artworkId: string): Promise<void> {
     this.validateRequired(domainId, 'Domain ID');
     this.validateRequired(artworkId, 'Artwork ID');
-    await this.request<void>(`/api/domains/${domainId}/artworks/${artworkId}`, { method: 'DELETE' });
+    await this.request(`/domains/${domainId}/artworks/${artworkId}`, { method: 'DELETE' });
   }
 
   /**
@@ -506,15 +511,15 @@ class ApiClient extends BaseApiClient {
     userId: string,
     limit: number = 20
   ): Promise<UntastedArtworksResponse> {
-    return await this.request<UntastedArtworksResponse>(`/api/domains/${domainId}/artworks/untasted/${userId}?limit=${limit}`, { method: 'GET' });
+    return await this.request<UntastedArtworksResponse>(`/domains/${domainId}/artworks/untasted/${userId}?limit=${limit}`, { method: 'GET' });
   }
 
   async saveArtworkPreference(
     domainId: string,
     userId: string,
-    preference: SavePreferenceDto
+    preference: { artworkId: string; domainId: string; liked: boolean }
   ): Promise<void> {
-    await this.request<UntastedArtworksResponse>(`/api/domains/${domainId}/artworks/preferences/${userId}`, { method: 'POST', body: JSON.stringify(preference) });
+    await this.request<UntastedArtworksResponse>(`/domains/${domainId}/artworks/preferences/${userId}`, { method: 'POST', body: JSON.stringify(preference) });
   }
 
   /**
@@ -524,7 +529,7 @@ class ApiClient extends BaseApiClient {
     this.validateRequired(domainId, 'Domain ID');
     const params = userId ? `?userId=${encodeURIComponent(userId)}` : '';
     return this.request<Array<Artwork>>(
-      `/api/domains/${domainId}/artworks/recommendations${params}`,
+      `/domains/${domainId}/artworks/recommendations${params}`,
       { method: 'GET' },
     );
   }
@@ -543,7 +548,7 @@ class ApiClient extends BaseApiClient {
     } else if (userId) {
       params = `?userId=${encodeURIComponent(userId)}`;
     }
-    return this.request<Proposal[]>(`/api/domains/${domainId}/sales/proposals${params}`, { method: 'GET' });
+    return this.request<Proposal[]>(`/domains/${domainId}/sales/proposals${params}`, { method: 'GET' });
   }
 
   /**
@@ -552,7 +557,7 @@ class ApiClient extends BaseApiClient {
   async getProposal(domainId: string, proposalId: string): Promise<Proposal> {
     this.validateRequired(domainId, 'Domain ID');
     this.validateRequired(proposalId, 'Proposal ID');
-    return this.request<Proposal>(`/api/domains/${domainId}/sales/proposals/${proposalId}`, { method: 'GET' });
+    return this.request<Proposal>(`/domains/${domainId}/sales/proposals/${proposalId}`, { method: 'GET' });
   }
 
   /**
@@ -561,7 +566,7 @@ class ApiClient extends BaseApiClient {
   async createProposal(domainId: string, proposal: Partial<Proposal>): Promise<Proposal> {
     this.validateRequired(domainId, 'Domain ID');
     this.validateRequired(proposal.userId, 'User ID');
-    return this.request<Proposal>(`/api/domains/${domainId}/sales/proposals`, {
+    return this.request<Proposal>(`/domains/${domainId}/sales/proposals`, {
       method: 'POST',
       body: JSON.stringify(proposal),
     });
@@ -573,7 +578,7 @@ class ApiClient extends BaseApiClient {
   async updateProposal(domainId: string, proposalId: string, update: Partial<Proposal>): Promise<Proposal> {
     this.validateRequired(domainId, 'Domain ID');
     this.validateRequired(proposalId, 'Proposal ID');
-    return this.request<Proposal>(`/api/domains/${domainId}/sales/proposals/${proposalId}`, {
+    return this.request<Proposal>(`/domains/${domainId}/sales/proposals/${proposalId}`, {
       method: 'PATCH',
       body: JSON.stringify(update),
     });
@@ -585,7 +590,7 @@ class ApiClient extends BaseApiClient {
   async deleteProposal(domainId: string, proposalId: string): Promise<void> {
     this.validateRequired(domainId, 'Domain ID');
     this.validateRequired(proposalId, 'Proposal ID');
-    await this.request<void>(`/api/domains/${domainId}/sales/proposals/${proposalId}`, { method: 'DELETE' });
+    await this.request<void>(`/domains/${domainId}/sales/proposals/${proposalId}`, { method: 'DELETE' });
   }
 
   /**
@@ -594,7 +599,7 @@ class ApiClient extends BaseApiClient {
   async pingProposal(domainId: string, proposalId: string): Promise<void> {
     this.validateRequired(domainId, 'Domain ID');
     this.validateRequired(proposalId, 'Proposal ID');
-    await this.request<void>(`/api/domains/${domainId}/sales/proposals/${proposalId}/ping`, { method: 'POST' });
+    await this.request<void>(`/domains/${domainId}/sales/proposals/${proposalId}/ping`, { method: 'POST' });
   }
 
   // ========== Authentication Endpoints (Public) ==========
@@ -604,7 +609,7 @@ class ApiClient extends BaseApiClient {
    */
   async requestLoginCode(email: string): Promise<{ message: string }> {
     this.validateEmail(email);
-    return this.request<{ message: string }>('/api/auth/login/request', {
+    return this.request<{ message: string }>('/auth/login/request', {
       method: 'POST',
       body: JSON.stringify({ email }),
     });
@@ -618,7 +623,7 @@ class ApiClient extends BaseApiClient {
     if (!code || code.length !== 6) {
       throw new ApiError('Verification code must be 6 digits', 400);
     }
-    return this.request<DomainVerificationResultResponse>('/api/auth/login/verify', {
+    return this.request<DomainVerificationResultResponse>('/auth/login/verify', {
       method: 'POST',
       body: JSON.stringify({ email, code }),
     });
@@ -632,7 +637,7 @@ class ApiClient extends BaseApiClient {
   async uploadPreferenceImage(file: File): Promise<{ success: boolean; message: string; vectorized: number }> {
     this.validateRequired(file, 'File');
     return this.uploadFile<{ success: boolean; message: string; vectorized: number }>(
-      '/api/users/me/vectorize-preference-image',
+      '/users/me/vectorize-preference-image',
       file
     );
   }
@@ -642,7 +647,7 @@ class ApiClient extends BaseApiClient {
    */
   async finalizePreferenceVectors(): Promise<{ success: boolean; message: string; totalVectors: number }> {
     return this.request<{ success: boolean; message: string; totalVectors: number }>(
-      '/api/users/me/finalize-preference-vectors',
+      '/users/me/finalize-preference-vectors',
       { method: 'POST' }
     );
   }
@@ -651,7 +656,7 @@ class ApiClient extends BaseApiClient {
    * Update user questionnaire
    */
   async updateUserQuestionnaire(questionnaire: PersonalQuestionnaire): Promise<User> {
-    return this.request<User>('/api/users/me/questionnaire', {
+    return this.request<User>('/users/me/questionnaire', {
       method: 'PATCH',
       body: JSON.stringify({ personalQuestionnaire: questionnaire }),
     });
@@ -661,14 +666,14 @@ class ApiClient extends BaseApiClient {
    * Complete onboarding
    */
   async completeOnboarding(): Promise<User> {
-    return this.request<User>('/api/users/me/complete-onboarding', { method: 'POST' });
+    return this.request<User>('/users/me/complete-onboarding', { method: 'POST' });
   }
 
   /**
    * Skip onboarding (can be resumed later)
    */
   async skipOnboarding(): Promise<User> {
-    return this.request<User>('/api/users/me/skip-onboarding', { method: 'POST' });
+    return this.request<User>('/users/me/skip-onboarding', { method: 'POST' });
   }
 }
 

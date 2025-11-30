@@ -47,7 +47,7 @@ async function downloadImageWithRetry(url, outputPath, retries = 3, referer = ''
 // -------------------------
 
 // --- AIC ---
-const AIC_API = 'https://api.artic.edu/api/v1/artworks';
+const AIC_API = 'https:/.artic.edu/v1/artworks';
 const AIC_FIELDS = [
   'id','title','artist_display','date_display','medium_display',
   'dimensions','department_title','classification_title',
@@ -79,7 +79,7 @@ function getAICImageURL(imageId) {
 }
 
 // --- CMA ---
-const CMA_API = 'https://openaccess-api.clevelandart.org/api/artworks';
+const CMA_API = 'https://openaccess-api.clevelandart.org/artworks';
 async function fetchCMAPage(page = 1) {
   const url = `${CMA_API}?page=${page}&limit=100&has_image=true&is_public_domain=true`;
   const data = await fetchJSON(url);

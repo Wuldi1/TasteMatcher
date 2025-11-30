@@ -30,7 +30,7 @@ export function CustomerHomePage() {
     const { stats, answeredQuestions, totalQuestions } = useUserStatsContext();
 
     // Fetch proposal metadata
-    const { hasSubmittedProposal, proposalMetadata } = useProposalData(user?.domainId, user?.id);
+    const { hasSubmittedProposal, proposalMetadata, loading } = useProposalData(user?.domainId, user?.id);
 
     const navigate = useNavigate();
 
@@ -54,8 +54,12 @@ export function CustomerHomePage() {
     // Calculate onboarding progress
     const onboardingProgress = totalQuestions - answeredQuestions;
 
-    if (!user) {
-        return null;
+    if (!user || loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[50vh]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
     }
 
     return (

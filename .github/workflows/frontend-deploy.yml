@@ -25,6 +25,10 @@ env:
   PNPM_VERSION: '8'
   FRONTEND_DIR: frontend
   BUILD_OUTPUT: frontend/build
+  # Define API URLs for different environments
+  API_URL_DEV: 'https://tastematcher-dev-api.azurewebsites.net'
+  API_URL_STG: 'https://tastematcher-stg-api.azurewebsites.net'
+  API_URL_PRD: 'https://tastematcher-prd-api.azurewebsites.net'
 
 jobs:
   build-pack:
@@ -49,11 +53,22 @@ jobs:
       - name: Lint frontend
         run: pnpm --filter @tastematcher/frontend lint
 
-    #   - name: Test frontend
-        # run: pnpm --filter @tastematcher/frontend test -- --ci --runInBand
+      - name: Determine API URL
+        id: api-url
+        run: |
+          ENV_NAME="${{ github.event.inputs.environment || 'dev' }}"
+          if [ "$ENV_NAME" == "stg" ]; then
+            echo "VITE_API_BASE_URL=${{ env.API_URL_STG }}" >> $GITHUB_ENV
+          elif [ "$ENV_NAME" == "prd" ]; then
+            echo "VITE_API_BASE_URL=${{ env.API_URL_PRD }}" >> $GITHUB_ENV
+          else
+            echo "VITE_API_BASE_URL=${{ env.API_URL_DEV }}" >> $GITHUB_ENV
+          fi
 
       - name: Build frontend
         run: pnpm --filter @tastematcher/frontend build
+        env:
+          VITE_API_BASE_URL: ${{ env.VITE_API_BASE_URL }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -75,10 +90,10 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.environment }}" == "stg" ]; then
             echo "AZURE_WEBAPP_NAME=tastematcher-stg-web" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=0531979e-9645-4a62-a894-ecb44f04412b" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=${{ secrets.AZURE_SUBSCRIPTION_STG }}" >> $GITHUB_ENV
           elif [ "${{ github.event.inputs.environment }}" == "prd" ]; then
             echo "AZURE_WEBAPP_NAME=tastematcher-prd-web" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=your-prod-subscription-id" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=${{ secrets.AZURE_SUBSCRIPTION_PRD }}" >> $GITHUB_ENV
           else
             echo "AZURE_WEBAPP_NAME=tastematcher-dev-web" >> $GITHUB_ENV
             echo "AZURE_SUBSCRIPTION=${{ secrets.AZURE_SUBSCRIPTION_DEV }}" >> $GITHUB_ENV
@@ -110,42 +125,10 @@ jobs:
           # Install dependencies so they're included in the zip
           npm install --production --no-package-lock
           
-          # Copy the appropriate .env file based on the environment
-          if [ "${{ github.event.inputs.environment }}" == "stg" ]; then
-            cp ../.env.staging .env
-          elif [ "${{ github.event.inputs.environment }}" == "prd" ]; then
-            cp ../.env.production .env
-          elif [ "${{ github.event.inputs.environment }}" == "dev" ]; then
-            cp ../.env.development .env
-          fi
-          
           # Create .deployment file to tell Azure to skip build
           cat > .deployment <<'EOF'
           [config]
           SCM_DO_BUILD_DURING_DEPLOYMENT = false
-          EOF
-          
-          # Create web.config for proper SPA routing
-          cat > web.config <<'EOF'
-          <?xml version="1.0"?>
-          <configuration>
-            <system.webServer>
-              <rewrite>
-                <rules>
-                  <rule name="React Routes" stopProcessing="true">
-                    <match url=".*" />
-                    <conditions logicalGrouping="MatchAll">
-                      <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
-                    </conditions>
-                    <action type="Rewrite" url="/index.html" />
-                  </rule>
-                </rules>
-              </rewrite>
-              <staticContent>
-                <mimeMap fileExtension=".json" mimeType="application/json" />
-              </staticContent>
-            </system.webServer>
-          </configuration>
           EOF
           
           zip -r ../build.zip .

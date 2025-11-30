@@ -6,7 +6,7 @@ import { CreateDomainRequestDto } from '../domains/dto/create-domain-request.dto
 import { DomainVerificationResultResponse, DomainRequest } from '@tastematcher/common';
 import { DomainsService } from '../domains/domains.service';
 
-@Controller('api/auth')
+@Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,

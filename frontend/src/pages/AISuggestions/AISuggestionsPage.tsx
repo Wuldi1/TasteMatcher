@@ -15,7 +15,7 @@ import { apiClient } from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Artwork, User } from '@tastematcher/common';
 import { getAIRecommendationsEligibility } from '../../utils/recommendations';
-import { ThumbsUp, ThumbsDown, FileText, X } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, FileText, X, Sparkles } from 'lucide-react';
 import { useSavePreference } from '../../utils/savePreference';
 
 interface DomainUserOption {
@@ -140,6 +140,7 @@ export const AISuggestionsPage = ({
       const liked = typeof arg2 === 'boolean' ? arg2 : Boolean(arg3);
 
       // Update recommendation list defensively
+      // @ts-ignore
       setRecommendations((prev) =>
         prev.map((artwork) =>
           artwork.id === artworkId ? { ...artwork, likedStatus: liked ? 'Liked' : 'Disliked' } : artwork
@@ -147,6 +148,7 @@ export const AISuggestionsPage = ({
       );
 
       // Update selected artwork if open
+      // @ts-ignore
       setSelectedArtwork((prev) =>
         prev && prev.id === artworkId ? { ...prev, likedStatus: liked ? 'Liked' : 'Disliked' } : prev
       );
@@ -182,7 +184,7 @@ export const AISuggestionsPage = ({
   };
 
   const handlePreferenceClick = (artworkId: string, liked: boolean) => {
-    savePreferenceMutation.mutate({ artworkId, domainId: user.domainId, liked });
+    savePreferenceMutation.mutate({ artworkId, domainId: user?.domainId!, liked });
   };
 
   const handleProposalToggle = (artwork: Artwork) => {
@@ -209,7 +211,7 @@ export const AISuggestionsPage = ({
       {eligibility.isEligible && recommendations.length > 0 && (
         <section
           aria-label="AI suggested artworks"
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
         >
           {recommendations.map((item) => {
             const isInProposal = proposalItems?.includes(item.id);
@@ -217,99 +219,108 @@ export const AISuggestionsPage = ({
             return (
               <article
                 key={item.id}
-                className="group flex flex-col overflow-hidden rounded-lg shadow transition hover:shadow-lg focus-within:ring-2 focus-within:ring-primary relative"
+                className="group flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300"
                 tabIndex={0}
                 aria-label={`${item.title} - similarity ${formatMatchPercentage(item.probabilityMatch)}`}
               >
-                {/* Proposal Badge */}
-                {isInProposal && (
-                  <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs font-semibold px-2 py-1 rounded">
-                    In Proposal
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedArtwork(item);
-                    onArtworkClick?.(item);
-                  }}
-                  className="block w-full h-48 bg-gray-100 overflow-hidden sm:h-60"
-                >
-                  {item.filename ? (
-                    <img
-                      src={item.filename}
-                      alt={item.title}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gray-100 text-sm text-gray-500">
-                      No image available
-                    </div>
-                  )}
-                </button>
-                <div className="flex flex-1 flex-col p-4">
-                  <h3 className="mb-2 line-clamp-2 text-base font-semibold text-gray-900">
-                    {item.title}
-                  </h3>
-                  {item.price !== undefined && (
-                    <div className="text-xs text-green-700 font-semibold mb-1">${item.price.toLocaleString()}</div>
-                  )}
-                  <div className="mt-auto flex items-center justify-between text-sm text-gray-600">
-                    <span>Match</span>
-                    <span className="font-medium text-primary">
-                      {formatMatchPercentage(item.probabilityMatch)}
+                {/* Header: Match Score */}
+                <div className="px-4 pt-4 pb-2 flex justify-between items-center">
+                  <div className="flex items-center gap-1.5 bg-purple-50 px-2.5 py-1 rounded-full">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                    <span className="text-xs font-bold text-purple-700">
+                      {formatMatchPercentage(item.probabilityMatch)} Match
                     </span>
                   </div>
-                  <div className="mt-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={readonlyThumbs}
-                        onClick={() => !readonlyThumbs && handlePreferenceClick(item.id, true)}
-                        className={`p-2 rounded-full ${item.likedStatus === 'Liked'
-                          ? 'hover:bg-green-300'
-                          : (readonlyThumbs ? '' : 'hover:bg-green-200')
-                          }`}
-                        aria-label="Thumbs up"
-                        tabIndex={readonlyThumbs ? -1 : 0}
-                      >
-                        <ThumbsUp
-                          className={`w-5 h-5 ${readonlyThumbs ? '' : 'hover:text-green-500'} ${item.likedStatus === 'Liked' ? 'text-green-600' : 'text-gray-400'}`}
-                        />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={readonlyThumbs}
-                        onClick={() => !readonlyThumbs && handlePreferenceClick(item.id, false)}
-                        className={`p-2 rounded-full ${item.likedStatus === 'Disliked'
-                          ? 'hover:bg-red-300'
-                          : (readonlyThumbs ? '' : 'hover:bg-red-200')}`}
-                        aria-label="Thumbs down"
-                        tabIndex={readonlyThumbs ? -1 : 0}
-                      >
-                        <ThumbsDown
-                          className={`w-5 h-5 ${readonlyThumbs ? '' : 'hover:text-red-500'} ${item.likedStatus === 'Disliked' ? 'text-red-600' : 'text-gray-400'}`}
-                        />
-                      </button>
-                    </div>
-                    {onAddToProposal && (
-                      <button
-                        type="button"
-                        onClick={() => handleProposalToggle(item)}
-                        className={`p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-1 ${isInProposal
-                            ? 'bg-green-100 hover:bg-green-200 focus:ring-green-500'
-                            : 'bg-blue-100 hover:bg-blue-200 focus:ring-blue-500'
-                          }`}
-                        aria-label={isInProposal ? 'Remove from Proposal' : 'Add to Proposal'}
-                      >
-                        <FileText
-                          className={`w-5 h-5 ${isInProposal ? 'text-green-600' : 'text-blue-600'}`}
-                        />
-                      </button>
+                  {item.price !== undefined && (item.shouldDisplayPrice ?? true) && (
+                    <span className="text-xs font-semibold text-gray-900">
+                      ${item.price.toLocaleString()}
+                    </span>
+                  )}
+                </div>
+
+                {/* Image */}
+                <div className="relative aspect-[4/3] w-full bg-gray-100 mx-auto">
+                  <button
+                    type="button"
+                    className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none"
+                    onClick={() => {
+                      setSelectedArtwork(item);
+                      onArtworkClick?.(item);
+                    }}
+                    aria-label={`View details for ${item.title}`}
+                  >
+                    {item.filename ? (
+                      <img
+                        src={item.filename}
+                        alt={item.title}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-gray-400">No Image</div>
                     )}
+                  </button>
+
+                  {/* Proposal Badge */}
+                  {isInProposal && (
+                    <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm text-white text-xs font-medium px-2 py-0.5 rounded-full shadow-sm">
+                      In Proposal
+                    </div>
+                  )}
+                </div>
+
+                {/* Info */}
+                <div className="p-4 flex flex-col gap-1">
+                  <h3 className="font-bold text-lg text-gray-900 line-clamp-1" title={item.title}>
+                    {item.title}
+                  </h3>
+                  <p className="text-sm text-gray-500 line-clamp-1" title={item.artist}>
+                    {item.artist}
+                  </p>
+                </div>
+
+                {/* Actions Footer */}
+                <div className="mt-auto px-4 pb-4 pt-2 border-t border-gray-50 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={readonlyThumbs}
+                      onClick={() => !readonlyThumbs && handlePreferenceClick(item.id, true)}
+                      className={`p-2 rounded-full transition-colors ${item.likedStatus === 'Liked'
+                        ? 'bg-green-100 text-green-600'
+                        : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                        }`}
+                      aria-label="Thumbs up"
+                    >
+                      <ThumbsUp className="w-5 h-5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={readonlyThumbs}
+                      onClick={() => !readonlyThumbs && handlePreferenceClick(item.id, false)}
+                      className={`p-2 rounded-full transition-colors ${item.likedStatus === 'Disliked'
+                        ? 'bg-red-100 text-red-600'
+                        : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                        }`}
+                      aria-label="Thumbs down"
+                    >
+                      <ThumbsDown className="w-5 h-5" />
+                    </button>
                   </div>
+
+                  {onAddToProposal && (
+                    <button
+                      type="button"
+                      onClick={() => handleProposalToggle(item)}
+                      className={`p-2 rounded-full transition-colors ${isInProposal
+                        ? 'bg-blue-100 text-blue-600'
+                        : 'text-gray-400 hover:bg-gray-100 hover:text-blue-600'
+                        }`}
+                      aria-label={isInProposal ? 'Remove from Proposal' : 'Add to Proposal'}
+                    >
+                      <FileText className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
               </article>
             );
@@ -354,52 +365,50 @@ export const AISuggestionsPage = ({
                 />
               </div>
               <div className="flex-1 flex flex-col">
-                <h2 id="modal-title" className="text-2xl font-bold text-gray-900 mb-4">
-                  {selectedArtwork.title}
-                </h2>
-                {selectedArtwork.price !== undefined && (
-                  <div className="text-lg text-green-700 font-semibold mb-2">${selectedArtwork.price.toLocaleString()}</div>
-                )}
-                {selectedArtwork.artist && (
-                  <p className="text-lg text-gray-700 mb-2">
-                    <span className="font-semibold">Artist:</span> {selectedArtwork.artist}
-                  </p>
-                )}
-                {selectedArtwork.date && (
-                  <p className="text-lg text-gray-700 mb-2">
-                    <span className="font-semibold">Date:</span> {selectedArtwork.date}
-                  </p>
-                )}
-                {selectedArtwork.description && (
-                  <p className="text-sm text-gray-600 mb-4">{selectedArtwork.description}</p>
+                <h2 id="modal-title" className="text-2xl font-bold text-gray-900 mb-2">{selectedArtwork.title}</h2>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="text-sm text-gray-500">{selectedArtwork.artist}</div>
+                  {selectedArtwork.date && <div className="text-sm text-gray-400">• {selectedArtwork.date}</div>}
+                </div>
+
+                {selectedArtwork.price !== undefined && (selectedArtwork.shouldDisplayPrice ?? true) && (
+                  <div className="text-2xl text-green-700 font-semibold mb-4">${selectedArtwork.price.toLocaleString()}</div>
                 )}
 
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {selectedArtwork.classification && (
-                    <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
-                      {selectedArtwork.classification}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-4 mb-6 text-sm border-t border-b border-gray-100 py-4">
+                  <div>
+                    <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Medium</span>
+                    <span className="text-gray-900 font-medium">{selectedArtwork.medium || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Dimensions</span>
+                    <span className="text-gray-900 font-medium">
+                      {selectedArtwork.width || selectedArtwork.height
+                        ? `${selectedArtwork.width ?? '-'} × ${selectedArtwork.height ?? '-'} in`
+                        : '—'}
                     </span>
-                  )}
-                  {selectedArtwork.department && (
-                    <span className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">
-                      {selectedArtwork.department}
-                    </span>
-                  )}
-                  {selectedArtwork.country && (
-                    <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
-                      {selectedArtwork.country}
-                    </span>
-                  )}
-                  {selectedArtwork.tags &&
-                    selectedArtwork.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-3 py-1 bg-gray-100 text-gray-800 text-sm rounded-full"
-                      >
-                        {tag}
+                  </div>
+                  <div>
+                    <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Signature</span>
+                    <span className="text-gray-900 font-medium">{selectedArtwork.signature || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Date</span>
+                    <span className="text-gray-900 font-medium">{selectedArtwork.date || '—'}</span>
+                  </div>
+                </div>
+
+                {selectedArtwork.description && <p className="text-sm text-gray-600 mb-6 leading-relaxed">{selectedArtwork.description}</p>}
+
+                {selectedArtwork.tags && selectedArtwork.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {selectedArtwork.tags.map((t) => (
+                      <span key={t} className="px-2.5 py-0.5 bg-gray-50 text-gray-600 rounded text-xs font-medium border border-gray-200">
+                        {t}
                       </span>
                     ))}
-                </div>
+                  </div>
+                )}
 
                 <div className="mt-4 flex items-center justify-center gap-6">
                   <button

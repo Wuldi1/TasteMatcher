@@ -87,10 +87,10 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.environment }}" == "stg" ]; then
             echo "AZURE_WEBAPP_NAME=tastematcher-stg-api" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=0531979e-9645-4a62-a894-ecb44f04412b" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=${{ secrets.AZURE_SUBSCRIPTION_STG }}" >> $GITHUB_ENV
           elif [ "${{ github.event.inputs.environment }}" == "prd" ]; then
             echo "AZURE_WEBAPP_NAME=tastematcher-prd-api" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=your-prod-subscription-id" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=${{ secrets.AZURE_SUBSCRIPTION_PRD }}" >> $GITHUB_ENV
           else
             echo "AZURE_WEBAPP_NAME=tastematcher-dev-api" >> $GITHUB_ENV
             echo "AZURE_SUBSCRIPTION=${{ secrets.AZURE_SUBSCRIPTION_DEV }}" >> $GITHUB_ENV

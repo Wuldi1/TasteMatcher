@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, Role, Domain, DomainRequest, DomainRequestStatus } from '@tastematcher/common';
+import { User, Role, Domain, DomainRequest } from '@tastematcher/common';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiClient, ApiError } from '../../utils/api';
 import { Navigate } from 'react-router-dom';
 import './Management.css';
+import { Mail, Edit, Trash2 } from 'lucide-react';
 
 type TabType = 'users' | 'domains' | 'domain-requests';
 
@@ -22,30 +23,29 @@ export function Management() {
   const [selectedDomainId, setSelectedDomainId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Filter and sort state for users
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<string>('all');
   const [userStatusFilter, setUserStatusFilter] = useState<string>('all');
   const [userSortBy, setUserSortBy] = useState<'name' | 'email' | 'createdAt'>('createdAt');
   const [userSortOrder, setUserSortOrder] = useState<'asc' | 'desc'>('desc');
-  
+
   // Filter and sort state for domains
   const [domainSearchQuery, setDomainSearchQuery] = useState('');
   const [domainStatusFilter, setDomainStatusFilter] = useState<string>('all');
   const [domainSortBy, setDomainSortBy] = useState<'name' | 'adminEmail' | 'createdAt'>('createdAt');
   const [domainSortOrder, setDomainSortOrder] = useState<'asc' | 'desc'>('desc');
-  
+
   // Filter and sort state for domain requests
   const [requestSearchQuery, setRequestSearchQuery] = useState('');
-  const [requestStatusFilter, setRequestStatusFilter] = useState<string>('all');
   const [requestSortBy, setRequestSortBy] = useState<'name' | 'email' | 'createdAt'>('createdAt');
   const [requestSortOrder, setRequestSortOrder] = useState<'asc' | 'desc'>('desc');
-  
+
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingDomain, setEditingDomain] = useState<Domain | null>(null);
-  
+
   // Invite form state
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
@@ -135,7 +135,7 @@ export function Management() {
 
   const handleInvite = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!inviteName.trim() || !inviteEmail.trim()) {
       setInviteError('Name and email are required');
       return;
@@ -144,7 +144,7 @@ export function Management() {
     try {
       setIsInviting(true);
       setInviteError(null);
-      
+
       await apiClient.inviteUser({
         name: inviteName.trim(),
         email: inviteEmail.trim().toLowerCase(),
@@ -166,7 +166,7 @@ export function Management() {
 
   const handleCreateDomain = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!createDomainUserName.trim() || !createDomainEmail.trim() || !createDomainName.trim()) {
       setCreateDomainError('All fields are required');
       return;
@@ -175,7 +175,7 @@ export function Management() {
     try {
       setIsCreatingDomain(true);
       setCreateDomainError(null);
-      
+
       await apiClient.createDomainByAdmin({
         name: createDomainUserName.trim(),
         email: createDomainEmail.trim().toLowerCase(),
@@ -198,7 +198,7 @@ export function Management() {
 
   const handleEditUser = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!editingUser || !editName.trim()) {
       setEditError('Name is required');
       return;
@@ -207,7 +207,7 @@ export function Management() {
     try {
       setIsEditing(true);
       setEditError(null);
-      
+
       await apiClient.updateUser(editingUser.id, {
         name: editName.trim(),
         role: editRole,
@@ -225,7 +225,7 @@ export function Management() {
 
   const handleEditDomain = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!editingDomain || !editDomainName.trim()) {
       setEditDomainError('Domain name is required');
       return;
@@ -234,7 +234,7 @@ export function Management() {
     try {
       setIsEditingDomain(true);
       setEditDomainError(null);
-      
+
       await apiClient.updateDomain(editingDomain.id, {
         name: editDomainName.trim(),
       });
@@ -284,7 +284,7 @@ export function Management() {
         email: user.email,
         role: user.role,
       });
-      
+
       alert(`Invitation email resent to ${user.email}`);
     } catch (err) {
       console.error('Failed to resend invitation:', err);
@@ -318,122 +318,117 @@ export function Management() {
   // Filter and sort users
   const filteredAndSortedUsers = React.useMemo(() => {
     let filtered = [...users];
-    
+
     // Apply search filter
     if (userSearchQuery.trim()) {
       const query = userSearchQuery.toLowerCase();
-      filtered = filtered.filter(u => 
+      filtered = filtered.filter(u =>
         u.name.toLowerCase().includes(query) ||
         u.email.toLowerCase().includes(query)
       );
     }
-    
+
     // Apply role filter
     if (userRoleFilter !== 'all') {
       filtered = filtered.filter(u => u.role === userRoleFilter);
     }
-    
+
     // Apply status filter
     if (userStatusFilter !== 'all') {
       filtered = filtered.filter(u => u.status === userStatusFilter);
     }
-    
+
     // Apply sorting
     filtered.sort((a, b) => {
       let aValue: string | number = a[userSortBy];
       let bValue: string | number = b[userSortBy];
-      
+
       if (typeof aValue === 'string') {
         aValue = aValue.toLowerCase();
         bValue = (bValue as string).toLowerCase();
       }
-      
+
       if (userSortOrder === 'asc') {
         return aValue > bValue ? 1 : -1;
       } else {
         return aValue < bValue ? 1 : -1;
       }
     });
-    
+
     return filtered;
   }, [users, userSearchQuery, userRoleFilter, userStatusFilter, userSortBy, userSortOrder]);
 
   // Filter and sort domains
   const filteredAndSortedDomains = React.useMemo(() => {
     let filtered = [...domains];
-    
+
     // Apply search filter
     if (domainSearchQuery.trim()) {
       const query = domainSearchQuery.toLowerCase();
-      filtered = filtered.filter(d => 
+      filtered = filtered.filter(d =>
         d.name.toLowerCase().includes(query) ||
         d.adminEmail.toLowerCase().includes(query)
       );
     }
-    
+
     // Apply status filter
     if (domainStatusFilter !== 'all') {
       filtered = filtered.filter(d => (d.status || 'active') === domainStatusFilter);
     }
-    
+
     // Apply sorting
     filtered.sort((a, b) => {
       let aValue: string | number = a[domainSortBy];
       let bValue: string | number = b[domainSortBy];
-      
+
       if (typeof aValue === 'string') {
         aValue = aValue.toLowerCase();
         bValue = (bValue as string).toLowerCase();
       }
-      
+
       if (domainSortOrder === 'asc') {
         return aValue > bValue ? 1 : -1;
       } else {
         return aValue < bValue ? 1 : -1;
       }
     });
-    
+
     return filtered;
   }, [domains, domainSearchQuery, domainStatusFilter, domainSortBy, domainSortOrder]);
 
   // Filter and sort domain requests
   const filteredAndSortedRequests = React.useMemo(() => {
     let filtered = [...domainRequests];
-    
+
     // Apply search filter
     if (requestSearchQuery.trim()) {
       const query = requestSearchQuery.toLowerCase();
-      filtered = filtered.filter(r => 
+      filtered = filtered.filter(r =>
         r.name.toLowerCase().includes(query) ||
         r.email.toLowerCase().includes(query) ||
         r.proposedDomainName.toLowerCase().includes(query)
       );
     }
-    
-    // Apply status filter
-    if (requestStatusFilter !== 'all') {
-      filtered = filtered.filter(r => r.status === requestStatusFilter);
-    }
-    
+
     // Apply sorting
     filtered.sort((a, b) => {
       let aValue: string | number = a[requestSortBy];
       let bValue: string | number = b[requestSortBy];
-      
+
       if (typeof aValue === 'string') {
         aValue = aValue.toLowerCase();
         bValue = (bValue as string).toLowerCase();
       }
-      
+
       if (requestSortOrder === 'asc') {
         return aValue > bValue ? 1 : -1;
       } else {
         return aValue < bValue ? 1 : -1;
       }
     });
-    
+
     return filtered;
-  }, [domainRequests, requestSearchQuery, requestStatusFilter, requestSortBy, requestSortOrder]);
+  }, [domainRequests, requestSearchQuery, requestSortBy, requestSortOrder]);
 
   // Check authorization - AFTER all hooks
   if (!user || (user.role === 'customer')) {
@@ -478,15 +473,6 @@ export function Management() {
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
-  const getDomainRequestStatusBadge = (status: DomainRequestStatus) => {
-    const colors = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      approved: 'bg-green-100 text-green-800',
-      rejected: 'bg-red-100 text-red-800',
-    };
-    return colors[status] || 'bg-gray-100 text-gray-800';
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
@@ -497,31 +483,28 @@ export function Management() {
               <nav className="flex -mb-px overflow-x-auto">
                 <button
                   onClick={() => setActiveTab('domains')}
-                  className={`px-4 sm:px-6 py-3 sm:py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'domains'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                  className={`px-4 sm:px-6 py-3 sm:py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'domains'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
                 >
                   Domains
                 </button>
                 <button
                   onClick={() => setActiveTab('users')}
-                  className={`px-4 sm:px-6 py-3 sm:py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'users'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                  className={`px-4 sm:px-6 py-3 sm:py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'users'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
                 >
                   Users
                 </button>
                 <button
                   onClick={() => setActiveTab('domain-requests')}
-                  className={`px-4 sm:px-6 py-3 sm:py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'domain-requests'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                  className={`px-4 sm:px-6 py-3 sm:py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'domain-requests'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
                 >
                   Domain Requests
                 </button>
@@ -562,7 +545,7 @@ export function Management() {
                       </select>
                     </div>
                   )}
-                  
+
                   {/* User Filters */}
                   <div className="management-filters">
                     <div className="management-filter-group">
@@ -578,7 +561,7 @@ export function Management() {
                         className="management-filter-input"
                       />
                     </div>
-                    
+
                     <div className="management-filter-group">
                       <label htmlFor="user-role-filter" className="management-filter-label">
                         Role
@@ -596,7 +579,7 @@ export function Management() {
                         <option value="global_admin">Global Admin</option>
                       </select>
                     </div>
-                    
+
                     <div className="management-filter-group">
                       <label htmlFor="user-status-filter" className="management-filter-label">
                         Status
@@ -612,7 +595,7 @@ export function Management() {
                         <option value="active">Active</option>
                       </select>
                     </div>
-                    
+
                     <div className="management-filter-group">
                       <label htmlFor="user-sort" className="management-filter-label">
                         Sort By
@@ -693,14 +676,17 @@ export function Management() {
                                 {u.role !== 'domain_owner' && u.role !== 'global_admin' && u.id !== user.id && (
                                   <div className="flex justify-end gap-2">
                                     {u.status === 'pending_verification' && (
-                                      <button onClick={() => handleResendInvite(u)} className="text-green-600 hover:text-green-900" title="Resend invitation email">
+                                      <button onClick={() => handleResendInvite(u)} className="flex items-center gap-1 px-3 py-1.5 text-sm text-yellow-600 hover:bg-yellow-50 border border-yellow-200 rounded-lg transition-colors" title="Resend invitation email">
+                                        <Mail className="w-4 h-4" />
                                         Resend
                                       </button>
                                     )}
-                                    <button onClick={() => openEditUserModal(u)} className="text-blue-600 hover:text-blue-900">
+                                    <button onClick={() => openEditUserModal(u)} className="flex items-center gap-1 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 border border-blue-200 rounded-lg transition-colors">
+                                      <Edit className="w-4 h-4" />
                                       Edit
                                     </button>
-                                    <button onClick={() => handleDeleteUser(u.id, u.name)} className="text-red-600 hover:text-red-900">
+                                    <button onClick={() => handleDeleteUser(u.id, u.name)} className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-lg transition-colors">
+                                      <Trash2 className="w-4 h-4" />
                                       Delete
                                     </button>
                                   </div>
@@ -728,7 +714,7 @@ export function Management() {
                               <p className="text-sm text-gray-500 mt-1">{u.email}</p>
                             </div>
                           </div>
-                          
+
                           <div className="flex flex-wrap gap-2 mb-3">
                             <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleBadge(u.role)}`}>
                               {u.role}
@@ -745,23 +731,26 @@ export function Management() {
                           {u.role !== 'domain_owner' && u.role !== 'global_admin' && u.id !== user.id && (
                             <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-200">
                               {u.status === 'pending_verification' && (
-                                <button 
-                                  onClick={() => handleResendInvite(u)} 
-                                  className="flex-1 text-center px-3 py-2 text-sm text-green-600 hover:text-green-900 border border-green-300 rounded-lg"
+                                <button
+                                  onClick={() => handleResendInvite(u)}
+                                  className="flex-1 text-center px-3 py-2 text-sm text-yellow-600 hover:text-yellow-900 border border-yellow-300 rounded-lg flex items-center justify-center gap-1"
                                 >
+                                  <Mail className="w-4 h-4" />
                                   Resend
                                 </button>
                               )}
-                              <button 
-                                onClick={() => openEditUserModal(u)} 
-                                className="flex-1 text-center px-3 py-2 text-sm text-blue-600 hover:text-blue-900 border border-blue-300 rounded-lg"
+                              <button
+                                onClick={() => openEditUserModal(u)}
+                                className="flex-1 text-center px-3 py-2 text-sm text-blue-600 hover:text-blue-900 border border-blue-300 rounded-lg flex items-center justify-center gap-1"
                               >
+                                <Edit className="w-4 h-4" />
                                 Edit
                               </button>
-                              <button 
-                                onClick={() => handleDeleteUser(u.id, u.name)} 
-                                className="flex-1 text-center px-3 py-2 text-sm text-red-600 hover:text-red-900 border border-red-300 rounded-lg"
+                              <button
+                                onClick={() => handleDeleteUser(u.id, u.name)}
+                                className="flex-1 text-center px-3 py-2 text-sm text-red-600 hover:text-red-900 border border-red-300 rounded-lg flex items-center justify-center gap-1"
                               >
+                                <Trash2 className="w-4 h-4" />
                                 Delete
                               </button>
                             </div>
@@ -792,7 +781,7 @@ export function Management() {
                     + Create Domain
                   </button>
                 </div>
-                
+
                 {/* Domain Filters */}
                 <div className="management-filters">
                   <div className="management-filter-group">
@@ -808,7 +797,7 @@ export function Management() {
                       className="management-filter-input"
                     />
                   </div>
-                  
+
                   <div className="management-filter-group">
                     <label htmlFor="domain-status-filter" className="management-filter-label">
                       Status
@@ -824,7 +813,7 @@ export function Management() {
                       <option value="active">Active</option>
                     </select>
                   </div>
-                  
+
                   <div className="management-filter-group">
                     <label htmlFor="domain-sort" className="management-filter-label">
                       Sort By
@@ -895,14 +884,17 @@ export function Management() {
                               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <div className="flex justify-end gap-2">
                                   {d.status !== 'active' && (
-                                    <button onClick={() => handleResendDomainVerification(d)} className="text-green-600 hover:text-green-900" title="Resend verification email">
+                                    <button onClick={() => handleResendDomainVerification(d)} className="flex items-center gap-1 px-3 py-1.5 text-sm text-yellow-600 hover:bg-yellow-50 border border-yellow-200 rounded-lg transition-colors" title="Resend verification email">
+                                      <Mail className="w-4 h-4" />
                                       Resend
                                     </button>
                                   )}
-                                  <button onClick={() => openEditDomainModal(d)} className="text-blue-600 hover:text-blue-900">
+                                  <button onClick={() => openEditDomainModal(d)} className="flex items-center gap-1 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 border border-blue-200 rounded-lg transition-colors">
+                                    <Edit className="w-4 h-4" />
                                     Edit
                                   </button>
-                                  <button onClick={() => handleDeleteDomain(d.id, d.name)} className="text-red-600 hover:text-red-900">
+                                  <button onClick={() => handleDeleteDomain(d.id, d.name)} className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-lg transition-colors">
+                                    <Trash2 className="w-4 h-4" />
                                     Delete
                                   </button>
                                 </div>
@@ -929,7 +921,7 @@ export function Management() {
                               <p className="text-sm text-gray-500 mt-1">{d.adminEmail}</p>
                             </div>
                           </div>
-                          
+
                           <div className="flex flex-wrap gap-2 mb-3">
                             <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getDomainStatusBadge(d.status)}`}>
                               {d.status || 'active'}
@@ -942,23 +934,26 @@ export function Management() {
 
                           <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-200">
                             {d.status !== 'active' && (
-                              <button 
-                                onClick={() => handleResendDomainVerification(d)} 
-                                className="flex-1 text-center px-3 py-2 text-sm text-green-600 hover:text-green-900 border border-green-300 rounded-lg"
+                              <button
+                                onClick={() => handleResendDomainVerification(d)}
+                                className="flex-1 text-center px-3 py-2 text-sm text-green-600 hover:text-green-900 border border-green-300 rounded-lg flex items-center justify-center gap-1"
                               >
+                                <Mail className="w-4 h-4" />
                                 Resend
                               </button>
                             )}
-                            <button 
-                              onClick={() => openEditDomainModal(d)} 
-                              className="flex-1 text-center px-3 py-2 text-sm text-blue-600 hover:text-blue-900 border border-blue-300 rounded-lg"
+                            <button
+                              onClick={() => openEditDomainModal(d)}
+                              className="flex-1 text-center px-3 py-2 text-sm text-blue-600 hover:text-blue-900 border border-blue-300 rounded-lg flex items-center justify-center gap-1"
                             >
+                              <Edit className="w-4 h-4" />
                               Edit
                             </button>
-                            <button 
-                              onClick={() => handleDeleteDomain(d.id, d.name)} 
-                              className="flex-1 text-center px-3 py-2 text-sm text-red-600 hover:text-red-900 border border-red-300 rounded-lg"
+                            <button
+                              onClick={() => handleDeleteDomain(d.id, d.name)}
+                              className="flex-1 text-center px-3 py-2 text-sm text-red-600 hover:text-red-900 border border-red-300 rounded-lg flex items-center justify-center gap-1"
                             >
+                              <Trash2 className="w-4 h-4" />
                               Delete
                             </button>
                           </div>
@@ -982,7 +977,7 @@ export function Management() {
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
                   <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Domain Requests</h1>
                 </div>
-                
+
                 {/* Request Filters */}
                 <div className="management-filters">
                   <div className="management-filter-group">
@@ -998,24 +993,7 @@ export function Management() {
                       className="management-filter-input"
                     />
                   </div>
-                  
-                  <div className="management-filter-group">
-                    <label htmlFor="request-status-filter" className="management-filter-label">
-                      Status
-                    </label>
-                    <select
-                      id="request-status-filter"
-                      value={requestStatusFilter}
-                      onChange={(e) => setRequestStatusFilter(e.target.value)}
-                      className="management-filter-select"
-                    >
-                      <option value="all">All Statuses</option>
-                      <option value="pending">Pending</option>
-                      <option value="approved">Approved</option>
-                      <option value="rejected">Rejected</option>
-                    </select>
-                  </div>
-                  
+
                   <div className="management-filter-group">
                     <label htmlFor="request-sort" className="management-filter-label">
                       Sort By
@@ -1064,7 +1042,6 @@ export function Management() {
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Proposed Domain</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message</th>
                           </tr>
@@ -1080,11 +1057,6 @@ export function Management() {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm text-gray-900">{req.proposedDomainName}</div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getDomainRequestStatusBadge(req.status)}`}>
-                                  {req.status}
-                                </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 {formatDate(req.createdAt)}
@@ -1116,17 +1088,11 @@ export function Management() {
                               <p className="text-sm text-gray-500 mt-1">{req.email}</p>
                             </div>
                           </div>
-                          
+
                           <div className="space-y-2 mb-3">
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-medium text-gray-500">Proposed Domain:</span>
                               <span className="text-sm text-gray-900">{req.proposedDomainName}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-medium text-gray-500">Status:</span>
-                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getDomainRequestStatusBadge(req.status)}`}>
-                                {req.status}
-                              </span>
                             </div>
                           </div>
 
@@ -1162,7 +1128,7 @@ export function Management() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Create New Domain</h2>
-            
+
             <form onSubmit={handleCreateDomain} className="space-y-4">
               <div>
                 <label htmlFor="createDomainUserName" className="block text-sm font-medium text-gray-700 mb-2">Admin Name</label>
@@ -1242,7 +1208,7 @@ export function Management() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Invite New User</h2>
-            
+
             <form onSubmit={handleInvite} className="space-y-4">
               <div>
                 <label htmlFor="inviteName" className="block text-sm font-medium text-gray-700 mb-2">Name</label>
@@ -1323,7 +1289,7 @@ export function Management() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Edit User</h2>
-            
+
             <form onSubmit={handleEditUser} className="space-y-4">
               <div>
                 <label htmlFor="editName" className="block text-sm font-medium text-gray-700 mb-2">Name</label>
@@ -1386,7 +1352,7 @@ export function Management() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Edit Domain</h2>
-            
+
             <form onSubmit={handleEditDomain} className="space-y-4">
               <div>
                 <label htmlFor="editDomainName" className="block text-sm font-medium text-gray-700 mb-2">Domain Name</label>

@@ -12,7 +12,7 @@ async function bootstrap() {
   });
 
   // Global prefix is already 'api' in controller routes
-  // So don't set it here if your routes already include /api/
+  // So don't set it here if your routes already include /
   // app.setGlobalPrefix('api');
 
   // Validation pipe

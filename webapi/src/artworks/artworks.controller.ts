@@ -20,18 +20,17 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { ArtworksService } from './artworks.service';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
-import { Artwork, PaginatedResponse, ArtworkStats, UntastedArtworksResponse, QueryParams, GlobalArtworksDomainId } from '@tastematcher/common';
-import { ArtworkPreference } from '@tastematcher/common';
+import { Artwork, ArtworkPreference, PaginatedResponse, ArtworkStats, UntastedArtworksResponse, QueryParams, GlobalArtworksDomainId, cleanupArtworkBeforeResponseToClient } from '@tastematcher/common';
 import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
 
 @ApiTags('artworks')
-@Controller('api/domains/:domainId/artworks')
+@Controller('domains/:domainId/artworks')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class ArtworksController {
-  constructor(private readonly artworksService: ArtworksService) {}
+  constructor(private readonly artworksService: ArtworksService) { }
 
   @Get('stats')
   @ApiOperation({ summary: 'Get aggregated artwork statistics for domain' })
@@ -65,7 +64,8 @@ export class ArtworksController {
       throw new ForbiddenException('Customers cannot request suggestions for other users.');
     }
 
-    return this.artworksService.getRecommendationsForUser(domainId, req.user, targetUserId);
+    const recommendedArtworks = await this.artworksService.getRecommendationsForUser(domainId, req.user, targetUserId);
+    return recommendedArtworks.map(artwork => cleanupArtworkBeforeResponseToClient(artwork, req.user.role) as Artwork);
   }
 
   @Get()
@@ -91,9 +91,9 @@ export class ArtworksController {
       continuationToken: continuationToken || undefined,
       sort: sortBy
         ? {
-            field: sortBy as keyof Artwork,
-            order: sortOrder || 'desc',
-          }
+          field: sortBy as keyof Artwork,
+          order: sortOrder || 'desc',
+        }
         : undefined,
       filters: filterBy ? [this.parseFilterBy(filterBy)] : undefined,
     };
@@ -118,7 +118,11 @@ export class ArtworksController {
       requesterId = undefined;
     }
 
-    return this.artworksService.findAll(domainId, queryParams, requesterId);
+    const artworks = await this.artworksService.findAll(domainId, queryParams, requesterId);
+    return {
+      ...artworks,
+      items: artworks.items.map(artwork => cleanupArtworkBeforeResponseToClient(artwork, req.user.role) as Artwork),
+    };
   }
 
   /**
@@ -151,7 +155,8 @@ export class ArtworksController {
     if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
-    return this.artworksService.findOne(domainId, artworkId);
+    const artwork = await this.artworksService.findOne(domainId, artworkId);
+    return cleanupArtworkBeforeResponseToClient(artwork, req.user.role) as Artwork;
   }
 
   @Patch(':artworkId')
@@ -167,7 +172,8 @@ export class ArtworksController {
     if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
-    return this.artworksService.update(domainId, artworkId, updateDto);
+    const updatedArtwork = await this.artworksService.update(domainId, artworkId, updateDto);
+    return cleanupArtworkBeforeResponseToClient(updatedArtwork, req.user.role) as Artwork;
   }
 
   @Delete(':artworkId')
@@ -183,7 +189,7 @@ export class ArtworksController {
     if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
-    return this.artworksService.remove(domainId, artworkId);
+    await this.artworksService.remove(domainId, artworkId);
   }
 
   @Get('untasted/:userId')
@@ -199,7 +205,11 @@ export class ArtworksController {
       throw new ForbiddenException('You are not authorized to perform this action.');
     }
     // we're using GlobalArtworksDomainId for customers
-    return this.artworksService.getUntastedArtworks(GlobalArtworksDomainId, userId, limit || 20);
+    const untastedArtworks = await this.artworksService.getUntastedArtworks(GlobalArtworksDomainId, userId, limit || 20);
+    return {
+      ...untastedArtworks,
+      artworks: untastedArtworks.artworks.map(artwork => cleanupArtworkBeforeResponseToClient(artwork, req.user.role) as Artwork),
+    };
   }
 
   @Post('preferences/:userId')

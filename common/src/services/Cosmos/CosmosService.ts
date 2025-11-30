@@ -94,9 +94,10 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Convenience getter for the Domains container.
+   * Mapped to 'Core' container.
    */
   async getDomainsContainer(): Promise<Container> {
-    return this.getContainer('Domains');
+    return this.getContainer('Core');
   }
 
   /**
@@ -108,9 +109,10 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Convenience getter for the Users container.
+   * Mapped to 'Core' container.
    */
   async getUsersContainer(): Promise<Container> {
-    return this.getContainer('Users');
+    return this.getContainer('Core');
   }
 
   async getUser(domainId: string, userId: string): Promise<User> {

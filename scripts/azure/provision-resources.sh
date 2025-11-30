@@ -17,9 +17,13 @@ fi
 
 # Set subscription and location based on environment
 if [ "$ENV" = "stg" ]; then
-  SUBSCRIPTION_ID="0531979e-9645-4a62-a894-ecb44f04412b"
-  LOCATION="eastus"
-  COMPUTER_VISION_LOCATION="eastus"
+  SUBSCRIPTION_ID="e105e38a-7820-4c7e-b1da-de05227d6355"
+  LOCATION="centralus"
+  COMPUTER_VISION_LOCATION="centralus"
+elif [ "$ENV" = "prd" ]; then
+  SUBSCRIPTION_ID="e105e38a-7820-4c7e-b1da-de05227d6355"
+  LOCATION="centralus"
+  COMPUTER_VISION_LOCATION="centralus"
 else
   SUBSCRIPTION_ID="e105e38a-7820-4c7e-b1da-de05227d6355"
 fi
@@ -72,14 +76,18 @@ az group create --name "$RG_NAME" --location "$LOCATION" -o none
 
 # Create Storage Account (StorageV2)
 echo "Creating storage account $STORAGE_ACCOUNT_NAME..."
-az storage account create \
-  --name "$STORAGE_ACCOUNT_NAME" \
-  --resource-group "$RG_NAME" \
-  --location "$LOCATION" \
-  --sku Standard_LRS \
-  --kind StorageV2 \
-  --access-tier Hot \
-  -o none
+if az storage account show --name "$STORAGE_ACCOUNT_NAME" --resource-group "$RG_NAME" >/dev/null 2>&1; then
+  echo "Storage account $STORAGE_ACCOUNT_NAME already exists. Skipping creation."
+else
+  az storage account create \
+    --name "$STORAGE_ACCOUNT_NAME" \
+    --resource-group "$RG_NAME" \
+    --location "$LOCATION" \
+    --sku Standard_LRS \
+    --kind StorageV2 \
+    --access-tier Hot \
+    -o none
+fi
 
 # Get storage account key and endpoint
 STORAGE_KEY=$(az storage account keys list --resource-group "$RG_NAME" --account-name "$STORAGE_ACCOUNT_NAME" --query "[0].value" -o tsv)
@@ -160,15 +168,16 @@ else
     # Create Cosmos DB containers with appropriate partition keys
     echo "Creating Cosmos DB containers..."
 
-    # Domains container - partition by /adminEmail for domain isolation
+    # Core container - Merged Domains and Users (and potentially Artworks/Proposals)
+    # Partition by /domainId for multi-tenant isolation
     az cosmosdb sql container create \
       --account-name "$COSMOS_NAME" \
       --resource-group "$RG_NAME" \
       --database-name "$COSMOS_DATABASE" \
-      --name "Domains" \
-      --partition-key-path "/adminEmail" \
+      --name "Core" \
+      --partition-key-path "/domainId" \
       --throughput 400 \
-      -o none || echo "Domains container already exists or creation failed - continuing..."
+      -o none || echo "Core container already exists or creation failed - continuing..."
 
     # DomainRequests container - partition by /email for request isolation
     az cosmosdb sql container create \
@@ -189,16 +198,6 @@ else
       --partition-key-path "/domainId" \
       --throughput 400 \
       -o none || echo "Artworks container already exists or creation failed - continuing..."
-
-    # Users container - partition by /domainId for multi-tenant isolation
-    az cosmosdb sql container create \
-      --account-name "$COSMOS_NAME" \
-      --resource-group "$RG_NAME" \
-      --database-name "$COSMOS_DATABASE" \
-      --name "Users" \
-      --partition-key-path "/domainId" \
-      --throughput 400 \
-      -o none || echo "Users container already exists or creation failed - continuing..."
 
     # ArtworkPreferences container - partition by /userId for user-specific preferences
     az cosmosdb sql container create \
@@ -229,11 +228,12 @@ COSMOS_DB_ENDPOINT="https://${COSMOS_NAME}.documents.azure.com:443/"
 # Build DATABASE_URL for Prisma Cosmos DB connector
 DATABASE_URL="mongodb://${COSMOS_NAME}:${COSMOS_PRIMARY_KEY}@${COSMOS_NAME}.mongo.cosmos.azure.com:10255/${COSMOS_DATABASE}?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@${COSMOS_NAME}@"
 
-# TODO : Make it a script that will create it securely
-JWT_SECRET="TXR1JkKj8zqz2qP6N2uQ0NraE4GgVfVdCuzkR3VxKQZ1CjSx2zgo8/J7Y4h9v1J7"
+# Generate a secure random JWT secret
+JWT_SECRET=$(openssl rand -base64 32)
+echo "Generated new JWT Secret."
 
 # Function to setup Cosmos DB data
-setup_cosmos_data() {
+setup_cosmos_admin_data() {
   echo "Setting up initial Cosmos DB data..."
   
   # Create a default admin user using Azure CLI
@@ -254,7 +254,7 @@ EOF
 }
 
 # Remove old PostgreSQL functions and replace with Cosmos DB setup
-setup_cosmos_data
+setup_cosmos_admin_data
 
 # Register Microsoft.CognitiveServices provider
 echo "registering Microsoft.CognitiveServices provider..."
@@ -276,6 +276,9 @@ az search service create \
 SEARCH_KEY=$(az search admin-key show --service-name "$SEARCH_NAME" --resource-group "$RG_NAME" --query primaryKey -o tsv)
 
 # Create Azure Cognitive Search index
+SEARCH_ENDPOINT="https://${SEARCH_NAME}.search.windows.net"
+INDEX_NAME="artworks-index"
+
 echo "Creating Azure Cognitive Search index: $INDEX_NAME..."
 INDEX_SCHEMA=$(cat <<'EOF'
 {
@@ -490,7 +493,7 @@ if az appservice plan show --name "$WEB_APP_PLAN" --resource-group "$RG_NAME" >/
   echo "App Service plan $WEB_APP_PLAN already exists. Skipping creation."
 else
   # Determine SKU based on environment
-  if [ "$ENV" = "prod" ]; then
+  if [ "$ENV" = "prd" ]; then
     WEB_APP_SKU="P1V3"  # Production: Premium V3 tier
   else
     WEB_APP_SKU="P0V3"    # Dev/Staging: Basic tier
@@ -736,20 +739,20 @@ az webapp config appsettings set \
 # ============================================
 # Configure deployment slots for production
 # ============================================
-if [ "$ENV" = "prod" ]; then
-  echo "Creating staging slot for Backend API (production environment)..."
+if [ "$ENV" = "prd" ]; then
+  echo "Creating prd slot for Backend API (production environment)..."
   az webapp deployment slot create \
     --resource-group "$RG_NAME" \
     --name "$WEBAPP_API_NAME" \
-    --slot staging \
-    -o none || echo "Staging slot may already exist - continuing..."
+    --slot prd \
+    -o none || echo "prd slot may already exist - continuing..."
   
-  echo "Creating staging slot for Frontend (production environment)..."
+  echo "Creating prd slot for Frontend (production environment)..."
   az webapp deployment slot create \
     --resource-group "$RG_NAME" \
     --name "$WEBAPP_FRONTEND_NAME" \
-    --slot staging \
-    -o none || echo "Staging slot may already exist - continuing..."
+    --slot prd \
+    -o none || echo "prd slot may already exist - continuing..."
 fi
 
 # ============================================
@@ -760,6 +763,21 @@ SP_NAME="tastematcher-${ENV}-sp"
 
 # Check if SP already exists
 SP_APP_ID=$(az ad sp list --display-name "$SP_NAME" --query "[0].appId" -o tsv 2>/dev/null || echo "")
+
+# Wait for SP to propagate in Azure AD
+echo "Waiting for SP propagation..."
+sleep 30
+
+  echo "Creating new service principal: $SP_NAME"
+  SP_JSON=$(az ad sp create-for-rbac \
+    --name "$SP_NAME" \
+    --role "Contributor" \
+    --scopes "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/$RG_NAME" \
+    -o json)
+  
+  SP_APP_ID=$(echo "$SP_JSON" | jq -r '.appId')
+  SP_PASSWORD=$(echo "$SP_JSON" | jq -r '.password')
+  SP_TENANT=$(echo "$SP_JSON" | jq -r '.tenant')
 
 if [ -z "$SP_APP_ID" ]; then
   echo "Creating new service principal: $SP_NAME"

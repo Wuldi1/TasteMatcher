@@ -24,7 +24,7 @@ import { Roles } from '../auth/utils/roles.decorator';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
 
 @ApiTags('domains')
-@Controller('api/domains')
+@Controller('domains')
 export class DomainsController {
   private readonly logger = new Logger(DomainsController.name);
 
@@ -37,7 +37,7 @@ export class DomainsController {
     @Request() req: AuthenticatedRequest,
     @Param('domainId') domainId: string,
   ): Promise<Domain> {
-    this.logger.debug({ route: 'GET /api/domains/:domainId', domainId, userId: req.user.id });
+    this.logger.debug({ route: 'GET /domains/:domainId', domainId, userId: req.user.id });
     if (req.user.domainId !== domainId) {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
