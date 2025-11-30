@@ -87,12 +87,15 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.environment }}" == "stg" ]; then
             echo "AZURE_WEBAPP_NAME=tastematcher-stg-api" >> $GITHUB_ENV
+            echo "AZURE_RESOURCE_GROUP=tastematcher-stg-rg" >> $GITHUB_ENV
             echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
           elif [ "${{ github.event.inputs.environment }}" == "prd" ]; then
             echo "AZURE_WEBAPP_NAME=tastematcher-prd-api" >> $GITHUB_ENV
+            echo "AZURE_RESOURCE_GROUP=tastematcher-prd-rg" >> $GITHUB_ENV
             echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
           else
             echo "AZURE_WEBAPP_NAME=tastematcher-dev-api" >> $GITHUB_ENV
+            echo "AZURE_RESOURCE_GROUP=tastematcher-dev-rg" >> $GITHUB_ENV
             echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
           fi
 
@@ -110,6 +113,7 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
           package: webapi-build.zip
           startup-command: 'npm start'
 
