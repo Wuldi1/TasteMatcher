@@ -109,12 +109,12 @@ async function main() {
             "Select environment:",
             [
                 { label: "Dev", value: "dev" },
-                { label: "Prod", value: "prod" },
+                { label: "Prod", value: "prd" },
             ],
             1
         );
         const apiBaseUrl =
-            env === "prod"
+            env === "prd"
                 ? process.env.API_BASE_URL_PROD || "https://tastematcher.art"
                 : process.env.API_BASE_URL_DEV || "http://localhost:8080";
 

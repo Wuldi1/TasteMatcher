@@ -194,9 +194,9 @@ az functionapp config appsettings set \
   --name tastematcher-functions \
   --resource-group tastematcher-rg \
   --settings \
-    AZURE_SEARCH_ENDPOINT="https://prod-search.search.windows.net" \
+    AZURE_SEARCH_ENDPOINT="https://prd-search.search.windows.net" \
     AZURE_SEARCH_ADMIN_KEY="@Microsoft.KeyVault(...)" \
-    AZURE_AI_VISION_ENDPOINT="https://prod-vision.cognitiveservices.azure.com/" \
+    AZURE_AI_VISION_ENDPOINT="https://prd-vision.cognitiveservices.azure.com/" \
     AZURE_AI_VISION_KEY="@Microsoft.KeyVault(...)" \
     LOG_LEVEL="info"
 ```

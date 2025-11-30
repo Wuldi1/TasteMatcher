@@ -20,7 +20,7 @@ if [ "$ENV" = "stg" ]; then
   SUBSCRIPTION_ID="e105e38a-7820-4c7e-b1da-de05227d6355"
   LOCATION="centralus"
   COMPUTER_VISION_LOCATION="centralus"
-elif [ "$ENV" = "prod" ]; then
+elif [ "$ENV" = "prd" ]; then
   SUBSCRIPTION_ID="e105e38a-7820-4c7e-b1da-de05227d6355"
   LOCATION="centralus"
   COMPUTER_VISION_LOCATION="centralus"
@@ -493,7 +493,7 @@ if az appservice plan show --name "$WEB_APP_PLAN" --resource-group "$RG_NAME" >/
   echo "App Service plan $WEB_APP_PLAN already exists. Skipping creation."
 else
   # Determine SKU based on environment
-  if [ "$ENV" = "prod" ]; then
+  if [ "$ENV" = "prd" ]; then
     WEB_APP_SKU="P1V3"  # Production: Premium V3 tier
   else
     WEB_APP_SKU="P0V3"    # Dev/Staging: Basic tier
@@ -739,20 +739,20 @@ az webapp config appsettings set \
 # ============================================
 # Configure deployment slots for production
 # ============================================
-if [ "$ENV" = "prod" ]; then
-  echo "Creating prod slot for Backend API (production environment)..."
+if [ "$ENV" = "prd" ]; then
+  echo "Creating prd slot for Backend API (production environment)..."
   az webapp deployment slot create \
     --resource-group "$RG_NAME" \
     --name "$WEBAPP_API_NAME" \
-    --slot prod \
-    -o none || echo "prod slot may already exist - continuing..."
+    --slot prd \
+    -o none || echo "prd slot may already exist - continuing..."
   
-  echo "Creating prod slot for Frontend (production environment)..."
+  echo "Creating prd slot for Frontend (production environment)..."
   az webapp deployment slot create \
     --resource-group "$RG_NAME" \
     --name "$WEBAPP_FRONTEND_NAME" \
-    --slot prod \
-    -o none || echo "prod slot may already exist - continuing..."
+    --slot prd \
+    -o none || echo "prd slot may already exist - continuing..."
 fi
 
 # ============================================
@@ -957,7 +957,7 @@ echo " 2. Deploy frontend code to $WEBAPP_FRONTEND_NAME using Azure CLI or GitHu
 echo " 3. Create the Cognitive Search index using scripts/azure/create-search-index.sh"
 echo " 4. Deploy your Azure Function code to $FUNCAPP_NAME"
 echo " 5. Configure Computer Vision for image vectorization in your Functions app"
-echo " 6. Use .env.${ENV} in your backend for local testing (but prefer Key Vault in prod)"
+echo " 6. Use .env.${ENV} in your backend for local testing (but prefer Key Vault in prd)"
 echo " 7. Set up GitHub Actions workflows for CI/CD deployment"
 echo ""
 echo "Health check URLs:"

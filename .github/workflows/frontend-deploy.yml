@@ -18,7 +18,7 @@ on:
         options:
           - dev
           - stg
-          - prod
+          - prd
 
 env:
   NODE_VERSION: '22.x'
@@ -28,7 +28,7 @@ env:
   # Define API URLs for different environments
   API_URL_DEV: 'https://tastematcher-dev-api.azurewebsites.net'
   API_URL_STG: 'https://tastematcher-stg-api.azurewebsites.net'
-  API_URL_PROD: 'https://tastematcher-prod-api.azurewebsites.net'
+  API_URL_PRD: 'https://tastematcher-prd-api.azurewebsites.net'
 
 jobs:
   build-pack:
@@ -59,8 +59,8 @@ jobs:
           ENV_NAME="${{ github.event.inputs.environment || 'dev' }}"
           if [ "$ENV_NAME" == "stg" ]; then
             echo "VITE_API_BASE_URL=${{ env.API_URL_STG }}" >> $GITHUB_ENV
-          elif [ "$ENV_NAME" == "prod" ]; then
-            echo "VITE_API_BASE_URL=${{ env.API_URL_PROD }}" >> $GITHUB_ENV
+          elif [ "$ENV_NAME" == "prd" ]; then
+            echo "VITE_API_BASE_URL=${{ env.API_URL_PRD }}" >> $GITHUB_ENV
           else
             echo "VITE_API_BASE_URL=${{ env.API_URL_DEV }}" >> $GITHUB_ENV
           fi
@@ -83,7 +83,7 @@ jobs:
     needs: build-pack
     environment:
       name: ${{ github.event.inputs.environment || 'dev' }}
-      url: ${{ github.event.inputs.environment == 'stg' && 'https://tastematcher-stg-web.azurewebsites.net' || github.event.inputs.environment == 'prod' && 'https://tastematcher-prod-web.azurewebsites.net' || 'https://tastematcher-dev-web.azurewebsites.net' }}
+      url: ${{ github.event.inputs.environment == 'stg' && 'https://tastematcher-stg-web.azurewebsites.net' || github.event.inputs.environment == 'prd' && 'https://tastematcher-prd-web.azurewebsites.net' || 'https://tastematcher-dev-web.azurewebsites.net' }}
 
     steps:
       - name: Set Environment Variables
@@ -91,8 +91,8 @@ jobs:
           if [ "${{ github.event.inputs.environment }}" == "stg" ]; then
             echo "AZURE_WEBAPP_NAME=tastematcher-stg-web" >> $GITHUB_ENV
             echo "AZURE_SUBSCRIPTION=${{ secrets.AZURE_SUBSCRIPTION_STG }}" >> $GITHUB_ENV
-          elif [ "${{ github.event.inputs.environment }}" == "prod" ]; then
-            echo "AZURE_WEBAPP_NAME=tastematcher-prod-web" >> $GITHUB_ENV
+          elif [ "${{ github.event.inputs.environment }}" == "prd" ]; then
+            echo "AZURE_WEBAPP_NAME=tastematcher-prd-web" >> $GITHUB_ENV
             echo "AZURE_SUBSCRIPTION=${{ secrets.AZURE_SUBSCRIPTION_PROD }}" >> $GITHUB_ENV
           else
             echo "AZURE_WEBAPP_NAME=tastematcher-dev-web" >> $GITHUB_ENV
@@ -137,7 +137,7 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          creds: ${{ github.event.inputs.environment == 'stg' && secrets.AZURE_CREDENTIALS_STG || github.event.inputs.environment == 'prod' && secrets.AZURE_CREDENTIALS_PROD || secrets.AZURE_CREDENTIALS_DEV }}
+          creds: ${{ github.event.inputs.environment == 'stg' && secrets.AZURE_CREDENTIALS_STG || github.event.inputs.environment == 'prd' && secrets.AZURE_CREDENTIALS_PROD || secrets.AZURE_CREDENTIALS_DEV }}
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3

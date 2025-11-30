@@ -235,7 +235,7 @@ When generating code, **simulate a senior engineer**:
 ./scripts/azure/deploy-functions.sh dev
 
 # Deploy to production
-./scripts/azure/deploy-functions.sh prod
+./scripts/azure/deploy-functions.sh prd
 ```
 
 ### Configure Function App Settings
