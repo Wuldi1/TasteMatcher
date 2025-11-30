@@ -141,7 +141,7 @@ export class AuthService {
         updatedAt: Date.now(),
       };
 
-      await domainsContainer.item(domain.id, domain.adminEmail).replace(updatedDomain);
+      await domainsContainer.item(domain.id, domain.domainId).replace(updatedDomain);
     }
 
     const token = this.generateUserToken(updatedUser);

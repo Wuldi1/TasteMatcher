@@ -49,8 +49,8 @@ class BaseApiClient {
 
   constructor() {
     // this.baseURL = process.env.REACT_APP_API_URL!;
-    this.baseURL = 'https://tastematcher-dev-api.azurewebsites.net';
-    // this.baseURL = 'https://api.tastematcher.art';
+    // this.baseURL = 'https://tastematcher-dev-api.azurewebsites.net';
+    this.baseURL = 'https://api.tastematcher.art';
     this.loadAuthToken();
   }
 

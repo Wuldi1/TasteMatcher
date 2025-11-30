@@ -20,7 +20,7 @@ if [ "$ENV" = "stg" ]; then
   SUBSCRIPTION_ID="e105e38a-7820-4c7e-b1da-de05227d6355"
   LOCATION="centralus"
   COMPUTER_VISION_LOCATION="centralus"
-elif [ "$ENV" = "prd" ]; then
+elif [ "$ENV" = "prod" ]; then
   SUBSCRIPTION_ID="e105e38a-7820-4c7e-b1da-de05227d6355"
   LOCATION="centralus"
   COMPUTER_VISION_LOCATION="centralus"
@@ -493,7 +493,7 @@ if az appservice plan show --name "$WEB_APP_PLAN" --resource-group "$RG_NAME" >/
   echo "App Service plan $WEB_APP_PLAN already exists. Skipping creation."
 else
   # Determine SKU based on environment
-  if [ "$ENV" = "prd" ]; then
+  if [ "$ENV" = "prod" ]; then
     WEB_APP_SKU="P1V3"  # Production: Premium V3 tier
   else
     WEB_APP_SKU="P0V3"    # Dev/Staging: Basic tier
@@ -739,20 +739,20 @@ az webapp config appsettings set \
 # ============================================
 # Configure deployment slots for production
 # ============================================
-if [ "$ENV" = "prd" ]; then
-  echo "Creating prd slot for Backend API (production environment)..."
+if [ "$ENV" = "prod" ]; then
+  echo "Creating prod slot for Backend API (production environment)..."
   az webapp deployment slot create \
     --resource-group "$RG_NAME" \
     --name "$WEBAPP_API_NAME" \
-    --slot prd \
-    -o none || echo "prd slot may already exist - continuing..."
+    --slot prod \
+    -o none || echo "prod slot may already exist - continuing..."
   
-  echo "Creating prd slot for Frontend (production environment)..."
+  echo "Creating prod slot for Frontend (production environment)..."
   az webapp deployment slot create \
     --resource-group "$RG_NAME" \
     --name "$WEBAPP_FRONTEND_NAME" \
-    --slot prd \
-    -o none || echo "prd slot may already exist - continuing..."
+    --slot prod \
+    -o none || echo "prod slot may already exist - continuing..."
 fi
 
 # ============================================
