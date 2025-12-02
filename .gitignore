@@ -38,3 +38,9 @@ functions-deploy.zip
 
 # Azurite
 azurite/
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.prd
