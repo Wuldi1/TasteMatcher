@@ -52,10 +52,10 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   async createDomainForTesting(@Body() dto: CreateDomainRequestDto): Promise<void> {
     // Add environment check - only allow in development
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('This endpoint is disabled in production');
+    if (process.env.NODE_ENV === 'development') {
+      await this.domainsService.createDomainWithAdmin(dto);
     }
 
-    await this.domainsService.createDomainWithAdmin(dto);
+    throw new Error('This endpoint is disabled in production');
   }
 }

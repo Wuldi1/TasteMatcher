@@ -44,7 +44,7 @@ private readonly blobService: BlobService;
 
     // Check Cosmos DB
     try {
-      const container = await this.cosmosService.getContainer('Domains');
+      const container = await this.cosmosService.getContainer('Core');
       await container.read();
       checks.database = 'ok';
     } catch (_) {
