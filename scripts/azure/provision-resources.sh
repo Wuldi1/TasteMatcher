@@ -540,6 +540,10 @@ az webapp config set \
   --http20-enabled true \
   -o none
 
+# Enforce HTTPS for Backend API
+echo "Enforcing HTTPS for Backend API..."
+az webapp update --resource-group "$RG_NAME" --name "$WEBAPP_API_NAME" --https-only true -o none
+
 # Enable managed identity for backend API
 echo "Enabling managed identity for Backend API Web App..."
 az webapp identity assign \
@@ -676,6 +680,10 @@ az webapp config set \
   --ftps-state Disabled \
   --http20-enabled true \
   -o none
+
+# Enforce HTTPS for Frontend Web App
+echo "Enforcing HTTPS for Frontend Web App..."
+az webapp update --resource-group "$RG_NAME" --name "$WEBAPP_FRONTEND_NAME" --https-only true -o none
 
 # Configure application settings for frontend
 echo "Setting application settings for Frontend Web App..."

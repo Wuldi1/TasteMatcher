@@ -18,7 +18,7 @@ export class AuthService {
   constructor(private readonly emailService: EmailService) {
     this.cosmosService = new CosmosService();
     this.jwtSecret = process.env.JWT_SECRET ?? '';
-    this.isPrd = process.env.NODE_ENV === 'prod';
+    this.isPrd = process.env.NODE_ENV === 'prd';
 
     if (!this.jwtSecret) {
       throw new Error('JWT_SECRET environment variable is required');

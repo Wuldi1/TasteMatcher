@@ -31,7 +31,7 @@ export class EmailService {
   constructor() {
     this.connectionString = process.env.AZURE_COMMUNICATION_CONNECTION_STRING;
     this.senderAddress = process.env.AZURE_EMAIL_SENDER;
-    this.isPrd = process.env.NODE_ENV === 'prod';
+    this.isPrd = process.env.NODE_ENV === 'prd';
 
     if (!this.connectionString || !this.senderAddress) {
       this.logger.warn(
