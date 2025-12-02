@@ -49,8 +49,8 @@ importers:
   common:
     dependencies:
       '@azure/cosmos':
-        specifier: ^4.7.0
-        version: 4.7.0
+        specifier: ^4.9.0
+        version: 4.9.0
       '@azure/identity':
         specifier: ^4.13.0
         version: 4.13.0
@@ -186,8 +186,8 @@ importers:
         specifier: ^1.9.0
         version: 1.10.1
       '@azure/cosmos':
-        specifier: ^4.7.0
-        version: 4.7.0
+        specifier: ^4.9.0
+        version: 4.9.0
       '@azure/functions':
         specifier: ^4.8.0
         version: 4.8.0
@@ -265,8 +265,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       '@azure/cosmos':
-        specifier: ^4.7.0
-        version: 4.7.0
+        specifier: ^4.9.0
+        version: 4.9.0
       '@azure/identity':
         specifier: ^4.13.0
         version: 4.13.0
@@ -592,8 +592,8 @@ packages:
     resolution: {integrity: sha512-D/sdlJBMJfx7gqoj66PKVmhDDaU6TKA49ptcolxdas29X7AfvLTmfAGLjAcIMBK7UZ2o4lygHIqVckOlQU3xWw==}
     engines: {node: '>=20.0.0'}
 
-  '@azure/cosmos@4.7.0':
-    resolution: {integrity: sha512-a8OV7E41u/ZDaaaDAFdqTTiJ7c82jZc/+ot3XzNCIIilR25NBB+1ixzWQOAgP8SHRUIKfaUl6wAPdTuiG9I66A==}
+  '@azure/cosmos@4.9.0':
+    resolution: {integrity: sha512-3LzLibuVgbhWEv6B9Hz7bMn0KAKKlr3Rn9xPulZ6Xx69GuwgWmQ4qmkrfYBBBFCJDQXoVAvVGBYkt9VlW8hmOg==}
     engines: {node: '>=20.0.0'}
 
   '@azure/functions@4.8.0':
@@ -9658,7 +9658,7 @@ snapshots:
       fast-xml-parser: 5.3.0
       tslib: 2.8.1
 
-  '@azure/cosmos@4.7.0':
+  '@azure/cosmos@4.9.0':
     dependencies:
       '@azure/abort-controller': 2.1.2
       '@azure/core-auth': 1.10.1
