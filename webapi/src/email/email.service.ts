@@ -26,10 +26,12 @@ export class EmailService {
   private readonly connectionString?: string;
   private readonly senderAddress?: string;
   private readonly emailClient?: EmailClient;
+  private readonly isPrd?: boolean;
 
   constructor() {
     this.connectionString = process.env.AZURE_COMMUNICATION_CONNECTION_STRING;
     this.senderAddress = process.env.AZURE_EMAIL_SENDER;
+    this.isPrd = process.env.NODE_ENV === 'prod';
 
     if (!this.connectionString || !this.senderAddress) {
       this.logger.warn(
@@ -97,9 +99,7 @@ export class EmailService {
     };
 
     try {
-      // TODO : enable actual email sending
-      // const poller = await this.emailClient.beginSend(message);
-      // await poller.pollUntilDone(); // TODO : maybe remove for faster UI response
+      await this.sendEmail(message);
 
       this.logger.log({
         action: 'sendVerificationEmail',
@@ -187,9 +187,7 @@ export class EmailService {
     };
 
     try {
-      // TODO : enable actual email sending
-      // const poller = await this.emailClient.beginSend(message);
-      // await poller.pollUntilDone(); // Optional: wait for email to be sent
+      await this.sendEmail(message);
 
       this.logger.log({
         action: 'sendUserInvitation',
@@ -285,9 +283,7 @@ export class EmailService {
     };
 
     try {
-      // TODO: enable actual send when ready
-      // const poller = await this.emailClient.beginSend(message);
-      // await poller.pollUntilDone();
+      await this.sendEmail(message);
 
       this.logger.log({
         action: 'sendProposalNotification',
@@ -305,5 +301,23 @@ export class EmailService {
       });
       throw error;
     }
+  }
+
+  async sendEmail(message: EmailMessage): Promise<void> {
+    // Placeholder for future email sending functionality
+    if (this.isPrd && this.emailClient) {
+      try {
+        this.logger.log('Production environment detected; sending email.');
+        const poller = await this.emailClient.beginSend(message);
+        await poller.pollUntilDone();
+      } catch (error) {
+        this.logger.error({
+          action: 'sendEmail',
+          errMessage: (error as Error).message,
+        });
+        throw error;
+      }
+    }
+    return new Promise((resolve) => resolve());
   }
 }

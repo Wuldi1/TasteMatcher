@@ -4,7 +4,6 @@ import { AppConfig, loadConfig } from '../../lib/config';
 import { createLogger } from '../../lib/logger';
 import { User } from '../../types/user.types';
 
-const USER_AGENT_SUFFIX = 'TasteMatcher-WebAPI';
 const logger = createLogger('CosmosService');
 
 /**
@@ -81,6 +80,7 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
 
     const container = this.database!.container(containerName);
     this.containerCache.set(containerName, container);
+
     logger.debug({ msg: 'Cached Cosmos container', containerName });
     return container;
   }
@@ -93,30 +93,14 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Convenience getter for the Domains container.
-   * Mapped to 'Core' container.
-   */
-  async getDomainsContainer(): Promise<Container> {
-    return this.getContainer('Core');
-  }
-
-  /**
    * Convenience getter for the Artworks container.
    */
   async getArtworksContainer(): Promise<Container> {
     return this.getContainer('Artworks');
   }
 
-  /**
-   * Convenience getter for the Users container.
-   * Mapped to 'Core' container.
-   */
-  async getUsersContainer(): Promise<Container> {
-    return this.getContainer('Core');
-  }
-
   async getUser(domainId: string, userId: string): Promise<User> {
-    const usersContainer = await this.getUsersContainer();
+    const usersContainer = await this.getContainer('Core');
     const { resource } = await usersContainer.item(userId, domainId).read<User>();
     if (!resource) {
       throw new Error(`User not found: ${userId} in domain ${domainId}`);
@@ -133,8 +117,7 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
     try {
       const options: CosmosClientOptions = {
         endpoint: this.appConfig.cosmos.endpoint,
-        key: this.appConfig.cosmos.key,
-        userAgentSuffix: USER_AGENT_SUFFIX,
+        key: this.appConfig.cosmos.key
       };
 
       this.client = new CosmosClient(options);

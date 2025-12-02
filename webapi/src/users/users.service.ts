@@ -25,7 +25,7 @@ export class UsersService {
      * Get all users in a domain
      */
     async findAllInDomain(domainId: string, askingUser: AuthenticatedUser, withStats: boolean = false): Promise<User[]> {
-        const container = await this.cosmosService.getUsersContainer();
+        const container = await this.cosmosService.getContainer('Core');
 
         try {
             let query = {
@@ -71,7 +71,7 @@ export class UsersService {
      * Get a single user by ID
      */
     async findOne(domainId: string, userId: string, withStats: boolean = false): Promise<User> {
-        const container = await this.cosmosService.getUsersContainer();
+        const container = await this.cosmosService.getContainer('Core');
 
         try {
             const { resource } = await container.item(userId, domainId).read<User>();
@@ -105,7 +105,7 @@ export class UsersService {
         updateDto: UpdateUserDto,
         requestingUserId: string,
     ): Promise<User> {
-        const container = await this.cosmosService.getUsersContainer();
+        const container = await this.cosmosService.getContainer('Core');
 
         try {
             const user = await this.findOne(domainId, userId);
@@ -136,7 +136,7 @@ export class UsersService {
      * Delete a user and all their preferences
      */
     async remove(domainId: string, userId: string, requestingUserId: string): Promise<void> {
-        const usersContainer = await this.cosmosService.getUsersContainer();
+        const usersContainer = await this.cosmosService.getContainer('Core');
         const preferencesContainer = await this.cosmosService.getContainer('ArtworkPreferences');
 
         try {
@@ -193,7 +193,7 @@ export class UsersService {
         inviteDto: InviteUserDto,
         invitedById: string,
     ): Promise<User> {
-        const container = await this.cosmosService.getUsersContainer();
+        const container = await this.cosmosService.getContainer('Core');
 
         try {
             // Check if user with this email already exists in the domain
@@ -274,7 +274,7 @@ export class UsersService {
     ): Promise<User> {
 
         try {
-            const container = await this.cosmosService.getUsersContainer();
+            const container = await this.cosmosService.getContainer('Core');
 
             // Fetch the user
             const { resource: user } = await container.item(userId, domainId).read<User>();
@@ -316,7 +316,7 @@ export class UsersService {
     async completeOnboarding(userId: string, domainId: string): Promise<User> {
 
         try {
-            const container = await this.cosmosService.getUsersContainer();
+            const container = await this.cosmosService.getContainer('Core');
 
             // patch specifically to set onboardingStatus to completed and completedAt timestamp
             const { resource } = await container.item(userId, domainId).patch([
@@ -343,7 +343,7 @@ export class UsersService {
     async skipOnboarding(userId: string, domainId: string): Promise<User> {
 
         try {
-            const container = await this.cosmosService.getUsersContainer();
+            const container = await this.cosmosService.getContainer('Core');
 
             // Patch specifically to set onboardingStatus to skipped
             const { resource } = await container.item(userId, domainId).patch([
@@ -373,7 +373,7 @@ export class UsersService {
         // eslint-disable-next-line
         file: Express.Multer.File,
     ): Promise<{ success: boolean; message: string; vectorized: number }> {
-        const container = await this.cosmosService.getUsersContainer();
+        const container = await this.cosmosService.getContainer('Core');
         const correlationId = uuidv4();
 
         try {
@@ -462,7 +462,7 @@ export class UsersService {
         userId: string,
         domainId: string,
     ): Promise<{ success: boolean; message: string; totalVectors: number }> {
-        const container = await this.cosmosService.getUsersContainer();
+        const container = await this.cosmosService.getContainer('Core');
 
         try {
             // Fetch the user

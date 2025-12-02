@@ -66,7 +66,7 @@ export class DomainsService {
       updatedAt: now,
     };
 
-    const domainsContainer = await this.cosmosService.getDomainsContainer();
+    const domainsContainer = await this.cosmosService.getContainer('Core');
     const { resource: createdDomain } = await domainsContainer.items.create(newDomain);
 
     // Create domain_owner user
@@ -129,7 +129,7 @@ export class DomainsService {
    * Get all domains (global_admin only)
    */
   async findAll(): Promise<Domain[]> {
-    const container = await this.cosmosService.getDomainsContainer();
+    const container = await this.cosmosService.getContainer('Core');
 
     const query = {
       query: "SELECT * FROM c WHERE c.type = 'domain' ORDER BY c.createdAt DESC",
@@ -145,7 +145,7 @@ export class DomainsService {
    * Get a single domain by ID
    */
   async findOne(domainId: string): Promise<Domain> {
-    const container = await this.cosmosService.getDomainsContainer();
+    const container = await this.cosmosService.getContainer('Core');
 
     const query = {
       query: "SELECT * FROM c WHERE c.id = @id AND c.domainId = @domainId AND c.type = 'domain'",
@@ -168,7 +168,7 @@ export class DomainsService {
    * Update domain information (global_admin only)
    */
   async update(domainId: string, updateDto: UpdateDomainDto): Promise<Domain> {
-    const container = await this.cosmosService.getDomainsContainer();
+    const container = await this.cosmosService.getContainer('Core');
     const domain = await this.findOne(domainId);
 
     const updatedDomain: Domain = {
@@ -225,7 +225,7 @@ export class DomainsService {
     }
 
     // Check if user already exists in the system
-    const usersContainer = await this.cosmosService.getUsersContainer();
+    const usersContainer = await this.cosmosService.getContainer('Core');
     const userQuery = {
       query: 'SELECT * FROM c WHERE c.email = @email',
       parameters: [{ name: '@email', value: normalizedEmail }],
@@ -322,11 +322,11 @@ export class DomainsService {
       updatedAt: now,
     };
 
-    const domainsContainer = await this.cosmosService.getDomainsContainer();
+    const domainsContainer = await this.cosmosService.getContainer('Core');
     await domainsContainer.items.create(newDomain);
 
     // Create domain_owner user with active status
-    const usersContainer = await this.cosmosService.getUsersContainer();
+    const usersContainer = await this.cosmosService.getContainer('Core');
     const newUser: User & { type: string } = {
       id: uuidv4(),
       domainId: domainId,
@@ -364,7 +364,7 @@ export class DomainsService {
    */
   private async findDomainByEmailOrNull(adminEmail: string): Promise<Domain | null> {
     const normalizedEmail = adminEmail.toLowerCase().trim();
-    const container = await this.cosmosService.getDomainsContainer();
+    const container = await this.cosmosService.getContainer('Core');
 
     // Cross-partition query (acceptable for low volume of domains)
     const { resources } = await container.items
@@ -393,7 +393,7 @@ export class DomainsService {
     name: string,
     timestamp: number,
   ): Promise<User> {
-    const usersContainer = await this.cosmosService.getUsersContainer();
+    const usersContainer = await this.cosmosService.getContainer('Core');
 
     const newUser: User & { type: string } = {
       id: uuidv4(),
@@ -417,7 +417,7 @@ export class DomainsService {
    * Find domain owner user
    */
   private async findDomainOwnerUser(domainId: string, email: string): Promise<User> {
-    const usersContainer = await this.cosmosService.getUsersContainer();
+    const usersContainer = await this.cosmosService.getContainer('Core');
 
     const { resources: users } = await usersContainer.items
       .query({
@@ -445,7 +445,7 @@ export class DomainsService {
    * Issue verification code and send email
    */
   private async issueVerificationCode(domain: Domain): Promise<Domain> {
-    const container = await this.cosmosService.getDomainsContainer();
+    const container = await this.cosmosService.getContainer('Core');
     const code = this.generateVerificationCode();
     const expiresAt = Date.now() + VERIFICATION_TTL_MS;
 
@@ -475,7 +475,7 @@ export class DomainsService {
    * Clear verification code from domain and mark as active
    */
   private async clearVerificationCode(domain: Domain): Promise<void> {
-    const container = await this.cosmosService.getDomainsContainer();
+    const container = await this.cosmosService.getContainer('Core');
 
     const updatedDomain: Domain = {
       ...domain,
@@ -528,7 +528,7 @@ export class DomainsService {
    * Delete all user preferences for a domain
    */
   private async deleteAllUserPreferences(domainId: string): Promise<void> {
-    const usersContainer = await this.cosmosService.getUsersContainer();
+    const usersContainer = await this.cosmosService.getContainer('Core');
     const preferencesContainer = await this.cosmosService.getContainer('ArtworkPreferences');
 
     // Get all users in domain
@@ -562,7 +562,7 @@ export class DomainsService {
    * Delete all users in a domain
    */
   private async deleteAllUsers(domainId: string): Promise<void> {
-    const usersContainer = await this.cosmosService.getUsersContainer();
+    const usersContainer = await this.cosmosService.getContainer('Core');
 
     const usersQuery = {
       query: "SELECT * FROM c WHERE c.domainId = @domainId AND c.type = 'user'",
@@ -604,7 +604,7 @@ export class DomainsService {
    * Delete domain document
    */
   private async deleteDomainDocument(domain: Domain): Promise<void> {
-    const domainsContainer = await this.cosmosService.getDomainsContainer();
+    const domainsContainer = await this.cosmosService.getContainer('Core');
     await domainsContainer.item(domain.id, domain.id).delete(); // PK is domainId
   }
 }

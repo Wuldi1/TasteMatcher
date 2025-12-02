@@ -5,15 +5,16 @@
   "scripts": {
     "build": "tsc",
     "start": "node build/main.js",
-    "start:dev": "node --env-file=.env.dev build/main.js",
     "start:local": "node --env-file=.env.local ../node_modules/ts-node-dev/lib/bin.js --respawn src/main.ts",
+    "start:prd": "node --env-file=.env.prd ../node_modules/ts-node-dev/lib/bin.js --respawn src/main.ts",
+    "start:dev": "node --env-file=.env.dev build/main.js",
     "test": "jest",
     "lint": "eslint \"src/**/*.ts\" --ignore-pattern \"**/*.spec.ts\" --ignore-pattern \"**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@azure/communication-email": "^1.1.0",
-    "@azure/cosmos": "^4.7.0",
+    "@azure/cosmos": "^4.9.0",
     "@azure/identity": "^4.13.0",
     "@azure/storage-blob": "^12.29.1",
     "@azure/storage-queue": "^12.28.1",

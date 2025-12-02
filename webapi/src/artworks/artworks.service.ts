@@ -375,7 +375,7 @@ export class ArtworksService {
       }
 
       // first, get the user preferenceVector from his existing record
-      const usersContainer = await this.cosmosService.getUsersContainer();
+      const usersContainer = await this.cosmosService.getContainer('Core');
       const { resource: userRecord } = await usersContainer.item(userId, domainId).read();
       const userPreferenceVector = userRecord.preferenceVector;
 

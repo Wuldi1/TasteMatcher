@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { sign } from 'jsonwebtoken';
-import { createHash } from 'crypto';
+import { createHash, randomInt } from 'crypto';
 import { CosmosService, User, DomainVerificationResultResponse } from '@tastematcher/common';
 import { LoginRequestDto } from './dto/login-request.dto';
 import { LoginVerifyDto } from './dto/login-verify.dto';
@@ -12,11 +12,14 @@ const VERIFICATION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly cosmosService: CosmosService;
+  private readonly isPrd?: boolean;
   private readonly jwtSecret: string;
 
   constructor(private readonly emailService: EmailService) {
     this.cosmosService = new CosmosService();
     this.jwtSecret = process.env.JWT_SECRET ?? '';
+    this.isPrd = process.env.NODE_ENV === 'prod';
+
     if (!this.jwtSecret) {
       throw new Error('JWT_SECRET environment variable is required');
     }
@@ -28,7 +31,9 @@ export class AuthService {
    */
   async requestLoginCode(loginDto: LoginRequestDto): Promise<{ message: string }> {
     const normalizedEmail = loginDto.email.toLowerCase().trim();
-    const usersContainer = await this.cosmosService.getUsersContainer();
+    const usersContainer = await this.cosmosService.getContainer('Core');
+
+    console.log('Processing login request for email:', normalizedEmail);
 
     // Find user by email across all domains
     const query = {
@@ -36,13 +41,16 @@ export class AuthService {
       parameters: [{ name: '@email', value: normalizedEmail }],
     };
 
-    const { resources: users } = await usersContainer.items.query<User>(query).fetchAll();
+    const { resources: users } = await usersContainer.items.query(query).fetchAll();
+
+    console.log(`Found ${users.length} users for email: ${normalizedEmail}`);
 
     if (users.length === 0) {
       throw new NotFoundException('No account found with this email address');
     }
 
     const user = users[0];
+    console.log('Found user for login request:', user);
 
     // Generate verification code
     const code = this.generateVerificationCode();
@@ -55,10 +63,11 @@ export class AuthService {
       verificationCodeExpiresAt: expiresAt,
     };
 
+    console.log('Updating user with verification code hash:', updatedUser);
     await usersContainer.item(user.id, user.domainId).replace(updatedUser);
 
     // Get domain info using domainId only
-    const domainsContainer = await this.cosmosService.getDomainsContainer();
+    const domainsContainer = await this.cosmosService.getContainer('Core');
     const { resource: domain } = await domainsContainer.items.query({
       query: 'SELECT * FROM c WHERE c.id = @domainId',
       parameters: [{ name: '@domainId', value: user.domainId }],
@@ -67,6 +76,7 @@ export class AuthService {
     if (!domain) {
       throw new NotFoundException('Domain not found');
     }
+    console.log('Found domain for login request:', domain);
 
     // Send verification email
     await this.emailService.sendVerificationEmail({
@@ -87,8 +97,8 @@ export class AuthService {
    */
   async verifyLoginCode(verifyDto: LoginVerifyDto): Promise<DomainVerificationResultResponse> {
     const normalizedEmail = verifyDto.email.toLowerCase().trim();
-    const usersContainer = await this.cosmosService.getUsersContainer();
-    const domainsContainer = await this.cosmosService.getDomainsContainer();
+    const usersContainer = await this.cosmosService.getContainer('Core');
+    const domainsContainer = await this.cosmosService.getContainer('Core');
 
     // Find user by email
     const query = {
@@ -172,8 +182,9 @@ export class AuthService {
    * Generate 6-digit verification code
    */
   private generateVerificationCode(): string {
-    // TODO: Use randomInt in production
-    // return randomInt(0, 1_000_000).toString().padStart(6, '0');
+    if (this.isPrd) {
+      return randomInt(0, 1_000_000).toString().padStart(6, '0');
+    }
     return '000000';
   }
 
