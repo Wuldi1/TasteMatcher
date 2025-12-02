@@ -90,12 +90,15 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.environment }}" == "stg" ]; then
             echo "AZURE_WEBAPP_NAME=tastematcher-stg-web" >> $GITHUB_ENV
+            echo "AZURE_RESOURCE_GROUP=tastematcher-stg-rg" >> $GITHUB_ENV
             echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
           elif [ "${{ github.event.inputs.environment }}" == "prd" ]; then
             echo "AZURE_WEBAPP_NAME=tastematcher-prd-web" >> $GITHUB_ENV
+            echo "AZURE_RESOURCE_GROUP=tastematcher-prd-rg" >> $GITHUB_ENV
             echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
           else
             echo "AZURE_WEBAPP_NAME=tastematcher-dev-web" >> $GITHUB_ENV
+            echo "AZURE_RESOURCE_GROUP=tastematcher-dev-rg" >> $GITHUB_ENV
             echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
           fi
 
