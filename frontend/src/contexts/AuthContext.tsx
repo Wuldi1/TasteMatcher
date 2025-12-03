@@ -12,7 +12,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { apiClient } from '../utils/api';
-import { User } from '@tastematcher/common';
+import { User, UserStatsResponse, PersonalQuestionnaire } from '@tastematcher/common';
 
 interface AuthContextType {
   user: Partial<User> | null;
@@ -22,9 +22,76 @@ interface AuthContextType {
   setUserFromToken: (token: string) => void;
   setUserFromUser: (user: Partial<User>) => void;
   refreshUser: () => Promise<Partial<User>>;
+  // User Stats capabilities
+  stats: UserStatsResponse | null;
+  answeredQuestions: number;
+  totalQuestions: number;
+  isStatsLoading: boolean;
+  refreshStats: () => Promise<void>;
+  incrementSwipeCount: () => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/**
+ * Calculate the total number of questions in the PersonalQuestionnaire interface.
+ * @returns The total number of questions.
+ */
+function calculateTotalQuestions(): number {
+    const questionnaire: PersonalQuestionnaire = {
+        personalDetails: {
+            location: '',
+            secondaryLocations: [],
+            profession: '',
+            culturalInfluences: '',
+            maritalStatus: 'single',
+            residences: [],
+            hasChildren: false,
+            numberOfChildren: 0,
+            currentlyCollects: false,
+            currentCollection: '',
+            familyCollects: false,
+        },
+        collectingPreferences: {
+            themes: '',
+            artistsOrMovements: '',
+            collectingStyle: 'conceptual',
+            displayLocations: [],
+            startedCollecting: '',
+            firstAcquisition: '',
+            evolutionOfFocus: '',
+            mentorsOrAdvisors: '',
+            eventsAttended: '',
+            museumBoards: '',
+            artistEngagement: '',
+        },
+        artworkPreferences: {
+            description: '',
+            referenceImageUrls: [],
+        },
+    };
+
+    return Object.values(questionnaire).reduce((total, section) => {
+        if (typeof section === 'object' && section !== null) {
+            return total + Object.keys(section).length;
+        }
+        return total;
+    }, 0);
+}
+
+/**
+ * Calculate the number of answered questions in the PersonalQuestionnaire.
+ * @param questionnaire - The user's personal questionnaire.
+ * @returns The number of answered questions.
+ */
+function calculateAnsweredQuestions(questionnaire: PersonalQuestionnaire): number {
+    return Object.values(questionnaire).reduce((count, section) => {
+        if (typeof section === 'object' && section !== null) {
+            return count + Object.values(section).filter((value) => value !== undefined && value !== null).length;
+        }
+        return count;
+    }, 0);
+}
 
 /**
  * Parse JWT token and extract user information
@@ -72,11 +139,20 @@ const isTokenValid = (token: string): boolean => {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Partial<User> | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  
+  // Stats state
+  const [stats, setStats] = useState<UserStatsResponse | null>(null);
+  const [answeredQuestions, setAnsweredQuestions] = useState(0);
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [isStatsLoading, setIsStatsLoading] = useState(false);
 
   const logout = useCallback(() => {
     localStorage.removeItem('tm_auth_token');
     apiClient.setAuthToken(null);
     setUser(null);
+    setStats(null);
+    setAnsweredQuestions(0);
+    setTotalQuestions(0);
   }, []);
 
   const refreshUser = useCallback(async (user: Partial<User>) => {
@@ -150,6 +226,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [logout]);
 
+  const refreshStats = useCallback(async () => {
+    if (!user?.id || !user?.domainId) return;
+
+    setIsStatsLoading(true);
+    try {
+        const fetchedStats = await apiClient.getUserStats();
+        setStats(fetchedStats);
+
+        // Calculate answered and total questions
+        if (user.personalQuestionnaire) {
+            setAnsweredQuestions(calculateAnsweredQuestions(user.personalQuestionnaire as PersonalQuestionnaire));
+            setTotalQuestions(calculateTotalQuestions());
+        }
+    } catch (err) {
+        console.error('Failed to fetch user stats:', err);
+    } finally {
+        setIsStatsLoading(false);
+    }
+  }, [user]);
+
+  const incrementSwipeCount = useCallback(() => {
+    setStats((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        totalSwiped: prev.totalSwiped + 1,
+      };
+    });
+    
+    setUser((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        swipeCount: (prev.swipeCount || 0) + 1,
+      };
+    });
+  }, []);
+
   useEffect(() => {
     const storedToken = localStorage.getItem('tm_auth_token');
     if (storedToken) {
@@ -158,6 +272,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsInitializing(false);
   }, [setUserFromToken]);
 
+  // Fetch stats when user changes
+  useEffect(() => {
+    if (user?.id) {
+        refreshStats();
+    } else {
+        setStats(null);
+    }
+  }, [user?.id, refreshStats]);
+
   const value = useMemo(
     () => ({
       user,
@@ -165,10 +288,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isInitializing,
       logout,
       setUserFromToken,
-      setUserFromUser, // Ensure this is included
+      setUserFromUser,
       refreshUser,
+      // Stats
+      stats,
+      answeredQuestions,
+      totalQuestions,
+      isStatsLoading,
+      refreshStats,
+      incrementSwipeCount,
     }),
-    [user, isInitializing, logout, setUserFromToken, setUserFromUser, refreshUser],
+    [user, isInitializing, logout, setUserFromToken, setUserFromUser, refreshUser, stats, answeredQuestions, totalQuestions, isStatsLoading, refreshStats, incrementSwipeCount],
   );
 
   return (

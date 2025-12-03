@@ -11,7 +11,7 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import { CustomerHomePage } from './CustomerHomePage';
 import { DealerHomePage } from './DealerHomePage';
 

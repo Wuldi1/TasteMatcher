@@ -13,7 +13,7 @@
 
 import { useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import { Search, X, ThumbsUp, ThumbsDown, Edit, Trash2, CheckSquare, Square, Eye, EyeOff } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
 import { apiClient } from '../../utils/api';

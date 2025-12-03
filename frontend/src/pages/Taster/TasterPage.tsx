@@ -13,7 +13,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import { ThumbsUp, ThumbsDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiClient } from '../../utils/api';
 import './TasterPage.css';
@@ -26,7 +26,7 @@ type SwipeDirection = 'left' | 'right' | null;
  * Only shows artworks the user hasn't rated yet.
  */
 export function TasterPage() {
-  const { user } = useAuth();
+  const { user, incrementSwipeCount } = useAuth();
   const queryClient = useQueryClient();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeDirection, setSwipeDirection] = useState<SwipeDirection>(null);
@@ -63,6 +63,9 @@ export function TasterPage() {
       });
     },
     onSuccess: () => {
+      // Manually update stats in context to reflect the swipe immediately
+      incrementSwipeCount();
+
       // Invalidate stats to update home page
       queryClient.invalidateQueries({ queryKey: ['artwork-stats', user?.domainId] });
     },
@@ -208,6 +211,13 @@ export function TasterPage() {
               style={{
                 transform: `translateX(${dragOffset.x}px) translateY(${dragOffset.y}px) rotate(${rotation}deg)`,
                 opacity,
+                // Layout changes for info below image
+                display: 'flex',
+                flexDirection: 'column',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                overflow: 'hidden',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
               }}
               onMouseDown={(e) => handleDragStart(e.clientX, e.clientY)}
               onMouseMove={(e) => dragStart && handleDragMove(e.clientX, e.clientY)}
@@ -219,44 +229,48 @@ export function TasterPage() {
               role="img"
               aria-label={currentArtwork.title}
             >
-              <img
-                src={currentArtwork.thumbnails?.[1]?.url || currentArtwork.filename}
-                alt={currentArtwork.title}
-                className="taster-card__image"
-                draggable="false"
-              />
-              <div className="taster-card__info">
-                <h2 className="taster-card__title">{currentArtwork.title}</h2>
+              <div style={{ position: 'relative', flex: '1', overflow: 'hidden' }}>
+                <img
+                  src={currentArtwork.thumbnails?.[1]?.url || currentArtwork.filename}
+                  alt={currentArtwork.title}
+                  className="taster-card__image"
+                  draggable="false"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', top: 0, left: 0 }}
+                />
+                
+                {/* Swipe indicators moved inside image container */}
+                <div className="taster-card__indicator taster-card__indicator--like">
+                  <ThumbsUp aria-hidden="true" />
+                  <span>LIKE</span>
+                </div>
+                <div className="taster-card__indicator taster-card__indicator--dislike">
+                  <ThumbsDown aria-hidden="true" />
+                  <span>NOPE</span>
+                </div>
+              </div>
+
+              <div className="taster-card__info" style={{ position: 'relative', background: '#fff', color: '#333', padding: '16px', flexShrink: 0 }}>
+                <h2 className="taster-card__title" style={{ color: '#000', marginBottom: '4px' }}>{currentArtwork.title}</h2>
                 {currentArtwork.artist && (
-                  <p className="taster-card__artist">by {currentArtwork.artist}</p>
+                  <p className="taster-card__artist" style={{ color: '#666' }}>by {currentArtwork.artist}</p>
                 )}
                 {currentArtwork.date && (
-                  <p className="taster-card__date">{currentArtwork.date}</p>
+                  <p className="taster-card__date" style={{ color: '#888' }}>{currentArtwork.date}</p>
                 )}
                 
                 {/* Metadata badges (medium/signature/dimensions) */}
-                <div className="taster-card__metadata">
-                  {currentArtwork.medium && <span className="taster-card__badge">{currentArtwork.medium}</span>}
-                  {currentArtwork.signature && <span className="taster-card__badge">Signed</span>}
+                <div className="taster-card__metadata" style={{ marginTop: '12px' }}>
+                  {currentArtwork.medium && <span className="taster-card__badge" style={{ background: '#f5f5f5', color: '#555', border: '1px solid #eee' }}>{currentArtwork.medium}</span>}
+                  {currentArtwork.signature && <span className="taster-card__badge" style={{ background: '#f5f5f5', color: '#555', border: '1px solid #eee' }}>Signed</span>}
                   {(currentArtwork.width !== undefined || currentArtwork.height !== undefined) && (
-                    <span className="taster-card__badge">{currentArtwork.width ?? '—'} × {currentArtwork.height ?? '—'} in</span>
+                    <span className="taster-card__badge" style={{ background: '#f5f5f5', color: '#555', border: '1px solid #eee' }}>{currentArtwork.width ?? '—'} × {currentArtwork.height ?? '—'} in</span>
                   )}
                 </div>
 
                 {/* Price badge (if visible) */}
                 {currentArtwork.price !== undefined && (currentArtwork.shouldDisplayPrice ?? true) && (
-                  <div className="taster-card__price">${currentArtwork.price.toLocaleString()}</div>
+                  <div className="taster-card__price" style={{ marginTop: '12px', color: '#000', fontWeight: '600' }}>${currentArtwork.price.toLocaleString()}</div>
                 )}
-              </div>
-
-              {/* Swipe indicators */}
-              <div className="taster-card__indicator taster-card__indicator--like">
-                <ThumbsUp aria-hidden="true" />
-                <span>LIKE</span>
-              </div>
-              <div className="taster-card__indicator taster-card__indicator--dislike">
-                <ThumbsDown aria-hidden="true" />
-                <span>NOPE</span>
               </div>
             </div>
           )}

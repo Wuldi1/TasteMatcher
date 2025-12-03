@@ -6,8 +6,8 @@ from io import BytesIO
 from PIL import Image, ImageFilter
 from glob import glob
 
-# INPUT_PDF = ["Preview_NADA_Miami_2025_Polina_Berlin_Gallery", "MSNADA25NP", "Amanita_NADA_Miami_Preview", "GhebalyABMB2025", "KarmaArt-Basel-Miami-Beach2025Preview", "Preview_NADA_Miami_2025_Polina_Berlin_Gallery", "251103_MarinaPerezSimao_TomieOhtake_TY_ExhPacket_[79]", "Preview_Loral_Raphael_Polina_Berlin_Gallery"]
-INPUT_PDF = ["Preview_NADA_Miami_2025_Polina_Berlin_Gallery"] # for testing a single PDF
+INPUT_PDF = ["Preview_NADA_Miami_2025_Polina_Berlin_Gallery", "MSNADA25NP", "Amanita_NADA_Miami_Preview", "Ghebaly ABMB2025", "KarmaArt-Basel-Miami-Beach2025Preview", "251103_MarinaPerezSimao_TomieOhtake_TY_ExhPacket_[79]", "Preview_Loral_Raphael_Polina_Berlin_Gallery"]
+# INPUT_PDF = ["Preview_NADA_Miami_2025_Polina_Berlin_Gallery"] # for testing a single PDF
 OUTPUT_DIR = "./TasteMatcherTestContent"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -24,26 +24,103 @@ def extract_metadata(text):
     lines = [l.strip() for l in text.splitlines() if l.strip()]
     if len(lines) < 2:
         return None
+
+    # Assume first line is Artist
     artist = lines[0]
-    title, date = "", ""
-    for line in lines:
-        m = re.search(r"(.+?)\s+(c\.\s*\d{4}|\b(18|19|20)\d{2}\b)", line)
-        if m:
-            title = m.group(1).strip()
-            date = m.group(2).strip()
-            break
-    if not title:
-        return None
-    description = " ".join(lines[1:])
+    
+    title = ""
+    date = ""
+    medium = ""
+    signature = ""
+    width = None
+    height = None
+    price = None
+    shouldDisplayPrice = False
+    description_parts = []
+
+    # Regex patterns
+    # Date: matches 1999, 2023, c. 1950, 1980-90
+    date_re = re.compile(r"(c\.\s*)?\b(18|19|20)\d{2}(?:[-–]\d{2,4})?\b", re.IGNORECASE)
+    # Dimensions: 10 x 20, 10.5 x 20.5 (allow spaces, x or ×)
+    dims_re = re.compile(r"(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
+    # Price: $10,000 or USD 10,000
+    price_re = re.compile(r"(?:USD|\$)\s?([\d,]+)", re.IGNORECASE)
+    # Signature keywords
+    sig_re = re.compile(r"\b(signed|verso|dated|inscribed)\b", re.IGNORECASE)
+
+    remaining_lines = lines[1:]
+    
+    for i, line in enumerate(remaining_lines):
+        # Check Price
+        m_price = price_re.search(line)
+        if m_price:
+            try:
+                price = float(m_price.group(1).replace(",", ""))
+            except ValueError:
+                pass
+            continue
+
+        # Check Dimensions
+        m_dims = dims_re.search(line)
+        if m_dims:
+            try:
+                # Convention: Height x Width
+                height = float(m_dims.group(1))
+                width = float(m_dims.group(2))
+            except ValueError:
+                pass
+            continue
+
+        # Check Signature
+        if sig_re.search(line):
+            signature = line
+            continue
+
+        # If we haven't found title yet, assume this is Title (or Title + Date)
+        if not title:
+            m_date = date_re.search(line)
+            if m_date:
+                date = m_date.group(0)
+                # Title is part before date
+                possible_title = line[:m_date.start()].strip()
+                if possible_title:
+                    title = possible_title.strip(", ")
+                else:
+                    # If line starts with date, treat as date line, title might be missing or handled
+                    pass
+            else:
+                title = line
+            continue
+
+        # If we have title but no date, check if this line is date
+        if not date:
+            m_date = date_re.search(line)
+            if m_date and len(line) < 20: # Short line, likely just date
+                date = m_date.group(0)
+                continue
+
+        # If we have title (and maybe date), look for Medium
+        # Medium is usually short and not a description sentence
+        if not medium and len(line) < 60:
+            medium = line
+            continue
+
+        # Everything else is description
+        description_parts.append(line)
+
+    description = " ".join(description_parts)
+
     return {
         "title": title,
         "artist": artist,
         "description": description,
-        "category": "artwork",
-        "classification": "contemporary",
-        "department": "inventory gallery",
-        "country": "unknown",
         "date": date,
+        "medium": medium,
+        "signature": signature,
+        "width": width,
+        "height": height,
+        "price": price,
+        "shouldDisplayPrice": shouldDisplayPrice,
         "tags": []
     }
 

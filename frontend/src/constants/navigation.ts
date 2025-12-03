@@ -25,7 +25,7 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
         name: 'Catalog', 
         href: '/catalog', 
         icon: LayoutGrid, 
-        roles: ['customer', 'dealer', 'domain_owner', 'global_admin'], 
+        roles: ['dealer', 'domain_owner', 'global_admin'], 
         ariaLabel: 'Navigate to catalog',
         bubbleText: 'This is the Catalog page. Browse all available art pieces.' 
     },

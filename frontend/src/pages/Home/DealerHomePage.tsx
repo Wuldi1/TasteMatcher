@@ -1,4 +1,4 @@
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import { useProposalData } from '../../hooks/useProposalData';
 import { Link } from 'react-router-dom';
 import { Users, ShoppingCart, FileText, PlusCircle, BarChart2, CheckCircle, Image } from 'lucide-react';

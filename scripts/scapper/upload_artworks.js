@@ -136,6 +136,7 @@ async function main() {
                 [
                     { label: "Gal", value: "gal" },
                     { label: "Jaclyn", value: "jaclyn" },
+                    { label: "Jaclyn Test", value: "jaclyntest" }
                 ],
                 0
             );
@@ -147,6 +148,7 @@ async function main() {
         const emailMap = {
             gal: process.env.TM_EMAIL_GAL || "galrubin15@gmail.com",
             jaclyn: process.env.TM_EMAIL_JACLYN || "jaclynlavy@gmail.com",
+            jaclyntest: process.env.TM_EMAIL_JACLYNTEST || "jaclyntest@gmail.com",
         };
         const email = emailMap[ownerChoice];
 

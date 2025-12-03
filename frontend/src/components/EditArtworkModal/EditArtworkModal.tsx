@@ -2,7 +2,7 @@ import { useState, FormEvent } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { X, Save } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../utils/api';
 
 interface EditArtworkModalProps {

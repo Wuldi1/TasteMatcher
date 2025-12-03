@@ -6,7 +6,7 @@ import ProtectedRoute from './ProtectedRoute';
 import { OnboardingFlow } from '../components/Onboarding/OnboardingFlow';
 import { Sidebar } from '../components/Layout/Sidebar';
 import { MobileSidebar } from '../components/Layout/MobileSidebar';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../contexts/AuthContext';
 import { CatalogPage } from '../pages/Catalog/CatalogPage';
 import { TasterPage } from '../pages/Taster/TasterPage';
 import { UploadPage } from '../pages/Upload/UploadPage';

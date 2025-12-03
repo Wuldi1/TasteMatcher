@@ -15,7 +15,7 @@ import { apiClient } from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Artwork, User } from '@tastematcher/common';
 import { getAIRecommendationsEligibility } from '../../utils/recommendations';
-import { ThumbsUp, ThumbsDown, FileText, X, Sparkles } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, FileText, X } from 'lucide-react';
 import { useSavePreference } from '../../utils/savePreference';
 
 interface DomainUserOption {
@@ -225,12 +225,12 @@ export const AISuggestionsPage = ({
               >
                 {/* Header: Match Score */}
                 <div className="px-4 pt-4 pb-2 flex justify-between items-center">
-                  <div className="flex items-center gap-1.5 bg-purple-50 px-2.5 py-1 rounded-full">
+                  {/* <div className="flex items-center gap-1.5 bg-purple-50 px-2.5 py-1 rounded-full">
                     <Sparkles className="w-3.5 h-3.5 text-purple-600" />
                     <span className="text-xs font-bold text-purple-700">
                       {formatMatchPercentage(item.probabilityMatch)} Match
                     </span>
-                  </div>
+                  </div> */}
                   {item.price !== undefined && (item.shouldDisplayPrice ?? true) && (
                     <span className="text-xs font-semibold text-gray-900">
                       ${item.price.toLocaleString()}

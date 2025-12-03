@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../utils/api';
 import ProposalView from '../../components/Proposal/ProposalView';
 import type { Proposal } from '@tastematcher/common';

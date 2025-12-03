@@ -48,8 +48,8 @@ class BaseApiClient {
   protected authToken: string | null = null;
 
   constructor() {
-    this.baseURL = process.env.REACT_APP_API_URL!;
-    // this.baseURL = 'https://tastematcher-dev-api.azurewebsites.net';
+    // this.baseURL = process.env.REACT_APP_API_URL!;
+    this.baseURL = 'https://tastematcher-dev-api.azurewebsites.net';
     // this.baseURL = 'https://api.tastematcher.art';
     this.loadAuthToken();
   }
@@ -128,7 +128,7 @@ class BaseApiClient {
         await this.handleErrorResponse(response, url);
       }
 
-      if (response.status === 204) {
+      if (response.status === 204 || response.status === 201) {
         // No Content
         return {} as T;
       }

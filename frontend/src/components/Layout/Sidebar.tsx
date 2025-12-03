@@ -8,7 +8,7 @@ import { getAIRecommendationsEligibility } from '../../utils/recommendations';
 import { useProposalData } from '../../hooks/useProposalData';
 
 export const Sidebar = () => {
-  const { user, refreshUser, logout } = useAuth();
+  const { user, refreshUser, logout, stats } = useAuth();
   const location = useLocation(); // Get the current route
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { currentStep, isTourActive, previousStep, nextStep, skipTour } = useWelcomeTour(); // Hook to start the onboarding guide
@@ -60,7 +60,10 @@ export const Sidebar = () => {
           }
 
           // Lock AI Suggestions for customers that are NOT yet eligible
-          const isLocked = link.id === 'ai-suggestions' && user?.role === 'customer' && !getAIRecommendationsEligibility(user!).isEligible;
+          // Create a temporary user object with the latest stats to ensure immediate UI update
+          const effectiveUser = user ? { ...user, swipeCount: stats?.totalSwiped ?? user.swipeCount } : null;
+          const isLocked = link.id === 'ai-suggestions' && user?.role === 'customer' && effectiveUser && !getAIRecommendationsEligibility(effectiveUser as any).isEligible;
+          
           const isActive = location.pathname === link.href || location.pathname.startsWith(`${link.href}/`); // Custom isActive logic
           const isActiveBubble = isTourActive && currentStep === link.id;
 
@@ -78,7 +81,7 @@ export const Sidebar = () => {
                       : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                   } ${isCollapsed ? 'justify-center' : ''}`
                 }
-                aria-disabled={isLocked}
+                aria-disabled={!!isLocked}
                 onClick={(event) => {
                   if (isLocked) {
                     event.preventDefault();

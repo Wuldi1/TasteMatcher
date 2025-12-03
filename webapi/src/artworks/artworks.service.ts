@@ -425,6 +425,7 @@ export class ArtworksService {
         ? targetUserId
         : requester.id;
 
+    const numberOfRecommendations = 25;
     const start = Date.now();
     this.logger.debug({
       msg: 'Fetching AI suggestions',
@@ -475,7 +476,8 @@ export class ArtworksService {
 
       const matches = await this.searchIndexService.searchSimilarArtworks(
         domainId,
-        preferenceVector
+        preferenceVector,
+        numberOfRecommendations * 2, // fetch more to account for already tasted artworks
       );
 
       const artworksContainer = await this.cosmosService.getArtworksContainer();
@@ -536,12 +538,12 @@ export class ArtworksService {
         durationMs: Date.now() - start,
       });
       // return the top 10 recommended artworks. We prefer those with highest probabilityMatch and not yet tasted, but the results will always be 10.
-      const topArtworks = recommendedArtworks.slice(0, 10);
+      const topArtworks = recommendedArtworks.slice(0, numberOfRecommendations);
       const topArtworksWithoutTasted = recommendedArtworks.filter(art => art.likedStatus === LikedStatus.NotTasted);
 
       // if topArtworksWithoutTasted has less than 10, fill the rest with tasted artworks that have highest probabilityMatch and not already included
-      if (topArtworksWithoutTasted.length < 10) {
-        const needed = 10 - topArtworksWithoutTasted.length;
+      if (topArtworksWithoutTasted.length < numberOfRecommendations) {
+        const needed = numberOfRecommendations - topArtworksWithoutTasted.length;
         const tastedArtworks = topArtworks
           .filter(art => art.likedStatus !== LikedStatus.NotTasted)
           .slice(0, needed);

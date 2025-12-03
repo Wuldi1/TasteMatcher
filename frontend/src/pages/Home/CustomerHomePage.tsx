@@ -11,8 +11,7 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { useAuth } from '../../hooks/useAuth';
-import { useUserStatsContext } from '../../contexts/UserStatsContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useProposalData } from '../../hooks/useProposalData';
 import { Link, useNavigate } from 'react-router-dom';
 import { CheckCircle, ThumbsUp, ThumbsDown, FileText, Sparkles, LayoutGrid } from 'lucide-react';
@@ -24,10 +23,7 @@ import { User } from '@tastematcher/common';
  * Redesigned Home Page as a dashboard.
  */
 export function CustomerHomePage() {
-    const { user, refreshUser } = useAuth();
-
-    // Fetch user stats from context
-    const { stats, answeredQuestions, totalQuestions } = useUserStatsContext();
+    const { user, refreshUser, stats, answeredQuestions, totalQuestions } = useAuth();
 
     // Fetch proposal metadata
     const { hasSubmittedProposal, proposalMetadata, loading } = useProposalData(user?.domainId, user?.id);
