@@ -18,15 +18,6 @@ export type UserStatus = 'pending_verification' | 'active';
 export type UserOnboardingStatus = 'not_started' | 'in_progress' | 'completed' | 'skipped';
 
 /**
- * Represents a comment in a conversation.
- */
-export interface Comment {
-  author: string;
-  text: string;
-  createdAt: number;
-}
-
-/**
  * Aesthetic admiration section
  */
 export interface AestheticAdmiration {
