@@ -81,6 +81,6 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
         icon: FileText, // Updated icon
         roles: ['customer'],
         ariaLabel: 'Navigate to Proposal page',
-        bubbleText: 'This is the Proposal page. Review and respond to proposals from dealers.',
+        bubbleText: 'This is the Proposal page. Review and respond to proposals from specialists.',
     },
 ];

@@ -27,7 +27,7 @@ export function ArtworkUpload() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   // default to showing price to customers; user can toggle this
-  const [metadata, setMetadata] = useState<Partial<Artwork>>({ shouldDisplayPrice: true });
+  const [metadata, setMetadata] = useState<Partial<Artwork>>({ shouldDisplayPrice: false });
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState<string>('');
@@ -59,7 +59,7 @@ export function ArtworkUpload() {
     // reset metadata to only the allowed default (preserve shouldDisplayPrice)
     // explicitly clear numeric fields so width/height/price are reset
     setMetadata({
-      shouldDisplayPrice: true,
+      shouldDisplayPrice: false,
       title: undefined,
       artist: undefined,
       medium: undefined,
@@ -311,7 +311,7 @@ export function ArtworkUpload() {
 
   // Toggle whether the price should be visible to customers
   const toggleDisplayPrice = useCallback(() => {
-    setMetadata((prev) => ({ ...prev, shouldDisplayPrice: !(prev?.shouldDisplayPrice ?? true) }));
+    setMetadata((prev) => ({ ...prev, shouldDisplayPrice: !(prev?.shouldDisplayPrice ?? false) }));
   }, []);
 
   return (
@@ -547,10 +547,10 @@ export function ArtworkUpload() {
               >
                 <input
                   type="checkbox"
-                  checked={metadata.shouldDisplayPrice ?? true}
+                  checked={metadata.shouldDisplayPrice ?? false}
                   onChange={toggleDisplayPrice}
                   disabled={status === 'uploading'}
-                  aria-checked={metadata.shouldDisplayPrice ?? true}
+                  aria-checked={metadata.shouldDisplayPrice ?? false}
                   aria-label="Show price to customers"
                   className="h-4 w-4 rounded border-gray-300 focus:ring-blue-500"
                 />

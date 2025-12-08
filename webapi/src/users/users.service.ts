@@ -8,6 +8,15 @@ import { EmailService } from '../email/email.service';
 import { ArtworksService } from '../artworks/artworks.service';
 import { AuthenticatedUser } from '../auth/types/authenticated-request.interface';
 
+// Helper interface until common package is updated
+interface ExtendedPersonalQuestionnaire {
+    aestheticAdmiration?: {
+        description?: string;
+        imageUrls?: string[];
+    };
+    [key: string]: any;
+}
+
 @Injectable()
 export class UsersService {
     private readonly logger = new Logger(UsersService.name);
@@ -133,6 +142,48 @@ export class UsersService {
     }
 
     /**
+     * Add a comment to a user's profile
+     */
+    async addComment(
+        domainId: string,
+        userId: string,
+        text: string,
+        authorUser: AuthenticatedUser
+    ): Promise<User> {
+        const container = await this.cosmosService.getContainer('Core');
+
+        try {
+            const user = await this.findOne(domainId, userId);
+
+            // Determine author name
+            const authorName = authorUser.email || 'Unknown';
+
+            const newComment = {
+                author: authorName,
+                text: text,
+                createdAt: Date.now(),
+            };
+
+            const currentComments = user.comments || [];
+            const updatedComments = [...currentComments, newComment];
+
+            const { resource } = await container.item(userId, domainId).patch([
+                { op: 'add', path: '/comments', value: updatedComments },
+                { op: 'replace', path: '/updatedAt', value: Date.now() }
+            ]);
+
+            this.logger.log(`Added comment to user ${userId}`);
+            return resource as User;
+        } catch (error) {
+            if (error instanceof NotFoundException) {
+                throw error;
+            }
+            this.logger.error(`Failed to add comment to user ${userId}`, error);
+            throw error;
+        }
+    }
+
+    /**
      * Delete a user and all their preferences
      */
     async remove(domainId: string, userId: string, requestingUserId: string): Promise<void> {
@@ -236,6 +287,7 @@ export class UsersService {
                 onboardingStatus: 'not_started',
                 invitedBy: invitedById,
                 preferenceVector: new Array(1024).fill(0), // Initialize with zero vector
+                comments: [],
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
             };
@@ -387,18 +439,17 @@ export class UsersService {
             // Validate file using BlobService
             this.blobService.validateImageFile(file);
 
-            // Generate unique blob name using BlobService
-            const blobName = getTemporaryBlobPath(
-                domainId,
-                userId,
-                file.mimetype
-            );
+            // Generate unique blob name for permanent storage
+            // Format: originals/[domain_id]/personal/[user_id]/[guid].jpeg
+            const guid = uuidv4();
+            const extension = file.mimetype.split('/')[1] || 'jpeg';
+            const blobName = `${domainId}/personal/${userId}/${guid}.${extension}`;
 
             this.logger.log(`Uploading preference image to blob: ${blobName}`);
 
-            // Upload to blob storage (derivatives container, temp folder)
+            // Upload to blob storage (originals container)
             const blobUrl = await this.blobService.uploadBlob(
-                'derivatives',
+                'originals',
                 blobName,
                 file.buffer,
                 file.mimetype,
@@ -416,17 +467,18 @@ export class UsersService {
 
             this.logger.log(`Generated embedding vector with ${embedding.vector.length} dimensions`);
 
-            // Store the temporary vector in user's metadata
-            const tempVectors = user.personalQuestionnaire?.artworkPreferences?.referenceImageUrls || [];
-            tempVectors.push(blobUrl);
+            // Store the vector URL in user's aestheticAdmiration
+            const currentAdmiration = user.personalQuestionnaire?.aestheticAdmiration || {};
+            const currentImages = currentAdmiration.imageUrls || [];
+            currentImages.push(blobUrl);
 
             const updatedUser: User = {
                 ...user,
                 personalQuestionnaire: {
                     ...user.personalQuestionnaire,
-                    artworkPreferences: {
-                        ...user.personalQuestionnaire?.artworkPreferences,
-                        referenceImageUrls: tempVectors,
+                    aestheticAdmiration: {
+                        ...currentAdmiration,
+                        imageUrls: currentImages,
                     },
                 },
                 tempPreferenceVectors: [
@@ -438,12 +490,12 @@ export class UsersService {
 
             await container.item(userId, domainId).replace(updatedUser);
 
-            this.logger.log(`Processed preference image ${tempVectors.length} for user ${userId}`);
+            this.logger.log(`Processed preference image ${currentImages.length} for user ${userId}`);
 
             return {
                 success: true,
-                message: `Successfully processed preference image ${tempVectors.length}`,
-                vectorized: tempVectors.length,
+                message: `Successfully processed preference image ${currentImages.length}`,
+                vectorized: currentImages.length,
             };
         } catch (error) {
             if (error instanceof NotFoundException || error instanceof BadRequestException) {
@@ -525,9 +577,6 @@ export class UsersService {
                 `Finalized preference vector for user ${userId} from ${tempVectors.length} images`,
             );
 
-            // Schedule cleanup of temporary blobs
-            this.cleanTemporaryBlobStorage(domainId, userId);
-
             return {
                 success: true,
                 message: `Successfully processed ${tempVectors.length} preference images`,
@@ -539,25 +588,6 @@ export class UsersService {
             }
             this.logger.error(`Failed to finalize preference vectors for user ${userId}`, error);
             throw error;
-        }
-    }
-
-    /**
-     * Schedule cleanup of temporary preference image blobs
-     * These images are only needed for initial vectorization
-     */
-    private async cleanTemporaryBlobStorage(domainId: string, userId: string): Promise<void> {
-        try {
-            // List all blobs in the temp/preferences/{userId} folder
-            const blobFolder = `${getTemporaryBlobFolder(domainId, userId)}/`;
-
-            // delete all blobs in the folder
-            await this.blobService.deleteBlobsWithPrefix('derivatives', blobFolder);
-
-            this.logger.log(`Temporary blobs cleaned up for user ${userId}`);
-        } catch (error) {
-            this.logger.error(`Failed to cleanup for user ${userId}`, error);
-            // Don't throw - cleanup failure shouldn't break the main flow
         }
     }
 }

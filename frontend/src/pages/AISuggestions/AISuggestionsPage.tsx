@@ -10,12 +10,12 @@
 // 9. CI-friendly: code passes lint, typecheck, and tests locally.
 // 10. Frontend-specific: UI changes must be responsive (mobile + desktop) and smooth (no visual regressions). Include accessibility considerations (semantic markup, aria attributes, keyboard navigation, focus management) and automated accessibility checks (axe, Playwright/accessibility audit) where applicable.
 // -----------------------------------------------------------
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { apiClient } from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Artwork, User } from '@tastematcher/common';
 import { getAIRecommendationsEligibility } from '../../utils/recommendations';
-import { ThumbsUp, ThumbsDown, FileText, X } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, FileText, X, Sparkles } from 'lucide-react';
 import { useSavePreference } from '../../utils/savePreference';
 
 interface DomainUserOption {
@@ -45,6 +45,10 @@ export const AISuggestionsPage = ({
   const [users, setUsers] = useState<DomainUserOption[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const observerTarget = useRef<HTMLDivElement>(null);
+  const LIMIT = 20;
 
   const isDomainOwner =
     user?.role === 'domain_owner' || user?.role === 'global_admin';
@@ -105,16 +109,27 @@ export const AISuggestionsPage = ({
       return;
     }
 
+    // Reset state when target user changes
+    setOffset(0);
+    setHasMore(true);
+    setRecommendations([]);
+    
     const fetchRecommendations = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        const recommendations = await apiClient.getRecommendations(
+        // @ts-ignore - apiClient might not be typed for extra args yet
+        const newRecommendations = await apiClient.getRecommendations(
           user.domainId!,
           targetUserId !== user?.id ? targetUserId : undefined,
+          LIMIT,
+          0 // Initial offset
         );
-        setRecommendations(recommendations);
+        setRecommendations(newRecommendations);
+        if (newRecommendations.length < LIMIT) {
+          setHasMore(false);
+        }
       } catch (err) {
         console.error('Failed to load AI suggestions', err);
         if (!userId && eligibility.isEligible) {
@@ -129,6 +144,56 @@ export const AISuggestionsPage = ({
     void fetchRecommendations();
   }, [targetUserId, user?.domainId, user?.id, eligibility.isEligible, userId]);
 
+  const loadMore = useCallback(async () => {
+    if (!targetUserId || !user?.domainId || loading || !hasMore) return;
+    
+    const nextOffset = offset + LIMIT;
+    setLoading(true);
+    
+    try {
+      // @ts-ignore
+      const newRecommendations = await apiClient.getRecommendations(
+        user.domainId!,
+        targetUserId !== user?.id ? targetUserId : undefined,
+        LIMIT,
+        nextOffset
+      );
+      
+      setRecommendations(prev => [...prev, ...newRecommendations]);
+      setOffset(nextOffset);
+      
+      if (newRecommendations.length < LIMIT) {
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error('Failed to load more AI suggestions', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [targetUserId, user?.domainId, user?.id, loading, hasMore, offset]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const element = observerTarget.current;
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (element) {
+      observer.observe(element);
+    }
+
+    return () => {
+      if (element) {
+        observer.unobserve(element);
+      }
+    };
+  }, [loadMore, hasMore, loading]);
 
   const savePreferenceMutation = useSavePreference({
     domainId: user?.domainId!,
@@ -164,7 +229,8 @@ export const AISuggestionsPage = ({
     return `${truncated.toFixed(2)}%`;
   };
 
-  if (loading) {
+  // Only show full screen loader if we have no data yet
+  if (loading && recommendations.length === 0) {
     return (
       <div
         className="flex items-center justify-center min-h-screen"
@@ -209,126 +275,137 @@ export const AISuggestionsPage = ({
       )}
 
       {eligibility.isEligible && recommendations.length > 0 && (
-        <section
-          aria-label="AI suggested artworks"
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
-        >
-          {recommendations.map((item) => {
-            const isInProposal = proposalItems?.includes(item.id);
+        <>
+          <section
+            aria-label="AI suggested artworks"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
+          >
+            {recommendations.map((item) => {
+              const isInProposal = proposalItems?.includes(item.id);
 
-            return (
-              <article
-                key={item.id}
-                className="group flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300"
-                tabIndex={0}
-                aria-label={`${item.title} - similarity ${formatMatchPercentage(item.probabilityMatch)}`}
-              >
-                {/* Header: Match Score */}
-                <div className="px-4 pt-4 pb-2 flex justify-between items-center">
-                  {/* <div className="flex items-center gap-1.5 bg-purple-50 px-2.5 py-1 rounded-full">
-                    <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                    <span className="text-xs font-bold text-purple-700">
-                      {formatMatchPercentage(item.probabilityMatch)} Match
-                    </span>
-                  </div> */}
-                  {item.price !== undefined && (item.shouldDisplayPrice ?? true) && (
-                    <span className="text-xs font-semibold text-gray-900">
-                      ${item.price.toLocaleString()}
-                    </span>
-                  )}
-                </div>
-
-                {/* Image */}
-                <div className="relative aspect-[4/3] w-full bg-gray-100 mx-auto">
-                  <button
-                    type="button"
-                    className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none"
-                    onClick={() => {
-                      setSelectedArtwork(item);
-                      onArtworkClick?.(item);
-                    }}
-                    aria-label={`View details for ${item.title}`}
-                  >
-                    {item.filename ? (
-                      <img
-                        src={item.filename}
-                        alt={item.title}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-gray-400">No Image</div>
+              return (
+                <article
+                  key={item.id}
+                  className="group flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300"
+                  tabIndex={0}
+                  aria-label={`${item.title} - similarity ${formatMatchPercentage(item.probabilityMatch)}`}
+                >
+                  {/* Header: Match Score */}
+                  <div className="px-4 pt-4 pb-2 flex justify-between items-center">
+                    {isDomainOwner && (
+                      <div className="flex items-center gap-1.5 bg-purple-50 px-2.5 py-1 rounded-full">
+                        <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                        <span className="text-xs font-bold text-purple-700">
+                          {formatMatchPercentage(item.probabilityMatch)} Match
+                        </span>
+                      </div>
                     )}
-                  </button>
-
-                  {/* Proposal Badge */}
-                  {isInProposal && (
-                    <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm text-white text-xs font-medium px-2 py-0.5 rounded-full shadow-sm">
-                      In Proposal
-                    </div>
-                  )}
-                </div>
-
-                {/* Info */}
-                <div className="p-4 flex flex-col gap-1">
-                  <h3 className="font-bold text-lg text-gray-900 line-clamp-1" title={item.title}>
-                    {item.title}
-                  </h3>
-                  <p className="text-sm text-gray-500 line-clamp-1" title={item.artist}>
-                    {item.artist}
-                  </p>
-                </div>
-
-                {/* Actions Footer */}
-                <div className="mt-auto px-4 pb-4 pt-2 border-t border-gray-50 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={readonlyThumbs}
-                      onClick={() => !readonlyThumbs && handlePreferenceClick(item.id, true)}
-                      className={`p-2 rounded-full transition-colors ${item.likedStatus === 'Liked'
-                        ? 'bg-green-100 text-green-600'
-                        : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-                        }`}
-                      aria-label="Thumbs up"
-                    >
-                      <ThumbsUp className="w-5 h-5" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={readonlyThumbs}
-                      onClick={() => !readonlyThumbs && handlePreferenceClick(item.id, false)}
-                      className={`p-2 rounded-full transition-colors ${item.likedStatus === 'Disliked'
-                        ? 'bg-red-100 text-red-600'
-                        : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-                        }`}
-                      aria-label="Thumbs down"
-                    >
-                      <ThumbsDown className="w-5 h-5" />
-                    </button>
+                    {item.price !== undefined && (item.shouldDisplayPrice ?? true) && (
+                      <span className="text-xs font-semibold text-gray-900">
+                        ${item.price.toLocaleString()}
+                      </span>
+                    )}
                   </div>
 
-                  {onAddToProposal && (
+                  {/* Image */}
+                  <div className="relative aspect-[4/3] w-full bg-gray-100 mx-auto">
                     <button
                       type="button"
-                      onClick={() => handleProposalToggle(item)}
-                      className={`p-2 rounded-full transition-colors ${isInProposal
-                        ? 'bg-blue-100 text-blue-600'
-                        : 'text-gray-400 hover:bg-gray-100 hover:text-blue-600'
-                        }`}
-                      aria-label={isInProposal ? 'Remove from Proposal' : 'Add to Proposal'}
+                      className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none"
+                      onClick={() => {
+                        setSelectedArtwork(item);
+                        onArtworkClick?.(item);
+                      }}
+                      aria-label={`View details for ${item.title}`}
                     >
-                      <FileText className="w-5 h-5" />
+                      {item.filename ? (
+                        <img
+                          src={item.filename}
+                          alt={item.title}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-gray-400">No Image</div>
+                      )}
                     </button>
-                  )}
-                </div>
-              </article>
-            );
-          })}
-        </section>
+
+                    {/* Proposal Badge */}
+                    {isInProposal && (
+                      <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm text-white text-xs font-medium px-2 py-0.5 rounded-full shadow-sm">
+                        In Proposal
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div className="p-4 flex flex-col gap-1">
+                    <h3 className="font-bold text-lg text-gray-900 line-clamp-1" title={item.title}>
+                      {item.title}
+                    </h3>
+                    <p className="text-sm text-gray-500 line-clamp-1" title={item.artist}>
+                      {item.artist}
+                    </p>
+                  </div>
+
+                  {/* Actions Footer */}
+                  <div className="mt-auto px-4 pb-4 pt-2 border-t border-gray-50 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={readonlyThumbs}
+                        onClick={() => !readonlyThumbs && handlePreferenceClick(item.id, true)}
+                        className={`p-2 rounded-full transition-colors ${item.likedStatus === 'Liked'
+                          ? 'bg-green-100 text-green-600'
+                          : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                          }`}
+                        aria-label="Thumbs up"
+                      >
+                        <ThumbsUp className="w-5 h-5" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={readonlyThumbs}
+                        onClick={() => !readonlyThumbs && handlePreferenceClick(item.id, false)}
+                        className={`p-2 rounded-full transition-colors ${item.likedStatus === 'Disliked'
+                          ? 'bg-red-100 text-red-600'
+                          : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                          }`}
+                        aria-label="Thumbs down"
+                      >
+                        <ThumbsDown className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {onAddToProposal && (
+                      <button
+                        type="button"
+                        onClick={() => handleProposalToggle(item)}
+                        className={`p-2 rounded-full transition-colors ${isInProposal
+                          ? 'bg-blue-100 text-blue-600'
+                          : 'text-gray-400 hover:bg-gray-100 hover:text-blue-600'
+                          }`}
+                        aria-label={isInProposal ? 'Remove from Proposal' : 'Add to Proposal'}
+                      >
+                        <FileText className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </section>
+
+          {/* Sentinel element for infinite scroll */}
+          <div ref={observerTarget} className="h-10 mt-8 flex justify-center items-center">
+            {loading && hasMore && (
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            )}
+          </div>
+        </>
       )}
 
-      {eligibility.isEligible && recommendations.length === 0 && (
+      {eligibility.isEligible && recommendations.length === 0 && !loading && (
         <p className="py-12 text-center text-gray-600">
           No AI suggestions yet. Encourage additional tasting activity to enrich personalization.
         </p>

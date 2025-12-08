@@ -25,6 +25,7 @@ export type ProposalItem = {
   artworkId: string;
   comments: Comment[];
   status: ProposalItemStatus;
+  askedPrice: number;
 };
 
 export interface Proposal {
@@ -34,6 +35,7 @@ export interface Proposal {
   dealerId?: string; // who created the proposal
   items: ProposalItem[]; // list of artwork IDs
   status: ProposalStatus;
+  generalComments: Comment[];
   createdAt: number;
   updatedAt?: number;
   submittedAt?: number;

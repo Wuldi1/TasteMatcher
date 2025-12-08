@@ -3,7 +3,7 @@ import os
 import re
 import json
 from io import BytesIO
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageChops
 from glob import glob
 
 INPUT_PDF = ["Preview_NADA_Miami_2025_Polina_Berlin_Gallery", "MSNADA25NP", "Amanita_NADA_Miami_Preview", "Ghebaly ABMB2025", "KarmaArt-Basel-Miami-Beach2025Preview", "251103_MarinaPerezSimao_TomieOhtake_TY_ExhPacket_[79]", "Preview_Loral_Raphael_Polina_Berlin_Gallery"]
@@ -41,8 +41,15 @@ def extract_metadata(text):
     # Regex patterns
     # Date: matches 1999, 2023, c. 1950, 1980-90
     date_re = re.compile(r"(c\.\s*)?\b(18|19|20)\d{2}(?:[-–]\d{2,4})?\b", re.IGNORECASE)
-    # Dimensions: 10 x 20, 10.5 x 20.5 (allow spaces, x or ×)
-    dims_re = re.compile(r"(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
+    
+    # Dimensions with units
+    # Inches: 10 x 20 in, 10 x 20 inches, 10 x 20", 10x20in
+    dims_in_re = re.compile(r'(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:in|inch|inches|”|")', re.IGNORECASE)
+    # CM: 10 x 20 cm, 10x20cm
+    dims_cm_re = re.compile(r"(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:cm)", re.IGNORECASE)
+    # Generic (fallback): 10 x 20
+    dims_generic_re = re.compile(r"(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
+
     # Price: $10,000 or USD 10,000
     price_re = re.compile(r"(?:USD|\$)\s?([\d,]+)", re.IGNORECASE)
     # Signature keywords
@@ -61,7 +68,30 @@ def extract_metadata(text):
             continue
 
         # Check Dimensions
-        m_dims = dims_re.search(line)
+        # 1. Try explicit inches
+        m_in = dims_in_re.search(line)
+        if m_in:
+            try:
+                height = float(m_in.group(1))
+                width = float(m_in.group(2))
+                continue
+            except ValueError:
+                pass
+
+        # 2. Try explicit cm (convert to inches)
+        m_cm = dims_cm_re.search(line)
+        if m_cm:
+            try:
+                h_cm = float(m_cm.group(1))
+                w_cm = float(m_cm.group(2))
+                height = round(h_cm / 2.54, 2)
+                width = round(w_cm / 2.54, 2)
+                continue
+            except ValueError:
+                pass
+
+        # 3. Fallback to generic (assume inches)
+        m_dims = dims_generic_re.search(line)
         if m_dims:
             try:
                 # Convention: Height x Width
@@ -134,6 +164,34 @@ def _pix_to_png_bytes(pix):
             return pix.getPNGData()
         except Exception:
             return None
+
+
+def trim_grey_margins(image, tolerance=50):
+    """
+    Trims margins that are similar to the top-left pixel color.
+    Useful for removing grey wall backgrounds or white page margins.
+    """
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+        
+    bg_color = image.getpixel((0, 0))
+    
+    # Create a background image of the same color
+    bg = Image.new(image.mode, image.size, bg_color)
+    
+    # Find difference
+    diff = ImageChops.difference(image, bg)
+    
+    # Convert to grayscale
+    diff = diff.convert("L")
+    
+    # Threshold the difference: pixels closer than tolerance to bg_color become 0 (black)
+    mask = diff.point(lambda x: 255 if x > tolerance else 0)
+    
+    bbox = mask.getbbox()
+    if bbox:
+        return image.crop(bbox)
+    return image
 
 
 def process_pdf_file(pdf_path: str):
@@ -316,13 +374,29 @@ def process_pdf_file(pdf_path: str):
                 print(f"⚠️  Empty image for page {page_index+1}, skipping.")
                 continue
 
-            # Save cropped or full page image
-            image_path = os.path.join(art_folder, "image.png")
-            try:
-              pix.save(image_path)
-              print(f"✅ Extracted: {meta['title']} (page {page_index+1}) -> saved image")
-            except Exception as e:
-              print(f"❌ Failed to save image for page {page_index+1}: {e}")
+            # Convert to PIL to apply smart cropping
+            png_bytes = _pix_to_png_bytes(pix)
+            if png_bytes:
+                try:
+                    img = Image.open(BytesIO(png_bytes)).convert("RGB")
+                    
+                    # Apply cropping to remove background (grey, white, etc.)
+                    img = trim_grey_margins(img, tolerance=50)
+                    
+                    # Save cropped image
+                    image_path = os.path.join(art_folder, "image.png")
+                    img.save(image_path)
+                    print(f"✅ Extracted: {meta['title']} (page {page_index+1}) -> saved image")
+                except Exception as e:
+                    print(f"❌ Failed to process/save image for page {page_index+1}: {e}")
+            else:
+                # Fallback
+                image_path = os.path.join(art_folder, "image.png")
+                try:
+                    pix.save(image_path)
+                    print(f"✅ Extracted: {meta['title']} (page {page_index+1}) -> saved image (raw)")
+                except Exception as e:
+                    print(f"❌ Failed to save image for page {page_index+1}: {e}")
         except Exception as page_err:
             print(f"⚠️  Error processing page {page_index+1} of {pdf_path}: {page_err}")
             continue

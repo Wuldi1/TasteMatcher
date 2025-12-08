@@ -9,21 +9,41 @@
 // 8. Adds meaningful JSDoc for exported functions/classes.
 // 9. CI-friendly: code passes lint, typecheck, and tests locally.
 // -----------------------------------------------------------
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { apiClient } from '../utils/api';
 import SaleProposal from '../components/SaleProposal';
 import { useAuth } from '../contexts/AuthContext';
 import { ArtworkStats, Proposal, ProposalItem, User, Artwork } from '@tastematcher/common';
 import { AISuggestionsPage } from './AISuggestions/AISuggestionsPage';
 import CatalogForUser from '../components/Catalog/CatalogForUser';
-import { Mail, Shield, Activity, Database, Layers, MessageSquare, FileText, ChevronDown } from 'lucide-react';
+import { Mail, Shield, Activity, Database, Layers, MessageSquare, FileText, ChevronDown, X, Send } from 'lucide-react';
 
 type UserItem = { id: string; name?: string };
+
+// Helper component for image slideshow
+const ImageSlideshow = ({ images, onImageClick }: { images: string[], onImageClick: (src: string) => void }) => {
+    if (!images || images.length === 0) return <div className="text-gray-400 italic text-sm">No images uploaded</div>;
+
+    return (
+        <div className="flex gap-3 overflow-x-auto pb-2 snap-x scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+            {images.map((src, idx) => (
+                <div 
+                    key={idx} 
+                    className="flex-shrink-0 w-40 h-40 rounded-lg overflow-hidden border border-gray-200 snap-start cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all" 
+                    onClick={() => onImageClick(src)}
+                >
+                    <img src={src} alt={`Reference ${idx + 1}`} className="w-full h-full object-cover" />
+                </div>
+            ))}
+        </div>
+    );
+};
 
 export default function SalesPage() {
     const { user } = useAuth();
     const domainId = user?.domainId ?? 'default';
     const isGlobalAdmin = user?.role === 'global_admin';
+    
     // Domains (only used for global_admin)
     const [domains, setDomains] = useState<{ id: string; name?: string; adminEmail?: string }[]>([]);
     const [selectedDomainId, setSelectedDomainId] = useState<string | undefined>(isGlobalAdmin ? undefined : domainId);
@@ -47,6 +67,14 @@ export default function SalesPage() {
     const [stats, setStats] = useState<ArtworkStats | null>(null);
     const [statsLoading, setStatsLoading] = useState(false);
     const [statsError, setStatsError] = useState<string | null>(null);
+
+    // Chat state
+    const [newChatComment, setNewChatComment] = useState('');
+    const [isSendingChat, setIsSendingChat] = useState(false);
+    const chatEndRef = useRef<HTMLDivElement>(null);
+
+    // Lightbox state
+    const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
     // New: proposal draft state
     const [proposalItem, setProposalItem] = useState<ProposalItem[]>([]);
@@ -157,7 +185,7 @@ export default function SalesPage() {
             return;
         }
 
-        (async () => {
+        const fetchUser = async () => {
             setUserDetailsLoading(true);
             setUserDetailsError(null);
             try {
@@ -172,9 +200,38 @@ export default function SalesPage() {
             } finally {
                 setUserDetailsLoading(false);
             }
-        })();
+        };
+
+        fetchUser();
         // include domain selection and admin flag (primitives) so effect re-runs only when they change
     }, [selectedUserId, isGlobalAdmin, selectedDomainId]);
+
+    // Scroll chat to bottom when comments update
+    useEffect(() => {
+        if (activeTab === 'details' && userDetails?.comments) {
+            chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [userDetails?.comments, activeTab]);
+
+    const handleSendChat = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newChatComment.trim() || !selectedUserId) return;
+
+        setIsSendingChat(true);
+        try {
+            await apiClient.addUserComment(selectedUserId, newChatComment);
+            setNewChatComment('');
+            
+            // Refresh user details to show new comment
+            const domainToRequest = isGlobalAdmin ? selectedDomainId : undefined;
+            const updatedUser = await apiClient.getUser(selectedUserId, domainToRequest);
+            setUserDetails(updatedUser);
+        } catch (error) {
+            console.error('Failed to send chat message', error);
+        } finally {
+            setIsSendingChat(false);
+        }
+    };
 
     useEffect(() => {
         // Use effectiveDomainId (selectedDomainId for admins, user's domain otherwise)
@@ -203,18 +260,39 @@ export default function SalesPage() {
     function renderQuestionnaire(q: Record<string, unknown>) {
         // Render as sections if nested, otherwise key/value rows
         return Object.entries(q).map(([k, v]) => {
+            // Handle completedAt specifically
+            if (k === 'completedAt' && typeof v === 'number') {
+                 return (
+                    <div key={k} className="mb-4 border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                        <div className="text-xs font-medium text-gray-500 mb-1">{humanize(k)}</div>
+                        <div className="text-sm text-gray-900 font-medium">{new Date(v).toLocaleString()}</div>
+                    </div>
+                );
+            }
+
             if (v && typeof v === 'object' && !Array.isArray(v)) {
                 const section = v as Record<string, unknown>;
                 return (
                     <div key={k} className="mb-6 border-b border-gray-100 pb-4 last:border-0 last:pb-0">
                         <h4 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">{humanize(k)}</h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {Object.entries(section).map(([sk, sv]) => (
-                                <div key={sk} className="text-sm">
-                                    <div className="text-xs font-medium text-gray-500 mb-1">{humanize(sk)}</div>
-                                    <div className="text-sm text-gray-900 font-medium">{formatValue(sv)}</div>
-                                </div>
-                            ))}
+                            {Object.entries(section).map(([sk, sv]) => {
+                                // Handle imageUrls specifically
+                                if (sk === 'imageUrls' && Array.isArray(sv)) {
+                                     return (
+                                        <div key={sk} className="text-sm sm:col-span-2">
+                                            <div className="text-xs font-medium text-gray-500 mb-2">{humanize(sk)}</div>
+                                            <ImageSlideshow images={sv as string[]} onImageClick={setLightboxImage} />
+                                        </div>
+                                    );
+                                }
+                                return (
+                                    <div key={sk} className="text-sm">
+                                        <div className="text-xs font-medium text-gray-500 mb-1">{humanize(sk)}</div>
+                                        <div className="text-sm text-gray-900 font-medium">{formatValue(sv)}</div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 );
@@ -276,6 +354,27 @@ export default function SalesPage() {
     // --- New styled tab bar and enhanced Details panel UI ---
     return (
         <div className="p-4 sm:p-6 md:p-8">
+            {/* Lightbox Modal */}
+            {lightboxImage && (
+                <div 
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 transition-opacity duration-300" 
+                    onClick={() => setLightboxImage(null)}
+                >
+                    <button 
+                        className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+                        aria-label="Close"
+                    >
+                        <X className="w-6 h-6" />
+                    </button>
+                    <img 
+                        src={lightboxImage} 
+                        alt="Full size reference" 
+                        className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" 
+                        onClick={(e) => e.stopPropagation()} 
+                    />
+                </div>
+            )}
+
             <header className="mb-8">
                 <h1 className="text-3xl font-bold text-gray-900">Sales Management</h1>
                 <p className="text-sm text-gray-500 mt-1">Create proposals, browse catalog, and view AI suggestions.</p>
@@ -500,6 +599,65 @@ export default function SalesPage() {
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Chat Section */}
+                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-[500px]">
+                                    <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                                        <MessageSquare className="w-5 h-5 text-blue-500" />
+                                        <span className="font-medium text-gray-700">Chat with Customer</span>
+                                    </div>
+                                    
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/30">
+                                        {(!userDetails.comments || userDetails.comments.length === 0) ? (
+                                            <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                                                <MessageSquare className="w-12 h-12 mb-2 opacity-20" />
+                                                <p>No messages yet.</p>
+                                            </div>
+                                        ) : (
+                                            userDetails.comments.map((comment, idx) => {
+                                                // In sales view, "Me" is the dealer/admin. Customer is the other.
+                                                // We check if the author matches the customer's name/email to align left.
+                                                const isCustomer = comment.author === userDetails.name || comment.author === userDetails.email;
+                                                
+                                                return (
+                                                    <div key={idx} className={`flex ${!isCustomer ? 'justify-end' : 'justify-start'}`}>
+                                                        <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                                                            !isCustomer 
+                                                                ? 'bg-blue-600 text-white rounded-br-none' 
+                                                                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'
+                                                        }`}>
+                                                            <div className={`text-xs mb-1 ${!isCustomer ? 'text-blue-100' : 'text-gray-500'}`}>
+                                                                {!isCustomer ? 'You' : comment.author} • {new Date(comment.createdAt).toLocaleDateString()}
+                                                            </div>
+                                                            <p className="text-sm whitespace-pre-wrap">{comment.text}</p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                        <div ref={chatEndRef} />
+                                    </div>
+
+                                    <div className="p-4 bg-white border-t border-gray-100">
+                                        <form onSubmit={handleSendChat} className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={newChatComment}
+                                                onChange={(e) => setNewChatComment(e.target.value)}
+                                                placeholder="Type a message to the customer..."
+                                                className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                disabled={isSendingChat}
+                                            />
+                                            <button
+                                                type="submit"
+                                                disabled={!newChatComment.trim() || isSendingChat}
+                                                className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                            >
+                                                <Send className="w-5 h-5" />
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -612,7 +770,7 @@ export default function SalesPage() {
                                     domainId={effectiveDomainId ?? domainId}
                                     dealerEmail={user?.email}
                                     userId={selectedUserId}
-                                    userName={userDetails?.name ?? userDetails?.email ?? 'Dealer'}
+                                    userName={userDetails?.name ?? userDetails?.email ?? 'Specialist'}
                                     draftItems={proposalItem}
                                     onDraftChange={(items: ProposalItem[]) => setProposalItem(items)}
                                     proposalId={proposalDetails?.id}

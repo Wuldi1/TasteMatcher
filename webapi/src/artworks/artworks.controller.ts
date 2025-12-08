@@ -52,6 +52,8 @@ export class ArtworksController {
     @Request() req: AuthenticatedRequest,
     @Param('domainId') domainId: string,
     @Query('userId') targetUserId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ): Promise<Array<Artwork>> {
     if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
@@ -64,7 +66,16 @@ export class ArtworksController {
       throw new ForbiddenException('Customers cannot request suggestions for other users.');
     }
 
-    const recommendedArtworks = await this.artworksService.getRecommendationsForUser(domainId, req.user, targetUserId);
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    const offsetNum = offset ? parseInt(offset, 10) : 0;
+
+    const recommendedArtworks = await this.artworksService.getRecommendationsForUser(
+      domainId,
+      req.user,
+      targetUserId,
+      limitNum,
+      offsetNum,
+    );
     return recommendedArtworks.map(artwork => cleanupArtworkBeforeResponseToClient(artwork, req.user.role) as Artwork);
   }
 

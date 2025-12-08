@@ -419,25 +419,30 @@ export class ArtworksService {
     domainId: string,
     requester: { id: string; role: string },
     targetUserId?: string,
+    limit: number = 20,
+    offset: number = 0,
   ): Promise<Array<Artwork>> {
     const resolvedUserId =
       (requester.role === 'dealer' || requester.role === 'domain_owner' || requester.role === 'global_admin') && targetUserId
         ? targetUserId
         : requester.id;
 
-    const numberOfRecommendations = 25;
+    // Fetch more candidates to account for filtering
+    const fetchCount = (offset + limit) * 3;
     const start = Date.now();
     this.logger.debug({
       msg: 'Fetching AI suggestions',
       domainId,
       requesterId: requester.id,
       targetUserId: resolvedUserId,
+      limit,
+      offset,
     });
 
     try {
       const userRecord = await this.cosmosService.getUser(domainId, resolvedUserId);
 
-      const { totalArtworks, totalSwiped, recentlyAdded } = await this.getStats(domainId, resolvedUserId);
+      const { totalSwiped } = await this.getStats(domainId, resolvedUserId);
       userRecord.swipeCount = totalSwiped;
 
       const { isEligible, reasons } = getAIRecommendationsEligibility(userRecord);
@@ -477,7 +482,7 @@ export class ArtworksService {
       const matches = await this.searchIndexService.searchSimilarArtworks(
         domainId,
         preferenceVector,
-        numberOfRecommendations * 2, // fetch more to account for already tasted artworks
+        fetchCount,
       );
 
       const artworksContainer = await this.cosmosService.getArtworksContainer();
@@ -500,6 +505,25 @@ export class ArtworksService {
       });
 
       for (const match of matches) {
+        const liked = preferencesMap.get(match.artworkId);
+        let shouldInclude = true;
+
+        if (requester.role === 'customer') {
+          // Customer: filter out all artworks with either liked status (liked and disliked)
+          if (liked !== undefined) {
+            shouldInclude = false;
+          }
+        } else {
+          // Others: retrieve all artworks except disliked
+          if (liked === false) {
+            shouldInclude = false;
+          }
+        }
+
+        if (!shouldInclude) {
+          continue;
+        }
+
         try {
           const { resource: artwork } = await artworksContainer
             .item(match.artworkId, domainId)
@@ -509,7 +533,6 @@ export class ArtworksService {
             artwork.probabilityMatch = match.score;
 
             // Attach liked status to the artwork
-            const liked = preferencesMap.get(artwork.id);
             if (liked === undefined) {
               artwork.likedStatus = LikedStatus.NotTasted;
             } else if (liked) {
@@ -537,21 +560,9 @@ export class ArtworksService {
         recommendationCount: recommendedArtworks.length,
         durationMs: Date.now() - start,
       });
-      // return the top 10 recommended artworks. We prefer those with highest probabilityMatch and not yet tasted, but the results will always be 10.
-      const topArtworks = recommendedArtworks.slice(0, numberOfRecommendations);
-      const topArtworksWithoutTasted = recommendedArtworks.filter(art => art.likedStatus === LikedStatus.NotTasted);
 
-      // if topArtworksWithoutTasted has less than 10, fill the rest with tasted artworks that have highest probabilityMatch and not already included
-      if (topArtworksWithoutTasted.length < numberOfRecommendations) {
-        const needed = numberOfRecommendations - topArtworksWithoutTasted.length;
-        const tastedArtworks = topArtworks
-          .filter(art => art.likedStatus !== LikedStatus.NotTasted)
-          .slice(0, needed);
-
-        return [...topArtworksWithoutTasted, ...tastedArtworks].sort((a, b) => (b.probabilityMatch || 0) - (a.probabilityMatch || 0));
-      }
-
-      return recommendedArtworks;
+      // Apply pagination
+      return recommendedArtworks.slice(offset, offset + limit);
 
     } catch (error) {
       this.logger.error({

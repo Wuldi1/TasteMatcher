@@ -454,6 +454,15 @@ export function Management() {
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
+  const getStatusDisplayText = (status: string) => {
+    const statusDisplayMap: { [key: string]: string } = {
+      pending_verification: 'Pending Verification',
+      active: 'Active',
+      onboarded: 'Onboarded',
+    };
+    return statusDisplayMap[status] || status;
+  }
+
   const getRoleBadge = (role: Role) => {
     const colors = {
       domain_owner: 'bg-purple-100 text-purple-800',
@@ -463,6 +472,16 @@ export function Management() {
     };
     return colors[role] || 'bg-gray-100 text-gray-800';
   };
+
+  const getRoleDisplayText = (role: Role) => {
+    const roleDisplayMap: { [key in Role]: string } = {
+      domain_owner: 'Domain Owner',
+      dealer: 'Specialist',
+      customer: 'Customer',
+      global_admin: 'Global Admin',
+    };
+    return roleDisplayMap[role] || role;
+  }
 
   const getDomainStatusBadge = (status?: string) => {
     if (!status) return 'bg-gray-100 text-gray-800';
@@ -574,7 +593,7 @@ export function Management() {
                       >
                         <option value="all">All Roles</option>
                         <option value="customer">Customer</option>
-                        <option value="dealer">Dealer</option>
+                        <option value="dealer">Specialist</option>
                         <option value="domain_owner">Domain Owner</option>
                         <option value="global_admin">Global Admin</option>
                       </select>
@@ -662,12 +681,13 @@ export function Management() {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleBadge(u.role)}`}>
-                                  {u.role}
+                                  { /* we translate role value into display text */}
+                                  {getRoleDisplayText(u.role)}
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadge(u.status)}`}>
-                                  {u.status}
+                                  {getStatusDisplayText(u.status)}
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(u.createdAt)}</td>
@@ -1246,7 +1266,7 @@ export function Management() {
                 >
                   <option value="customer">Customer</option>
                   {/* Hide the dealer option if the current user is a dealer */}
-                  {user?.role !== 'dealer' && <option value="dealer">Dealer</option>}
+                  {user?.role !== 'dealer' && <option value="dealer">Specialist</option>}
                 </select>
               </div>
 
@@ -1312,7 +1332,7 @@ export function Management() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="customer">Customer</option>
-                  <option value="dealer">Dealer</option>
+                  <option value="dealer">Specialist</option>
                 </select>
               </div>
 

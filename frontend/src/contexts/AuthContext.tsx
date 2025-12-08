@@ -38,45 +38,13 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
  * @returns The total number of questions.
  */
 function calculateTotalQuestions(): number {
-    const questionnaire: PersonalQuestionnaire = {
-        personalDetails: {
-            location: '',
-            secondaryLocations: [],
-            profession: '',
-            culturalInfluences: '',
-            maritalStatus: 'single',
-            residences: [],
-            hasChildren: false,
-            numberOfChildren: 0,
-            currentlyCollects: false,
-            currentCollection: '',
-            familyCollects: false,
-        },
-        collectingPreferences: {
-            themes: '',
-            artistsOrMovements: '',
-            collectingStyle: 'conceptual',
-            displayLocations: [],
-            startedCollecting: '',
-            firstAcquisition: '',
-            evolutionOfFocus: '',
-            mentorsOrAdvisors: '',
-            eventsAttended: '',
-            museumBoards: '',
-            artistEngagement: '',
-        },
-        artworkPreferences: {
-            description: '',
-            referenceImageUrls: [],
-        },
-    };
-
-    return Object.values(questionnaire).reduce((total, section) => {
-        if (typeof section === 'object' && section !== null) {
-            return total + Object.keys(section).length;
-        }
-        return total;
-    }, 0);
+    // 1. Collection Type
+    // 2. About Yourself
+    // 3. Current Location
+    // 4. Other Residences
+    // 5. Collection Goals
+    // 6. Aesthetic Admiration (Description + Images)
+    return 6;
 }
 
 /**
@@ -85,12 +53,18 @@ function calculateTotalQuestions(): number {
  * @returns The number of answered questions.
  */
 function calculateAnsweredQuestions(questionnaire: PersonalQuestionnaire): number {
-    return Object.values(questionnaire).reduce((count, section) => {
-        if (typeof section === 'object' && section !== null) {
-            return count + Object.values(section).filter((value) => value !== undefined && value !== null).length;
-        }
-        return count;
-    }, 0);
+    let count = 0;
+    if (questionnaire.collectionType) count++;
+    if (questionnaire.aboutYourself) count++;
+    if (questionnaire.currentLocation) count++;
+    if (questionnaire.hasOtherResidences !== undefined) count++;
+    if (questionnaire.collectionGoals) count++;
+    
+    const hasAdmirationText = !!questionnaire.aestheticAdmiration?.description;
+    const hasAdmirationImages = (questionnaire.aestheticAdmiration?.imageUrls?.length ?? 0) > 0;
+    if (hasAdmirationText || hasAdmirationImages) count++;
+
+    return count;
 }
 
 /**
@@ -194,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       onboardingStatus: userData.onboardingStatus || 'not_started',
       personalQuestionnaire: userData.personalQuestionnaire,
       swipeCount: userData.swipeCount || 0,
+      comments: userData.comments || [],
     });
 
   }, []);

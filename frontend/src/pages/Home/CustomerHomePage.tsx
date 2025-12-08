@@ -14,16 +14,20 @@
 import { useAuth } from '../../contexts/AuthContext';
 import { useProposalData } from '../../hooks/useProposalData';
 import { Link, useNavigate } from 'react-router-dom';
-import { CheckCircle, ThumbsUp, ThumbsDown, FileText, Sparkles, LayoutGrid } from 'lucide-react';
+import { CheckCircle, ThumbsUp, ThumbsDown, FileText, Sparkles, LayoutGrid, MessageSquare, Send } from 'lucide-react';
 import './HomePage.css';
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { User } from '@tastematcher/common';
+import { apiClient } from '../../utils/api';
 
 /**
  * Redesigned Home Page as a dashboard.
  */
 export function CustomerHomePage() {
     const { user, refreshUser, stats, answeredQuestions, totalQuestions } = useAuth();
+    const [newComment, setNewComment] = useState('');
+    const [isSendingComment, setIsSendingComment] = useState(false);
+    const commentsEndRef = useRef<HTMLDivElement>(null);
 
     // Fetch proposal metadata
     const { hasSubmittedProposal, proposalMetadata, loading } = useProposalData(user?.domainId, user?.id);
@@ -46,6 +50,28 @@ export function CustomerHomePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Only run once on mount
 
+    // Scroll to bottom of comments when they change
+    useEffect(() => {
+        if (user?.comments?.length) {
+            commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [user?.comments]);
+
+    const handleSendComment = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newComment.trim() || !user?.id) return;
+
+        setIsSendingComment(true);
+        try {
+            await apiClient.addUserComment(user.id, newComment);
+            setNewComment('');
+            await refreshUser();
+        } catch (error) {
+            console.error('Failed to send comment', error);
+        } finally {
+            setIsSendingComment(false);
+        }
+    };
 
     // Calculate onboarding progress
     const onboardingProgress = totalQuestions - answeredQuestions;
@@ -148,6 +174,65 @@ export function CustomerHomePage() {
                         <p className="text-sm text-gray-600">Last Updated: {proposalMetadata.lastUpdated ? new Date(proposalMetadata.lastUpdated).toLocaleString() : 'NaN'}</p>
                     </div>
                 )}
+            </section>
+
+            {/* Chat with Specialist */}
+            <section className="space-y-6">
+                <h2 className="text-xl font-semibold">Contact Specialist</h2>
+                <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-[500px]">
+                    <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                        <MessageSquare className="w-5 h-5 text-blue-500" />
+                        <span className="font-medium text-gray-700">Messages</span>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/30">
+                        {(!user.comments || user.comments.length === 0) ? (
+                            <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                                <MessageSquare className="w-12 h-12 mb-2 opacity-20" />
+                                <p>No messages yet. Start a conversation!</p>
+                            </div>
+                        ) : (
+                            user.comments.map((comment, idx) => {
+                                const isMe = comment.author === user.name || comment.author === user.email;
+                                return (
+                                    <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                                            isMe 
+                                                ? 'bg-blue-600 text-white rounded-br-none' 
+                                                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'
+                                        }`}>
+                                            <div className={`text-xs mb-1 ${isMe ? 'text-blue-100' : 'text-gray-500'}`}>
+                                                {isMe ? 'You' : comment.author} • {new Date(comment.createdAt).toLocaleDateString()}
+                                            </div>
+                                            <p className="text-sm whitespace-pre-wrap">{comment.text}</p>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                        <div ref={commentsEndRef} />
+                    </div>
+
+                    <div className="p-4 bg-white border-t border-gray-100">
+                        <form onSubmit={handleSendComment} className="flex gap-2">
+                            <input
+                                type="text"
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                placeholder="Type a message..."
+                                className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                disabled={isSendingComment}
+                            />
+                            <button
+                                type="submit"
+                                disabled={!newComment.trim() || isSendingComment}
+                                className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                <Send className="w-5 h-5" />
+                            </button>
+                        </form>
+                    </div>
+                </div>
             </section>
         </div>
     );

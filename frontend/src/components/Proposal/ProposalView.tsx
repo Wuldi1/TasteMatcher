@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { apiClient } from '../../utils/api';
 import type { Proposal, ProposalItem, Comment, Artwork } from '@tastematcher/common';
-import { CheckCircle, XCircle, Clock, Send, Save, MessageSquare } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Send, Save, MessageSquare, Calendar, DollarSign, Image as ImageIcon } from 'lucide-react';
 
 export default function ProposalView({
   proposal,
@@ -10,9 +10,11 @@ export default function ProposalView({
   proposal: Proposal;
   onStatusChange?: (status: 'accepted' | 'rejected' | 'submitted') => void;
 }) {
-  const { items = [], userId, domainId, id } = proposal;
+  const { items = [], userId, domainId, id, generalComments: initialGeneralComments = [] } = proposal;
 
   const [localItems, setLocalItems] = useState<ProposalItem[]>(items);
+  const [generalComments, setGeneralComments] = useState<Comment[]>(initialGeneralComments);
+  const [newGeneralComment, setNewGeneralComment] = useState('');
   const [newComments, setNewComments] = useState<Record<string, string>>({});
   const [artworkDataById, setArtworkDataById] = useState<Record<string, Artwork>>({});
   const [saving, setSaving] = useState(false);
@@ -26,7 +28,14 @@ export default function ProposalView({
   // Sync incoming draft changes
   useEffect(() => {
     setLocalItems(items);
-  }, [items]);
+    setGeneralComments(initialGeneralComments);
+  }, [items, initialGeneralComments]);
+
+  // Check for changes
+  const isDirty = useMemo(() => {
+    if (newGeneralComment.trim().length > 0) return true;
+    return JSON.stringify(localItems) !== JSON.stringify(items);
+  }, [localItems, items, newGeneralComment]);
 
   // Load artwork data for each artworkId in the proposal
   useEffect(() => {
@@ -88,22 +97,37 @@ export default function ProposalView({
     setNewComments((prev) => ({ ...prev, [artworkId]: '' }));
   };
 
-  // Save proposal changes
-  const handleSave = async () => {
+  // Save proposal changes (Update)
+  const handleUpdate = async () => {
     setSaving(true);
     try {
+      const updatedGeneralComments = [...generalComments];
+      if (newGeneralComment.trim()) {
+        updatedGeneralComments.push({
+            author: 'Customer',
+            text: newGeneralComment.trim(),
+            createdAt: Date.now()
+        });
+      }
+
       const payload: Partial<Proposal> = {
         userId,
         items: localItems.map((item) => ({
           artworkId: item.artworkId,
           comments: item.comments,
           status: item.status,
+          askedPrice: item.askedPrice,
         })),
+        generalComments: updatedGeneralComments,
       };
 
-      await apiClient.updateProposal(domainId, id, payload);
-      showAlert('Success', 'Proposal saved successfully!');
-      onStatusChange?.('submitted');
+      const updated = await apiClient.updateProposal(domainId, id, payload);
+      
+      // Update local state
+      setGeneralComments(updated.generalComments || []);
+      setNewGeneralComment('');
+      
+      showAlert('Success', 'Proposal updated successfully!');
     } catch (err) {
       console.error('Failed to save proposal', err);
       showAlert('Error', 'Failed to save proposal');
@@ -112,6 +136,24 @@ export default function ProposalView({
     }
   };
 
+  const handleStatusUpdate = async (status: 'accepted' | 'rejected') => {
+      setSaving(true);
+      try {
+          await apiClient.updateProposal(domainId, id, { status });
+          showAlert('Success', `Proposal ${status}!`);
+          onStatusChange?.(status);
+      } catch (err) {
+          console.error(`Failed to ${status} proposal`, err);
+          showAlert('Error', `Failed to ${status} proposal`);
+      } finally {
+          setSaving(false);
+      }
+  };
+
+  // Calculate summary stats
+  const totalAskedPrice = localItems.reduce((sum, item) => sum + (item.askedPrice || 0), 0);
+  const lastUpdatedDate = proposal.updatedAt ? new Date(proposal.updatedAt).toLocaleDateString() : new Date(proposal.createdAt).toLocaleDateString();
+
   return (
     <div
       className="max-w-6xl mx-auto space-y-8 px-4 sm:px-6"
@@ -119,21 +161,88 @@ export default function ProposalView({
       style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 16px) + 160px)' }}
     >
       {/* Header */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Proposal Offer</h1>
-          <p className="text-gray-500 mt-1">Review the curated selection below</p>
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Proposal Offer</h1>
+            <p className="text-gray-500 mt-1">Review the curated selection below</p>
+          </div>
+          <div className={`px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2 capitalize ${
+              proposal.status === 'accepted' ? 'bg-green-100 text-green-700' :
+              proposal.status === 'rejected' ? 'bg-red-100 text-red-700' :
+              'bg-blue-50 text-blue-700'
+          }`}>
+              {proposal.status === 'accepted' && <CheckCircle className="w-4 h-4" />}
+              {proposal.status === 'rejected' && <XCircle className="w-4 h-4" />}
+              {proposal.status === 'submitted' && <Clock className="w-4 h-4" />}
+              {proposal.status}
+          </div>
         </div>
-        <div className={`px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2 capitalize ${
-            proposal.status === 'accepted' ? 'bg-green-100 text-green-700' :
-            proposal.status === 'rejected' ? 'bg-red-100 text-red-700' :
-            'bg-blue-50 text-blue-700'
-        }`}>
-            {proposal.status === 'accepted' && <CheckCircle className="w-4 h-4" />}
-            {proposal.status === 'rejected' && <XCircle className="w-4 h-4" />}
-            {proposal.status === 'submitted' && <Clock className="w-4 h-4" />}
-            {proposal.status}
+
+        {/* Summary Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-gray-100">
+            <div className="flex items-center gap-3 text-gray-600">
+                <div className="p-2 bg-gray-50 rounded-lg">
+                    <ImageIcon className="w-5 h-5 text-gray-500" />
+                </div>
+                <div>
+                    <p className="text-xs text-gray-400 uppercase font-medium">Artworks</p>
+                    <p className="font-semibold text-gray-900">{localItems.length} Items</p>
+                </div>
+            </div>
+            <div className="flex items-center gap-3 text-gray-600">
+                <div className="p-2 bg-gray-50 rounded-lg">
+                    <DollarSign className="w-5 h-5 text-gray-500" />
+                </div>
+                <div>
+                    <p className="text-xs text-gray-400 uppercase font-medium">Total Value</p>
+                    <p className="font-semibold text-gray-900">${totalAskedPrice.toLocaleString()}</p>
+                </div>
+            </div>
+            <div className="flex items-center gap-3 text-gray-600">
+                <div className="p-2 bg-gray-50 rounded-lg">
+                    <Calendar className="w-5 h-5 text-gray-500" />
+                </div>
+                <div>
+                    <p className="text-xs text-gray-400 uppercase font-medium">Last Updated</p>
+                    <p className="font-semibold text-gray-900">{lastUpdatedDate}</p>
+                </div>
+            </div>
         </div>
+      </div>
+
+      {/* General Comments Section */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <div className="flex items-center gap-2 mb-4">
+            <MessageSquare className="w-5 h-5 text-gray-500" />
+            <h3 className="text-lg font-bold text-gray-900">General Discussion</h3>
+        </div>
+        
+        {generalComments.length > 0 && (
+            <div className="space-y-3 mb-6">
+                {generalComments.map((comment, index) => (
+                    <div key={index} className={`p-3 rounded-lg border ${comment.author === 'Customer' ? 'bg-blue-50 border-blue-100 ml-8' : 'bg-gray-50 border-gray-100 mr-8'}`}>
+                        <div className="flex justify-between items-baseline mb-1">
+                            <span className="font-semibold text-sm text-gray-700">{comment.author}</span>
+                            <span className="text-xs text-gray-500">{new Date(comment.createdAt).toLocaleDateString()} {new Date(comment.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{comment.text}</p>
+                    </div>
+                ))}
+            </div>
+        )}
+
+        {!isReadOnly && (
+            <div className="relative">
+                <textarea
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+                    rows={3}
+                    placeholder="Add a general comment or question about this proposal..."
+                    value={newGeneralComment}
+                    onChange={(e) => setNewGeneralComment(e.target.value)}
+                />
+            </div>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -221,7 +330,7 @@ export default function ProposalView({
                         </div>
                         <div>
                             <span className="block text-xs text-gray-400 uppercase tracking-wider">Price</span>
-                            {artwork?.price !== undefined ? <span className="font-semibold text-green-700">${artwork.price.toLocaleString()}</span> : '—'}
+                            {item.askedPrice !== undefined ? <span className="font-semibold text-green-700">${item.askedPrice.toLocaleString()}</span> : '—'}
                         </div>
                     </div>
 
@@ -316,29 +425,27 @@ export default function ProposalView({
         )}
       </div>
 
-      {/* Sticky Bottom Actions — positioned above mobile bottom bars using safe-area inset */}
+      {/* Sticky Bottom Actions */}
       <div
-        className="fixed left-0 right-0 bg-white/90 backdrop-blur-md border-t border-gray-200 p-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
-        // lift the bar above mobile bottom navigation / home indicator (larger offset)
-        style={{ bottom: 'calc(env(safe-area-inset-bottom, 16px) + 88px)' }}
+        className="fixed left-0 right-0 bg-white/90 backdrop-blur-md border-t border-gray-200 p-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] bottom-[calc(env(safe-area-inset-bottom,0px)+64px)] md:bottom-0"
       >
         <div className="max-w-6xl mx-auto flex justify-end gap-3">
             {!isReadOnly && (
                 <button
-                    onClick={handleSave}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
-                    disabled={saving}
+                    onClick={handleUpdate}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={saving || !isDirty}
                 >
-                    <Save className="w-4 h-4" />
-                    Save Draft
+                    <Save className={`w-4 h-4 ${saving ? 'animate-spin' : ''}`} />
+                    Update Proposal
                 </button>
             )}
             
             {proposal.status !== 'rejected' && (
                 <button
-                    onClick={() => onStatusChange?.('rejected')}
+                    onClick={() => handleStatusUpdate('rejected')}
                     className="flex items-center gap-2 px-6 py-2.5 bg-red-50 text-red-600 border border-red-100 rounded-xl font-medium hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={isReadOnly}
+                    disabled={isReadOnly || saving}
                 >
                     <XCircle className="w-4 h-4" />
                     Reject Proposal
@@ -347,9 +454,9 @@ export default function ProposalView({
 
             {proposal.status !== 'accepted' && (
                 <button
-                    onClick={() => onStatusChange?.('accepted')}
+                    onClick={() => handleStatusUpdate('accepted')}
                     className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={isReadOnly}
+                    disabled={isReadOnly || saving}
                 >
                     <CheckCircle className="w-4 h-4" />
                     Accept Proposal

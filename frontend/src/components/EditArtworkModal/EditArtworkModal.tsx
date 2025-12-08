@@ -21,7 +21,7 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
   const [widthInput, setWidthInput] = useState<string>(artwork.width !== undefined ? String(artwork.width) : '');
   const [heightInput, setHeightInput] = useState<string>(artwork.height !== undefined ? String(artwork.height) : '');
   const [priceInput, setPriceInput] = useState<string>(artwork.price !== undefined ? String(artwork.price) : '');
-  const [shouldDisplayPrice, setShouldDisplayPrice] = useState<boolean>(artwork.shouldDisplayPrice ?? true);
+  const [shouldDisplayPrice, setShouldDisplayPrice] = useState<boolean>(artwork.shouldDisplayPrice ?? false);
   const [date, setDate] = useState(artwork.date || '');
   const [tags, setTags] = useState(artwork.tags?.join(', ') || '');
   const [error, setError] = useState('');

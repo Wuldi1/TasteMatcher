@@ -103,6 +103,31 @@ export class UsersController {
   }
 
   /**
+   * Add a comment to a user (chat)
+   */
+  @Post(':id/comments')
+  @HttpCode(HttpStatus.CREATED)
+  async addComment(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') userId: string,
+    @Body('text') text: string,
+  ): Promise<User> {
+    if (!text) {
+      throw new BadRequestException('Comment text is required');
+    }
+
+    // Allow user to comment on themselves, or dealers/admins to comment on users in their domain
+    if (req.user.id !== userId) {
+      if (req.user.role === 'customer') {
+        throw new ForbiddenException('You can only comment on your own profile.');
+      }
+      // For dealers/admins, domain check is handled in service or by finding user in domain
+    }
+
+    return this.usersService.addComment(req.user.domainId, userId, text, req.user);
+  }
+
+  /**
    * Delete a user and all their preferences (domain_owner and global_admin only)
    */
   @Delete(':id')

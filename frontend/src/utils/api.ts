@@ -381,6 +381,18 @@ class ApiClient extends BaseApiClient {
   }
 
   /**
+   * Add a comment to a user
+   */
+  async addUserComment(userId: string, text: string): Promise<User> {
+    this.validateRequired(userId, 'User ID');
+    this.validateRequired(text, 'Comment text');
+    return this.request<User>(`/users/${userId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    });
+  }
+
+  /**
    * Delete user
    */
   async deleteUser(userId: string): Promise<void> {
@@ -526,9 +538,18 @@ class ApiClient extends BaseApiClient {
   /**
    * Get recommendations for a domain
    */
-  async getRecommendations(domainId: string, userId?: string): Promise<Array<Artwork>> {
+  async getRecommendations(domainId: string, userId?: string, limit?: string, offset?: string): Promise<Array<Artwork>> {
     this.validateRequired(domainId, 'Domain ID');
-    const params = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+    let params = '';
+    if (limit) {
+      params += `?limit=${encodeURIComponent(limit)}`;
+    }
+    if (offset) {
+      params += params ? `&offset=${encodeURIComponent(offset)}` : `?offset=${encodeURIComponent(offset)}`;
+    }
+    if (userId) {
+      params += params ? `&userId=${encodeURIComponent(userId)}` : `?userId=${encodeURIComponent(userId)}`;
+    }
     return this.request<Array<Artwork>>(
       `/domains/${domainId}/artworks/recommendations${params}`,
       { method: 'GET' },
@@ -635,7 +656,7 @@ class ApiClient extends BaseApiClient {
   /**
    * Upload preference image for onboarding
    */
-  async uploadPreferenceImage(file: File): Promise<{ success: boolean; message: string; vectorized: number }> {
+  async vectorizePreferenceImage(file: File): Promise<{ success: boolean; message: string; vectorized: number }> {
     this.validateRequired(file, 'File');
     return this.uploadFile<{ success: boolean; message: string; vectorized: number }>(
       '/users/me/vectorize-preference-image',
@@ -656,10 +677,10 @@ class ApiClient extends BaseApiClient {
   /**
    * Update user questionnaire
    */
-  async updateUserQuestionnaire(questionnaire: PersonalQuestionnaire): Promise<User> {
+  async updateQuestionnaire(data: { personalQuestionnaire: Partial<PersonalQuestionnaire> }): Promise<User> {
     return this.request<User>('/users/me/questionnaire', {
       method: 'PATCH',
-      body: JSON.stringify({ personalQuestionnaire: questionnaire }),
+      body: JSON.stringify(data),
     });
   }
 

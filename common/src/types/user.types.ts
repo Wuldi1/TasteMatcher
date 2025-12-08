@@ -18,54 +18,47 @@ export type UserStatus = 'pending_verification' | 'active';
 export type UserOnboardingStatus = 'not_started' | 'in_progress' | 'completed' | 'skipped';
 
 /**
- * Personal details section of the questionnaire
+ * Represents a comment in a conversation.
  */
-export interface PersonalDetails {
-  location?: string;
-  secondaryLocations?: string[];
-  profession?: string;
-  culturalInfluences?: string;
-  maritalStatus?: 'single' | 'married' | 'partnered' | 'other';
-  residences?: string[];
-  hasChildren?: boolean;
-  numberOfChildren?: number;
-  currentlyCollects?: boolean;
-  currentCollection?: string;
-  familyCollects?: boolean;
+export interface Comment {
+  author: string;
+  text: string;
+  createdAt: number;
 }
 
 /**
- * Collecting preferences section
+ * Aesthetic admiration section
  */
-export interface CollectingPreferences {
-  themes?: string;
-  artistsOrMovements?: string;
-  collectingStyle?: 'conceptual' | 'aesthetic' | 'research-based' | 'intuitive' | 'mixed';
-  displayLocations?: string[];
-  startedCollecting?: string;
-  firstAcquisition?: string;
-  evolutionOfFocus?: string;
-  mentorsOrAdvisors?: string;
-  eventsAttended?: string;
-  museumBoards?: string;
-  artistEngagement?: string;
-}
-
-/**
- * Artwork preferences section
- */
-export interface ArtworkPreferences {
+export interface AestheticAdmiration {
   description?: string;
-  referenceImageUrls?: string[]; // URLs to uploaded images (if we store them)
+  imageUrls?: string[];
 }
 
 /**
  * Complete personal questionnaire structure
  */
 export interface PersonalQuestionnaire {
-  personalDetails?: PersonalDetails;
-  collectingPreferences?: CollectingPreferences;
-  artworkPreferences?: ArtworkPreferences;
+  // Decision Making
+  collectionType?: 'individual' | 'group';
+  decisionMakersDescription?: string;
+
+  // About You
+  aboutYourself?: string;
+
+  // Location
+  currentLocation?: string;
+
+  // Other Residences
+  hasOtherResidences?: boolean;
+  otherResidencesDescription?: string;
+
+  // Collection Goals
+  collectionGoals?: string;
+
+  // Aesthetic Preferences
+  aestheticAdmiration?: AestheticAdmiration;
+
+  // Metadata
   completedAt?: number; // Timestamp when questionnaire was completed
 }
 
@@ -157,6 +150,11 @@ export interface User {
    * The user's amount of swipe interactions used for recommendations.
    */
   swipeCount?: number;
+
+  /**
+   * User comments associated with this user.
+   */
+  comments?: Comment[];
 }
 
 /**
