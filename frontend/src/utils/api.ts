@@ -128,14 +128,8 @@ class BaseApiClient {
         await this.handleErrorResponse(response, url);
       }
 
-      if (response.status === 204 || response.status === 201) {
-        // No Content
-        return {} as T;
-      }
-
-      const data = await response.json();
-
-      return data;
+      const text = await response.text();
+      return text ? JSON.parse(text) : ({} as T);
     } catch (error) {
       console.log(error)
       if (error instanceof ApiError) {

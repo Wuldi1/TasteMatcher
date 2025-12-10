@@ -89,6 +89,7 @@ export default function SaleProposal({
     // Use the passed draftItems as the source of truth; keep local copy for editing convenience
     const [items, setItems] = useState<ProposalItem[]>(draftItems ?? []);
     const [generalComments, setGeneralComments] = useState<Comment[]>([]);
+    const [proposalStatus, setProposalStatus] = useState<string | undefined>(undefined);
     const [isDirty, setIsDirty] = useState(false);
     const isLocalChangeRef = React.useRef<boolean>(false);
     const [saving, setSaving] = useState(false);
@@ -113,6 +114,8 @@ export default function SaleProposal({
         setItems(draftItems ?? []);
         if (proposalId) {
             setIsDirty(true);
+        } else {
+            setProposalStatus(undefined);
         }
     }, [draftItems, proposalId]);
 
@@ -126,7 +129,10 @@ export default function SaleProposal({
 
     // Load existing proposal if proposalId provided
     useEffect(() => {
-        if (!proposalId) return;
+        if (!proposalId) {
+            setProposalStatus(undefined);
+            return;
+        }
         let mounted = true;
         (async () => {
             try {
@@ -144,6 +150,7 @@ export default function SaleProposal({
                 }));
                 setItems(normalized);
                 setGeneralComments(fetched.generalComments || []);
+                setProposalStatus(fetched.status);
                 setIsDirty(false);
             } catch (err) {
                 console.error('Failed to load proposal', err);
@@ -262,26 +269,32 @@ export default function SaleProposal({
                     askedPrice: item.askedPrice,
                 })) as any,
                 generalComments: updatedGeneralComments,
+                status: "submitted", // Ensure the proposal is submitted with the correct status
             };
 
             let data;
             if (proposalId) {
-                // update existing proposal
+                // Update existing proposal
                 data = await apiClient.updateProposal(domainId, proposalId, payload);
-                showProposalSummaryAlert('Proposal updated', data);
             } else {
-                // create new
+                // Create new proposal
                 data = await apiClient.createProposal(domainId, payload);
-                showProposalSummaryAlert('Proposal created', data);
             }
-            
-            setGeneralComments(updatedGeneralComments);
+
+            // Update local state with the saved proposal data
+            setItems(data.items || []);
+            setGeneralComments(data.generalComments || []);
+            setProposalStatus(data.status);
             setIsDirty(false);
+
+            console.log('Proposal saved', data);
 
             // Notify parent of the saved proposal (so buttons enable immediately)
             if (onProposalSave) {
                 onProposalSave(data);
             }
+
+            showProposalSummaryAlert(proposalId ? 'Proposal updated' : 'Proposal created', data);
         } catch (err) {
             console.error('Failed to save proposal', err);
             showAlert('Error', 'Failed to save proposal');
@@ -295,14 +308,17 @@ export default function SaleProposal({
             showAlert('Error', 'No saved proposal to delete');
             return;
         }
-        
+
         showConfirm('Delete Proposal', 'Are you sure you want to delete this proposal?', async () => {
             try {
                 await apiClient.deleteProposal(domainId, proposalId);
                 showAlert('Success', 'Proposal deleted');
-                // clear items and notify parent
+
+                // Clear items and general comments, and notify parent
                 isLocalChangeRef.current = true;
                 setItems([]);
+                setGeneralComments([]); // Clear general comments after deletion
+                setProposalStatus(undefined);
                 if (onDraftChange) onDraftChange([]);
                 if (onProposalDelete) onProposalDelete();
             } catch (err) {
@@ -373,11 +389,6 @@ export default function SaleProposal({
         });
     }
 
-    // Determine overall proposal status based on items' status
-    const allApproved = items.every((item) => item.status === 'approved');
-    const somePending = items.some((item) => item.status === 'pending');
-    const status = allApproved ? 'approved' : somePending ? 'pending' : 'rejected';
-
     return (
         <div
             className="space-y-8 pb-[calc(env(safe-area-inset-bottom,0px)+140px)] md:pb-24"
@@ -388,9 +399,11 @@ export default function SaleProposal({
                     <h2 className="text-lg font-bold text-gray-900">Proposal Items</h2>
                     <p className="text-sm text-gray-500">{items.length} artworks selected</p>
                 </div>
-                <div className="px-3 py-1 bg-gray-100 rounded-full text-sm font-medium text-gray-600 capitalize">
-                    Status: {status}
-                </div>
+                {proposalId && proposalStatus && (
+                    <div className="px-3 py-1 bg-gray-100 rounded-full text-sm font-medium text-gray-600 capitalize">
+                        Status: {proposalStatus}
+                    </div>
+                )}
             </div>
 
             {/* General Comments Section */}

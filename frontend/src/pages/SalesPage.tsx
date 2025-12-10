@@ -436,7 +436,7 @@ export default function SalesPage() {
                             { id: 'details', label: 'Overview' },
                             { id: 'catalog', label: 'Catalog' },
                             { id: 'ai', label: 'AI Suggestions' },
-                            { id: 'proposal', label: 'Proposal Draft' },
+                            { id: 'proposal', label: 'Proposal' },
                         ].map((t) => {
                             const active = activeTab === (t.id as any);
                             return (
