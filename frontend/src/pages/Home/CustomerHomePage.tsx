@@ -17,7 +17,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { CheckCircle, ThumbsUp, ThumbsDown, FileText, Sparkles, MessageSquare, Send, Paperclip, Loader2, Image as ImageIcon, Upload } from 'lucide-react';
 import './HomePage.css';
 import { useEffect, useState, useRef } from 'react';
-import { User } from '@tastematcher/common';
 import { apiClient } from '../../utils/api';
 
 /**
