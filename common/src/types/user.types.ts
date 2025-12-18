@@ -25,6 +25,8 @@ export interface AestheticAdmiration {
   imageUrls?: string[];
 }
 
+export interface PersonalCollection extends AestheticAdmiration {}
+
 /**
  * Complete personal questionnaire structure
  */
@@ -48,6 +50,14 @@ export interface PersonalQuestionnaire {
 
   // Aesthetic Preferences
   aestheticAdmiration?: AestheticAdmiration;
+
+  // Collection Ownership
+  hasPersonalCollection?: boolean;
+  personalCollection?: PersonalCollection;
+
+  // Professional collaborators
+  worksWithDesigner?: boolean;
+  designerDetails?: string;
 
   // Metadata
   completedAt?: number; // Timestamp when questionnaire was completed
@@ -146,6 +156,11 @@ export interface User {
    * User comments associated with this user.
    */
   comments?: Comment[];
+
+  /**
+   * Shared gallery uploads provided outside the questionnaire context.
+   */
+  sharedCollectionUploads?: string[];
 }
 
 /**

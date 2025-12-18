@@ -47,6 +47,8 @@ export const AISuggestionsPage = ({
   const [error, setError] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [savingCommentId, setSavingCommentId] = useState<string | null>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
   const LIMIT = 20;
 
@@ -113,6 +115,7 @@ export const AISuggestionsPage = ({
     setOffset(0);
     setHasMore(true);
     setRecommendations([]);
+    setCommentDrafts({});
     
     const fetchRecommendations = async () => {
       setLoading(true);
@@ -198,25 +201,32 @@ export const AISuggestionsPage = ({
   const savePreferenceMutation = useSavePreference({
     domainId: user?.domainId!,
     userId: user?.id!,
-    onOptimisticUpdate: (artworkId: string, arg2?: any, arg3?: any) => {
-      // Support both callback signatures:
-      // - onOptimisticUpdate(artworkId, liked)
-      // - onOptimisticUpdate(artworkId, domainId, liked)
-      const liked = typeof arg2 === 'boolean' ? arg2 : Boolean(arg3);
-
-      // Update recommendation list defensively
-      // @ts-ignore
+    onOptimisticUpdate: (artworkId, updates) => {
       setRecommendations((prev) =>
-        prev.map((artwork) =>
-          artwork.id === artworkId ? { ...artwork, likedStatus: liked ? 'Liked' : 'Disliked' } : artwork
-        )
+        prev.map((artwork) => {
+          if (artwork.id !== artworkId) return artwork;
+          const next = { ...artwork };
+          if (typeof updates.liked === 'boolean') {
+            next.likedStatus = updates.liked ? 'Liked' : 'Disliked';
+          }
+          if (updates.comment !== undefined) {
+            next.preferenceComment = updates.comment;
+          }
+          return next;
+        })
       );
 
-      // Update selected artwork if open
-      // @ts-ignore
-      setSelectedArtwork((prev) =>
-        prev && prev.id === artworkId ? { ...prev, likedStatus: liked ? 'Liked' : 'Disliked' } : prev
-      );
+      setSelectedArtwork((prev) => {
+        if (!prev || prev.id !== artworkId) return prev;
+        const updated = { ...prev };
+        if (typeof updates.liked === 'boolean') {
+          updated.likedStatus = updates.liked ? 'Liked' : 'Disliked';
+        }
+        if (updates.comment !== undefined) {
+          updated.preferenceComment = updates.comment;
+        }
+        return updated;
+      });
     },
   });
 
@@ -249,13 +259,49 @@ export const AISuggestionsPage = ({
     setSelectedArtwork(null);
   };
 
-  const handlePreferenceClick = (artworkId: string, liked: boolean) => {
-    savePreferenceMutation.mutate({ artworkId, domainId: user?.domainId!, liked });
+  const getDraftComment = (artwork: Artwork) =>
+    commentDrafts[artwork.id] ?? artwork.preferenceComment ?? '';
+
+  const handlePreferenceClick = (artwork: Artwork, liked: boolean) => {
+    const commentValue = commentDrafts[artwork.id];
+    const normalizedComment =
+      commentValue !== undefined ? commentValue.trim() : artwork.preferenceComment;
+    savePreferenceMutation.mutate({
+      artworkId: artwork.id,
+      domainId: user?.domainId!,
+      liked,
+      comment: normalizedComment,
+    });
   };
 
   const handleProposalToggle = (artwork: Artwork) => {
     if (onAddToProposal) {
       onAddToProposal(artwork);
+    }
+  };
+
+  const handleCommentChange = (artworkId: string, value: string) => {
+    setCommentDrafts((prev) => ({ ...prev, [artworkId]: value }));
+  };
+
+  const handleCommentSave = async (artwork: Artwork) => {
+    if (!user?.domainId) return;
+    const commentValue = getDraftComment(artwork);
+    const normalizedComment = commentValue.trim();
+    const previous = (artwork.preferenceComment ?? '').trim();
+    if (previous === normalizedComment) {
+      return;
+    }
+    setSavingCommentId(artwork.id);
+    try {
+      await savePreferenceMutation.mutateAsync({
+        artworkId: artwork.id,
+        domainId: user.domainId,
+        comment: normalizedComment,
+      });
+      setCommentDrafts((prev) => ({ ...prev, [artwork.id]: normalizedComment }));
+    } finally {
+      setSavingCommentId((prev) => (prev === artwork.id ? null : prev));
     }
   };
 
@@ -283,6 +329,7 @@ export const AISuggestionsPage = ({
             {recommendations.map((item) => {
               const isInProposal = proposalItems?.includes(item.id);
 
+              const commentValue = getDraftComment(item);
               return (
                 <article
                   key={item.id}
@@ -349,47 +396,79 @@ export const AISuggestionsPage = ({
                   </div>
 
                   {/* Actions Footer */}
-                  <div className="mt-auto px-4 pb-4 pt-2 border-t border-gray-50 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={readonlyThumbs}
-                        onClick={() => !readonlyThumbs && handlePreferenceClick(item.id, true)}
-                        className={`p-2 rounded-full transition-colors ${item.likedStatus === 'Liked'
-                          ? 'bg-green-100 text-green-600'
-                          : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-                          }`}
-                        aria-label="Thumbs up"
-                      >
-                        <ThumbsUp className="w-5 h-5" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={readonlyThumbs}
-                        onClick={() => !readonlyThumbs && handlePreferenceClick(item.id, false)}
-                        className={`p-2 rounded-full transition-colors ${item.likedStatus === 'Disliked'
-                          ? 'bg-red-100 text-red-600'
-                          : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-                          }`}
-                        aria-label="Thumbs down"
-                      >
-                        <ThumbsDown className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    {onAddToProposal && (
-                      <button
-                        type="button"
-                        onClick={() => handleProposalToggle(item)}
-                        className={`p-2 rounded-full transition-colors ${isInProposal
-                          ? 'bg-blue-100 text-blue-600'
-                          : 'text-gray-400 hover:bg-gray-100 hover:text-blue-600'
-                          }`}
-                        aria-label={isInProposal ? 'Remove from Proposal' : 'Add to Proposal'}
-                      >
-                        <FileText className="w-5 h-5" />
-                      </button>
+                  <div className="mt-auto px-4 pb-4 pt-2 border-t border-gray-50 space-y-3">
+                    {readonlyThumbs ? (
+                      <div className="text-sm text-gray-600">
+                        <p className="uppercase text-xs font-semibold tracking-wider text-gray-500 mb-1">
+                          Customer feedback
+                        </p>
+                        <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2 min-h-[56px]">
+                          {item.preferenceComment && item.preferenceComment.trim().length > 0
+                            ? item.preferenceComment
+                            : 'No feedback yet.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 inline-flex items-center gap-2">
+                          Share feedback
+                          {savingCommentId === item.id && (
+                            <span className="text-[10px] text-blue-500">Saving…</span>
+                          )}
+                        </label>
+                        <textarea
+                          value={commentValue}
+                          onChange={(e) => handleCommentChange(item.id, e.target.value)}
+                          onBlur={() => handleCommentSave(item)}
+                          placeholder="Write a note for your specialist..."
+                          className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 transition-colors min-h-[80px] resize-y"
+                        />
+                        <p className="text-[11px] text-gray-400 mt-1">Notes auto-save when you leave the field.</p>
+                      </div>
                     )}
+
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={readonlyThumbs}
+                          onClick={() => !readonlyThumbs && handlePreferenceClick(item, true)}
+                          className={`p-2 rounded-full transition-colors ${item.likedStatus === 'Liked'
+                            ? 'bg-green-100 text-green-600'
+                            : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                            }`}
+                          aria-label="Thumbs up"
+                        >
+                          <ThumbsUp className="w-5 h-5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={readonlyThumbs}
+                          onClick={() => !readonlyThumbs && handlePreferenceClick(item, false)}
+                          className={`p-2 rounded-full transition-colors ${item.likedStatus === 'Disliked'
+                            ? 'bg-red-100 text-red-600'
+                            : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                            }`}
+                          aria-label="Thumbs down"
+                        >
+                          <ThumbsDown className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      {onAddToProposal && (
+                        <button
+                          type="button"
+                          onClick={() => handleProposalToggle(item)}
+                          className={`p-2 rounded-full transition-colors ${isInProposal
+                            ? 'bg-blue-100 text-blue-600'
+                            : 'text-gray-400 hover:bg-gray-100 hover:text-blue-600'
+                            }`}
+                          aria-label={isInProposal ? 'Remove from Proposal' : 'Add to Proposal'}
+                        >
+                          <FileText className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </article>
               );
@@ -487,11 +566,40 @@ export const AISuggestionsPage = ({
                   </div>
                 )}
 
+                {!readonlyThumbs ? (
+                  <div className="mb-6">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 inline-flex items-center gap-2">
+                      Share feedback
+                      {savingCommentId === selectedArtwork.id && (
+                        <span className="text-[10px] text-blue-500">Saving…</span>
+                      )}
+                    </label>
+                    <textarea
+                      value={getDraftComment(selectedArtwork)}
+                      onChange={(e) => handleCommentChange(selectedArtwork.id, e.target.value)}
+                      onBlur={() => handleCommentSave(selectedArtwork)}
+                      placeholder="Let us know what you think about this artwork..."
+                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 transition-colors min-h-[100px] resize-y"
+                    />
+                  </div>
+                ) : (
+                  <div className="mb-6">
+                    <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                      Customer feedback
+                    </span>
+                    <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 min-h-[80px]">
+                      {selectedArtwork.preferenceComment && selectedArtwork.preferenceComment.trim().length > 0
+                        ? selectedArtwork.preferenceComment
+                        : 'No feedback yet.'}
+                    </p>
+                  </div>
+                )}
+
                 <div className="mt-4 flex items-center justify-center gap-6">
                   <button
                     type="button"
                     disabled={readonlyThumbs}
-                    onClick={() => handlePreferenceClick(selectedArtwork.id, true)}
+                    onClick={() => handlePreferenceClick(selectedArtwork, true)}
                     aria-label="Like artwork"
                     className={`p-2 rounded-full ${readonlyThumbs ? '' : 'hover:bg-green-100'} ${selectedArtwork.likedStatus === 'Liked' ? 'bg-green-100' : 'bg-gray-100'}`}
                   >
@@ -500,7 +608,7 @@ export const AISuggestionsPage = ({
                   <button
                     type="button"
                     disabled={readonlyThumbs}
-                    onClick={() => handlePreferenceClick(selectedArtwork.id, false)}
+                    onClick={() => handlePreferenceClick(selectedArtwork, false)}
                     aria-label="Dislike artwork"
                     className={`p-2 rounded-full ${readonlyThumbs ? '' : 'hover:bg-red-100'} ${selectedArtwork.likedStatus === 'Disliked' ? 'bg-red-100' : 'bg-gray-100'}`}
                   >

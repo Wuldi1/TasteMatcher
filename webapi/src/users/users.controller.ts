@@ -196,6 +196,7 @@ export class UsersController {
     @Request() req: AuthenticatedRequest,
     // eslint-disable-next-line
     @UploadedFile() file: Express.Multer.File,
+    @Query('section') section?: 'aesthetic' | 'collection' | 'shared_gallery',
   ): Promise<{ success: boolean; message: string; vectorized: number }> {
     if (!file) {
       throw new BadRequestException('No file uploaded');
@@ -205,6 +206,7 @@ export class UsersController {
       req.user.id,
       req.user.domainId,
       file,
+      section,
     );
   }
 

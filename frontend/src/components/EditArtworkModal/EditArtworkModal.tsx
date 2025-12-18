@@ -1,6 +1,6 @@
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useRef, useEffect, ChangeEvent } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { X, Save } from 'lucide-react';
+import { X, Save, Sparkles, Upload as UploadIcon } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../utils/api';
@@ -22,9 +22,22 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
   const [heightInput, setHeightInput] = useState<string>(artwork.height !== undefined ? String(artwork.height) : '');
   const [priceInput, setPriceInput] = useState<string>(artwork.price !== undefined ? String(artwork.price) : '');
   const [shouldDisplayPrice, setShouldDisplayPrice] = useState<boolean>(artwork.shouldDisplayPrice ?? false);
+  const [useForTaster, setUseForTaster] = useState<boolean>(artwork.useForTaster ?? false);
   const [date, setDate] = useState(artwork.date || '');
   const [tags, setTags] = useState(artwork.tags?.join(', ') || '');
   const [error, setError] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [newImageFile, setNewImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+    };
+  }, [imagePreviewUrl]);
 
   const updateMutation = useMutation({
     mutationFn: (updates: Partial<Artwork>) => {
@@ -39,7 +52,7 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
     },
   });
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -60,12 +73,53 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
       height: parseNumberOrUndefined(heightInput),
       price: parseNumberOrUndefined(priceInput),
       shouldDisplayPrice,
+      useForTaster,
       // keep other fields below
       date: date.trim() || undefined,
       tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
     };
 
+    if (!user?.domainId) {
+      setError('No domain ID');
+      return;
+    }
+
+    if (newImageFile) {
+      try {
+        setIsUploadingImage(true);
+        await apiClient.replaceArtworkImage(user.domainId, artwork.id, newImageFile);
+        setNewImageFile(null);
+        if (imagePreviewUrl) {
+          URL.revokeObjectURL(imagePreviewUrl);
+          setImagePreviewUrl(null);
+        }
+      } catch (uploadErr) {
+        setError(uploadErr instanceof Error ? uploadErr.message : 'Failed to upload new image');
+        setIsUploadingImage(false);
+        return;
+      }
+    }
+
+    setIsUploadingImage(false);
     updateMutation.mutate(updates);
+  };
+
+  const handleChangeImageClick = () => {
+    imageInputRef.current?.click();
+  };
+
+  const handleImageFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
+
+    setNewImageFile(file);
+    setImagePreviewUrl(URL.createObjectURL(file));
   };
 
   return (
@@ -85,16 +139,36 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
                 
                 {/* Left Column: Image */}
                 <div className="w-full md:w-1/3 flex-shrink-0">
-                    <div className="aspect-[3/4] w-full bg-gray-100 rounded-lg overflow-hidden border border-gray-200 sticky top-0">
+                    <div className="aspect-[3/4] w-full bg-gray-100 rounded-lg overflow-hidden border border-gray-200 sticky top-0 relative">
                         {artwork.filename ? (
                             <img 
-                                src={artwork.thumbnails?.[2]?.url || artwork.filename} 
+                                src={imagePreviewUrl || artwork.thumbnails?.[2]?.url || artwork.filename} 
                                 alt={artwork.title} 
                                 className="w-full h-full object-contain"
                             />
                         ) : (
                             <div className="flex items-center justify-center h-full text-gray-400">No Image</div>
                         )}
+                        <button
+                          type="button"
+                          onClick={handleChangeImageClick}
+                          className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-sm font-medium text-gray-700 shadow hover:bg-white"
+                        >
+                          <UploadIcon className="w-4 h-4" />
+                          Replace image
+                        </button>
+                        {newImageFile && (
+                          <div className="absolute top-3 right-3 rounded-full bg-purple-600/90 text-xs font-semibold text-white px-2 py-0.5 shadow">
+                            New image selected
+                          </div>
+                        )}
+                        <input
+                          ref={imageInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={handleImageFileChange}
+                        />
                     </div>
                 </div>
 
@@ -155,6 +229,24 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
                                 />
                                 Publicly Visible
                             </label>
+                        </div>
+                        <div className="mt-4 rounded-lg border border-purple-100 bg-white/80 p-3">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-purple-700">
+                            <Sparkles className="w-4 h-4" />
+                            Taster availability
+                          </div>
+                          <div className="mt-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2 text-sm text-gray-600">
+                            <p>Control whether this artwork can appear in the Taster experience for your collectors.</p>
+                            <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={useForTaster}
+                                onChange={(e) => setUseForTaster(e.target.checked)}
+                                className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                              />
+                              {useForTaster ? 'Included in Taster' : 'Not in Taster'}
+                            </label>
+                          </div>
                         </div>
                     </div>
 
@@ -253,11 +345,11 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
             <button
                 type="submit"
                 form="edit-form"
-                disabled={updateMutation.isPending}
+                disabled={updateMutation.isPending || isUploadingImage}
                 className="flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 <Save className="w-4 h-4" />
-                {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+                {updateMutation.isPending || isUploadingImage ? 'Saving...' : 'Save Changes'}
             </button>
         </div>
       </div>

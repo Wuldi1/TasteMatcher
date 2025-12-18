@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { apiClient } from '../../utils/api';
 import type { Proposal, ProposalItem, Comment, Artwork } from '@tastematcher/common';
-import { CheckCircle, XCircle, Clock, Send, Save, MessageSquare, Calendar, DollarSign, Image as ImageIcon } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Send, Save, MessageSquare, Calendar, Image as ImageIcon } from 'lucide-react';
 
 export default function ProposalView({
   proposal,
@@ -151,7 +151,9 @@ export default function ProposalView({
   };
 
   // Calculate summary stats
-  const totalAskedPrice = localItems.reduce((sum, item) => sum + (item.askedPrice || 0), 0);
+  const approvedCount = localItems.filter((item) => item.status === 'approved').length;
+  const rejectedCount = localItems.filter((item) => item.status === 'rejected').length;
+  const pendingCount = Math.max(localItems.length - approvedCount - rejectedCount, 0);
   const lastUpdatedDate = proposal.updatedAt ? new Date(proposal.updatedAt).toLocaleDateString() : new Date(proposal.createdAt).toLocaleDateString();
 
   return (
@@ -181,33 +183,39 @@ export default function ProposalView({
 
         {/* Summary Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-gray-100">
-            <div className="flex items-center gap-3 text-gray-600">
-                <div className="p-2 bg-gray-50 rounded-lg">
-                    <ImageIcon className="w-5 h-5 text-gray-500" />
-                </div>
-                <div>
-                    <p className="text-xs text-gray-400 uppercase font-medium">Artworks</p>
-                    <p className="font-semibold text-gray-900">{localItems.length} Items</p>
-                </div>
+          <div className="flex items-center gap-3 text-gray-600">
+            <div className="p-2 bg-gray-50 rounded-lg">
+              <ImageIcon className="w-5 h-5 text-gray-500" />
             </div>
-            <div className="flex items-center gap-3 text-gray-600">
-                <div className="p-2 bg-gray-50 rounded-lg">
-                    <DollarSign className="w-5 h-5 text-gray-500" />
-                </div>
-                <div>
-                    <p className="text-xs text-gray-400 uppercase font-medium">Total Value</p>
-                    <p className="font-semibold text-gray-900">${totalAskedPrice.toLocaleString()}</p>
-                </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase font-medium">Artworks selected</p>
+              <p className="font-semibold text-gray-900">{localItems.length} pieces</p>
             </div>
-            <div className="flex items-center gap-3 text-gray-600">
-                <div className="p-2 bg-gray-50 rounded-lg">
-                    <Calendar className="w-5 h-5 text-gray-500" />
-                </div>
-                <div>
-                    <p className="text-xs text-gray-400 uppercase font-medium">Last Updated</p>
-                    <p className="font-semibold text-gray-900">{lastUpdatedDate}</p>
-                </div>
+          </div>
+          <div className="flex items-center gap-3 text-gray-600">
+            <div className="p-2 bg-gray-50 rounded-lg">
+              <CheckCircle className="w-5 h-5 text-gray-500" />
             </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase font-medium">Decision progress</p>
+              <p className="font-semibold text-gray-900">
+                {approvedCount} approved
+                <span className="text-sm text-gray-500 ml-2">• {pendingCount} pending</span>
+              </p>
+              {rejectedCount > 0 && (
+                <p className="text-xs text-gray-500 mt-1">{rejectedCount} passed for now</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-3 text-gray-600">
+            <div className="p-2 bg-gray-50 rounded-lg">
+              <Calendar className="w-5 h-5 text-gray-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase font-medium">Last updated</p>
+              <p className="font-semibold text-gray-900">{lastUpdatedDate}</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -276,6 +284,12 @@ export default function ProposalView({
             };
 
             const { color, text, icon, borderColor } = statusConfig[item.status];
+            const askedPriceDisplay =
+              item.askedPrice === undefined
+                ? '—'
+                : item.askedPrice > 0
+                  ? `$${item.askedPrice.toLocaleString()}`
+                  : 'N/A';
 
             return (
               <article key={item.artworkId} className={`bg-white border ${borderColor} rounded-2xl overflow-hidden shadow-sm transition-shadow hover:shadow-md flex flex-col lg:flex-row`}>
@@ -330,7 +344,7 @@ export default function ProposalView({
                         </div>
                         <div>
                             <span className="block text-xs text-gray-400 uppercase tracking-wider">Price</span>
-                            {item.askedPrice !== undefined ? <span className="font-semibold text-green-700">${item.askedPrice.toLocaleString()}</span> : '—'}
+                            {askedPriceDisplay}
                         </div>
                     </div>
 

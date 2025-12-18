@@ -14,7 +14,7 @@ import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react'
 import type { Artwork } from '@tastematcher/common';
 import { useDomain } from '../contexts/DomainContext';
 import { apiClient, ApiError } from '../utils/api';
-import { FileText, User as UserIcon, Tag, DollarSign, CalendarDays, Layers, Trash2, Upload } from 'lucide-react';
+import { FileText, User as UserIcon, Tag, DollarSign, CalendarDays, Layers, Trash2, Upload, Sparkles } from 'lucide-react';
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
@@ -27,7 +27,7 @@ export function ArtworkUpload() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   // default to showing price to customers; user can toggle this
-  const [metadata, setMetadata] = useState<Partial<Artwork>>({ shouldDisplayPrice: false });
+  const [metadata, setMetadata] = useState<Partial<Artwork>>({ shouldDisplayPrice: false, useForTaster: false });
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState<string>('');
@@ -60,6 +60,7 @@ export function ArtworkUpload() {
     // explicitly clear numeric fields so width/height/price are reset
     setMetadata({
       shouldDisplayPrice: false,
+      useForTaster: false,
       title: undefined,
       artist: undefined,
       medium: undefined,
@@ -314,6 +315,10 @@ export function ArtworkUpload() {
     setMetadata((prev) => ({ ...prev, shouldDisplayPrice: !(prev?.shouldDisplayPrice ?? false) }));
   }, []);
 
+  const toggleUseForTaster = useCallback(() => {
+    setMetadata((prev) => ({ ...prev, useForTaster: !(prev?.useForTaster ?? false) }));
+  }, []);
+
   return (
     <section className="rounded-2xl bg-white p-6 shadow-xl sm:p-8">
       {showSuccessToast && (
@@ -558,6 +563,29 @@ export function ArtworkUpload() {
               </label>
             </div>
             <p className="text-xs text-gray-500">Set a price in USD ($). Commas are automatically added.</p>
+          </div>
+
+          {/* Taster availability */}
+          <div className="space-y-2 sm:col-span-2">
+            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-600" />
+              Taster availability
+            </label>
+            <p className="text-xs text-gray-500">
+              Allow this artwork to appear in the Taster learning experience for your collectors. Only domain owners, dealers, and admins can see this toggle.
+            </p>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={metadata.useForTaster ?? false}
+                onChange={toggleUseForTaster}
+                disabled={status === 'uploading'}
+                aria-checked={metadata.useForTaster ?? false}
+                aria-label="Include artwork in Taster experience"
+                className="h-4 w-4 rounded border-gray-300 focus:ring-purple-500"
+              />
+              <span>Use this artwork in the Taster experience</span>
+            </label>
           </div>
         </div>
 

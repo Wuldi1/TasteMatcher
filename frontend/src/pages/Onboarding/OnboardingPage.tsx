@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../utils/api';
 import { PersonalQuestionnaire } from '@tastematcher/common';
@@ -8,9 +8,18 @@ import { ArrowRight, ArrowLeft, Upload, CheckCircle, Loader2 } from 'lucide-reac
 export function OnboardingPage() {
     const { user, refreshUser } = useAuth();
     const navigate = useNavigate();
-    const [step, setStep] = useState(1);
+    const location = useLocation();
+    const derivedInitialStep = useMemo(() => {
+        const params = new URLSearchParams(location.search);
+        const parsed = Number(params.get('step'));
+        if (!isNaN(parsed) && parsed >= 1 && parsed <= 7) {
+            return parsed;
+        }
+        return 1;
+    }, [location.search]);
+    const [step, setStep] = useState(derivedInitialStep);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
+    const [uploadingTarget, setUploadingTarget] = useState<'aesthetic' | 'collection' | null>(null);
     
     const [formData, setFormData] = useState<PersonalQuestionnaire>({
         collectionType: 'individual',
@@ -20,6 +29,13 @@ export function OnboardingPage() {
         hasOtherResidences: false,
         otherResidencesDescription: '',
         collectionGoals: '',
+        hasPersonalCollection: undefined,
+        personalCollection: {
+            description: '',
+            imageUrls: []
+        },
+        worksWithDesigner: undefined,
+        designerDetails: '',
         aestheticAdmiration: {
             description: '',
             imageUrls: []
@@ -27,10 +43,18 @@ export function OnboardingPage() {
     });
 
     useEffect(() => {
+        setStep(derivedInitialStep);
+    }, [derivedInitialStep]);
+
+    useEffect(() => {
         if (user?.personalQuestionnaire) {
             setFormData(prev => ({
                 ...prev,
                 ...user.personalQuestionnaire,
+                personalCollection: {
+                    description: user.personalQuestionnaire?.personalCollection?.description || '',
+                    imageUrls: user.personalQuestionnaire?.personalCollection?.imageUrls || []
+                },
                 aestheticAdmiration: {
                     description: user.personalQuestionnaire?.aestheticAdmiration?.description || '',
                     imageUrls: user.personalQuestionnaire?.aestheticAdmiration?.imageUrls || []
@@ -53,11 +77,21 @@ export function OnboardingPage() {
         }));
     };
 
+    const updatePersonalCollection = (updates: Partial<{ description: string; imageUrls: string[] }>) => {
+        setFormData(prev => ({
+            ...prev,
+            personalCollection: {
+                ...prev.personalCollection,
+                ...updates
+            }
+        }));
+    };
+
     const handleNext = async () => {
         // Save progress on each step
         try {
             await apiClient.updateQuestionnaire({ personalQuestionnaire: formData });
-            if (step < 6) {
+            if (step < 7) {
                 setStep(step + 1);
             } else {
                 await handleComplete();
@@ -75,12 +109,15 @@ export function OnboardingPage() {
         setIsSubmitting(true);
         try {
             // Finalize vectors if images were uploaded
-            if (formData.aestheticAdmiration?.imageUrls?.length) {
+            if (
+                (formData.aestheticAdmiration?.imageUrls?.length ?? 0) > 0 ||
+                (formData.personalCollection?.imageUrls?.length ?? 0) > 0
+            ) {
                 await apiClient.finalizePreferenceVectors();
             }
             await apiClient.completeOnboarding();
             await refreshUser();
-            navigate('/');
+            navigate('/taster');
         } catch (error) {
             console.error('Failed to complete onboarding', error);
         } finally {
@@ -88,26 +125,29 @@ export function OnboardingPage() {
         }
     };
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'aesthetic' | 'collection') => {
         if (!e.target.files?.length) return;
         
-        setIsUploading(true);
+        setUploadingTarget(target);
         const file = e.target.files[0];
         
         try {
-            await apiClient.vectorizePreferenceImage(file);
+            await apiClient.vectorizePreferenceImage(file, { section: target === 'collection' ? 'collection' : 'aesthetic' });
             // Refresh user to get the new image URL from backend
             const updatedUser = await refreshUser();
             
-            if (updatedUser?.personalQuestionnaire?.aestheticAdmiration?.imageUrls) {
-                updateAesthetic({ 
-                    imageUrls: updatedUser.personalQuestionnaire.aestheticAdmiration.imageUrls 
-                });
+            if (target === 'collection') {
+                const images = updatedUser?.personalQuestionnaire?.personalCollection?.imageUrls || [];
+                updatePersonalCollection({ imageUrls: images });
+            } else {
+                const images = updatedUser?.personalQuestionnaire?.aestheticAdmiration?.imageUrls || [];
+                updateAesthetic({ imageUrls: images });
             }
         } catch (error) {
             console.error('Failed to upload image', error);
         } finally {
-            setIsUploading(false);
+            setUploadingTarget(null);
+            e.target.value = '';
         }
     };
 
@@ -271,61 +311,191 @@ export function OnboardingPage() {
             case 6:
                 return (
                     <div className="space-y-6">
-                        <h2 className="text-2xl font-bold text-gray-900">Aesthetic Preferences</h2>
-                        <div className="space-y-6">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Are there any artists or creators whose aesthetic you admire?
-                                </label>
-                                <p className="text-xs text-gray-500 mb-2">Not limited to visual art — could be film, design, fashion</p>
-                                <textarea
-                                    value={formData.aestheticAdmiration?.description || ''}
-                                    onChange={(e) => updateAesthetic({ description: e.target.value })}
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    rows={4}
-                                />
+                        <h2 className="text-2xl font-bold text-gray-900">Collaborators</h2>
+                        <div className="space-y-4">
+                            <label className="block text-sm font-medium text-gray-700">
+                                Are you currently working with an architect or interior designer?
+                            </label>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={() => updateFormData({ worksWithDesigner: true })}
+                                    className={`px-6 py-3 border rounded-lg transition-all ${
+                                        formData.worksWithDesigner === true
+                                            ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                                            : 'border-gray-200 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    Yes
+                                </button>
+                                <button
+                                    onClick={() => updateFormData({ worksWithDesigner: false, designerDetails: '' })}
+                                    className={`px-6 py-3 border rounded-lg transition-all ${
+                                        formData.worksWithDesigner === false
+                                            ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                                            : 'border-gray-200 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    No
+                                </button>
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Upload screenshots or photos if available
-                                </label>
-                                <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 transition-colors relative">
-                                    <div className="space-y-1 text-center">
-                                        {isUploading ? (
-                                            <Loader2 className="mx-auto h-12 w-12 text-gray-400 animate-spin" />
-                                        ) : (
-                                            <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                                        )}
-                                        <div className="flex text-sm text-gray-600">
-                                            <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
-                                                <span>Upload a file</span>
-                                                <input 
-                                                    type="file" 
-                                                    className="sr-only" 
-                                                    accept="image/*"
-                                                    onChange={handleImageUpload}
-                                                    disabled={isUploading}
-                                                />
-                                            </label>
-                                            <p className="pl-1">or drag and drop</p>
-                                        </div>
-                                        <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
-                                    </div>
+                            {formData.worksWithDesigner && (
+                                <div className="mt-4">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        If yes, let us know who they are:
+                                    </label>
+                                    <textarea
+                                        value={formData.designerDetails || ''}
+                                        onChange={(e) => updateFormData({ designerDetails: e.target.value })}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        rows={3}
+                                        placeholder="Name, firm, or any helpful notes..."
+                                    />
                                 </div>
+                            )}
+                        </div>
+                    </div>
+                );
 
-                                {/* Image Preview Grid */}
-                                {formData.aestheticAdmiration?.imageUrls && formData.aestheticAdmiration.imageUrls.length > 0 && (
-                                    <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
-                                        {formData.aestheticAdmiration.imageUrls.map((url, idx) => (
-                                            <div key={idx} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
-                                                <img src={url} alt={`Upload ${idx + 1}`} className="w-full h-full object-cover" />
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+            case 7:
+                return (
+                    <div className="space-y-6" id="collection-section">
+                        <h2 className="text-2xl font-bold text-gray-900">Visual References</h2>
+                        <div className="space-y-4">
+                            <label className="block text-sm font-medium text-gray-700">
+                                Do you currently maintain an art collection?
+                            </label>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={() => updateFormData({ hasPersonalCollection: true })}
+                                    className={`px-6 py-3 border rounded-lg transition-all ${
+                                        formData.hasPersonalCollection === true
+                                            ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                                            : 'border-gray-200 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    Yes
+                                </button>
+                                <button
+                                    onClick={() => updateFormData({ hasPersonalCollection: false })}
+                                    className={`px-6 py-3 border rounded-lg transition-all ${
+                                        formData.hasPersonalCollection === false
+                                            ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                                            : 'border-gray-200 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    Not yet
+                                </button>
                             </div>
                         </div>
+
+                        {formData.hasPersonalCollection === true && (
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        My Collection
+                                    </label>
+                                    <textarea
+                                        value={formData.personalCollection?.description || ''}
+                                        onChange={(e) => updatePersonalCollection({ description: e.target.value })}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        rows={4}
+                                        placeholder="Tell us about your existing collection or highlight key pieces..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Upload photos of your collection
+                                    </label>
+                                    <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 transition-colors relative">
+                                        <div className="space-y-1 text-center">
+                                            {uploadingTarget === 'collection' ? (
+                                                <Loader2 className="mx-auto h-12 w-12 text-gray-400 animate-spin" />
+                                            ) : (
+                                                <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                                            )}
+                                            <div className="flex text-sm text-gray-600">
+                                                <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                                                    <span>Upload a file</span>
+                                                    <input
+                                                        type="file"
+                                                        className="sr-only"
+                                                        accept="image/*"
+                                                        onChange={(event) => handleImageUpload(event, 'collection')}
+                                                        disabled={uploadingTarget !== null}
+                                                    />
+                                                </label>
+                                                <p className="pl-1">or drag and drop</p>
+                                            </div>
+                                            <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                                        </div>
+                                    </div>
+                                    {formData.personalCollection?.imageUrls && formData.personalCollection.imageUrls.length > 0 && (
+                                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                            {formData.personalCollection.imageUrls.map((url, idx) => (
+                                                <div key={idx} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
+                                                    <img src={url} alt={`Collection Upload ${idx + 1}`} className="w-full h-full object-cover" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {formData.hasPersonalCollection === false && (
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Aesthetic Inspiration
+                                    </label>
+                                    <textarea
+                                        value={formData.aestheticAdmiration?.description || ''}
+                                        onChange={(e) => updateAesthetic({ description: e.target.value })}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        rows={4}
+                                        placeholder="Share the designers, artists, or aesthetics that resonate with you..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Upload inspiration images
+                                    </label>
+                                    <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 transition-colors relative">
+                                        <div className="space-y-1 text-center">
+                                            {uploadingTarget === 'aesthetic' ? (
+                                                <Loader2 className="mx-auto h-12 w-12 text-gray-400 animate-spin" />
+                                            ) : (
+                                                <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                                            )}
+                                            <div className="flex text-sm text-gray-600">
+                                                <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                                                    <span>Upload a file</span>
+                                                    <input
+                                                        type="file"
+                                                        className="sr-only"
+                                                        accept="image/*"
+                                                        onChange={(event) => handleImageUpload(event, 'aesthetic')}
+                                                        disabled={uploadingTarget !== null}
+                                                    />
+                                                </label>
+                                                <p className="pl-1">or drag and drop</p>
+                                            </div>
+                                            <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                                        </div>
+                                    </div>
+                                    {formData.aestheticAdmiration?.imageUrls && formData.aestheticAdmiration.imageUrls.length > 0 && (
+                                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                            {formData.aestheticAdmiration.imageUrls.map((url, idx) => (
+                                                <div key={idx} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
+                                                    <img src={url} alt={`Upload ${idx + 1}`} className="w-full h-full object-cover" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 );
         }
@@ -339,11 +509,11 @@ export function OnboardingPage() {
                     <div className="h-2 bg-gray-200 rounded-full">
                         <div 
                             className="h-2 bg-blue-600 rounded-full transition-all duration-300"
-                            style={{ width: `${(step / 6) * 100}%` }}
+                            style={{ width: `${(step / 7) * 100}%` }}
                         />
                     </div>
                     <div className="mt-2 text-sm text-gray-500 text-right">
-                        Step {step} of 6
+                        Step {step} of 7
                     </div>
                 </div>
 
@@ -367,12 +537,12 @@ export function OnboardingPage() {
                         
                         <button
                             onClick={handleNext}
-                            disabled={isSubmitting || isUploading}
+                            disabled={isSubmitting || uploadingTarget !== null}
                             className="flex items-center px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isSubmitting ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : step === 6 ? (
+                            ) : step === 7 ? (
                                 <>
                                     Complete
                                     <CheckCircle className="w-4 h-4 ml-2" />

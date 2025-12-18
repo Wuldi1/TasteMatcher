@@ -35,7 +35,7 @@ export class ApiError extends Error {
     public code?: string
   ) {
     super(message);
-    this.name = 'ApiError';
+  this.name = 'ApiError';
   }
 }
 
@@ -440,6 +440,13 @@ class ApiClient extends BaseApiClient {
     );
   }
 
+  async replaceArtworkImage(domainId: string, artworkId: string, file: File): Promise<Artwork> {
+    this.validateRequired(domainId, 'Domain ID');
+    this.validateRequired(artworkId, 'Artwork ID');
+    this.validateRequired(file, 'File');
+    return this.uploadFile<Artwork>(`/domains/${domainId}/uploads/${artworkId}/image`, file);
+  }
+
   /**
    * Get artwork statistics for a domain
    */
@@ -524,9 +531,12 @@ class ApiClient extends BaseApiClient {
   async saveArtworkPreference(
     domainId: string,
     userId: string,
-    preference: { artworkId: string; domainId: string; liked: boolean }
+    preference: { artworkId: string; domainId: string; liked?: boolean; comment?: string }
   ): Promise<void> {
-    await this.request<UntastedArtworksResponse>(`/domains/${domainId}/artworks/preferences/${userId}`, { method: 'POST', body: JSON.stringify(preference) });
+    await this.request<UntastedArtworksResponse>(
+      `/domains/${domainId}/artworks/preferences/${userId}`,
+      { method: 'POST', body: JSON.stringify(preference) }
+    );
   }
 
   /**
@@ -650,10 +660,17 @@ class ApiClient extends BaseApiClient {
   /**
    * Upload preference image for onboarding
    */
-  async vectorizePreferenceImage(file: File): Promise<{ success: boolean; message: string; vectorized: number }> {
+  async vectorizePreferenceImage(
+    file: File,
+    options?: { section?: 'aesthetic' | 'collection' | 'shared_gallery' }
+  ): Promise<{ success: boolean; message: string; vectorized: number }> {
     this.validateRequired(file, 'File');
+    const section = options?.section;
+    const endpoint = section
+      ? `/users/me/vectorize-preference-image?section=${encodeURIComponent(section)}`
+      : '/users/me/vectorize-preference-image';
     return this.uploadFile<{ success: boolean; message: string; vectorized: number }>(
-      '/users/me/vectorize-preference-image',
+      endpoint,
       file
     );
   }

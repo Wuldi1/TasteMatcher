@@ -26,13 +26,16 @@ type SwipeDirection = 'left' | 'right' | null;
  * Only shows artworks the user hasn't rated yet.
  */
 export function TasterPage() {
-  const { user, incrementSwipeCount } = useAuth();
+  const { user, incrementSwipeCount, stats } = useAuth();
   const queryClient = useQueryClient();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeDirection, setSwipeDirection] = useState<SwipeDirection>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
+  const [showAiUnlockModal, setShowAiUnlockModal] = useState(false);
+  const hasShownUnlockRef = useRef(false);
+  const previousTotalSwipedRef = useRef<number | null>(null);
 
   // Fetch untasted artworks for the user
   const { data: untastedData, isLoading } = useQuery({
@@ -52,12 +55,11 @@ export function TasterPage() {
 
   // Save preference mutation
   const savePreference = useMutation({
-    mutationFn: async ({ artworkId, liked }: { artworkId: string; liked: boolean }) => {
+    mutationFn: async ({ artworkId, liked, artworkDomainId }: { artworkId: string; liked: boolean; artworkDomainId?: string }) => {
       if (!user?.domainId || !user?.id) throw new Error('User not authenticated');
       
-      // TODO : Use from Common's Contants
       await apiClient.saveArtworkPreference(user.domainId, user.id, {
-        domainId: "00000000-0000-0000-0000-000000000000",
+        domainId: artworkDomainId ?? "00000000-0000-0000-0000-000000000000",
         artworkId,
         liked,
       });
@@ -75,12 +77,34 @@ export function TasterPage() {
     },
   });
 
+  useEffect(() => {
+    if (stats?.totalSwiped === undefined || stats?.totalSwiped === null) {
+      return;
+    }
+
+    if (previousTotalSwipedRef.current === null) {
+      previousTotalSwipedRef.current = stats.totalSwiped;
+      return;
+    }
+
+    const prev = previousTotalSwipedRef.current;
+    if (stats.totalSwiped >= 20 && prev < 20 && !hasShownUnlockRef.current) {
+      hasShownUnlockRef.current = true;
+      setShowAiUnlockModal(true);
+    }
+    previousTotalSwipedRef.current = stats.totalSwiped;
+  }, [stats?.totalSwiped]);
+
   // Handle swipe decision
   const handleSwipe = useCallback((direction: 'left' | 'right') => {
     if (!currentArtwork || swipeDirection) return;
 
     setSwipeDirection(direction);
-    savePreference.mutate({ artworkId: currentArtwork.id, liked: direction === 'right' });
+    savePreference.mutate({
+      artworkId: currentArtwork.id,
+      liked: direction === 'right',
+      artworkDomainId: currentArtwork.domainId,
+    });
 
     setTimeout(() => {
       setCurrentIndex((prev) => prev + 1);
@@ -194,6 +218,23 @@ export function TasterPage() {
 
   return (
     <div className="taster-page">
+      {showAiUnlockModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Congratulations!</h2>
+            <p className="text-gray-600 mb-4">
+              You’ve completed 20 swipes and unlocked the AI Suggestions section. Head over to explore personalized recommendations.
+            </p>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-white font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              onClick={() => setShowAiUnlockModal(false)}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
       <header className="taster-header">
         <h1 className="taster-title">Taster</h1>
         <p className="taster-subtitle">

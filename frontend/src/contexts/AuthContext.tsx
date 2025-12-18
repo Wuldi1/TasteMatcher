@@ -21,7 +21,7 @@ interface AuthContextType {
   logout: () => void;
   setUserFromToken: (token: string) => void;
   setUserFromUser: (user: Partial<User>) => void;
-  refreshUser: () => Promise<Partial<User>>;
+  refreshUser: () => Promise<Partial<User> | null>;
   // User Stats capabilities
   stats: UserStatsResponse | null;
   answeredQuestions: number;
@@ -38,13 +38,14 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
  * @returns The total number of questions.
  */
 function calculateTotalQuestions(): number {
-    // 1. Collection Type
-    // 2. About Yourself
-    // 3. Current Location
-    // 4. Other Residences
-    // 5. Collection Goals
-    // 6. Aesthetic Admiration (Description + Images)
-    return 6;
+  // 1. Collection Type
+  // 2. About Yourself
+  // 3. Current Location
+  // 4. Other Residences
+  // 5. Collection Goals
+  // 6. Collaborators
+  // 7. Collection / Inspiration uploads
+  return 7;
 }
 
 /**
@@ -53,18 +54,41 @@ function calculateTotalQuestions(): number {
  * @returns The number of answered questions.
  */
 function calculateAnsweredQuestions(questionnaire: PersonalQuestionnaire): number {
-    let count = 0;
-    if (questionnaire.collectionType) count++;
-    if (questionnaire.aboutYourself) count++;
-    if (questionnaire.currentLocation) count++;
-    if (questionnaire.hasOtherResidences !== undefined) count++;
-    if (questionnaire.collectionGoals) count++;
-    
-    const hasAdmirationText = !!questionnaire.aestheticAdmiration?.description;
-    const hasAdmirationImages = (questionnaire.aestheticAdmiration?.imageUrls?.length ?? 0) > 0;
-    if (hasAdmirationText || hasAdmirationImages) count++;
+  let count = 0;
+  const hasText = (value?: string | null) => Boolean(value && value.trim().length > 0);
+  const hasImages = (value?: string[]) => (value?.length ?? 0) > 0;
 
-    return count;
+  if (questionnaire.collectionType) count++;
+  if (hasText(questionnaire.aboutYourself)) count++;
+  if (hasText(questionnaire.currentLocation)) count++;
+  if (questionnaire.hasOtherResidences !== undefined) count++;
+  if (hasText(questionnaire.collectionGoals)) count++;
+
+  if (questionnaire.worksWithDesigner !== undefined) {
+    if (!questionnaire.worksWithDesigner) {
+      count++;
+    } else if (hasText(questionnaire.designerDetails)) {
+      count++;
+    }
+  }
+
+  const hasCollectionAnswer = questionnaire.hasPersonalCollection !== undefined;
+  let hasCollectionContent = false;
+  if (questionnaire.hasPersonalCollection) {
+    hasCollectionContent =
+      hasText(questionnaire.personalCollection?.description) ||
+      hasImages(questionnaire.personalCollection?.imageUrls);
+  } else {
+    hasCollectionContent =
+      hasText(questionnaire.aestheticAdmiration?.description) ||
+      hasImages(questionnaire.aestheticAdmiration?.imageUrls);
+  }
+
+  if (hasCollectionAnswer && hasCollectionContent) {
+    count++;
+  }
+
+  return count;
 }
 
 /**
@@ -113,7 +137,7 @@ const isTokenValid = (token: string): boolean => {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Partial<User> | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
-  
+
   // Stats state
   const [stats, setStats] = useState<UserStatsResponse | null>(null);
   const [answeredQuestions, setAnsweredQuestions] = useState(0);
@@ -129,35 +153,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTotalQuestions(0);
   }, []);
 
-  const refreshUser = useCallback(async (user: Partial<User>) => {
-    const token = localStorage.getItem('tm_auth_token');
-    if (!token) {
-      console.log('No token found in refreshUser');
-      return;
-    }
-
-    try {
-      // Fetch fresh user data with new token from backend
-      const { user: freshUser, token: newToken } = await apiClient.refreshCurrentUser();
-      // Update stored tokens
-      localStorage.setItem('token', newToken);
-      localStorage.setItem('tm_auth_token', newToken);
-
-      // Update API client token
-      apiClient.setAuthToken(newToken);
-
-      // Update user state with fresh data including personalQuestionnaire
-      setUserFromUser(freshUser);
-      return freshUser;
-    } catch (error) {
-      console.error('Failed to refresh user:', error);
-      // If refresh fails, try parsing existing token
-      setUserFromToken(token);
-      return user;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const setUserFromUser = useCallback((userData: Partial<User>) => {
     setUser({
       id: userData.id,
@@ -169,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       personalQuestionnaire: userData.personalQuestionnaire,
       swipeCount: userData.swipeCount || 0,
       comments: userData.comments || [],
+      sharedCollectionUploads: userData.sharedCollectionUploads ?? [],
     });
 
   }, []);
@@ -201,23 +197,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [logout]);
 
+  const refreshUser = useCallback(async (): Promise<Partial<User> | null> => {
+    const token = localStorage.getItem('tm_auth_token');
+    if (!token) {
+      console.log('No token found in refreshUser');
+      return null;
+    }
+
+    try {
+      // Fetch fresh user data with new token from backend
+      const { user: freshUser, token: newToken } = await apiClient.refreshCurrentUser();
+      // Update stored tokens
+      localStorage.setItem('token', newToken);
+      localStorage.setItem('tm_auth_token', newToken);
+
+      // Update API client token
+      apiClient.setAuthToken(newToken);
+
+      // Update user state with fresh data including personalQuestionnaire
+      setUserFromUser(freshUser);
+      return freshUser;
+    } catch (error) {
+      console.error('Failed to refresh user:', error);
+      // If refresh fails, try parsing existing token
+      setUserFromToken(token);
+      return null;
+    }
+  }, [setUserFromToken, setUserFromUser]);
+
   const refreshStats = useCallback(async () => {
     if (!user?.id || !user?.domainId) return;
 
     setIsStatsLoading(true);
     try {
-        const fetchedStats = await apiClient.getUserStats();
-        setStats(fetchedStats);
+      const fetchedStats = await apiClient.getUserStats();
+      setStats(fetchedStats);
 
-        // Calculate answered and total questions
-        if (user.personalQuestionnaire) {
-            setAnsweredQuestions(calculateAnsweredQuestions(user.personalQuestionnaire as PersonalQuestionnaire));
-            setTotalQuestions(calculateTotalQuestions());
-        }
+      if (user.personalQuestionnaire) {
+        setAnsweredQuestions(calculateAnsweredQuestions(user.personalQuestionnaire as PersonalQuestionnaire));
+      } else {
+        setAnsweredQuestions(0);
+      }
+      setTotalQuestions(calculateTotalQuestions());
     } catch (err) {
-        console.error('Failed to fetch user stats:', err);
+      console.error('Failed to fetch user stats:', err);
     } finally {
-        setIsStatsLoading(false);
+      setIsStatsLoading(false);
     }
   }, [user]);
 
@@ -229,7 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         totalSwiped: prev.totalSwiped + 1,
       };
     });
-    
+
     setUser((prev) => {
       if (!prev) return null;
       return {
@@ -250,11 +275,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Fetch stats when user changes
   useEffect(() => {
     if (user?.id) {
-        refreshStats();
+      refreshStats();
     } else {
-        setStats(null);
+      setStats(null);
     }
   }, [user?.id, refreshStats]);
+
+  useEffect(() => {
+    if (user?.personalQuestionnaire) {
+      setAnsweredQuestions(calculateAnsweredQuestions(user.personalQuestionnaire as PersonalQuestionnaire));
+    } else if (user) {
+      setAnsweredQuestions(0);
+    } else {
+      setAnsweredQuestions(0);
+    }
+    setTotalQuestions(calculateTotalQuestions());
+  }, [user]);
 
   const value = useMemo(
     () => ({

@@ -188,7 +188,7 @@ export class BlobService {
           fileUrl: blobClient.url
         });
 
-        return blobClient.url;
+        return this.appendCacheBustingParam(blobClient.url);
       },
       {
         maxAttempts: 2,
@@ -325,6 +325,11 @@ export class BlobService {
     logger.debug({
       msg: 'Sent message to queue',
       queueName: this.appConfig.queue.name,
-    });
+      });
+  }
+
+  private appendCacheBustingParam(url: string): string {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}t=${Date.now()}`;
   }
 }

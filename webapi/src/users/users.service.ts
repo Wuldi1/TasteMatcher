@@ -424,6 +424,7 @@ export class UsersService {
         domainId: string,
         // eslint-disable-next-line
         file: Express.Multer.File,
+        section: 'aesthetic' | 'collection' | 'shared_gallery' = 'aesthetic',
     ): Promise<{ success: boolean; message: string; vectorized: number }> {
         const container = await this.cosmosService.getContainer('Core');
         const correlationId = uuidv4();
@@ -468,18 +469,10 @@ export class UsersService {
             this.logger.log(`Generated embedding vector with ${embedding.vector.length} dimensions`);
 
             // Store the vector URL in user's aestheticAdmiration
-            const currentAdmiration = user.personalQuestionnaire?.aestheticAdmiration || {};
-            const currentImages = currentAdmiration.imageUrls || [];
-            currentImages.push(blobUrl);
-
             const updatedUser: User = {
                 ...user,
                 personalQuestionnaire: {
                     ...user.personalQuestionnaire,
-                    aestheticAdmiration: {
-                        ...currentAdmiration,
-                        imageUrls: currentImages,
-                    },
                 },
                 tempPreferenceVectors: [
                     ...(user.tempPreferenceVectors || []),
@@ -488,14 +481,44 @@ export class UsersService {
                 updatedAt: Date.now(),
             };
 
+            let resultingCount = 0;
+
+            if (section === 'shared_gallery') {
+                const sharedUploads = [...(user.sharedCollectionUploads ?? []), blobUrl];
+                updatedUser.sharedCollectionUploads = sharedUploads;
+                resultingCount = sharedUploads.length;
+            } else if (section === 'collection') {
+                const currentCollection = user.personalQuestionnaire?.personalCollection || {};
+                const collectionImages = [...(currentCollection.imageUrls ?? []), blobUrl];
+                updatedUser.personalQuestionnaire = {
+                    ...updatedUser.personalQuestionnaire,
+                    personalCollection: {
+                        ...currentCollection,
+                        imageUrls: collectionImages,
+                    },
+                };
+                resultingCount = collectionImages.length;
+            } else {
+                const currentAdmiration = user.personalQuestionnaire?.aestheticAdmiration || {};
+                const admirationImages = [...(currentAdmiration.imageUrls ?? []), blobUrl];
+                updatedUser.personalQuestionnaire = {
+                    ...updatedUser.personalQuestionnaire,
+                    aestheticAdmiration: {
+                        ...currentAdmiration,
+                        imageUrls: admirationImages,
+                    },
+                };
+                resultingCount = admirationImages.length;
+            }
+
             await container.item(userId, domainId).replace(updatedUser);
 
-            this.logger.log(`Processed preference image ${currentImages.length} for user ${userId}`);
+            this.logger.log(`Processed preference image ${resultingCount} for user ${userId}`);
 
             return {
                 success: true,
-                message: `Successfully processed preference image ${currentImages.length}`,
-                vectorized: currentImages.length,
+                message: `Successfully processed preference image ${resultingCount}`,
+                vectorized: resultingCount,
             };
         } catch (error) {
             if (error instanceof NotFoundException || error instanceof BadRequestException) {

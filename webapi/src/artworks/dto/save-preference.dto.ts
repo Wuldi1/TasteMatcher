@@ -1,5 +1,5 @@
-import { IsString, IsBoolean } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsBoolean, IsOptional, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SavePreferenceDto {
   @ApiProperty({ description: 'Artwork ID' })
@@ -11,7 +11,14 @@ export class SavePreferenceDto {
   domainId!: string;
 
 
-  @ApiProperty({ description: 'True for like, false for dislike' })
+  @ApiPropertyOptional({ description: 'True for like, false for dislike' })
+  @IsOptional()
   @IsBoolean()
-  liked!: boolean;
+  liked?: boolean;
+
+  @ApiPropertyOptional({ description: 'Optional free text customer comment', maxLength: 2000 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  comment?: string;
 }

@@ -9,10 +9,19 @@ import {
   BadRequestException,
   Logger,
   Request,
-  UseGuards
+  UseGuards,
+  NotFoundException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Artwork, BlobService, CosmosService, getOriginalBlobPath, ImageProcessingQueueMessage, ProcessingStatus } from '@tastematcher/common';
+import {
+  Artwork,
+  BlobService,
+  CosmosService,
+  getOriginalBlobPath,
+  ImageProcessingQueueMessage,
+  ProcessingStatus,
+  cleanupArtworkBeforeResponseToClient
+} from '@tastematcher/common';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
 import { v4 as uuidv4 } from 'uuid';
 import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
@@ -124,6 +133,69 @@ export class UploadController {
     }
   }
 
+  @Post(':artworkId/image')
+  @UseInterceptors(FileInterceptor('file'))
+  async replaceArtworkImage(
+    @Request() req: AuthenticatedRequest,
+    @Param('domainId') domainId: string,
+    @Param('artworkId') artworkId: string,
+    // eslint-disable-next-line
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<Artwork> {
+    this.logger.debug({
+      route: '/domains/:domainId/uploads/:artworkId/image',
+      method: 'POST',
+      domainId,
+      artworkId,
+    });
+
+    if (domainId !== req.user.domainId && req.user.role !== 'global_admin') {
+      throw new BadRequestException('Unauthorized domain access');
+    }
+
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+
+    this.blobService.validateImageFile(file);
+
+    const artworksContainer = await this.cosmosService.getArtworksContainer();
+    const { resource: existingArtwork } = await artworksContainer.item(artworkId, domainId).read<Artwork>();
+
+    if (!existingArtwork) {
+      throw new NotFoundException(`Artwork ${artworkId} not found`);
+    }
+
+    const blobName = getOriginalBlobPath(domainId, artworkId, file.mimetype);
+    const artworkUrl = await this.blobService.uploadBlob('originals', blobName, file.buffer, file.mimetype);
+
+    const updatedArtwork: Artwork = {
+      ...existingArtwork,
+      filename: artworkUrl,
+      thumbnails: undefined,
+    };
+
+    const { resource } = await artworksContainer.item(artworkId, domainId).replace(updatedArtwork);
+
+    const imageProcessingQueueMessage: ImageProcessingQueueMessage = {
+      messageId: uuidv4(),
+      artworkId,
+      domainId,
+      blobName,
+      fileUrl: artworkUrl,
+      uploadedAt: Date.now(),
+    };
+    await this.blobService.sendMessageToQueue(imageProcessingQueueMessage);
+
+    this.logger.log({
+      action: 'replaceArtworkImage.success',
+      domainId,
+      artworkId,
+    });
+
+    return cleanupArtworkBeforeResponseToClient(resource as Artwork, req.user.role) as Artwork;
+  }
+
   private parseArtworkPayload(body: any, domainId: string): Artwork {
     // Accept direct artwork object or legacy { artwork } or { metadata }
 
@@ -165,6 +237,8 @@ export class UploadController {
       vector: [],
       vectorModel: '',
       price: parsed.price !== undefined ? Number(parsed.price) : undefined,
+      shouldDisplayPrice: parsed.shouldDisplayPrice ?? false,
+      useForTaster: parsed.useForTaster ?? false,
     } as Artwork;
   }
 }

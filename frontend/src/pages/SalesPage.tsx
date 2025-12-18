@@ -9,14 +9,14 @@
 // 8. Adds meaningful JSDoc for exported functions/classes.
 // 9. CI-friendly: code passes lint, typecheck, and tests locally.
 // -----------------------------------------------------------
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { apiClient } from '../utils/api';
 import SaleProposal from '../components/SaleProposal';
 import { useAuth } from '../contexts/AuthContext';
 import { ArtworkStats, Proposal, ProposalItem, User, Artwork } from '@tastematcher/common';
 import { AISuggestionsPage } from './AISuggestions/AISuggestionsPage';
 import CatalogForUser from '../components/Catalog/CatalogForUser';
-import { Mail, Shield, Activity, Database, Layers, MessageSquare, FileText, ChevronDown, X, Send } from 'lucide-react';
+import { Mail, Shield, Activity, Database, Layers, MessageSquare, FileText, ChevronDown, X, Send, Paperclip, Loader2 } from 'lucide-react';
 
 type UserItem = { id: string; name?: string };
 
@@ -71,6 +71,8 @@ export default function SalesPage() {
     // Chat state
     const [newChatComment, setNewChatComment] = useState('');
     const [isSendingChat, setIsSendingChat] = useState(false);
+    const [isUploadingChatAttachment, setIsUploadingChatAttachment] = useState(false);
+    const chatFileInputRef = useRef<HTMLInputElement | null>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     // Lightbox state
@@ -177,6 +179,22 @@ export default function SalesPage() {
         setProposalItem([]);
     }, [selectedDomainId]);
 
+    const refreshSelectedUserDetails = useCallback(async () => {
+        if (!selectedUserId) return null;
+        try {
+            const domainToRequest = isGlobalAdmin ? selectedDomainId : undefined;
+            const userResponse = await apiClient.getUser(selectedUserId, domainToRequest);
+            setUserDetails(userResponse);
+            setUserDetailsError(null);
+            return userResponse;
+        } catch (err) {
+            console.error('Failed to load user details', err);
+            setUserDetailsError('Unable to load user details');
+            setUserDetails(null);
+            throw err;
+        }
+    }, [selectedUserId, isGlobalAdmin, selectedDomainId]);
+
     // Fetch selected user details and domain stats when selection changes
     useEffect(() => {
         if (!selectedUserId) {
@@ -185,26 +203,11 @@ export default function SalesPage() {
             return;
         }
 
-        const fetchUser = async () => {
-            setUserDetailsLoading(true);
-            setUserDetailsError(null);
-            try {
-                // If current viewer is global admin and an effectiveDomainId is selected, include it so backend fetches that domain's user
-                const domainToRequest = isGlobalAdmin ? selectedDomainId : undefined;
-                const userResponse = await apiClient.getUser(selectedUserId, domainToRequest);
-                setUserDetails(userResponse);
-            } catch (err) {
-                console.error('Failed to load user details', err);
-                setUserDetailsError('Unable to load user details');
-                setUserDetails(null);
-            } finally {
-                setUserDetailsLoading(false);
-            }
-        };
-
-        fetchUser();
-        // include domain selection and admin flag (primitives) so effect re-runs only when they change
-    }, [selectedUserId, isGlobalAdmin, selectedDomainId]);
+        setUserDetailsLoading(true);
+        refreshSelectedUserDetails()
+            .catch(() => undefined)
+            .finally(() => setUserDetailsLoading(false));
+    }, [selectedUserId, refreshSelectedUserDetails]);
 
     // Scroll chat to bottom when comments update
     useEffect(() => {
@@ -221,15 +224,49 @@ export default function SalesPage() {
         try {
             await apiClient.addUserComment(selectedUserId, newChatComment);
             setNewChatComment('');
-            
-            // Refresh user details to show new comment
-            const domainToRequest = isGlobalAdmin ? selectedDomainId : undefined;
-            const updatedUser = await apiClient.getUser(selectedUserId, domainToRequest);
-            setUserDetails(updatedUser);
+            await refreshSelectedUserDetails();
         } catch (error) {
             console.error('Failed to send chat message', error);
         } finally {
             setIsSendingChat(false);
+        }
+    };
+
+    const uploadChatAttachment = async (file: File) => {
+        if (!selectedUserId) return;
+        const previousUrls = userDetails?.sharedCollectionUploads ?? [];
+        setIsUploadingChatAttachment(true);
+        try {
+            await apiClient.vectorizePreferenceImage(file, { section: 'shared_gallery' });
+            const updatedUser = await refreshSelectedUserDetails();
+            const newUrls = updatedUser?.sharedCollectionUploads ?? [];
+            const attachmentUrl =
+                newUrls.find((url) => !previousUrls.includes(url)) || newUrls[newUrls.length - 1];
+
+            if (attachmentUrl) {
+                await apiClient.addUserComment(selectedUserId, attachmentUrl);
+                await refreshSelectedUserDetails();
+            }
+        } catch (error) {
+            console.error('Failed to upload chat attachment', error);
+        } finally {
+            setIsUploadingChatAttachment(false);
+        }
+    };
+
+    const handleChatFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            void uploadChatAttachment(file);
+        }
+        event.target.value = '';
+    };
+
+    const handleChatPaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
+        if (event.clipboardData.files.length > 0) {
+            const file = event.clipboardData.files[0];
+            event.preventDefault();
+            void uploadChatAttachment(file);
         }
     };
 
@@ -615,9 +652,9 @@ export default function SalesPage() {
                                             </div>
                                         ) : (
                                             userDetails.comments.map((comment, idx) => {
-                                                // In sales view, "Me" is the dealer/admin. Customer is the other.
-                                                // We check if the author matches the customer's name/email to align left.
                                                 const isCustomer = comment.author === userDetails.name || comment.author === userDetails.email;
+                                                const trimmedText = comment.text?.trim() || '';
+                                                const isImageMessage = /^https?:\/\//i.test(trimmedText);
                                                 
                                                 return (
                                                     <div key={idx} className={`flex ${!isCustomer ? 'justify-end' : 'justify-start'}`}>
@@ -629,7 +666,27 @@ export default function SalesPage() {
                                                             <div className={`text-xs mb-1 ${!isCustomer ? 'text-blue-100' : 'text-gray-500'}`}>
                                                                 {!isCustomer ? 'You' : comment.author} • {new Date(comment.createdAt).toLocaleDateString()}
                                                             </div>
-                                                            <p className="text-sm whitespace-pre-wrap">{comment.text}</p>
+                                                            {isImageMessage ? (
+                                                                <a
+                                                                    href={trimmedText}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="block"
+                                                                >
+                                                                    <div className={`rounded-xl overflow-hidden border ${!isCustomer ? 'border-white/30 bg-white/10' : 'border-gray-200 bg-gray-50'}`}>
+                                                                        <img
+                                                                            src={trimmedText}
+                                                                            alt="Shared attachment"
+                                                                            className="w-full max-w-[220px] h-36 object-cover"
+                                                                        />
+                                                                    </div>
+                                                                    <span className={`mt-1 block text-[10px] uppercase tracking-wide ${!isCustomer ? 'text-blue-100' : 'text-gray-400'}`}>
+                                                                        Tap to open full size
+                                                                    </span>
+                                                                </a>
+                                                            ) : (
+                                                                <p className="text-sm whitespace-pre-wrap break-words">{comment.text}</p>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 );
@@ -639,22 +696,48 @@ export default function SalesPage() {
                                     </div>
 
                                     <div className="p-4 bg-white border-t border-gray-100">
-                                        <form onSubmit={handleSendChat} className="flex gap-2">
+                                        <form onSubmit={handleSendChat} className="flex gap-2 items-center">
+                                            <input
+                                                ref={chatFileInputRef}
+                                                type="file"
+                                                accept="image/jpeg,image/png,image/webp"
+                                                className="hidden"
+                                                onChange={handleChatFileChange}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => chatFileInputRef.current?.click()}
+                                                className="text-gray-500 hover:text-blue-600 transition-colors p-2 rounded-full hover:bg-blue-50"
+                                                title="Attach an image"
+                                                disabled={isSendingChat || isUploadingChatAttachment}
+                                            >
+                                                <Paperclip className="w-5 h-5" />
+                                            </button>
                                             <input
                                                 type="text"
                                                 value={newChatComment}
                                                 onChange={(e) => setNewChatComment(e.target.value)}
                                                 placeholder="Type a message to the customer..."
                                                 className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                disabled={isSendingChat}
+                                                disabled={isSendingChat || isUploadingChatAttachment}
+                                                onPaste={handleChatPaste}
                                             />
                                             <button
                                                 type="submit"
-                                                disabled={!newChatComment.trim() || isSendingChat}
+                                                disabled={!newChatComment.trim() || isSendingChat || isUploadingChatAttachment}
                                                 className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                             >
-                                                <Send className="w-5 h-5" />
+                                                {isSendingChat ? (
+                                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                                ) : (
+                                                    <Send className="w-5 h-5" />
+                                                )}
                                             </button>
+                                            {isUploadingChatAttachment && (
+                                                <span className="text-xs text-gray-500 flex items-center gap-1">
+                                                    <Loader2 className="w-4 h-4 animate-spin" /> Uploading…
+                                                </span>
+                                            )}
                                         </form>
                                     </div>
                                 </div>
@@ -704,6 +787,7 @@ export default function SalesPage() {
                                                         taggedAt: Date.now(),
                                                         title: artwork.title,
                                                         filename: artwork.filename,
+                                                        askedPrice: 0,
                                                     },
                                                     ...currentDraft,
                                                 ];

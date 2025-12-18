@@ -14,6 +14,7 @@ export interface Artwork {
   height?: number;
   price?: number; // USD price, optional
   shouldDisplayPrice?: boolean; // whether to show price to users
+  useForTaster?: boolean; // whether artwork should appear in the Taster experience (defaults to false)
   tags?: string[];
   filename: string; // defined by service
   vector: number[]; // embedding vector for search
@@ -23,6 +24,7 @@ export interface Artwork {
   createdAt?: number; // timestamp
   metadata?: ArtworkMetadata; // allow additional metadata fields
   likedStatus?: LikedStatus; // customer's like/dislike status for the artwork
+  preferenceComment?: string; // free-text feedback stored with the viewer's preference
 }
 
 export interface ThumbnailSize {
@@ -65,8 +67,10 @@ export interface ArtworkPreference {
   userId: string; // Partition key for efficient user-scoped queries
   artworkId: string;
   domainId: string;
-  liked: boolean; // true = like, false = dislike
+  liked?: boolean; // true = like, false = dislike
+  comment?: string;
   createdAt: number; // Timestamp
+  updatedAt?: number;
 }
 
 /**

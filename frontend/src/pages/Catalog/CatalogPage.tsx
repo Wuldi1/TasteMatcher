@@ -14,7 +14,7 @@
 import { useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
-import { Search, X, ThumbsUp, ThumbsDown, Edit, Trash2, CheckSquare, Square, Eye, EyeOff } from 'lucide-react';
+import { Search, X, ThumbsUp, ThumbsDown, Edit, Trash2, CheckSquare, Square, Eye, EyeOff, Sparkles } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
 import { apiClient } from '../../utils/api';
 import { EditArtworkModal } from '../../components/EditArtworkModal/EditArtworkModal';
@@ -175,6 +175,28 @@ export function CatalogPage() {
     },
   });
 
+  const bulkUpdateTasterFlag = useMutation({
+    mutationFn: async ({ artworkIds, useForTaster }: { artworkIds: string[]; useForTaster: boolean }) => {
+      if (!user?.domainId) throw new Error('No domain ID');
+      await Promise.all(artworkIds.map(id => apiClient.updateArtwork(user.domainId, id, { useForTaster })));
+    },
+    onSuccess: (_, { artworkIds, useForTaster }) => {
+      queryClient.setQueryData(['artworks', user?.domainId, searchQuery, sortBy, sortOrder], (oldData: any) => {
+        if (!oldData || !Array.isArray(oldData.pages)) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            items: Array.isArray(page.items)
+              ? page.items.map((item: any) => (artworkIds.includes(item.id) ? { ...item, useForTaster } : item))
+              : page.items,
+          })),
+        };
+      });
+      setSelectedArtworks(new Set());
+    },
+  });
+
   // Replace custom hook with local mutation that performs a safe optimistic update
   const savePreferenceMutation = useMutation({
     mutationFn: async ({ artworkId, liked }: { artworkId: string; liked: boolean }) => {
@@ -301,6 +323,14 @@ export function CatalogPage() {
 
   const handleBulkMakePricesHidden = () => {
     bulkUpdatePriceVisibility.mutate({ artworkIds: Array.from(selectedArtworks), shouldDisplayPrice: false });
+  };
+
+  const handleBulkEnableTaster = () => {
+    bulkUpdateTasterFlag.mutate({ artworkIds: Array.from(selectedArtworks), useForTaster: true });
+  };
+
+  const handleBulkDisableTaster = () => {
+    bulkUpdateTasterFlag.mutate({ artworkIds: Array.from(selectedArtworks), useForTaster: false });
   };
 
   // Handler to like/dislike from catalog or modal
@@ -434,6 +464,20 @@ export function CatalogPage() {
                     Hide Prices
                   </button>
                   <button
+                    onClick={handleBulkEnableTaster}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 transition-colors"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Use in Taster
+                  </button>
+                  <button
+                    onClick={handleBulkDisableTaster}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 transition-colors"
+                  >
+                    <Sparkles className="w-4 h-4 text-gray-500" />
+                    Remove from Taster
+                  </button>
+                  <button
                     onClick={handleBulkDelete}
                     className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium bg-white text-red-700 border border-red-200 hover:bg-red-50 transition-colors"
                   >
@@ -473,6 +517,20 @@ export function CatalogPage() {
                     aria-label="Make prices hidden"
                   >
                     <EyeOff className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={handleBulkEnableTaster}
+                    className="p-2.5 text-purple-600 bg-purple-50 rounded-lg active:scale-95 transition-transform"
+                    aria-label="Use in Taster"
+                  >
+                    <Sparkles className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={handleBulkDisableTaster}
+                    className="p-2.5 text-gray-500 bg-gray-100 rounded-lg active:scale-95 transition-transform"
+                    aria-label="Remove from Taster"
+                  >
+                    <Sparkles className="w-5 h-5" />
                   </button>
                   <button 
                     onClick={handleBulkDelete} 
@@ -553,6 +611,13 @@ export function CatalogPage() {
                       {artwork.price !== undefined && (artwork.shouldDisplayPrice ?? true) && (
                         <div className="absolute top-3 right-3 z-10 bg-white/90 backdrop-blur-sm text-gray-900 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
                           ${artwork.price.toLocaleString()}
+                        </div>
+                      )}
+
+                      {artwork.useForTaster && (
+                        <div className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1 rounded-full bg-purple-600/90 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+                          <Sparkles className="w-4 h-4" />
+                          Taster
                         </div>
                       )}
                     </div>
@@ -682,6 +747,13 @@ export function CatalogPage() {
 
                   {selectedArtwork.price !== undefined && (selectedArtwork.shouldDisplayPrice ?? true) && (
                     <div className="text-2xl text-green-700 font-semibold mb-4">${selectedArtwork.price.toLocaleString()}</div>
+                  )}
+
+                  {selectedArtwork.useForTaster && (
+                    <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-purple-50 px-3 py-1 text-sm font-semibold text-purple-700">
+                      <Sparkles className="w-4 h-4" />
+                      Enabled for Taster
+                    </div>
                   )}
 
                   <div className="grid grid-cols-2 gap-x-4 gap-y-4 mb-6 text-sm border-t border-b border-gray-100 py-4">

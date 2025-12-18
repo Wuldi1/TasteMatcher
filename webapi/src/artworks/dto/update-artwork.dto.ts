@@ -38,6 +38,11 @@ export class UpdateArtworkDto {
   @IsBoolean()
   shouldDisplayPrice?: boolean;
 
+  @ApiPropertyOptional({ description: 'Whether this artwork should be available in the Taster experience', type: Boolean })
+  @IsOptional()
+  @IsBoolean()
+  useForTaster?: boolean;
+
   @ApiPropertyOptional({ description: 'Artwork height in inches', type: Number })
   @IsOptional()
   @IsNumber()

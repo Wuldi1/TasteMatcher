@@ -215,8 +215,13 @@ export class ArtworksController {
     if (req.user.id !== userId && req.user.role === 'customer') {
       throw new ForbiddenException('You are not authorized to perform this action.');
     }
-    // we're using GlobalArtworksDomainId for customers
-    const untastedArtworks = await this.artworksService.getUntastedArtworks(GlobalArtworksDomainId, userId, limit || 20);
+    const includeDomainId = domainId !== GlobalArtworksDomainId ? domainId : undefined;
+    const untastedArtworks = await this.artworksService.getUntastedArtworks(
+      GlobalArtworksDomainId,
+      userId,
+      limit || 20,
+      includeDomainId,
+    );
     return {
       ...untastedArtworks,
       artworks: untastedArtworks.artworks.map(artwork => cleanupArtworkBeforeResponseToClient(artwork, req.user.role) as Artwork),

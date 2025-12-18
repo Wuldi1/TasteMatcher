@@ -12,22 +12,32 @@ export const useSavePreference = ({
 }: {
   domainId: string;
   userId: string;
-  onOptimisticUpdate?: (artworkId: string, liked: boolean) => void;
+  onOptimisticUpdate?: (artworkId: string, updates: { liked?: boolean; comment?: string }) => void;
 }) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ artworkId, domainId, liked }: { artworkId: string; domainId: string; liked: boolean }) => {
+    mutationFn: async ({
+      artworkId,
+      domainId,
+      liked,
+      comment,
+    }: {
+      artworkId: string;
+      domainId: string;
+      liked?: boolean;
+      comment?: string;
+    }) => {
       if (!domainId || !userId) throw new Error('Domain ID and User ID are required');
-      return apiClient.saveArtworkPreference(domainId, userId, { artworkId, domainId, liked });
+      return apiClient.saveArtworkPreference(domainId, userId, { artworkId, domainId, liked, comment });
     },
-    onMutate: async ({ artworkId, domainId, liked }) => {
+    onMutate: async ({ artworkId, domainId, liked, comment }) => {
       // Cancel any ongoing queries for artworks
       await queryClient.cancelQueries(['artworks', domainId]);
 
       // Optionally perform an optimistic update
       if (onOptimisticUpdate) {
-        onOptimisticUpdate(artworkId, liked);
+        onOptimisticUpdate(artworkId, { liked, comment });
       }
 
       return { previousData: queryClient.getQueriesData(['artworks', domainId]) };

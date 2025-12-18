@@ -111,7 +111,11 @@ export default function SaleProposal({
 
     // Sync incoming draft changes
     useEffect(() => {
-        setItems(draftItems ?? []);
+        const normalizedDraft = (draftItems ?? []).map((item) => ({
+            ...item,
+            askedPrice: item.askedPrice ?? 0,
+        }));
+        setItems(normalizedDraft);
         if (proposalId) {
             setIsDirty(true);
         } else {
@@ -146,7 +150,7 @@ export default function SaleProposal({
                     taggedAt: item.taggedAt ?? Date.now(),
                     title: item.title,
                     filename: item.filename,
-                    askedPrice: item.askedPrice,
+                    askedPrice: item.askedPrice ?? 0,
                 }));
                 setItems(normalized);
                 setGeneralComments(fetched.generalComments || []);
@@ -201,7 +205,7 @@ export default function SaleProposal({
 
     const handlePriceChange = (artworkId: string, price?: number) => {
         setItems(prev => prev.map(item => 
-            item.artworkId === artworkId ? { ...item, askedPrice: price || 0 } : item
+            item.artworkId === artworkId ? { ...item, askedPrice: price ?? 0 } : item
         ));
         isLocalChangeRef.current = true;
         setIsDirty(true);
@@ -230,8 +234,8 @@ export default function SaleProposal({
         const errors: Record<string, string> = {};
         let hasError = false;
         items.forEach(item => {
-            if (item.askedPrice === undefined || item.askedPrice === null || item.askedPrice < 0) {
-                errors[item.artworkId] = 'Price is required';
+            if (item.askedPrice !== undefined && item.askedPrice < 0) {
+                errors[item.artworkId] = 'Price cannot be negative';
                 hasError = true;
             }
         });
@@ -493,7 +497,7 @@ export default function SaleProposal({
                                         {/* Displayed Price Input */}
                                         <div className="col-span-2 mt-2">
                                             <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                                                Asked Price <span className="text-red-500">*</span>
+                                                Asked Price
                                             </label>
                                             <FormattedPriceInput
                                                 value={item.askedPrice}
