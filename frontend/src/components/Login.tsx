@@ -15,7 +15,7 @@ export function Login() {
   const { setUserFromUser } = useAuth();
 
   const [email, setEmail] = useState<string>('');
-  const [verificationCode, setVerificationCode] = useState<string>('');
+  const [verificationCode, setVerificationCode] = useState<string>(window.location.hostname === 'localhost' ? '000000' : '');
   const [phase, setPhase] = useState<Phase>('email');
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [userIntent, setUserIntent] = useState<UserIntent>(null);

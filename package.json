@@ -11,11 +11,10 @@
     "start:local:webapi": "pnpm run build:webapi && pnpm --filter @tastematcher/webapi start:local",
     "start:dev:webapi": "pnpm --filter @tastematcher/webapi start:dev",
     "start:prd:webapi": "pnpm --filter @tastematcher/webapi start:prd",
-    "start:local:frontend": "pnpm run build:frontend && pnpm --filter @tastematcher/frontend start:local",
-    "start:dev:frontend": "pnpm run build:frontend && pnpm --filter @tastematcher/frontend start:dev",
-    "start:local:functions": "pnpm run build:functions && pnpm --filter @tastematcher/functions dev"
+    "start:frontend": "pnpm run build:frontend && pnpm --filter @tastematcher/frontend start"
   },
   "devDependencies": {
+    "@types/react": "^19.2.7",
     "eslint": "^9.38.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
@@ -29,6 +28,7 @@
     "@azure/storage-blob": "^12.29.1",
     "functions": "^1.0.9",
     "path": "^0.12.7",
-    "pino": "^10.1.0"
+    "pino": "^10.1.0",
+    "react-easy-crop": "^5.5.6"
   }
 }

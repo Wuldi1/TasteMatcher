@@ -57,7 +57,7 @@ export default function SalesPage() {
     const [users, setUsers] = useState<UserItem[]>([]);
     const [selectedUserId, setSelectedUserId] = useState<string | undefined>(undefined);
     const [activeTab, setActiveTab] = useState<'details' | 'catalog' | 'ai' | 'proposal'>('details');
-    const [hasFeedbackFilter, setHasFeedbackFilter] = useState<boolean>(false);
+    const [preferenceFilter, setPreferenceFilter] = useState<'all' | 'liked' | 'disliked'>('all');
 
     // New: fetched user details + stats
     const [userDetails, setUserDetails] = useState<User | null>(null);
@@ -755,17 +755,30 @@ export default function SalesPage() {
                         {!selectedUserId && <div>Please select a user to view the catalog.</div>}
                         {selectedUserId && (
                             <div>
-                                <div className="mb-3">
-                                    <label className="inline-flex items-center">
-                                        <input type="checkbox" checked={hasFeedbackFilter} onChange={(e) => setHasFeedbackFilter(e.target.checked)} />
-                                        <span className="ml-2 text-sm">Has Feedback</span>
-                                    </label>
+                                <div className="mb-4">
+                                    <span className="text-sm font-medium text-gray-700 mr-3">Filter by feedback</span>
+                                    <div className="inline-flex items-center gap-2">
+                                        {(['all', 'liked', 'disliked'] as const).map((option) => (
+                                            <button
+                                                key={option}
+                                                type="button"
+                                                onClick={() => setPreferenceFilter(option)}
+                                                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                                                    preferenceFilter === option
+                                                        ? 'bg-blue-600 text-white'
+                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                }`}
+                                            >
+                                                {option === 'all' ? 'All' : option === 'liked' ? 'Liked' : 'Disliked'}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
                                 <CatalogForUser
                                     domainId={effectiveDomainId ?? domainId}
                                     userId={selectedUserId}
-                                    hasFeedback={hasFeedbackFilter}
+                                    preferenceFilter={preferenceFilter === 'all' ? undefined : preferenceFilter}
                                     onAddToDraft={(artwork) => {
                                         setProposalItem((currentDraft) => {
                                             const isAlreadyInProposal = currentDraft.some(

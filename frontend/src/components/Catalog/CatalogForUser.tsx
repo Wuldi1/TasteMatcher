@@ -8,7 +8,7 @@ const PAGE_SIZE = 30;
 export type CatalogForUserProps = {
     domainId: string;
     userId?: string; // optional target user for liked/disliked status
-    hasFeedback?: boolean; // show only artworks with feedback
+    preferenceFilter?: 'liked' | 'disliked';
     onArtworkClick?: (a: Artwork) => void;
     onAddToDraft?: (a: Artwork) => void;
     onEditClick?: (a: Artwork, e: React.MouseEvent) => void;
@@ -23,7 +23,7 @@ export type CatalogForUserProps = {
 export default function CatalogForUser({
     domainId,
     userId,
-    hasFeedback = false,
+    preferenceFilter,
     onArtworkClick,
     onAddToDraft,
     onEditClick,
@@ -62,7 +62,11 @@ export default function CatalogForUser({
         setInitialLoading(true);
         setError(null);
         try {
-            const response = await apiClient.getArtworks(domainId, { limit: PAGE_SIZE, userId });
+            const response = await apiClient.getArtworks(domainId, {
+                limit: PAGE_SIZE,
+                userId,
+                preference: preferenceFilter,
+            });
             const items = response.items ?? [];
             setArtworks(items);
             mergeFeedback(items);
@@ -77,7 +81,7 @@ export default function CatalogForUser({
         } finally {
             setInitialLoading(false);
         }
-    }, [domainId, userId, mergeFeedback]);
+    }, [domainId, userId, preferenceFilter, mergeFeedback]);
 
     const fetchNextPage = useCallback(async () => {
         if (!domainId || !hasMore || !continuationToken || isLoadingMore) return;
@@ -87,6 +91,7 @@ export default function CatalogForUser({
                 limit: PAGE_SIZE,
                 userId,
                 continuationToken: continuationToken || undefined,
+                preference: preferenceFilter,
             });
             const items = response.items ?? [];
             if (items.length > 0) {
@@ -113,7 +118,7 @@ export default function CatalogForUser({
         } finally {
             setIsLoadingMore(false);
         }
-    }, [domainId, userId, hasMore, continuationToken, isLoadingMore, mergeFeedback, artworks.length]);
+    }, [domainId, userId, preferenceFilter, hasMore, continuationToken, isLoadingMore, mergeFeedback, artworks.length]);
 
     useEffect(() => {
         if (!domainId) return;
@@ -122,7 +127,7 @@ export default function CatalogForUser({
         setContinuationToken(null);
         setHasMore(false);
         fetchInitial();
-    }, [domainId, userId, fetchInitial]);
+    }, [domainId, userId, preferenceFilter, fetchInitial]);
 
     useEffect(() => {
         if (!hasMore) return;

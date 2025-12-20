@@ -1,9 +1,10 @@
-import { useState, FormEvent, useRef, useEffect, ChangeEvent } from 'react';
+import { useState, FormEvent, useRef, useEffect, ChangeEvent, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { X, Save, Sparkles, Upload as UploadIcon } from 'lucide-react';
+import { X, Save, Sparkles, Upload as UploadIcon, RotateCcw, RotateCw, Loader2 } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../utils/api';
+import Cropper, { Area } from 'react-easy-crop';
 
 interface EditArtworkModalProps {
   artwork: Artwork;
@@ -29,7 +30,26 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [isEditingImage, setIsEditingImage] = useState(false);
+  const [editingSource, setEditingSource] = useState<string | null>(null);
+  const [editingFileName, setEditingFileName] = useState<string>('artwork-edit.jpg');
+  const [crop, setCrop] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [isPreparingEdit, setIsPreparingEdit] = useState(false);
+  const [isApplyingEdits, setIsApplyingEdits] = useState(false);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const onCropComplete = useCallback((_croppedArea: Area, croppedPixels: Area) => {
+    setCroppedAreaPixels(croppedPixels);
+  }, []);
+
+  const handleRotationChange = (delta: number) => {
+    setRotation((prev) => {
+      const next = prev + delta;
+      return ((next % 360) + 360) % 360;
+    });
+  };
 
   useEffect(() => {
     return () => {
@@ -104,8 +124,45 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
     updateMutation.mutate(updates);
   };
 
+  useEffect(() => {
+    return () => {
+      if (editingSource && editingSource.startsWith('blob:')) {
+        URL.revokeObjectURL(editingSource);
+      }
+    };
+  }, [editingSource]);
+
   const handleChangeImageClick = () => {
     imageInputRef.current?.click();
+  };
+
+  const openImageEditor = useCallback((source: string, fileName: string) => {
+    if (editingSource && editingSource.startsWith('blob:')) {
+      URL.revokeObjectURL(editingSource);
+    }
+    setEditingSource(source);
+    setEditingFileName(fileName);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setRotation(0);
+    setCroppedAreaPixels(null);
+    setIsEditingImage(true);
+  }, [editingSource]);
+
+  const handleEditExistingImage = async () => {
+    if (!artwork.filename) return;
+    try {
+      setIsPreparingEdit(true);
+      const response = await fetch(artwork.filename, { mode: 'cors' });
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      openImageEditor(objectUrl, `artwork-${artwork.id}.${blob.type.split('/')[1] || 'jpg'}`);
+    } catch (err) {
+      console.error('Failed to load artwork image for editing', err);
+      setError('Unable to edit this image. Please try uploading a new file.');
+    } finally {
+      setIsPreparingEdit(false);
+    }
   };
 
   const handleImageFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -116,10 +173,54 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
 
     if (imagePreviewUrl) {
       URL.revokeObjectURL(imagePreviewUrl);
+      setImagePreviewUrl(null);
     }
 
-    setNewImageFile(file);
-    setImagePreviewUrl(URL.createObjectURL(file));
+    setNewImageFile(null);
+    const objectUrl = URL.createObjectURL(file);
+    openImageEditor(objectUrl, file.name || `artwork-${artwork.id}.jpg`);
+    event.target.value = '';
+  };
+
+  const handleCancelImageEditing = () => {
+    setIsEditingImage(false);
+    if (editingSource && editingSource.startsWith('blob:')) {
+      URL.revokeObjectURL(editingSource);
+    }
+    setEditingSource(null);
+    setCroppedAreaPixels(null);
+    setIsApplyingEdits(false);
+  };
+
+  const handleApplyImageEdits = async () => {
+    if (!editingSource || !croppedAreaPixels) {
+      setError('Please adjust the crop area before applying.');
+      return;
+    }
+    try {
+      setIsApplyingEdits(true);
+      const blob = await getCroppedImg(editingSource, croppedAreaPixels, rotation);
+      const extension = editingFileName.split('.').pop();
+      const sanitizedName = editingFileName.replace(/\.[^/.]+$/, '');
+      const finalName = `${sanitizedName || 'artwork-edit'}.${extension || 'jpg'}`;
+      const file = new File([blob], finalName, { type: blob.type || 'image/jpeg' });
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreviewUrl(previewUrl);
+      setNewImageFile(file);
+      setIsEditingImage(false);
+      if (editingSource && editingSource.startsWith('blob:')) {
+        URL.revokeObjectURL(editingSource);
+      }
+      setEditingSource(null);
+    } catch (err) {
+      console.error('Failed to apply image edits', err);
+      setError('Failed to apply image edits. Please try again.');
+    } finally {
+      setIsApplyingEdits(false);
+    }
   };
 
   return (
@@ -140,6 +241,11 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
                 {/* Left Column: Image */}
                 <div className="w-full md:w-1/3 flex-shrink-0">
                     <div className="aspect-[3/4] w-full bg-gray-100 rounded-lg overflow-hidden border border-gray-200 sticky top-0 relative">
+                        {isPreparingEdit && (
+                            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70 backdrop-blur-sm">
+                                <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
+                            </div>
+                        )}
                         {artwork.filename ? (
                             <img 
                                 src={imagePreviewUrl || artwork.thumbnails?.[2]?.url || artwork.filename} 
@@ -149,14 +255,27 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
                         ) : (
                             <div className="flex items-center justify-center h-full text-gray-400">No Image</div>
                         )}
-                        <button
-                          type="button"
-                          onClick={handleChangeImageClick}
-                          className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-sm font-medium text-gray-700 shadow hover:bg-white"
-                        >
-                          <UploadIcon className="w-4 h-4" />
-                          Replace image
-                        </button>
+                        <div className="absolute inset-x-3 bottom-3 flex flex-col gap-2 z-30">
+                            {artwork.filename && (
+                                <button
+                                    type="button"
+                                    onClick={handleEditExistingImage}
+                                    className="inline-flex items-center justify-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-sm font-medium text-gray-700 shadow hover:bg-white disabled:opacity-60"
+                                    disabled={isPreparingEdit}
+                                >
+                                    Edit current image
+                                </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={handleChangeImageClick}
+                              className="inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-sm font-medium text-gray-700 shadow hover:bg-white disabled:opacity-60"
+                              disabled={isPreparingEdit}
+                            >
+                              <UploadIcon className="w-4 h-4" />
+                              Upload new image
+                            </button>
+                        </div>
                         {newImageFile && (
                           <div className="absolute top-3 right-3 rounded-full bg-purple-600/90 text-xs font-semibold text-white px-2 py-0.5 shadow">
                             New image selected
@@ -353,6 +472,155 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
             </button>
         </div>
       </div>
+      {isEditingImage && editingSource && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4">
+          <div className="relative w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl">
+            <button
+              type="button"
+              onClick={handleCancelImageEditing}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+              aria-label="Close editor"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 pr-8">Adjust Artwork Image</h3>
+            <div className="relative w-full h-[55vh] bg-gray-900 rounded-xl overflow-hidden">
+              <Cropper
+                image={editingSource}
+                crop={crop}
+                zoom={zoom}
+                rotation={rotation}
+                aspect={3 / 4}
+                onCropChange={setCrop}
+                onCropComplete={onCropComplete}
+                onZoomChange={setZoom}
+                onRotationChange={setRotation}
+              />
+            </div>
+            <div className="mt-6 space-y-4">
+              <div>
+                <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">Zoom</label>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.01}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="w-full accent-blue-600"
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleRotationChange(-90)}
+                    className="inline-flex items-center justify-center rounded-full border border-gray-200 p-2 text-gray-600 hover:bg-gray-50"
+                    aria-label="Rotate left"
+                  >
+                    <RotateCcw className="w-5 h-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRotationChange(90)}
+                    className="inline-flex items-center justify-center rounded-full border border-gray-200 p-2 text-gray-600 hover:bg-gray-50"
+                    aria-label="Rotate right"
+                  >
+                    <RotateCw className="w-5 h-5" />
+                  </button>
+                </div>
+                <span className="text-sm font-medium text-gray-600">{rotation}°</span>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleCancelImageEditing}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyImageEdits}
+                disabled={isApplyingEdits}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {isApplyingEdits ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Applying...
+                  </>
+                ) : (
+                  'Apply edits'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function createImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener('load', () => resolve(image));
+    image.addEventListener('error', (error) => reject(error));
+    image.setAttribute('crossOrigin', 'anonymous');
+    image.src = url;
+  });
+}
+
+const getRadianAngle = (degreeValue: number) => (degreeValue * Math.PI) / 180;
+
+function rotateSize(width: number, height: number, rotation: number) {
+  const rotRad = getRadianAngle(rotation);
+  return {
+    width: Math.abs(Math.cos(rotRad) * width) + Math.abs(Math.sin(rotRad) * height),
+    height: Math.abs(Math.sin(rotRad) * width) + Math.abs(Math.cos(rotRad) * height),
+  };
+}
+
+async function getCroppedImg(imageSrc: string, pixelCrop: Area, rotation = 0): Promise<Blob> {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  if (!ctx) {
+    throw new Error('Failed to get canvas context');
+  }
+
+  const rotRad = getRadianAngle(rotation);
+  const { width: bBoxWidth, height: bBoxHeight } = rotateSize(image.width, image.height, rotation);
+
+  canvas.width = bBoxWidth;
+  canvas.height = bBoxHeight;
+
+  ctx.translate(bBoxWidth / 2, bBoxHeight / 2);
+  ctx.rotate(rotRad);
+  ctx.translate(-image.width / 2, -image.height / 2);
+  ctx.drawImage(image, 0, 0);
+
+  const data = ctx.getImageData(pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height);
+
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+
+  ctx.putImageData(data, 0, 0);
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error('Canvas is empty'));
+          return;
+        }
+        resolve(blob);
+      },
+      'image/jpeg',
+      0.95,
+    );
+  });
 }

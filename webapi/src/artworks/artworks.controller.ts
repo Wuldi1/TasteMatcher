@@ -91,6 +91,7 @@ export class ArtworksController {
     @Query('sortOrder') sortOrder?: 'asc' | 'desc',
     @Query('filterBy') filterBy?: string,
     @Query('userId') userId?: string, // optional user target for dealer/domain_owner
+    @Query('preference') preference?: 'liked' | 'disliked',
   ): Promise<PaginatedResponse<Artwork>> {
     if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
@@ -129,7 +130,24 @@ export class ArtworksController {
       requesterId = undefined;
     }
 
-    const artworks = await this.artworksService.findAll(domainId, queryParams, requesterId);
+    const normalizedPreference =
+      preference === 'liked' ? 'liked' : preference === 'disliked' ? 'disliked' : undefined;
+
+    if (normalizedPreference && !requesterId) {
+      throw new BadRequestException('Preference filters require a specific user context.');
+    }
+
+    let artworks: PaginatedResponse<Artwork>;
+    if (normalizedPreference && requesterId) {
+      artworks = await this.artworksService.findByPreference(
+        domainId,
+        requesterId,
+        normalizedPreference === 'liked',
+        queryParams,
+      );
+    } else {
+      artworks = await this.artworksService.findAll(domainId, queryParams, requesterId);
+    }
     return {
       ...artworks,
       items: artworks.items.map(artwork => cleanupArtworkBeforeResponseToClient(artwork, req.user.role) as Artwork),

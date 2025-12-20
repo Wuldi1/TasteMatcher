@@ -245,14 +245,30 @@ export class UsersService {
         invitedById: string,
     ): Promise<User> {
         const container = await this.cosmosService.getContainer('Core');
+        const normalizedEmail = inviteDto.email.toLowerCase();
 
         try {
+            // First, ensure this email isn't used in any other domain
+            const crossDomainQuery = {
+                query: "SELECT TOP 1 c.id, c.domainId FROM c WHERE c.type = 'user' AND c.email = @email",
+                parameters: [{ name: '@email', value: normalizedEmail }],
+            };
+
+            const { resources: crossDomainMatch } = await container.items
+                .query(crossDomainQuery)
+                .fetchAll();
+
+            const matchInAnotherDomain = crossDomainMatch.find((user) => user.domainId !== domainId);
+            if (matchInAnotherDomain) {
+                throw new BadRequestException(`User with email ${inviteDto.email} already exists in another domain`);
+            }
+
             // Check if user with this email already exists in the domain
             const existingQuery = {
                 query: "SELECT * FROM c WHERE c.domainId = @domainId AND c.email = @email AND c.type = 'user'",
                 parameters: [
                     { name: '@domainId', value: domainId },
-                    { name: '@email', value: inviteDto.email.toLowerCase() },
+                    { name: '@email', value: normalizedEmail },
                 ],
             };
 
@@ -280,7 +296,7 @@ export class UsersService {
                 id: uuidv4(),
                 domainId,
                 type: 'user',
-                email: inviteDto.email.toLowerCase(),
+                email: normalizedEmail,
                 name: inviteDto.name,
                 role: inviteDto.role,
                 status: 'pending_verification',

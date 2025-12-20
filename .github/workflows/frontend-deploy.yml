@@ -53,22 +53,8 @@ jobs:
       - name: Lint frontend
         run: pnpm --filter @tastematcher/frontend lint
 
-      - name: Determine API URL
-        id: api-url
-        run: |
-          ENV_NAME="${{ github.event.inputs.environment || 'dev' }}"
-          if [ "$ENV_NAME" == "stg" ]; then
-            echo "VITE_API_BASE_URL=${{ env.API_URL_STG }}" >> $GITHUB_ENV
-          elif [ "$ENV_NAME" == "prd" ]; then
-            echo "VITE_API_BASE_URL=${{ env.API_URL_PRD }}" >> $GITHUB_ENV
-          else
-            echo "VITE_API_BASE_URL=${{ env.API_URL_DEV }}" >> $GITHUB_ENV
-          fi
-
       - name: Build frontend
         run: pnpm --filter @tastematcher/frontend build
-        env:
-          VITE_API_BASE_URL: ${{ env.VITE_API_BASE_URL }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

@@ -141,7 +141,7 @@ export class UsersController {
    * Invite a new user to the domain (domain_owner and global_admin only)
    */
   @Post('invite')
-  @Roles('domain_owner', 'global_admin', 'dealer') // Add dealer role
+  @Roles('domain_owner', 'global_admin', 'dealer')
   async invite(@Request() req: AuthenticatedRequest, @Body() inviteDto: InviteUserDto): Promise<User> {
     const currentUser = req.user as User;
 

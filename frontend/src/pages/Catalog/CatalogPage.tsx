@@ -11,7 +11,7 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { Search, X, ThumbsUp, ThumbsDown, Edit, Trash2, CheckSquare, Square, Eye, EyeOff, Sparkles } from 'lucide-react';
@@ -19,6 +19,7 @@ import type { Artwork } from '@tastematcher/common';
 import { apiClient } from '../../utils/api';
 import { EditArtworkModal } from '../../components/EditArtworkModal/EditArtworkModal';
 import './CatalogPage.css';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 /**
  * Catalog page displaying all uploaded artworks in a responsive grid.
@@ -26,6 +27,8 @@ import './CatalogPage.css';
  */
 export function CatalogPage() {
   const { user, isInitializing: authLoading } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<string>('createdAt');
@@ -34,6 +37,21 @@ export function CatalogPage() {
   const [editingArtwork, setEditingArtwork] = useState<Artwork | null>(null);
   const [selectedArtworks, setSelectedArtworks] = useState<Set<string>>(new Set()); // For multi-select
   const [deletingArtworks, setDeletingArtworks] = useState<Set<string>>(new Set()); // For animation
+  const preferenceFilter = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const value = params.get('view');
+    if (value === 'liked' || value === 'disliked') {
+      return value;
+    }
+    return undefined;
+  }, [location.search]);
+
+  const clearPreferenceFilter = () => {
+    if (!preferenceFilter) return;
+    const params = new URLSearchParams(location.search);
+    params.delete('view');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+  };
 
   // Fetch artworks with infinite scroll
   const {
@@ -44,7 +62,7 @@ export function CatalogPage() {
     isLoading: queryLoading,
     error,
   } = useInfiniteQuery({
-    queryKey: ['artworks', user?.domainId, searchQuery, sortBy, sortOrder],
+    queryKey: ['artworks', user?.domainId, searchQuery, sortBy, sortOrder, preferenceFilter],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
       if (!user?.domainId) {
         throw new Error('No domain ID');
@@ -54,6 +72,7 @@ export function CatalogPage() {
         continuationToken: pageParam,
         sortBy,
         sortOrder,
+        preference: preferenceFilter,
       });
       return result;
     },
@@ -209,7 +228,7 @@ export function CatalogPage() {
     },
     // Optimistic update
     onMutate: async ({ artworkId, liked }: { artworkId: string; liked: boolean }) => {
-      const queryKey = ['artworks', user?.domainId, searchQuery, sortBy, sortOrder];
+      const queryKey = ['artworks', user?.domainId, searchQuery, sortBy, sortOrder, preferenceFilter];
       await queryClient.cancelQueries({ queryKey });
 
       const previousData = queryClient.getQueryData(queryKey);
@@ -544,6 +563,22 @@ export function CatalogPage() {
             </>
           )}
         </header>
+
+        {preferenceFilter && (
+          <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-sm text-blue-800">
+            <span className="font-semibold">
+              Showing {preferenceFilter === 'liked' ? 'liked' : 'disliked'} artworks only.
+            </span>
+            <button
+              type="button"
+              onClick={clearPreferenceFilter}
+              className="inline-flex items-center gap-1 rounded-full border border-blue-200 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+            >
+              <X className="h-3.5 w-3.5" />
+              Clear filter
+            </button>
+          </div>
+        )}
 
         {/* Gallery grid */}
         {authLoading || queryLoading ? (

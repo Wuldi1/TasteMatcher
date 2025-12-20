@@ -35,7 +35,7 @@ export class ApiError extends Error {
     public code?: string
   ) {
     super(message);
-  this.name = 'ApiError';
+    this.name = 'ApiError';
   }
 }
 
@@ -48,9 +48,27 @@ class BaseApiClient {
   protected authToken: string | null = null;
 
   constructor() {
-    // this.baseURL = process.env.REACT_APP_API_URL!;
-    this.baseURL = 'https://tastematcher-dev-api.azurewebsites.net';
-    // this.baseURL = 'https://api.tastematcher.art';
+    console.log('BaseApiClient initialized', window.location.hostname);
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      console.log('Setting baseURL to localhost for development');
+      this.baseURL = 'http://localhost:8080';
+    }
+    else if (window.location.hostname.includes('tastematcher-dev-web')) {
+      console.log('Setting baseURL to tastematcher-dev-api.azurewebsites.net for development');
+      this.baseURL = 'https://tastematcher-dev-api.azurewebsites.net';
+    }
+    else if (window.location.hostname.includes('tastematcher-stg-web')) {
+      console.log('Setting baseURL to tastematcher-stg-api.azurewebsites.net for staging');
+      this.baseURL = 'https://tastematcher-stg-api.azurewebsites.net';
+    }
+    else if (window.location.hostname.includes('tastematcher.art')) {
+      console.log('Setting baseURL to api.tastematcher.art for production');
+      this.baseURL = 'https://api.tastematcher.art';
+    }
+    else {
+      this.baseURL = process.env.REACT_APP_API_URL!;
+    }
+
     this.loadAuthToken();
   }
 
@@ -470,6 +488,7 @@ class ApiClient extends BaseApiClient {
       sortOrder?: 'asc' | 'desc';
       filterBy?: string;
       userId?: string;
+      preference?: 'liked' | 'disliked';
     }
   ): Promise<PaginatedResponse<Artwork>> {
     this.validateRequired(domainId, 'Domain ID');
@@ -481,6 +500,7 @@ class ApiClient extends BaseApiClient {
     if (options?.sortOrder) params.append('sortOrder', options.sortOrder);
     if (options?.filterBy) params.append('filterBy', options.filterBy);
     if (options?.userId) params.append('userId', options.userId);
+    if (options?.preference) params.append('preference', options.preference);
 
     const queryString = params.toString();
     const endpoint = `/domains/${domainId}/artworks${queryString ? `?${queryString}` : ''}`;

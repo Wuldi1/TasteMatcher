@@ -109,6 +109,97 @@ export class ArtworksService {
   }
 
   /**
+   * Fetch artworks filtered by a user's like/dislike preference with pagination.
+   */
+  async findByPreference(
+    domainId: string,
+    userId: string,
+    liked: boolean,
+    queryParams: QueryParams<Artwork>,
+  ): Promise<PaginatedResponse<Artwork>> {
+    const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
+    const artworksContainer = await this.cosmosService.getArtworksContainer();
+
+    const limit = queryParams.limit ?? 20;
+
+    const prefQuery = {
+      query: `
+        SELECT c.artworkId, c.comment, c.createdAt
+        FROM c
+        WHERE c.userId = @userId AND c.liked = @liked
+        ORDER BY c.createdAt DESC
+      `,
+      parameters: [
+        { name: '@userId', value: userId },
+        { name: '@liked', value: liked },
+      ],
+    };
+
+    const prefResponse = await preferencesContainer.items
+      .query(prefQuery, {
+        partitionKey: userId,
+        maxItemCount: limit,
+        continuationToken: queryParams.continuationToken,
+      })
+      .fetchNext();
+
+    const preferences = prefResponse.resources ?? [];
+    const preferenceContinuation = prefResponse.continuationToken ?? null;
+
+    const artworkIds = preferences.map((pref) => pref.artworkId).filter(Boolean);
+    if (artworkIds.length === 0) {
+      return {
+        items: [],
+        continuationToken: preferenceContinuation,
+        hasMore: Boolean(preferenceContinuation),
+      };
+    }
+
+    const { resources: artworks } = await artworksContainer.items
+      .query({
+        query: 'SELECT * FROM c WHERE c.domainId = @domainId AND ARRAY_CONTAINS(@ids, c.id)',
+        parameters: [
+          { name: '@domainId', value: domainId },
+          { name: '@ids', value: artworkIds },
+        ],
+      })
+      .fetchAll();
+
+    const artworkMap = new Map<string, Artwork>(
+      (artworks ?? []).map((art) => [art.id, art]),
+    );
+
+    const preferenceMap = new Map<string, { comment?: string }>();
+    preferences.forEach((pref) => {
+      if (pref?.artworkId) {
+        preferenceMap.set(pref.artworkId, { comment: pref.comment });
+      }
+    });
+
+    const ordered = artworkIds
+      .map((id) => {
+        const art = artworkMap.get(id);
+        if (!art) return null;
+        const enriched = art as Artwork;
+        enriched.likedStatus = liked ? LikedStatus.Liked : LikedStatus.Disliked;
+        const prefInfo = preferenceMap.get(id);
+        if (prefInfo?.comment) {
+          enriched.preferenceComment = prefInfo.comment;
+        } else {
+          delete enriched.preferenceComment;
+        }
+        return enriched;
+      })
+      .filter((art): art is Artwork => art !== null);
+
+    return {
+      items: ordered,
+      continuationToken: preferenceContinuation,
+      hasMore: Boolean(preferenceContinuation),
+    };
+  }
+
+  /**
    * Get single artwork by ID
    */
   async findOne(domainId: string, artworkId: string): Promise<Artwork> {

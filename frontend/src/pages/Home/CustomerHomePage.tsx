@@ -199,16 +199,24 @@ export function CustomerHomePage() {
             <section className="space-y-6">
                 <h2 className="text-xl font-semibold">Your Stats</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div className="bg-white rounded-lg shadow-md p-4 flex flex-col items-center">
+                    <Link
+                        to="/catalog?view=liked"
+                        className="bg-white rounded-lg shadow-md p-4 flex flex-col items-center hover:shadow-lg transition-shadow focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    >
                         <ThumbsUp className="w-10 h-10 text-green-500" />
                         <h3 className="text-lg font-medium mt-2">{stats?.totalLikes || 0}</h3>
                         <p className="text-sm text-gray-600">Artworks Liked</p>
-                    </div>
-                    <div className="bg-white rounded-lg shadow-md p-4 flex flex-col items-center">
+                        <span className="mt-2 text-xs text-blue-500">View saved likes →</span>
+                    </Link>
+                    <Link
+                        to="/catalog?view=disliked"
+                        className="bg-white rounded-lg shadow-md p-4 flex flex-col items-center hover:shadow-lg transition-shadow focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    >
                         <ThumbsDown className="w-10 h-10 text-red-500" />
                         <h3 className="text-lg font-medium mt-2">{stats?.totalDislikes || 0}</h3>
                         <p className="text-sm text-gray-600">Artworks Disliked</p>
-                    </div>
+                        <span className="mt-2 text-xs text-blue-500">Review dislikes →</span>
+                    </Link>
                     <div className="bg-white rounded-lg shadow-md p-4 flex flex-col items-center">
                         <Sparkles className="w-10 h-10 text-yellow-500" />
                         <h3 className="text-lg font-medium mt-2">{stats?.totalSwiped || 0}</h3>
