@@ -83,6 +83,8 @@ export class UploadController {
       // upload file to blob storage
       const artworkUrl = await this.blobService.uploadBlob("originals", blobName, file.buffer, file.mimetype);
       artworkMetadata.filename = artworkUrl;
+      artworkMetadata.isPrivate = artworkMetadata.isPrivate ?? false;
+      artworkMetadata.uploadedBy = req.user.id;
 
       // write artwork record to database
       artworkMetadata.createdAt = Date.now();
@@ -239,6 +241,7 @@ export class UploadController {
       price: parsed.price !== undefined ? Number(parsed.price) : undefined,
       shouldDisplayPrice: parsed.shouldDisplayPrice ?? false,
       useForTaster: parsed.useForTaster ?? false,
+      isPrivate: parsed.isPrivate ?? false,
     } as Artwork;
   }
 }

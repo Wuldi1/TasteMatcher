@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ArtworksService } from './artworks.service';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { CosmosService } from '@tastematcher/common';
 
 describe('ArtworksService', () => {
@@ -91,9 +91,22 @@ describe('ArtworksService', () => {
         replace: jest.fn().mockResolvedValue({ resource: updated }),
       });
 
-      const result = await service.update('domain-1', '1', { title: 'New Title' });
+      const result = await service.update('domain-1', '1', { title: 'New Title' }, { id: 'user-1' });
 
       expect(result.title).toBe('New Title');
+    });
+
+    it('should block privacy changes if requester is not uploader', async () => {
+      const existing = { id: '1', domainId: 'domain-1', uploadedBy: 'uploader-1', isPrivate: false };
+
+      mockContainer.item.mockReturnValue({
+        read: jest.fn().mockResolvedValue({ resource: existing }),
+        replace: jest.fn(),
+      });
+
+      await expect(
+        service.update('domain-1', '1', { isPrivate: true }, { id: 'other-user' }),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 

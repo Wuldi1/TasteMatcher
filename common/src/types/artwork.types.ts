@@ -15,6 +15,8 @@ export interface Artwork {
   price?: number; // USD price, optional
   shouldDisplayPrice?: boolean; // whether to show price to users
   useForTaster?: boolean; // whether artwork should appear in the Taster experience (defaults to false)
+  isPrivate?: boolean;
+  uploadedBy?: string;
   tags?: string[];
   filename: string; // defined by service
   vector: number[]; // embedding vector for search

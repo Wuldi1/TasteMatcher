@@ -20,7 +20,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { ArtworksService } from './artworks.service';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
-import { Artwork, ArtworkPreference, PaginatedResponse, ArtworkStats, UntastedArtworksResponse, QueryParams, GlobalArtworksDomainId, cleanupArtworkBeforeResponseToClient } from '@tastematcher/common';
+import { Artwork, ArtworkPreference, PaginatedResponse, ArtworkStats, UntastedArtworksResponse, QueryParams, GlobalArtworksDomainId, cleanupArtworkBeforeResponseToClient, Role } from '@tastematcher/common';
 import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
 
@@ -137,6 +137,12 @@ export class ArtworksController {
       throw new BadRequestException('Preference filters require a specific user context.');
     }
 
+    const viewerContext = {
+      id: req.user.id,
+      role: req.user.role as Role,
+      invitedBy: (req.user as any).invitedBy ?? null,
+    };
+
     let artworks: PaginatedResponse<Artwork>;
     if (normalizedPreference && requesterId) {
       artworks = await this.artworksService.findByPreference(
@@ -144,9 +150,10 @@ export class ArtworksController {
         requesterId,
         normalizedPreference === 'liked',
         queryParams,
+        viewerContext,
       );
     } else {
-      artworks = await this.artworksService.findAll(domainId, queryParams, requesterId);
+      artworks = await this.artworksService.findAll(domainId, queryParams, requesterId, viewerContext);
     }
     return {
       ...artworks,
@@ -201,7 +208,7 @@ export class ArtworksController {
     if (req.user.domainId !== domainId && req.user.role !== 'global_admin') {
       throw new ForbiddenException('You are not authorized to access this domain.');
     }
-    const updatedArtwork = await this.artworksService.update(domainId, artworkId, updateDto);
+    const updatedArtwork = await this.artworksService.update(domainId, artworkId, updateDto, req.user);
     return cleanupArtworkBeforeResponseToClient(updatedArtwork, req.user.role) as Artwork;
   }
 
@@ -234,11 +241,17 @@ export class ArtworksController {
       throw new ForbiddenException('You are not authorized to perform this action.');
     }
     const includeDomainId = domainId !== GlobalArtworksDomainId ? domainId : undefined;
+    const viewerContext = {
+      id: req.user.id,
+      role: req.user.role as Role,
+      invitedBy: (req.user as any).invitedBy ?? null,
+    };
     const untastedArtworks = await this.artworksService.getUntastedArtworks(
       GlobalArtworksDomainId,
       userId,
       limit || 20,
       includeDomainId,
+      viewerContext,
     );
     return {
       ...untastedArtworks,

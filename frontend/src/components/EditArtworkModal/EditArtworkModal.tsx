@@ -1,6 +1,6 @@
 import { useState, FormEvent, useRef, useEffect, ChangeEvent, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { X, Save, Sparkles, Upload as UploadIcon, RotateCcw, RotateCw, Loader2 } from 'lucide-react';
+import { X, Save, Sparkles, Upload as UploadIcon, RotateCcw, RotateCw, Loader2, Lock } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../utils/api';
@@ -24,6 +24,7 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
   const [priceInput, setPriceInput] = useState<string>(artwork.price !== undefined ? String(artwork.price) : '');
   const [shouldDisplayPrice, setShouldDisplayPrice] = useState<boolean>(artwork.shouldDisplayPrice ?? false);
   const [useForTaster, setUseForTaster] = useState<boolean>(artwork.useForTaster ?? false);
+  const [isPrivate, setIsPrivate] = useState<boolean>(artwork.isPrivate ?? false);
   const [date, setDate] = useState(artwork.date || '');
   const [tags, setTags] = useState(artwork.tags?.join(', ') || '');
   const [error, setError] = useState('');
@@ -39,6 +40,7 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [isPreparingEdit, setIsPreparingEdit] = useState(false);
   const [isApplyingEdits, setIsApplyingEdits] = useState(false);
+  const canEditPrivacy = Boolean(user?.id && artwork.uploadedBy === user.id);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const onCropComplete = useCallback((_croppedArea: Area, croppedPixels: Area) => {
     setCroppedAreaPixels(croppedPixels);
@@ -98,6 +100,10 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
       date: date.trim() || undefined,
       tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
     };
+
+    if (canEditPrivacy) {
+      updates.isPrivate = isPrivate;
+    }
 
     if (!user?.domainId) {
       setError('No domain ID');
@@ -367,6 +373,32 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
                             </label>
                           </div>
                         </div>
+                        {canEditPrivacy && (
+                          <div className="mt-3 rounded-lg border border-gray-200 bg-white/90 p-4">
+                            <div className="flex items-start gap-3">
+                              <div className="rounded-full bg-gray-100 p-2 text-gray-600">
+                                <Lock className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 space-y-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-900">Visibility</p>
+                                  <p className="text-xs text-gray-500">
+                                    Private works are only visible to you and customers you personally invite. Domain owners and admins can always review them.
+                                  </p>
+                                </div>
+                                <label className="inline-flex items-center gap-2 text-sm text-gray-800 cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={isPrivate}
+                                    onChange={(e) => setIsPrivate(e.target.checked)}
+                                    className="rounded border-gray-300 text-gray-700 focus:ring-gray-500"
+                                  />
+                                  {isPrivate ? 'Restrict to my invitees' : 'Share with my full domain'}
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                     </div>
 
                     {/* Details Grid */}

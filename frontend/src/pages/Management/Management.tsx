@@ -315,6 +315,14 @@ export function Management() {
     setEditDomainError(null);
   }, []);
 
+  const inviterEmailLookup = React.useMemo(() => {
+    const lookup = new Map<string, string>();
+    users.forEach((u) => {
+      lookup.set(u.id, u.email);
+    });
+    return lookup;
+  }, [users]);
+
   // Filter and sort users
   const filteredAndSortedUsers = React.useMemo(() => {
     let filtered = [...users];
@@ -663,6 +671,7 @@ export function Management() {
                           <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invited By</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
@@ -678,6 +687,11 @@ export function Management() {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm text-gray-500">{u.email}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-500">
+                                  {u.invitedBy ? inviterEmailLookup.get(u.invitedBy) ?? u.invitedBy : '—'}
+                                </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleBadge(u.role)}`}>
@@ -732,6 +746,11 @@ export function Management() {
                             <div className="flex-1">
                               <h3 className="text-base font-semibold text-gray-900">{u.name}</h3>
                               <p className="text-sm text-gray-500 mt-1">{u.email}</p>
+                              {u.invitedBy && (
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  Invited by {inviterEmailLookup.get(u.invitedBy) ?? u.invitedBy}
+                                </p>
+                              )}
                             </div>
                           </div>
 

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException, ForbiddenException } from '@nestjs/common';
 import {
   Artwork,
   PaginatedResponse,
@@ -12,7 +12,8 @@ import {
   executeCosmosQuery,
   getAIRecommendationsEligibility,
   LikedStatus,
-  GlobalArtworksDomainId
+  GlobalArtworksDomainId,
+  Role,
 } from '@tastematcher/common';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
@@ -35,7 +36,8 @@ export class ArtworksService {
   async findAll(
     domainId: string,
     queryParams: QueryParams<Artwork>,
-    requestedUserId?: string, // optional: if provided will enrich artworks with likedStatus for that user
+    requestedUserId?: string,
+    viewer?: { id: string; role: Role; invitedBy?: string | null },
   ): Promise<PaginatedResponse<Artwork>> {
     const container = await this.cosmosService.getArtworksContainer();
 
@@ -97,8 +99,12 @@ export class ArtworksService {
         }
       }
 
+      const filteredItems = (result.items || []).filter((art) =>
+        this.canViewerSeeArtwork(art, viewer),
+      );
+
       return {
-        items: result.items || [],
+        items: filteredItems,
         continuationToken: result.continuationToken,
         hasMore: result.hasMore,
       };
@@ -116,6 +122,7 @@ export class ArtworksService {
     userId: string,
     liked: boolean,
     queryParams: QueryParams<Artwork>,
+    viewer?: { id: string; role: Role; invitedBy?: string | null },
   ): Promise<PaginatedResponse<Artwork>> {
     const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
     const artworksContainer = await this.cosmosService.getArtworksContainer();
@@ -155,42 +162,25 @@ export class ArtworksService {
       };
     }
 
-    const { resources: artworks } = await artworksContainer.items
-      .query({
-        query: 'SELECT * FROM c WHERE c.domainId = @domainId AND ARRAY_CONTAINS(@ids, c.id)',
-        parameters: [
-          { name: '@domainId', value: domainId },
-          { name: '@ids', value: artworkIds },
-        ],
-      })
-      .fetchAll();
-
-    const artworkMap = new Map<string, Artwork>(
-      (artworks ?? []).map((art) => [art.id, art]),
-    );
-
-    const preferenceMap = new Map<string, { comment?: string }>();
-    preferences.forEach((pref) => {
-      if (pref?.artworkId) {
-        preferenceMap.set(pref.artworkId, { comment: pref.comment });
+    const ordered: Artwork[] = [];
+    for (const preference of preferences) {
+      if (!preference?.artworkId) {
+        continue;
       }
-    });
-
-    const ordered = artworkIds
-      .map((id) => {
-        const art = artworkMap.get(id);
-        if (!art) return null;
-        const enriched = art as Artwork;
-        enriched.likedStatus = liked ? LikedStatus.Liked : LikedStatus.Disliked;
-        const prefInfo = preferenceMap.get(id);
-        if (prefInfo?.comment) {
-          enriched.preferenceComment = prefInfo.comment;
-        } else {
-          delete enriched.preferenceComment;
-        }
-        return enriched;
-      })
-      .filter((art): art is Artwork => art !== null);
+      const { artworkId } = preference;
+      const { resource: art } = await artworksContainer.item(artworkId, domainId).read<Artwork>();
+      if (!art) continue;
+      const enriched = art as Artwork;
+      enriched.likedStatus = liked ? LikedStatus.Liked : LikedStatus.Disliked;
+      if (preference.comment) {
+        enriched.preferenceComment = preference.comment;
+      } else {
+        delete enriched.preferenceComment;
+      }
+      if (this.canViewerSeeArtwork(enriched, viewer)) {
+        ordered.push(enriched);
+      }
+    }
 
     return {
       items: ordered,
@@ -229,6 +219,7 @@ export class ArtworksService {
     domainId: string,
     artworkId: string,
     updateDto: UpdateArtworkDto,
+    user?: { id: string; role?: Role },
   ): Promise<Artwork> {
     const container = await this.cosmosService.getArtworksContainer();
 
@@ -237,6 +228,16 @@ export class ArtworksService {
 
       if (!existing) {
         throw new NotFoundException(`Artwork ${artworkId} not found`);
+      }
+
+      const privacyChangeRequested = Object.prototype.hasOwnProperty.call(updateDto, 'isPrivate');
+      if (privacyChangeRequested) {
+        if (!user?.id) {
+          throw new ForbiddenException('Only the uploader can change artwork privacy.');
+        }
+        if (!existing.uploadedBy || existing.uploadedBy !== user.id) {
+          throw new ForbiddenException('You can only change privacy on artworks you uploaded.');
+        }
       }
 
       const updated = {
@@ -368,6 +369,7 @@ export class ArtworksService {
     userId: string,
     limit: number = 20,
     includeDomainId?: string,
+    viewer?: { id: string; role: Role; invitedBy?: string | null },
   ): Promise<UntastedArtworksResponse> {
     const artworksContainer = await this.cosmosService.getArtworksContainer();
     const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
@@ -400,13 +402,26 @@ export class ArtworksService {
         ? '(c.domainId = @primaryDomainId OR (c.domainId = @secondaryDomainId AND c.useForTaster = true))'
         : 'c.domainId = @primaryDomainId';
 
+      const randomOrderFields = [
+        'createdAt',
+        'title',
+        'artist',
+        'date',
+        'signature',
+        '_ts',
+        '_rid',
+      ];
+      const orderField = randomOrderFields[Math.floor(Math.random() * randomOrderFields.length)];
+      const orderDirection = Math.random() > 0.5 ? 'ASC' : 'DESC';
+      const orderClause = `ORDER BY c.${orderField} ${orderDirection}`;
+
       if (tastedArtworkIds.length === 0) {
         // User hasn't tasted anything yet - return first N artworks
         artworksQuery = `
           SELECT TOP @limit * 
           FROM c 
           WHERE ${domainFilterClause}
-          ORDER BY c.createdAt DESC
+          ${orderClause}
         `;
       } else {
         // Exclude already tasted artworks using NOT IN
@@ -416,7 +431,7 @@ export class ArtworksService {
           FROM c 
           WHERE ${domainFilterClause}
             AND NOT ARRAY_CONTAINS(@tastedIds, c.id)
-          ORDER BY c.createdAt DESC
+          ${orderClause}
         `;
         parameters.push({ name: '@tastedIds', value: tastedArtworkIds });
       }
@@ -430,9 +445,11 @@ export class ArtworksService {
         }`,
       );
 
+      const visible = untastedArtworks.filter((art) => this.canViewerSeeArtwork(art, viewer));
+
       return {
-        artworks: untastedArtworks,
-        total: untastedArtworks.length,
+        artworks: visible,
+        total: visible.length,
       };
     } catch (error) {
       this.logger.error(
@@ -693,8 +710,12 @@ export class ArtworksService {
         durationMs: Date.now() - start,
       });
 
+      const visibleRecommendations = recommendedArtworks.filter((art) =>
+        this.canViewerSeeArtwork(art, requester),
+      );
+
       // Apply pagination
-      return recommendedArtworks.slice(offset, offset + limit);
+      return visibleRecommendations.slice(offset, offset + limit);
 
     } catch (error) {
       this.logger.error({
@@ -707,5 +728,27 @@ export class ArtworksService {
       });
       throw error;
     }
+  }
+
+  private canViewerSeeArtwork(
+    artwork: Artwork,
+    viewer?: { id: string; role: string; invitedBy?: string | null },
+  ): boolean {
+    if (!artwork.isPrivate) {
+      return true;
+    }
+    if (!viewer) {
+      return true;
+    }
+    if (viewer.role === 'global_admin' || viewer.role === 'domain_owner') {
+      return true;
+    }
+    if (viewer.role === 'dealer') {
+      return artwork.uploadedBy === viewer.id;
+    }
+    if (viewer.role === 'customer') {
+      return Boolean(viewer.invitedBy && artwork.uploadedBy === viewer.invitedBy);
+    }
+    return false;
   }
 }

@@ -43,6 +43,11 @@ export class UpdateArtworkDto {
   @IsBoolean()
   useForTaster?: boolean;
 
+  @ApiPropertyOptional({ description: 'Whether this artwork is private to the uploader and their invitees', type: Boolean })
+  @IsOptional()
+  @IsBoolean()
+  isPrivate?: boolean;
+
   @ApiPropertyOptional({ description: 'Artwork height in inches', type: Number })
   @IsOptional()
   @IsNumber()

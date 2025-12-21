@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '../../utils/api';
 import type { Artwork } from '@tastematcher/common';
-import { FileText, ThumbsUp, ThumbsDown, Edit, Trash2, Sparkles } from 'lucide-react';
+import { FileText, ThumbsUp, ThumbsDown, Edit, Trash2, Sparkles, Lock } from 'lucide-react';
 
 const PAGE_SIZE = 30;
 
@@ -206,6 +206,12 @@ export default function CatalogForUser({
                                 <div className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1 rounded-full bg-purple-600/90 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
                                     <Sparkles className="w-4 h-4" />
                                     Taster
+                                </div>
+                            )}
+                            {artwork.isPrivate && (
+                                <div className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1 rounded-full bg-gray-900/85 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+                                    <Lock className="w-3.5 h-3.5" />
+                                    Private
                                 </div>
                             )}
                         </div>

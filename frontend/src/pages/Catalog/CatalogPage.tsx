@@ -14,7 +14,7 @@
 import { useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
-import { Search, X, ThumbsUp, ThumbsDown, Edit, Trash2, CheckSquare, Square, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Search, X, ThumbsUp, ThumbsDown, Edit, Trash2, CheckSquare, Square, Eye, EyeOff, Sparkles, Lock, Unlock } from 'lucide-react';
 import type { Artwork } from '@tastematcher/common';
 import { apiClient } from '../../utils/api';
 import { EditArtworkModal } from '../../components/EditArtworkModal/EditArtworkModal';
@@ -107,6 +107,13 @@ export function CatalogPage() {
       );
     })
     : allArtworks;
+
+  const selectedArtworkRecords = filteredArtworks.filter((artwork) => selectedArtworks.has(artwork.id));
+  const canModifyPrivacy = Boolean(
+    user?.id &&
+    selectedArtworkRecords.length > 0 &&
+    selectedArtworkRecords.every((artwork) => artwork.uploadedBy === user.id),
+  );
 
   // Delete mutation
   const deleteMutation = useMutation({
@@ -212,6 +219,29 @@ export function CatalogPage() {
           })),
         };
       });
+      setSelectedArtworks(new Set());
+    },
+  });
+
+  const bulkUpdatePrivacy = useMutation({
+    mutationFn: async ({ artworkIds, isPrivate }: { artworkIds: string[]; isPrivate: boolean }) => {
+      if (!user?.domainId) throw new Error('No domain ID');
+      await Promise.all(artworkIds.map(id => apiClient.updateArtwork(user.domainId, id, { isPrivate })));
+    },
+    onSuccess: (_, { artworkIds, isPrivate }) => {
+      queryClient.setQueryData(['artworks', user?.domainId, searchQuery, sortBy, sortOrder], (oldData: any) => {
+        if (!oldData || !Array.isArray(oldData.pages)) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            items: Array.isArray(page.items)
+              ? page.items.map((item: any) => (artworkIds.includes(item.id) ? { ...item, isPrivate } : item))
+              : page.items,
+          })),
+        };
+      });
+      setSelectedArtwork((prev) => (prev && artworkIds.includes(prev.id) ? { ...prev, isPrivate } : prev));
       setSelectedArtworks(new Set());
     },
   });
@@ -350,6 +380,14 @@ export function CatalogPage() {
 
   const handleBulkDisableTaster = () => {
     bulkUpdateTasterFlag.mutate({ artworkIds: Array.from(selectedArtworks), useForTaster: false });
+  };
+
+  const handleBulkMakePrivate = () => {
+    bulkUpdatePrivacy.mutate({ artworkIds: Array.from(selectedArtworks), isPrivate: true });
+  };
+
+  const handleBulkMakePublic = () => {
+    bulkUpdatePrivacy.mutate({ artworkIds: Array.from(selectedArtworks), isPrivate: false });
   };
 
   // Handler to like/dislike from catalog or modal
@@ -496,6 +534,24 @@ export function CatalogPage() {
                     <Sparkles className="w-4 h-4 text-gray-500" />
                     Remove from Taster
                   </button>
+                  {canModifyPrivacy && (
+                    <>
+                      <button
+                        onClick={handleBulkMakePrivate}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium bg-white text-gray-800 border border-gray-200 hover:bg-gray-100 transition-colors"
+                      >
+                        <Lock className="w-4 h-4" />
+                        Mark Private
+                      </button>
+                      <button
+                        onClick={handleBulkMakePublic}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 transition-colors"
+                      >
+                        <Unlock className="w-4 h-4" />
+                        Make Public
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={handleBulkDelete}
                     className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium bg-white text-red-700 border border-red-200 hover:bg-red-50 transition-colors"
@@ -551,6 +607,24 @@ export function CatalogPage() {
                   >
                     <Sparkles className="w-5 h-5" />
                   </button>
+                  {canModifyPrivacy && (
+                    <>
+                      <button
+                        onClick={handleBulkMakePrivate}
+                        className="p-2.5 text-gray-700 bg-gray-100 rounded-lg active:scale-95 transition-transform"
+                        aria-label="Mark private"
+                      >
+                        <Lock className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={handleBulkMakePublic}
+                        className="p-2.5 text-gray-500 bg-gray-100 rounded-lg active:scale-95 transition-transform"
+                        aria-label="Make public"
+                      >
+                        <Unlock className="w-5 h-5" />
+                      </button>
+                    </>
+                  )}
                   <button 
                     onClick={handleBulkDelete} 
                     className="p-2.5 text-red-600 bg-red-50 rounded-lg active:scale-95 transition-transform"
@@ -653,6 +727,12 @@ export function CatalogPage() {
                         <div className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1 rounded-full bg-purple-600/90 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
                           <Sparkles className="w-4 h-4" />
                           Taster
+                        </div>
+                      )}
+                      {artwork.isPrivate && (
+                        <div className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1 rounded-full bg-gray-900/80 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+                          <Lock className="w-3.5 h-3.5" />
+                          Private
                         </div>
                       )}
                     </div>
@@ -788,6 +868,12 @@ export function CatalogPage() {
                     <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-purple-50 px-3 py-1 text-sm font-semibold text-purple-700">
                       <Sparkles className="w-4 h-4" />
                       Enabled for Taster
+                    </div>
+                  )}
+                  {selectedArtwork.isPrivate && (
+                    <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-gray-900 text-white px-3 py-1 text-sm font-semibold">
+                      <Lock className="w-4 h-4" />
+                      Private artwork
                     </div>
                   )}
 

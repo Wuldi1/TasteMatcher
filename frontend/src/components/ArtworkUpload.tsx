@@ -14,7 +14,7 @@ import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react'
 import type { Artwork } from '@tastematcher/common';
 import { useDomain } from '../contexts/DomainContext';
 import { apiClient, ApiError } from '../utils/api';
-import { FileText, User as UserIcon, Tag, DollarSign, CalendarDays, Layers, Trash2, Upload, Sparkles } from 'lucide-react';
+import { FileText, User as UserIcon, Tag, DollarSign, CalendarDays, Layers, Trash2, Upload, Sparkles, Lock } from 'lucide-react';
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
@@ -27,7 +27,7 @@ export function ArtworkUpload() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   // default to showing price to customers; user can toggle this
-  const [metadata, setMetadata] = useState<Partial<Artwork>>({ shouldDisplayPrice: false, useForTaster: false });
+  const [metadata, setMetadata] = useState<Partial<Artwork>>({ shouldDisplayPrice: false, useForTaster: false, isPrivate: false });
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState<string>('');
@@ -61,6 +61,7 @@ export function ArtworkUpload() {
     setMetadata({
       shouldDisplayPrice: false,
       useForTaster: false,
+      isPrivate: false,
       title: undefined,
       artist: undefined,
       medium: undefined,
@@ -317,6 +318,10 @@ export function ArtworkUpload() {
 
   const toggleUseForTaster = useCallback(() => {
     setMetadata((prev) => ({ ...prev, useForTaster: !(prev?.useForTaster ?? false) }));
+  }, []);
+
+  const togglePrivacy = useCallback(() => {
+    setMetadata((prev) => ({ ...prev, isPrivate: !(prev?.isPrivate ?? false) }));
   }, []);
 
   return (
@@ -585,6 +590,29 @@ export function ArtworkUpload() {
                 className="h-4 w-4 rounded border-gray-300 focus:ring-purple-500"
               />
               <span>Use this artwork in the Taster experience</span>
+            </label>
+          </div>
+
+          {/* Privacy */}
+          <div className="space-y-2 sm:col-span-2 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+            <label className="text-sm font-medium text-gray-800 flex items-center gap-2">
+              <Lock className="w-4 h-4 text-gray-600" />
+              Privacy
+            </label>
+            <p className="text-xs text-gray-600">
+              Private artworks stay visible only to you and customers you invite. Domain owners and TasteMatcher admins can still review everything.
+            </p>
+            <label className="inline-flex items-center gap-3 text-sm text-gray-800">
+              <input
+                type="checkbox"
+                checked={metadata.isPrivate ?? false}
+                onChange={togglePrivacy}
+                disabled={status === 'uploading'}
+                aria-checked={metadata.isPrivate ?? false}
+                aria-label="Mark artwork as private"
+                className="h-4 w-4 rounded border-gray-300 focus:ring-gray-500"
+              />
+              {metadata.isPrivate ? 'Only I and my invitees can see this piece' : 'Share with all collectors in my domain'}
             </label>
           </div>
         </div>
