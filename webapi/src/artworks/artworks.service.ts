@@ -231,7 +231,7 @@ export class ArtworksService {
       }
 
       const privacyChangeRequested = Object.prototype.hasOwnProperty.call(updateDto, 'isPrivate');
-      if (privacyChangeRequested) {
+      if (privacyChangeRequested && updateDto.isPrivate !== existing.isPrivate) {
         if (!user?.id) {
           throw new ForbiddenException('Only the uploader can change artwork privacy.');
         }
