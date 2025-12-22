@@ -94,6 +94,7 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
       width: parseNumberOrUndefined(widthInput),
       height: parseNumberOrUndefined(heightInput),
       price: parseNumberOrUndefined(priceInput),
+      isPrivate: isPrivate,
       shouldDisplayPrice,
       useForTaster,
       // keep other fields below

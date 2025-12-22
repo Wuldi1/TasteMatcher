@@ -303,11 +303,147 @@ export class EmailService {
     }
   }
 
+  /**
+   * Send a detailed proposal digest to multiple recipients.
+   * Includes proposal items, comments, status, and a direct portal link.
+   */
+  async sendProposalDigest(params: {
+    recipients: string[];
+    proposal: Proposal;
+    action: 'created' | 'updated';
+    actorEmail?: string;
+    actorRole?: string;
+    portalLink?: string;
+  }): Promise<void> {
+    const start = Date.now();
+    const safeRecipients = Array.from(
+      new Set(
+        (params.recipients || []).filter((email) => typeof email === 'string' && email.includes('@')),
+      ),
+    );
+
+    this.logger.debug({
+      action: 'sendProposalDigest',
+      recipients: safeRecipients,
+      proposalId: params.proposal.id,
+      domainId: params.proposal.domainId,
+      notificationType: params.action,
+    });
+
+    if (safeRecipients.length === 0) {
+      this.logger.warn('sendProposalDigest called without valid recipients');
+      return;
+    }
+
+    const baseUrl = process.env.FRONTEND_URL ?? '';
+    const proposalLink = params.portalLink ?? `${baseUrl}/sales/proposals/${params.proposal.id}`;
+
+    const subject =
+      params.action === 'created'
+        ? 'New proposal shared with you'
+        : 'Proposal updated';
+
+    const actorLine =
+      params.actorEmail || params.actorRole
+        ? ` by ${params.actorEmail ?? params.actorRole}`
+        : '';
+
+    const totalArtworks = params.proposal.items?.length ?? 0;
+    const statusCounts = params.proposal.items?.reduce(
+      (acc, item) => {
+        acc[item.status] = (acc[item.status] ?? 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    ) ?? {};
+
+    const totalItemComments =
+      params.proposal.items?.reduce((acc, item) => acc + (item.comments?.length ?? 0), 0) ?? 0;
+    const totalGeneralComments = params.proposal.generalComments?.length ?? 0;
+
+    const statusSummary = ['approved', 'pending', 'rejected']
+      .map((key) => `${key}: ${statusCounts[key] ?? 0}`)
+      .join(', ');
+
+    const textBody = [
+      `Hello,`,
+      ``,
+      `Proposal ${params.proposal.id} was ${params.action}${actorLine}.`,
+      `Status: ${params.proposal.status}`,
+      ``,
+      `View in portal: ${proposalLink}`,
+      ``,
+      `Artworks: ${totalArtworks}`,
+      `Statuses -> ${statusSummary}`,
+      `Artwork comments: ${totalItemComments}`,
+      `General comments: ${totalGeneralComments}`,
+      ``,
+      `Thank you,`,
+      `TasteMatcher`,
+    ].join('\n');
+
+    const htmlBody = [
+      `<p>Hello,</p>`,
+      `<p>Proposal <strong>${params.proposal.id}</strong> was <strong>${params.action}</strong>${actorLine ? `<span>${actorLine}</span>` : ''}.</p>`,
+      `<p>Status: <strong>${params.proposal.status}</strong></p>`,
+      `<p><a href="${proposalLink}">View in portal</a></p>`,
+      `<p><strong>Artworks:</strong> ${totalArtworks}</p>`,
+      `<p><strong>Statuses:</strong> ${statusSummary}</p>`,
+      `<p><strong>Artwork comments:</strong> ${totalItemComments}</p>`,
+      `<p><strong>General comments:</strong> ${totalGeneralComments}</p>`,
+      `<p>Thank you,<br/>TasteMatcher</p>`,
+    ].join('');
+
+    if (!this.emailClient || !this.senderAddress) {
+      this.logger.log({
+        action: 'sendProposalDigest',
+        mode: 'log-only',
+        recipients: safeRecipients,
+        subject,
+        proposalId: params.proposal.id,
+        durationMs: Date.now() - start,
+      });
+      return;
+    }
+
+    const message: EmailMessage = {
+      senderAddress: this.senderAddress,
+      content: {
+        subject,
+        plainText: textBody,
+        html: htmlBody,
+      },
+      recipients: {
+        to: safeRecipients.map((address) => ({ address })),
+      },
+    };
+
+    try {
+      await this.sendEmail(message);
+
+      this.logger.log({
+        action: 'sendProposalDigest',
+        recipients: safeRecipients,
+        proposalId: params.proposal.id,
+        notificationType: params.action,
+        durationMs: Date.now() - start,
+      });
+    } catch (error) {
+      this.logger.error({
+        action: 'sendProposalDigest',
+        recipients: safeRecipients,
+        proposalId: params.proposal.id,
+        errMessage: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
   async sendEmail(message: EmailMessage): Promise<void> {
     // Placeholder for future email sending functionality
     if (this.isPrd && this.emailClient) {
       try {
-        this.logger.log('Production environment detected; sending email.');
+        this.logger.log('Production environment detected; sending email', { message });
         const poller = await this.emailClient.beginSend(message);
         await poller.pollUntilDone();
       } catch (error) {

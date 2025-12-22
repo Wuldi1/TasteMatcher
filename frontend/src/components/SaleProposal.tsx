@@ -7,11 +7,13 @@ import { Trash2, Bell, Save, CheckCircle, Send, Clock, XCircle, MessageSquare, A
 const FormattedPriceInput = ({ 
     value, 
     onChange, 
-    hasError 
+    hasError,
+    disabled = false,
 }: { 
     value?: number; 
     onChange: (val?: number) => void; 
     hasError?: boolean;
+    disabled?: boolean;
 }) => {
     const [displayValue, setDisplayValue] = useState(value?.toLocaleString() ?? '');
 
@@ -55,11 +57,12 @@ const FormattedPriceInput = ({
                     hasError 
                         ? 'border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500 bg-red-50' 
                         : 'border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
-                }`}
+                } disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-500`}
                 placeholder="0.00"
                 value={displayValue}
                 onChange={handleChange}
                 onBlur={handleBlur}
+                disabled={disabled}
             />
         </div>
     );
@@ -108,6 +111,23 @@ export default function SaleProposal({
 
     // Track new comments for each artworkId
     const [newComments, setNewComments] = useState<Record<string, string>>({});
+    const isReadOnly = proposalStatus === 'accepted' || proposalStatus === 'rejected';
+    const normalizedDealerEmail = (dealerEmail ?? '').trim().toLowerCase();
+    const normalizedCustomerName = (userName ?? '').trim().toLowerCase();
+
+    const isDealerAuthor = (author: string) => {
+        const normalizedAuthor = (author ?? '').trim().toLowerCase();
+        return normalizedAuthor === normalizedDealerEmail || normalizedAuthor === 'specialist';
+    };
+
+    const getDisplayAuthor = (author: string) => {
+        const normalizedAuthor = (author ?? '').trim().toLowerCase();
+        if (author && isDealerAuthor(author)) return 'You';
+        if (normalizedAuthor === 'customer' || (normalizedCustomerName && normalizedAuthor === normalizedCustomerName)) {
+            return userName ?? 'Customer';
+        }
+        return author || 'Unknown';
+    };
 
     // Sync incoming draft changes
     useEffect(() => {
@@ -204,6 +224,7 @@ export default function SaleProposal({
     }, [draftItems, domainId]);
 
     const handlePriceChange = (artworkId: string, price?: number) => {
+        if (isReadOnly) return;
         setItems(prev => prev.map(item => 
             item.artworkId === artworkId ? { ...item, askedPrice: price ?? 0 } : item
         ));
@@ -221,6 +242,10 @@ export default function SaleProposal({
     };
 
     function handleSaveClick() {
+        if (isReadOnly) {
+            showAlert('Proposal Locked', 'This proposal has already been accepted or rejected and is now read-only.');
+            return;
+        }
         if (!userId) {
             showAlert('Missing User', 'Select a user first');
             return;
@@ -251,6 +276,7 @@ export default function SaleProposal({
     }
 
     async function confirmSaveProposal() {
+        if (isReadOnly) return;
         setSaving(true);
         setIsSaveModalOpen(false);
 
@@ -357,6 +383,7 @@ export default function SaleProposal({
 
     // Handler to add a comment to an item
     function handleAddComment(artworkId: string) {
+        if (isReadOnly) return;
         const commentText = (newComments[artworkId] || '').trim();
         if (!commentText) return;
         isLocalChangeRef.current = true;
@@ -383,6 +410,10 @@ export default function SaleProposal({
 
     // Handler to delete an artwork from the proposal
     function handleDeleteArtwork(artworkId: string) {
+        if (isReadOnly) {
+            showAlert('Proposal Locked', 'Accepted or rejected proposals are read-only.');
+            return;
+        }
         showConfirm('Remove Item', 'Remove this artwork from the proposal?', () => {
             isLocalChangeRef.current = true;
             setIsDirty(true);
@@ -398,6 +429,30 @@ export default function SaleProposal({
             className="space-y-8 pb-[calc(env(safe-area-inset-bottom,0px)+140px)] md:pb-24"
             // provide large bottom padding so sticky actions don't overlap page content on mobile
         >
+            {proposalId && proposalStatus && (() => {
+                const statusStyles: Record<string, { bg: string; text: string; border: string; label: string }> = {
+                    accepted: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', label: 'Accepted' },
+                    rejected: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', label: 'Rejected' },
+                    submitted: { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200', label: 'Submitted' },
+                    draft: { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200', label: 'Draft' },
+                    pending: { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200', label: 'Pending' },
+                };
+                const normalizedStatus = proposalStatus.toLowerCase();
+                const statusStyle = statusStyles[normalizedStatus] ?? statusStyles.pending;
+
+                return (
+                    <div className={`bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center`}>
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-900">Proposal Items</h2>
+                            <p className="text-sm text-gray-500">{items.length} artworks selected</p>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-sm font-medium capitalize flex items-center gap-1.5 border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                            Status: {statusStyle.label}
+                        </div>
+                    </div>
+                );
+            })()}
+            {(!proposalId || !proposalStatus) && (
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
                 <div>
                     <h2 className="text-lg font-bold text-gray-900">Proposal Items</h2>
@@ -409,6 +464,7 @@ export default function SaleProposal({
                     </div>
                 )}
             </div>
+            )}
 
             {/* General Comments Section */}
             {generalComments.length > 0 && (
@@ -421,7 +477,7 @@ export default function SaleProposal({
                         {generalComments.map((comment, index) => (
                             <div key={index} className="bg-gray-50 p-3 rounded-lg border border-gray-100">
                                 <div className="flex justify-between items-baseline mb-1">
-                                    <span className="font-semibold text-sm text-gray-700">{comment.author}</span>
+                                    <span className="font-semibold text-sm text-gray-700">{getDisplayAuthor(comment.author)}</span>
                                     <span className="text-xs text-gray-500">{new Date(comment.createdAt).toLocaleDateString()} {new Date(comment.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                 </div>
                                 <p className="text-gray-700 text-sm whitespace-pre-wrap">{comment.text}</p>
@@ -461,7 +517,7 @@ export default function SaleProposal({
                             },
                         };
 
-                        const { color, text, icon, borderColor } = statusConfig[item.status];
+                        const { color, text, icon, borderColor } = statusConfig[item.status] ?? statusConfig.pending;
 
                         return (
                             <article key={item.artworkId} className={`bg-white border ${borderColor} rounded-2xl overflow-hidden shadow-sm transition-shadow hover:shadow-md flex flex-col lg:flex-row`}>
@@ -503,6 +559,7 @@ export default function SaleProposal({
                                                 value={item.askedPrice}
                                                 onChange={(val) => handlePriceChange(item.artworkId, val)}
                                                 hasError={!!validationErrors[item.artworkId]}
+                                                disabled={isReadOnly}
                                             />
                                             {validationErrors[item.artworkId] && (
                                                 <p className="text-xs text-red-600 mt-1">{validationErrors[item.artworkId]}</p>
@@ -520,8 +577,9 @@ export default function SaleProposal({
                                         <button
                                             type="button"
                                             onClick={() => handleDeleteArtwork(item.artworkId)}
-                                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             title="Remove artwork from proposal"
+                                            disabled={isReadOnly}
                                         >
                                             <Trash2 className="w-4 h-4" />
                                             Remove Item
@@ -541,9 +599,9 @@ export default function SaleProposal({
                                             <div className="text-xs text-gray-400 italic text-center py-2">No comments</div>
                                         ) : (
                                             item.comments.map((comment: Comment, index: number) => (
-                                                <div key={index} className={`p-2.5 rounded-lg text-sm ${comment.author === (dealerEmail ?? 'Specialist') ? 'bg-white border border-gray-200 mr-2' : 'bg-blue-50 border border-blue-100 ml-2'}`}>
+                                                <div key={index} className={`p-2.5 rounded-lg text-sm ${isDealerAuthor(comment.author) ? 'bg-white border border-gray-200 mr-2' : 'bg-blue-50 border border-blue-100 ml-2'}`}>
                                                     <div className="flex justify-between items-baseline mb-1">
-                                                        <span className="font-semibold text-xs text-gray-700">{comment.author}</span>
+                                                        <span className="font-semibold text-xs text-gray-700">{getDisplayAuthor(comment.author)}</span>
                                                         <span className="text-[10px] text-gray-400">{new Date(comment.createdAt).toLocaleDateString()}</span>
                                                     </div>
                                                     <p className="text-gray-700 text-xs">{comment.text}</p>
@@ -553,33 +611,42 @@ export default function SaleProposal({
                                     </div>
 
                                     <form
-                                        className="mt-auto relative"
-                                        onSubmit={(e) => {
-                                            e.preventDefault();
-                                            handleAddComment(item.artworkId);
-                                        }}
-                                    >
-                                        <input
-                                            type="text"
-                                            className="w-full border border-gray-300 rounded-md pl-2 pr-8 py-1.5 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                            placeholder="Add note..."
-                                            value={newComments[item.artworkId] || ''}
-                                            onChange={(e) =>
-                                                setNewComments((prev) => ({
-                                                    ...prev,
-                                                    [item.artworkId]: e.target.value,
-                                                }))
-                                            }
-                                        />
-                                        <button
-                                            type="submit"
-                                            className="absolute right-1 top-1 p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                            disabled={!newComments[item.artworkId]?.trim()}
+                                            className="mt-auto relative"
+                                            onSubmit={(e) => {
+                                                e.preventDefault();
+                                                if (isReadOnly) return;
+                                                handleAddComment(item.artworkId);
+                                            }}
                                         >
-                                            <Send className="w-3 h-3" />
-                                        </button>
-                                    </form>
-                                </div>
+                                            <input
+                                                type="text"
+                                            className="w-full border border-gray-300 rounded-md pl-2 pr-8 py-1.5 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                                placeholder="Add note..."
+                                                value={newComments[item.artworkId] || ''}
+                                                onChange={(e) =>
+                                                    setNewComments((prev) => ({
+                                                        ...prev,
+                                                        [item.artworkId]: e.target.value,
+                                                    }))
+                                                }
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        if (isReadOnly) return;
+                                                        handleAddComment(item.artworkId);
+                                                    }
+                                                }}
+                                                disabled={isReadOnly}
+                                            />
+                                            <button
+                                                type="submit"
+                                                className="absolute right-1 top-1 p-1 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                                                disabled={!newComments[item.artworkId]?.trim() || isReadOnly}
+                                            >
+                                                <Send className="w-3 h-3" />
+                                            </button>
+                                        </form>
+                                    </div>
                             </article>
                         );
                     })
@@ -602,7 +669,7 @@ export default function SaleProposal({
                     <button
                         onClick={handlePingProposal}
                         className="flex items-center gap-2 px-4 py-2 bg-white border border-yellow-200 text-yellow-700 rounded-xl font-medium hover:bg-yellow-50 transition-colors disabled:opacity-50"
-                        disabled={!proposalId}
+                        disabled={!proposalId || isReadOnly}
                     >
                         <Bell className="w-4 h-4" />
                         Ping
@@ -614,7 +681,7 @@ export default function SaleProposal({
                                 ? 'bg-blue-600 hover:bg-blue-700' 
                                 : 'bg-green-600 hover:bg-green-700'
                         }`}
-                        disabled={saving || (proposalId ? !isDirty : items.length === 0)}
+                        disabled={saving || isReadOnly || (proposalId ? !isDirty : items.length === 0)}
                     >
                         {proposalId ? <Save className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
                         {proposalId ? 'Update' : 'Create'}
@@ -636,7 +703,7 @@ export default function SaleProposal({
                                     <p className="text-sm font-medium text-gray-700">Previous comments:</p>
                                     {generalComments.map((comment, index) => (
                                         <div key={index} className="bg-gray-50 p-2 rounded text-sm text-gray-600">
-                                            <span className="font-semibold">{comment.author}:</span> {comment.text}
+                                            <span className="font-semibold">{getDisplayAuthor(comment.author)}:</span> {comment.text}
                                         </div>
                                     ))}
                                 </div>

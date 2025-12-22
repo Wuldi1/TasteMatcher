@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { EmailService } from '../email/email.service';
 import { UsersService } from '../users/users.service';
 import { AuthenticatedUser } from '../auth/types/authenticated-request.interface';
+import { DomainsService } from '../domains/domains.service';
 
 @Injectable()
 export class SalesService {
@@ -13,6 +14,7 @@ export class SalesService {
   constructor(
     private readonly emailService: EmailService,
     private readonly usersService: UsersService,
+    private readonly domainsService: DomainsService,
   ) {
     this.cosmosService = new CosmosService();
   }
@@ -43,13 +45,7 @@ export class SalesService {
     };
 
     const { resource } = await container.items.create(newProposal);
-    // send email to customer (best-effort)
-    try {
-      const customer = await this.usersService.findOne(domainId, newProposal.userId);
-      await this.emailService.sendProposalNotification?.(customer.email, newProposal, 'created');
-    } catch (err) {
-      this.logger.warn('Failed to send proposal notification', err);
-    }
+    await this.notifyProposalUpdate(resource as Proposal, requestingUser, 'created');
 
     this.logger.log(`Created proposal ${resource?.id} for user ${resource?.userId}`);
     return resource as Proposal;
@@ -125,12 +121,7 @@ export class SalesService {
     };
 
     const { resource } = await container.item(proposalId, domainId).replace(updated as any);
-    try {
-      const customer = await this.usersService.findOne(domainId, resource.userId);
-      await this.emailService.sendProposalNotification?.(customer.email, resource, 'updated');
-    } catch (err) {
-      this.logger.warn('Failed to send proposal update notification', err);
-    }
+    await this.notifyProposalUpdate(resource as Proposal, requestingUser, 'updated');
 
     this.logger.log(`Updated proposal ${proposalId}`);
     return resource as Proposal;
@@ -162,5 +153,54 @@ export class SalesService {
     const customer = await this.usersService.findOne(domainId, proposal.userId);
     await this.emailService.sendProposalNotification?.(customer.email, proposal, 'ping');
     this.logger.log(`Pinged customer ${customer.email} for proposal ${proposalId}`);
+  }
+
+  private async notifyProposalUpdate(proposal: Proposal, actor: AuthenticatedUser, action: 'created' | 'updated'): Promise<void> {
+    const recipients: string[] = [];
+    const baseUrl = process.env.FRONTEND_URL ?? '';
+    let portalPath = '/buying-proposal';
+
+    if (actor.role === 'customer') {
+      if (proposal.dealerId) {
+        try {
+          const dealer = await this.usersService.findOne(proposal.domainId, proposal.dealerId);
+          if (dealer?.email) recipients.push(dealer.email);
+        } catch (err) {
+          this.logger.warn(`Failed to fetch dealer ${proposal.dealerId} for proposal ${proposal.id}`, err);
+        }
+      }
+      try {
+        const domain = await this.domainsService.findOne(proposal.domainId);
+        if (domain?.adminEmail) recipients.push(domain.adminEmail);
+      } catch (err) {
+        this.logger.warn(`Failed to fetch domain owner for proposal ${proposal.id}`, err);
+      }
+      portalPath = `/sales?domainId=${encodeURIComponent(proposal.domainId)}&userId=${encodeURIComponent(proposal.userId)}`;
+    } else {
+      try {
+        const customer = await this.usersService.findOne(proposal.domainId, proposal.userId);
+        if (customer?.email) recipients.push(customer.email);
+      } catch (err) {
+        this.logger.warn(`Failed to fetch customer ${proposal.userId} for proposal ${proposal.id}`, err);
+      }
+    }
+
+    if (recipients.length === 0) {
+      this.logger.warn(`No recipients resolved for proposal ${proposal.id} ${action} notification`);
+      return;
+    }
+
+    try {
+      await this.emailService.sendProposalDigest({
+        recipients,
+        proposal,
+        action,
+        actorEmail: actor.email,
+        actorRole: actor.role,
+        portalLink: `${baseUrl}${portalPath}`,
+      });
+    } catch (err) {
+      this.logger.warn(`Failed to send proposal ${action} digest for ${proposal.id}`, err);
+    }
   }
 }

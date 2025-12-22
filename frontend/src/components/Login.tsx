@@ -15,7 +15,7 @@ export function Login() {
   const { setUserFromUser } = useAuth();
 
   const [email, setEmail] = useState<string>('');
-  const [verificationCode, setVerificationCode] = useState<string>(window.location.hostname === 'localhost' ? '000000' : '');
+  const [verificationCode, setVerificationCode] = useState<string>(window.location.hostname.includes('tastematcher.art') ? '' : '000000');
   const [phase, setPhase] = useState<Phase>('email');
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [userIntent, setUserIntent] = useState<UserIntent>(null);
@@ -67,17 +67,17 @@ export function Login() {
 
     try {
       const result = await apiClient.verifyLoginCode(email.trim().toLowerCase(), verificationCode.trim());
-      
+
       // Store token
       localStorage.setItem('token', result.token);
       localStorage.setItem('tm_auth_token', result.token);
-      
+
       // Update auth context
       setUserFromUser(result.user);
-      
+
       // Configure API client
       apiClient.setAuthToken(result.token);
-      
+
       // Navigate to home
       navigate('/home');
     } catch (err) {
@@ -424,11 +424,11 @@ export function Login() {
                   </svg>
                 </div>
               </div>
-              
+
               <h3 className="text-xl font-semibold text-gray-900 text-center mb-3">
                 Request Submitted!
               </h3>
-              
+
               <p className="text-sm text-gray-700 text-center mb-4">
                 Thank you for your interest in TasteMatcher. We've received your gallery account request.
               </p>

@@ -10,6 +10,7 @@
 // 9. CI-friendly: code passes lint, typecheck, and tests locally.
 // -----------------------------------------------------------
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../utils/api';
 import SaleProposal from '../components/SaleProposal';
 import { useAuth } from '../contexts/AuthContext';
@@ -43,6 +44,7 @@ export default function SalesPage() {
     const { user } = useAuth();
     const domainId = user?.domainId ?? 'default';
     const isGlobalAdmin = user?.role === 'global_admin';
+    const [searchParams, setSearchParams] = useSearchParams();
     
     // Domains (only used for global_admin)
     const [domains, setDomains] = useState<{ id: string; name?: string; adminEmail?: string }[]>([]);
@@ -81,6 +83,23 @@ export default function SalesPage() {
     // New: proposal draft state
     const [proposalItem, setProposalItem] = useState<ProposalItem[]>([]);
     const [proposalDetails, setProposalDetails] = useState<Proposal | null>(null); // Store proposal metadata
+    const queryDomainId = searchParams.get('domainId') || undefined;
+    const queryUserId = searchParams.get('userId') || undefined;
+
+    const syncQueryParams = useCallback(
+        (nextDomainId?: string, nextUserId?: string) => {
+            const nextParams = new URLSearchParams();
+            if (isGlobalAdmin && nextDomainId) nextParams.set('domainId', nextDomainId);
+            if (nextUserId) nextParams.set('userId', nextUserId);
+
+            const currentString = searchParams.toString();
+            const nextString = nextParams.toString();
+            if (nextString !== currentString) {
+                setSearchParams(nextParams);
+            }
+        },
+        [isGlobalAdmin, searchParams, setSearchParams]
+    );
 
     // Load the correct proposal for the selected user
     useEffect(() => {
@@ -94,7 +113,8 @@ export default function SalesPage() {
             try {
                 const proposals = await apiClient.listProposals(effectiveDomainId, selectedUserId);
                 if (proposals.length > 0) {
-                    const proposal = proposals.find((p) => p.userId === selectedUserId); // Find the proposal for the selected user
+                    const proposal = proposals.find((p) => p.userId === selectedUserId);
+
                     if (proposal) {
                         setProposalDetails(proposal);
                         setProposalItem(
@@ -178,6 +198,22 @@ export default function SalesPage() {
         setSelectedUserId(undefined);
         setProposalItem([]);
     }, [selectedDomainId]);
+
+    // Deep link support: populate state from query params
+    useEffect(() => {
+        if (queryUserId) {
+            setSelectedUserId(queryUserId);
+            setActiveTab('proposal');
+        }
+        if (isGlobalAdmin && queryDomainId) {
+            setSelectedDomainId(queryDomainId);
+        }
+    }, [queryUserId, queryDomainId, isGlobalAdmin]);
+
+    // Keep query params in sync with selections
+    useEffect(() => {
+        syncQueryParams(selectedDomainId, selectedUserId);
+    }, [selectedDomainId, selectedUserId, syncQueryParams]);
 
     const refreshSelectedUserDetails = useCallback(async () => {
         if (!selectedUserId) return null;

@@ -197,7 +197,7 @@ export function CustomerHomePage() {
 
             {/* Aggregated Stats */}
             <section className="space-y-6">
-                <h2 className="text-xl font-semibold">Your Stats</h2>
+                <h2 className="text-xl font-semibold">Your Profile Section</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     <Link
                         to="/catalog?view=liked"
