@@ -206,15 +206,16 @@ export class DomainsService {
    * Create a domain request (public - for users wanting their own domain)
    */
   async createDomainRequest(requestDto: CreateDomainRequestDto): Promise<DomainRequest> {
-    const container = await this.cosmosService.getContainer('DomainRequests');
+    const container = await this.cosmosService.getContainer('Proposals');
     const normalizedEmail = requestDto.email.toLowerCase().trim();
 
     // Check for existing pending request
     const existingQuery = {
-      query: 'SELECT * FROM c WHERE c.email = @email AND c.status = @status',
+      query: 'SELECT * FROM c WHERE c.type = @type AND c.email = @email AND c.status = @status',
       parameters: [
+        { name: '@type', value: 'domainRequest' },
         { name: '@email', value: normalizedEmail },
-        { name: '@status', value: 'pending' },
+        { name: '@status', value: 'pending_verification' },
       ],
     };
 
@@ -239,6 +240,8 @@ export class DomainsService {
 
     const newRequest: DomainRequest = {
       id: uuidv4(),
+      type: 'domainRequest',
+      domainId: 'domain-requests',
       email: normalizedEmail,
       name: requestDto.name,
       proposedDomainName: requestDto.proposedDomainName,
@@ -259,10 +262,11 @@ export class DomainsService {
    * Get all domain requests (global_admin only)
    */
   async getAllDomainRequests(): Promise<DomainRequest[]> {
-    const container = await this.cosmosService.getContainer('DomainRequests');
+    const container = await this.cosmosService.getContainer('Proposals');
 
     const query = {
-      query: 'SELECT * FROM c ORDER BY c.createdAt DESC',
+      query: 'SELECT * FROM c WHERE c.type = @type ORDER BY c.createdAt DESC',
+      parameters: [{ name: '@type', value: 'domainRequest' }],
     };
 
     const { resources } = await container.items.query<DomainRequest>(query).fetchAll();
@@ -529,7 +533,7 @@ export class DomainsService {
    */
   private async deleteAllUserPreferences(domainId: string): Promise<void> {
     const usersContainer = await this.cosmosService.getContainer('Core');
-    const preferencesContainer = await this.cosmosService.getContainer('ArtworkPreferences');
+    const preferencesContainer = await this.cosmosService.getContainer('Artworks');
 
     // Get all users in domain
     const usersQuery = {
@@ -542,16 +546,20 @@ export class DomainsService {
     // Delete preferences for each user
     for (const user of users) {
       const prefsQuery = {
-        query: 'SELECT * FROM c WHERE c.userId = @userId',
-        parameters: [{ name: '@userId', value: user.id }],
+        query: 'SELECT * FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId',
+        parameters: [
+          { name: '@type', value: 'artworkPreference' },
+          { name: '@domainId', value: domainId },
+          { name: '@userId', value: user.id },
+        ],
       };
 
       const { resources: prefs } = await preferencesContainer.items
-        .query(prefsQuery, { partitionKey: user.id })
+        .query(prefsQuery, { partitionKey: domainId })
         .fetchAll();
 
       await Promise.all(
-        prefs.map((pref) => preferencesContainer.item(pref.id, user.id).delete()),
+        prefs.map((pref) => preferencesContainer.item(pref.id, domainId).delete()),
       );
     }
 

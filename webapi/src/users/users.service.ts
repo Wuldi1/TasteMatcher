@@ -188,7 +188,7 @@ export class UsersService {
      */
     async remove(domainId: string, userId: string, requestingUserId: string): Promise<void> {
         const usersContainer = await this.cosmosService.getContainer('Core');
-        const preferencesContainer = await this.cosmosService.getContainer('ArtworkPreferences');
+        const preferencesContainer = await this.cosmosService.getContainer('Artworks');
 
         try {
             const user = await this.findOne(domainId, userId);
@@ -205,18 +205,22 @@ export class UsersService {
 
             // Delete all user preferences
             const preferencesQuery = {
-                query: 'SELECT * FROM c WHERE c.userId = @userId',
-                parameters: [{ name: '@userId', value: userId }],
+                query: 'SELECT * FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId',
+                parameters: [
+                    { name: '@type', value: 'artworkPreference' },
+                    { name: '@domainId', value: domainId },
+                    { name: '@userId', value: userId },
+                ],
             };
 
             const { resources: preferences } = await preferencesContainer.items
-                .query(preferencesQuery, { partitionKey: userId })
+                .query(preferencesQuery, { partitionKey: domainId })
                 .fetchAll();
 
             // Delete preferences in parallel
             await Promise.all(
                 preferences.map(pref =>
-                    preferencesContainer.item(pref.id, userId).delete()
+                    preferencesContainer.item(pref.id, domainId).delete()
                 )
             );
 

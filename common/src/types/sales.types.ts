@@ -30,6 +30,7 @@ export type ProposalItem = {
 
 export interface Proposal {
   id: string;
+  type: 'proposal';
   domainId: string;
   userId: string; // customer / owner of artworks
   dealerId?: string; // who created the proposal

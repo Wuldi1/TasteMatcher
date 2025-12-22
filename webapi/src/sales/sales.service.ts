@@ -20,7 +20,7 @@ export class SalesService {
   }
 
   private async getContainer() {
-    return this.cosmosService.getContainer('SalesProposals');
+    return this.cosmosService.getContainer('Proposals');
   }
 
   /**
@@ -33,6 +33,7 @@ export class SalesService {
     // authorization handled in controller - service trusts caller but double-check domain
     const newProposal: Proposal = {
       id: uuidv4(),
+      type: 'proposal',
       domainId,
       userId: proposal.userId!,
       dealerId: proposal.dealerId ?? requestingUser.id,
@@ -75,24 +76,27 @@ export class SalesService {
 
     if (dealerUserId) {
       questProperties = {
-        query: 'SELECT * FROM c WHERE c.domainId = @domainId AND c.dealerId = @dealerUserId ORDER BY c.createdAt DESC',
+        query: 'SELECT * FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.dealerId = @dealerUserId ORDER BY c.createdAt DESC',
         parameters: [
+          { name: '@type', value: 'proposal' },
           { name: '@domainId', value: domainId },
           { name: '@dealerUserId', value: dealerUserId },
         ],
       };
     } else if (userId) {
       questProperties = {
-        query: 'SELECT * FROM c WHERE c.domainId = @domainId AND c.userId = @userId ORDER BY c.createdAt DESC',
+        query: 'SELECT * FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId ORDER BY c.createdAt DESC',
         parameters: [
+          { name: '@type', value: 'proposal' },
           { name: '@domainId', value: domainId },
           { name: '@userId', value: userId },
         ],
       };
     } else {
       questProperties = {
-        query: 'SELECT * FROM c WHERE c.domainId = @domainId ORDER BY c.createdAt DESC',
+        query: 'SELECT * FROM c WHERE c.type = @type AND c.domainId = @domainId ORDER BY c.createdAt DESC',
         parameters: [
+          { name: '@type', value: 'proposal' },
           { name: '@domainId', value: domainId },
         ],
       };
@@ -112,6 +116,7 @@ export class SalesService {
     // Apply updates
     const updated: Proposal = {
       ...existing,
+      type: 'proposal',
       items: update.items ?? existing.items,
       metadata: update.metadata ?? existing.metadata,
       generalComments: update.generalComments ?? existing.generalComments,

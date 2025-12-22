@@ -70,6 +70,15 @@ export interface DomainRequest {
    * Unique identifier for the request (UUID)
    */
   id: string;
+  /**
+   * Marker for polymorphic storage in shared container
+   */
+  type: 'domainRequest';
+
+  /**
+   * Partition key placeholder for shared Proposals container
+   */
+  domainId?: string;
 
   /**
    * Email of the person requesting the domain

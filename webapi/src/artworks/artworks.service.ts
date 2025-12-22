@@ -13,7 +13,7 @@ import {
   getAIRecommendationsEligibility,
   LikedStatus,
   GlobalArtworksDomainId,
-  Role,
+  Role
 } from '@tastematcher/common';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
@@ -40,13 +40,20 @@ export class ArtworksService {
     viewer?: { id: string; role: Role; invitedBy?: string | null },
   ): Promise<PaginatedResponse<Artwork>> {
     const container = await this.cosmosService.getArtworksContainer();
+    const normalizedQueryParams: QueryParams<Artwork> = {
+      ...queryParams,
+      filters: [
+        ...(queryParams.filters ?? []),
+        { field: 'type', operator: 'eq', value: 'artwork' },
+      ],
+    };
 
     try {
       const result = await executeCosmosQuery<Artwork>(
         container,
         'domainId',
         domainId,
-        queryParams,
+        normalizedQueryParams,
         { field: 'createdAt', order: 'desc' }
       );
 
@@ -57,14 +64,18 @@ export class ArtworksService {
         try {
           const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
 
-          // Query preferences for this user (partitioned by userId)
+          // Query preferences for this user (stored in Artworks container, partitioned by domainId)
           const prefQuery = {
-            query: 'SELECT c.artworkId, c.liked, c.comment FROM c WHERE c.userId = @userId',
-            parameters: [{ name: '@userId', value: requestedUserId }],
+            query: 'SELECT c.artworkId, c.liked, c.comment FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId',
+            parameters: [
+              { name: '@type', value: 'artworkPreference' },
+              { name: '@domainId', value: domainId },
+              { name: '@userId', value: requestedUserId },
+            ],
           };
 
           const { resources: prefs } = await preferencesContainer.items
-            .query(prefQuery, { partitionKey: requestedUserId })
+            .query(prefQuery, { partitionKey: domainId })
             .fetchAll();
 
           const prefMap = new Map<string, { liked?: boolean; comment?: string }>();
@@ -133,10 +144,12 @@ export class ArtworksService {
       query: `
         SELECT c.artworkId, c.comment, c.createdAt
         FROM c
-        WHERE c.userId = @userId AND c.liked = @liked
+        WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId AND c.liked = @liked
         ORDER BY c.createdAt DESC
       `,
       parameters: [
+        { name: '@type', value: 'artworkPreference' },
+        { name: '@domainId', value: domainId },
         { name: '@userId', value: userId },
         { name: '@liked', value: liked },
       ],
@@ -144,7 +157,7 @@ export class ArtworksService {
 
     const prefResponse = await preferencesContainer.items
       .query(prefQuery, {
-        partitionKey: userId,
+        partitionKey: domainId,
         maxItemCount: limit,
         continuationToken: queryParams.continuationToken,
       })
@@ -287,17 +300,21 @@ export class ArtworksService {
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
       const totalQuery = {
-        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId',
-        parameters: [{ name: '@domainId', value: domainId }],
+        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.type = @type',
+        parameters: [
+          { name: '@domainId', value: domainId },
+          { name: '@type', value: 'artwork' },
+        ],
       };
 
       const totalSwipedQuery = {
         query: `
           SELECT VALUE COUNT(1) 
           FROM c 
-          WHERE c.userId = @userId AND c.domainId = @domainId
+          WHERE c.type = @type AND c.userId = @userId AND c.domainId = @domainId
         `,
         parameters: [
+          { name: '@type', value: 'artworkPreference' },
           { name: '@userId', value: userId },
           { name: '@domainId', value: GlobalArtworksDomainId },
         ],
@@ -307,9 +324,10 @@ export class ArtworksService {
         query: `
           SELECT VALUE COUNT(1) 
           FROM c 
-          WHERE c.userId = @userId AND c.domainId = @domainId AND c.liked = true
+          WHERE c.type = @type AND c.userId = @userId AND c.domainId = @domainId AND c.liked = true
         `,
         parameters: [
+          { name: '@type', value: 'artworkPreference' },
           { name: '@userId', value: userId },
           { name: '@domainId', value: domainId },
         ],
@@ -319,27 +337,29 @@ export class ArtworksService {
         query: `
           SELECT VALUE COUNT(1) 
           FROM c 
-          WHERE c.userId = @userId AND c.domainId = @domainId AND c.liked = false
+          WHERE c.type = @type AND c.userId = @userId AND c.domainId = @domainId AND c.liked = false
         `,
         parameters: [
+          { name: '@type', value: 'artworkPreference' },
           { name: '@userId', value: userId },
           { name: '@domainId', value: domainId },
         ],
       };
 
       const recentQuery = {
-        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.createdAt >= @sevenDaysAgo',
+        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.type = @type AND c.createdAt >= @sevenDaysAgo',
         parameters: [
           { name: '@domainId', value: domainId },
+          { name: '@type', value: 'artwork' },
           { name: '@sevenDaysAgo', value: sevenDaysAgo },
         ],
       };
 
       const [totalResult, totalSwipedResult, likesResult, dislikesResult, recentResult] = await Promise.all([
         artworksContainer.items.query(totalQuery).fetchAll(),
-        preferencesContainer.items.query(totalSwipedQuery).fetchAll(),
-        preferencesContainer.items.query(likesQuery).fetchAll(),
-        preferencesContainer.items.query(dislikesQuery).fetchAll(),
+        preferencesContainer.items.query(totalSwipedQuery, { partitionKey: GlobalArtworksDomainId }).fetchAll(),
+        preferencesContainer.items.query(likesQuery, { partitionKey: domainId }).fetchAll(),
+        preferencesContainer.items.query(dislikesQuery, { partitionKey: domainId }).fetchAll(),
         artworksContainer.items.query(recentQuery).fetchAll(),
       ]);
 
@@ -377,12 +397,16 @@ export class ArtworksService {
     try {
       // Step 1: Get all artwork IDs the user has already tasted
       const tastedQuery = {
-        query: 'SELECT VALUE c.artworkId FROM c WHERE c.userId = @userId',
-        parameters: [{ name: '@userId', value: userId }],
+        query: 'SELECT VALUE c.artworkId FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId',
+        parameters: [
+          { name: '@type', value: 'artworkPreference' },
+          { name: '@domainId', value: GlobalArtworksDomainId },
+          { name: '@userId', value: userId },
+        ],
       };
 
       const { resources: tastedArtworkIds } = await preferencesContainer.items
-        .query(tastedQuery, { partitionKey: userId })
+        .query(tastedQuery, { partitionKey: GlobalArtworksDomainId })
         .fetchAll();
 
       this.logger.debug(`User ${userId} has tasted ${tastedArtworkIds.length} artworks`);
@@ -401,6 +425,7 @@ export class ArtworksService {
       const domainFilterClause = secondaryDomainId
         ? '(c.domainId = @primaryDomainId OR (c.domainId = @secondaryDomainId AND c.useForTaster = true))'
         : 'c.domainId = @primaryDomainId';
+      const typeClause = 'c.type = @artworkType';
 
       const randomOrderFields = [
         'createdAt',
@@ -420,7 +445,7 @@ export class ArtworksService {
         artworksQuery = `
           SELECT TOP @limit * 
           FROM c 
-          WHERE ${domainFilterClause}
+          WHERE ${typeClause} AND ${domainFilterClause}
           ${orderClause}
         `;
       } else {
@@ -429,12 +454,14 @@ export class ArtworksService {
         artworksQuery = `
           SELECT TOP @limit * 
           FROM c 
-          WHERE ${domainFilterClause}
+          WHERE ${typeClause} AND ${domainFilterClause}
             AND NOT ARRAY_CONTAINS(@tastedIds, c.id)
           ${orderClause}
         `;
         parameters.push({ name: '@tastedIds', value: tastedArtworkIds });
       }
+
+      parameters.push({ name: '@artworkType', value: 'artwork' });
 
       const { resources: untastedArtworks } = await artworksContainer.items
         .query({ query: artworksQuery, parameters })
@@ -472,7 +499,7 @@ export class ArtworksService {
       let updatedResource;
 
       // Check if preference already exists
-      const { resource: existingPreference } = await artworkPreferencesContainer.item(preferenceId, userId).read();
+      const { resource: existingPreference } = await artworkPreferencesContainer.item(preferenceId, domainId).read();
 
 
       if (existingPreference) {
@@ -480,6 +507,8 @@ export class ArtworksService {
         const updatedPreference = {
           ...existingPreference,
           ...saveDto,
+          type: existingPreference.type ?? 'artworkPreference',
+          domainId,
           liked:
             typeof saveDto.liked === 'boolean'
               ? saveDto.liked
@@ -488,7 +517,7 @@ export class ArtworksService {
         };
 
         const { resource: replacement } = await artworkPreferencesContainer
-          .item(preferenceId, userId)
+          .item(preferenceId, domainId)
           .replace(updatedPreference);
         updatedResource = replacement;
         this.logger.log(`Updated preference for artwork ${artworkId} by user ${userId}`);
@@ -497,6 +526,7 @@ export class ArtworksService {
         // Create new preference
         const newPreference = {
           id: preferenceId,
+          type: 'artworkPreference' as const,
           userId,
           ...saveDto,
           liked: typeof saveDto.liked === 'boolean' ? saveDto.liked : undefined,
@@ -630,12 +660,16 @@ export class ArtworksService {
 
       // Fetch preferences for the user
       const preferencesQuery = {
-        query: 'SELECT c.artworkId, c.liked, c.comment FROM c WHERE c.userId = @userId',
-        parameters: [{ name: '@userId', value: resolvedUserId }],
+        query: 'SELECT c.artworkId, c.liked, c.comment FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId',
+        parameters: [
+          { name: '@type', value: 'artworkPreference' },
+          { name: '@domainId', value: domainId },
+          { name: '@userId', value: resolvedUserId },
+        ],
       };
 
       const { resources: preferences } = await preferencesContainer.items
-        .query(preferencesQuery, { partitionKey: resolvedUserId })
+        .query(preferencesQuery, { partitionKey: domainId })
         .fetchAll();
 
       const preferencesMap = new Map<string, { liked?: boolean; comment?: string }>();
