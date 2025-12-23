@@ -14,18 +14,32 @@
 import { useAuth } from '../../contexts/AuthContext';
 import { CustomerHomePage } from './CustomerHomePage';
 import { DealerHomePage } from './DealerHomePage';
+import { LogOut } from 'lucide-react';
 
 export function HomePage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   if (!user) {
     return null;
   }
 
-  if (user.role === 'customer') {
-    return <CustomerHomePage />;
-  }
-  else {
-    return <DealerHomePage />;
-  }
+  const isCustomer = user.role === 'customer';
+
+  return (
+    <div className="relative">
+      {isCustomer ? <CustomerHomePage /> : <DealerHomePage />}
+
+      {/* Mobile-only logout (bottom) */}
+      <div className="sm:hidden sticky bottom-0 z-30 bg-white/80 backdrop-blur px-4 py-3">
+        <button
+          onClick={logout}
+          className="w-full inline-flex items-center justify-center gap-2 text-sm font-medium text-gray-700 px-3 py-2 rounded-lg border border-gray-200 shadow-sm bg-white hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+          aria-label="Logout"
+        >
+          <LogOut className="w-4 h-4" />
+          Logout
+        </button>
+      </div>
+    </div>
+  );
 }

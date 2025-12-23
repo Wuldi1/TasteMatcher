@@ -85,7 +85,11 @@ class BaseApiClient {
   /**
    * Set authentication token for API requests
    */
-  setAuthToken(token: string): void {
+  setAuthToken(token: string | null): void {
+    if (!token) {
+      this.clearAuthToken();
+      return;
+    }
     this.authToken = token;
     localStorage.setItem('token', token);
     localStorage.setItem('tm_auth_token', token);
@@ -162,6 +166,13 @@ class BaseApiClient {
    * Handle error responses with proper logging
    */
   private async handleErrorResponse(response: Response, url: string): Promise<never> {
+    if (response.status === 401) {
+      this.clearAuthToken();
+      console.error('API Error: Unauthorized, clearing auth token', { url });
+      window.location.reload();
+      throw new ApiError('Unauthorized', 401);
+    }
+
     let errorMessage = `HTTP ${response.status}`;
     let errorCode: string | undefined;
 
