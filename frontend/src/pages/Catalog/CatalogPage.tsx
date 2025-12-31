@@ -822,14 +822,14 @@ export function CatalogPage() {
         {/* Redesigned Full-size modal */}
         {selectedArtwork && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
             onClick={handleCloseModal}
           >
             <div
-              className="relative bg-white rounded-lg shadow-lg w-full max-w-4xl p-6"
+              className="relative bg-white rounded-lg shadow-lg w-full max-w-4xl p-5 sm:p-6 md:p-8 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Close Button */}
@@ -848,7 +848,7 @@ export function CatalogPage() {
                   <img
                     src={selectedArtwork.thumbnails?.[2]?.url || selectedArtwork.filename}
                     alt={selectedArtwork.title}
-                    className="rounded-lg object-cover w-full h-96"
+                    className="rounded-lg object-cover w-full h-72 sm:h-80 md:h-96"
                   />
                 </div>
 

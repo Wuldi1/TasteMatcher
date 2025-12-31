@@ -24,7 +24,7 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
   const [priceInput, setPriceInput] = useState<string>(artwork.price !== undefined ? String(artwork.price) : '');
   const [shouldDisplayPrice, setShouldDisplayPrice] = useState<boolean>(artwork.shouldDisplayPrice ?? false);
   const [useForTaster, setUseForTaster] = useState<boolean>(artwork.useForTaster ?? false);
-  const [isPrivate, setIsPrivate] = useState<boolean>(artwork.isPrivate ?? false);
+  const [isPrivate, setIsPrivate] = useState<boolean | undefined>(artwork.isPrivate ?? undefined);
   const [date, setDate] = useState(artwork.date || '');
   const [tags, setTags] = useState(artwork.tags?.join(', ') || '');
   const [error, setError] = useState('');
@@ -231,8 +231,8 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" role="dialog" aria-modal="true">
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg md:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black bg-opacity-50 p-3 sm:p-4 overflow-y-auto" role="dialog" aria-modal="true">
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg md:max-w-5xl max-h-[calc(100vh-1.5rem)] sm:max-h-[90vh] overflow-hidden flex flex-col">
         
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 border-b border-gray-100">
@@ -247,7 +247,7 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
                 
                 {/* Left Column: Image */}
                 <div className="w-full md:w-1/3 flex-shrink-0">
-                    <div className="aspect-[3/4] w-full bg-gray-100 rounded-lg overflow-hidden border border-gray-200 sticky top-0 relative">
+                    <div className="aspect-[3/4] w-full bg-gray-100 rounded-lg overflow-hidden border border-gray-200 md:sticky md:top-0 relative">
                         {isPreparingEdit && (
                             <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70 backdrop-blur-sm">
                                 <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
