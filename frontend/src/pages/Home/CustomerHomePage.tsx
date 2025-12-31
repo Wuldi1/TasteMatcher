@@ -115,8 +115,9 @@ export function CustomerHomePage() {
         }
     };
 
-    // Calculate onboarding progress
+    // Calculate onboarding progress and swipe count (guarded for undefined stats)
     const remainingQuestions = Math.max(totalQuestions - answeredQuestions, 0);
+    const totalSwiped = stats?.totalSwiped ?? 0;
 
     if (!user || loading) {
         return (
@@ -162,7 +163,7 @@ export function CustomerHomePage() {
                     <Link to="/taster" className="bg-yellow-100 rounded-lg shadow-md p-4 flex flex-col items-center hover:bg-yellow-200">
                         <Sparkles className="w-10 h-10 text-yellow-500" />
                         {
-                            stats?.totalSwiped >= 20 ? (
+                            totalSwiped >= 20 ? (
                                 <>
                                     <h3 className="text-lg font-medium mt-2">Keep up Model training</h3>
                                     <p className="text-sm text-gray-600 text-center">The more you swipe, the better your model gets.</p>
@@ -219,7 +220,7 @@ export function CustomerHomePage() {
                     </Link>
                     <div className="bg-white rounded-lg shadow-md p-4 flex flex-col items-center">
                         <Sparkles className="w-10 h-10 text-yellow-500" />
-                        <h3 className="text-lg font-medium mt-2">{stats?.totalSwiped || 0}</h3>
+                        <h3 className="text-lg font-medium mt-2">{totalSwiped}</h3>
                         <p className="text-sm text-gray-600">Total Swipes</p>
                     </div>
                 </div>

@@ -149,7 +149,7 @@ export function CatalogPage() {
   const bulkDeleteMutation = useMutation({
     mutationFn: async (artworkIds: string[]) => {
       if (!user?.domainId) throw new Error('No domain ID');
-      await Promise.all(artworkIds.map(id => apiClient.deleteArtwork(user.domainId, id)));
+      await Promise.all(artworkIds.map(id => apiClient.deleteArtwork(user.domainId!, id)));
     },
     onSuccess: (_, artworkIds) => {
       // Immediately remove from cache
@@ -181,7 +181,7 @@ export function CatalogPage() {
   const bulkUpdatePriceVisibility = useMutation({
     mutationFn: async ({ artworkIds, shouldDisplayPrice }: { artworkIds: string[]; shouldDisplayPrice: boolean }) => {
       if (!user?.domainId) throw new Error('No domain ID');
-      await Promise.all(artworkIds.map(id => apiClient.updateArtwork(user.domainId, id, { shouldDisplayPrice })));
+      await Promise.all(artworkIds.map(id => apiClient.updateArtwork(user.domainId!, id, { shouldDisplayPrice })));
     },
     onSuccess: (_, { artworkIds, shouldDisplayPrice }) => {
       // Update cache
@@ -204,7 +204,7 @@ export function CatalogPage() {
   const bulkUpdateTasterFlag = useMutation({
     mutationFn: async ({ artworkIds, useForTaster }: { artworkIds: string[]; useForTaster: boolean }) => {
       if (!user?.domainId) throw new Error('No domain ID');
-      await Promise.all(artworkIds.map(id => apiClient.updateArtwork(user.domainId, id, { useForTaster })));
+      await Promise.all(artworkIds.map(id => apiClient.updateArtwork(user.domainId!, id, { useForTaster })));
     },
     onSuccess: (_, { artworkIds, useForTaster }) => {
       queryClient.setQueryData(['artworks', user?.domainId, searchQuery, sortBy, sortOrder], (oldData: any) => {
@@ -226,7 +226,7 @@ export function CatalogPage() {
   const bulkUpdatePrivacy = useMutation({
     mutationFn: async ({ artworkIds, isPrivate }: { artworkIds: string[]; isPrivate: boolean }) => {
       if (!user?.domainId) throw new Error('No domain ID');
-      await Promise.all(artworkIds.map(id => apiClient.updateArtwork(user.domainId, id, { isPrivate })));
+      await Promise.all(artworkIds.map(id => apiClient.updateArtwork(user.domainId!, id, { isPrivate })));
     },
     onSuccess: (_, { artworkIds, isPrivate }) => {
       queryClient.setQueryData(['artworks', user?.domainId, searchQuery, sortBy, sortOrder], (oldData: any) => {

@@ -1,11 +1,12 @@
 import { Home, Compass, Upload, LayoutGrid, Users, Sparkles, ShoppingCart, FileText } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export interface NavigationLink {
     id: string;
     name: string;
     href: string;
     ariaLabel: string;
-    icon: React.ComponentType;
+    icon: LucideIcon;
     roles: string[]; // Roles that can access this link
     bubbleText: string; // Text to display in the tour bubble
 }

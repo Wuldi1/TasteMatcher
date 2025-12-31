@@ -26,6 +26,7 @@ export function Login() {
   const [sellerName, setSellerName] = useState('');
   const [sellerDomainName, setSellerDomainName] = useState('');
   const [sellerMessage, setSellerMessage] = useState('');
+  const logoSrc = `${process.env.PUBLIC_URL}/tastematcher_icon_icon_128.png`;
 
   const handleEmailSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,6 +136,9 @@ export function Login() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl p-6 sm:p-8 w-full max-w-md">
+        <div className="flex justify-center mb-4">
+          <img src={logoSrc} alt="TasteMatcher logo" className="h-12 w-12" />
+        </div>
         <div className="text-center mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
             TasteMatcher

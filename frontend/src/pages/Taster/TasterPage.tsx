@@ -167,7 +167,7 @@ export function TasterPage() {
             const existingIds = new Set(artworks.map(a => a.id));
             const newArtworks = nextBatch.artworks.filter(a => !existingIds.has(a.id));
             if (newArtworks.length > 0) {
-              untastedData.artworks.push(...newArtworks);
+              untastedData?.artworks.push(...newArtworks);
             }
           }
         } catch (err) {

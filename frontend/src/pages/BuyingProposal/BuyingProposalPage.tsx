@@ -27,7 +27,7 @@ export function BuyingProposalPage() {
     }
   }, [user?.id, user?.domainId]);
 
-  const handleStatusChange = async (status: 'accepted' | 'rejected') => {
+  const handleStatusChange = async (status: 'accepted' | 'rejected' | 'submitted') => {
     if (!proposal) return;
 
     try {
@@ -53,7 +53,7 @@ export function BuyingProposalPage() {
       <h1 className="text-2xl font-bold mb-4">Buying Proposal</h1>
       <ProposalView
         proposal={proposal}
-        isDealerView={false}
+        // isDealerView={false} // TODO : Is this a mistake?
         onStatusChange={handleStatusChange}
       />
     </div>

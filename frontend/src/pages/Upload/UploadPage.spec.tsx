@@ -3,22 +3,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { UploadPage } from './UploadPage';
 import { AuthContext } from '../../contexts/AuthContext';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { createMockAuthContext } from '../../test/mocks/authContext';
+import userEvent from '@testing-library/user-event';
 
 const mockUser = {
   id: 'user-1',
   email: 'test@example.com',
   domainId: 'domain-1',
   domainName: 'Test Domain',
-  role: 'user' as const,
-};
-
-const mockAuthContext = {
-  user: mockUser,
-  login: vi.fn(),
-  register: vi.fn(),
-  logout: vi.fn(),
-  isLoading: false,
+  role: 'dealer' as const,
 };
 
 const queryClient = new QueryClient({
@@ -28,6 +22,10 @@ const queryClient = new QueryClient({
 });
 
 const renderWithProviders = (component: React.ReactElement) => {
+  const mockAuthContext = createMockAuthContext({
+    user: mockUser,
+    isAuthenticated: true,
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={mockAuthContext}>

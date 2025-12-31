@@ -14,7 +14,7 @@
     "start:frontend": "pnpm run build:frontend && pnpm --filter @tastematcher/frontend start"
   },
   "devDependencies": {
-    "@types/react": "^19.2.7",
+    "@types/react": "^18.3.26",
     "eslint": "^9.38.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",

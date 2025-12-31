@@ -4,6 +4,7 @@
 // 3. Includes JSDoc for all properties.
 
 import { ArtworkStats } from "./artwork.types";
+import { Comment } from "./sales.types";
 
 // -----------------------------------------------------------
 export type Role = 'global_admin' | 'domain_owner' | 'dealer' | 'customer';

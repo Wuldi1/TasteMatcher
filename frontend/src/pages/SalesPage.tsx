@@ -121,7 +121,8 @@ export default function SalesPage() {
                             proposal.items.map((item) => ({
                                 artworkId: item.artworkId,
                                 comments: item.comments ?? [],
-                                status: item.status ?? 'pending'
+                                status: item.status ?? 'pending',
+                                askedPrice: item.askedPrice ?? 0
                             }))
                         );
                     } else {
@@ -417,6 +418,7 @@ export default function SalesPage() {
                         taggedAt: Date.now(),
                         title: artwork.title,
                         filename: artwork.filename,
+                        askedPrice: 0
                     },
                     ...currentDraft,
                 ];

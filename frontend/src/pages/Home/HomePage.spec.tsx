@@ -3,21 +3,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { HomePage } from './HomePage';
 import { AuthContext } from '../../contexts/AuthContext';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { createMockAuthContext } from '../../test/mocks/authContext';
 
 const mockUser = {
   id: 'user-1',
   email: 'test@example.com',
   domainId: 'domain-1',
   domainName: 'Test Domain',
-  role: 'user' as const,
-};
-
-const mockAuthContext = {
-  user: mockUser,
-  login: vi.fn(),
-  logout: vi.fn(),
-  isLoading: false,
+  role: 'customer' as const,
 };
 
 const queryClient = new QueryClient({
@@ -27,6 +21,10 @@ const queryClient = new QueryClient({
 });
 
 const renderWithProviders = (component: React.ReactElement) => {
+  const mockAuthContext = createMockAuthContext({
+    user: mockUser,
+    isAuthenticated: true,
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={mockAuthContext}>
@@ -69,7 +67,7 @@ describe('HomePage', () => {
   });
 
   it('does not render when user is not authenticated', () => {
-    const unauthContext = { ...mockAuthContext, user: null };
+    const unauthContext = createMockAuthContext();
     
     render(
       <QueryClientProvider client={queryClient}>

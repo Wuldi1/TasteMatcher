@@ -33,25 +33,27 @@ export const useSavePreference = ({
     },
     onMutate: async ({ artworkId, domainId, liked, comment }) => {
       // Cancel any ongoing queries for artworks
-      await queryClient.cancelQueries(['artworks', domainId]);
+      await queryClient.cancelQueries({ queryKey: ['artworks', domainId] });
+
+      const previousArtworks = queryClient.getQueryData(['artworks', domainId]);
 
       // Optionally perform an optimistic update
       if (onOptimisticUpdate) {
         onOptimisticUpdate(artworkId, { liked, comment });
       }
 
-      return { previousData: queryClient.getQueriesData(['artworks', domainId]) };
+      return { previousArtworks };
     },
     onError: (_error, _variables, context) => {
       // Revert to previous data if optimistic update failed
-      if (context?.previousData) {
-        queryClient.setQueriesData(['artworks', domainId], context.previousData);
+      if (context?.previousArtworks !== undefined) {
+        queryClient.setQueryData(['artworks', domainId], context.previousArtworks);
       }
     },
     onSuccess: () => {
       // Invalidate queries to refresh data
-      queryClient.invalidateQueries(['artworks', domainId]);
-      queryClient.invalidateQueries(['untasted-artworks', domainId, userId]);
+      queryClient.invalidateQueries({ queryKey: ['artworks', domainId] });
+      queryClient.invalidateQueries({ queryKey: ['untasted-artworks', domainId, userId] });
     },
   });
 };

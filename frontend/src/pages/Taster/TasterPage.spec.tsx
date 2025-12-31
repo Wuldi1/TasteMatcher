@@ -1,22 +1,35 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TasterPage } from './TasterPage';
 import { AuthContext } from '../../contexts/AuthContext';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createMockAuthContext } from '../../test/mocks/authContext';
+
+const mockFetchUntasted = vi.fn().mockResolvedValue({
+  artworks: [
+    { id: 'art-1', title: 'Test Artwork', imageUrl: 'https://example.com/image.jpg', domainId: 'domain-1' },
+  ],
+  hasMore: false,
+});
+
+const mockSavePreference = vi.fn();
+
+vi.mock('../../utils/api', () => ({
+  apiClient: {
+    fetchUntastedArtworks: (...args: unknown[]) => mockFetchUntasted(...args),
+    saveArtworkPreference: (...args: unknown[]) => mockSavePreference(...args),
+    refreshCurrentUser: vi.fn(),
+    setAuthToken: vi.fn(),
+  },
+}));
 
 const mockUser = {
   id: 'user-1',
   email: 'test@example.com',
   domainId: 'domain-1',
   domainName: 'Test Domain',
-  role: 'user' as const,
-};
-
-const mockAuthContext = {
-  user: mockUser,
-  login: vi.fn(),
-  logout: vi.fn(),
-  isLoading: false,
+  role: 'customer' as const,
 };
 
 const queryClient = new QueryClient({
@@ -26,6 +39,11 @@ const queryClient = new QueryClient({
 });
 
 const renderWithProviders = (component: React.ReactElement) => {
+  const mockAuthContext = createMockAuthContext({
+    user: mockUser,
+    isAuthenticated: true,
+    stats: { totalArtworks: 0, totalLikes: 0, totalDislikes: 0, totalSwiped: 0, recentlyAdded: 0 },
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={mockAuthContext}>

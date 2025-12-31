@@ -573,7 +573,7 @@ class ApiClient extends BaseApiClient {
   /**
    * Get recommendations for a domain
    */
-  async getRecommendations(domainId: string, userId?: string, limit?: string, offset?: string): Promise<Array<Artwork>> {
+  async getRecommendations(domainId: string, userId?: string, limit?: number, offset?: number): Promise<Array<Artwork>> {
     this.validateRequired(domainId, 'Domain ID');
     let params = '';
     if (limit) {

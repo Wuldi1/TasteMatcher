@@ -1,6 +1,6 @@
 # TasteMatcher Frontend
 
-React + TypeScript + Vite frontend for the TasteMatcher art recommendation platform.
+React + TypeScript (Create React App) frontend for the TasteMatcher art recommendation platform.
 
 ## Features
 
@@ -30,13 +30,10 @@ pnpm install
 
 ```bash
 # Start dev server
-pnpm dev
+pnpm start
 
 # Run tests
 pnpm test
-
-# Run tests in watch mode
-pnpm test:watch
 
 # Type checking
 pnpm typecheck
@@ -50,9 +47,6 @@ pnpm lint
 ```bash
 # Production build
 pnpm build
-
-# Preview production build
-pnpm preview
 ```
 
 ## Project Structure
@@ -60,9 +54,9 @@ pnpm preview
 The frontend project is structured as follows:
 
 - `src/`: Contains the source code for the frontend application.
-  - `main.tsx`: The entry point for the React application.
-  - `App.tsx`: The main application component.
-  - `components/`: Contains reusable components, such as `HelloFetch.tsx`.
+  - `index.tsx`: The entry point for the React application.
+  - `App.tsx`: The main application component (providers + routing).
+  - `components/`: Contains reusable components.
 
 ## API Integration
 

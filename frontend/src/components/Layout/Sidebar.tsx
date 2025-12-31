@@ -43,7 +43,23 @@ export const Sidebar = () => {
         }`}
     >
       <div className="flex items-center justify-center h-20 border-b border-gray-200 relative flex-shrink-0">
-        {!isCollapsed && <h1 className="text-2xl font-bold tracking-wider text-gray-800">TasteMatcher</h1>}
+        {!isCollapsed && (
+          <div className="flex items-center gap-3">
+            <img
+              src={`${process.env.PUBLIC_URL}/tastematcher_icon_icon_64.png`}
+              alt="TasteMatcher logo"
+              className="h-8 w-8"
+            />
+            <h1 className="text-2xl font-bold tracking-wider text-gray-800">TasteMatcher</h1>
+          </div>
+        )}
+        {isCollapsed && (
+          <img
+            src={`${process.env.PUBLIC_URL}/tastematcher_icon_icon_64.png`}
+            alt="TasteMatcher logo"
+            className="h-8 w-8"
+          />
+        )}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="absolute -right-3 top-6 bg-white border border-gray-200 text-gray-500 hover:bg-blue-50 hover:text-blue-600 rounded-full p-1.5 transition-colors"

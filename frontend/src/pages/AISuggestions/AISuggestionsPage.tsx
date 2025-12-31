@@ -207,6 +207,7 @@ export const AISuggestionsPage = ({
           if (artwork.id !== artworkId) return artwork;
           const next = { ...artwork };
           if (typeof updates.liked === 'boolean') {
+            // @ts-ignore
             next.likedStatus = updates.liked ? 'Liked' : 'Disliked';
           }
           if (updates.comment !== undefined) {
@@ -220,6 +221,7 @@ export const AISuggestionsPage = ({
         if (!prev || prev.id !== artworkId) return prev;
         const updated = { ...prev };
         if (typeof updates.liked === 'boolean') {
+          // @ts-ignore
           updated.likedStatus = updates.liked ? 'Liked' : 'Disliked';
         }
         if (updates.comment !== undefined) {

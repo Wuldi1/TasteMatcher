@@ -3,15 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthPage } from './AuthPage';
 import { AuthContext } from '../../contexts/AuthContext';
-import { describe, it, expect, vi } from 'vitest';
-
-const mockAuthContext = {
-  user: null,
-  login: vi.fn(),
-  register: vi.fn(),
-  logout: vi.fn(),
-  isLoading: false,
-};
+import { describe, it, expect } from 'vitest';
+import { createMockAuthContext } from '../../test/mocks/authContext';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,6 +13,7 @@ const queryClient = new QueryClient({
 });
 
 const renderWithProviders = (component: React.ReactElement) => {
+  const mockAuthContext = createMockAuthContext();
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={mockAuthContext}>

@@ -5,7 +5,7 @@ import { User } from "@tastematcher/common";
  * Pure function with no backend dependencies
  */
 export function getAIRecommendationsEligibility(
-  user: User
+  user: Partial<User>
 ): { isEligible: boolean; reasons: string[] } {
   const reasons: string[] = [];
   let isEligible = false;
