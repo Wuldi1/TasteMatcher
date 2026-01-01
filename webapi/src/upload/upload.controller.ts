@@ -223,6 +223,7 @@ export class UploadController {
     return {
       id: uuidv4(),
       domainId,
+      type: 'artwork',
       title: parsed.title!,
       artist: parsed.artist!,
       description: parsed.description!,

@@ -1,9 +1,17 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../utils/api';
 import { PersonalQuestionnaire } from '@tastematcher/common';
 import { ArrowRight, ArrowLeft, Upload, CheckCircle, Loader2 } from 'lucide-react';
+
+const COLLECTING_REASONS = [
+    'Legacy',
+    'Investment',
+    'Decoration / Interior Design',
+    'Prestige / Cultural Signaling',
+    'Community & Discovery',
+];
 
 export function OnboardingPage() {
     const { user, refreshUser } = useAuth();
@@ -12,7 +20,7 @@ export function OnboardingPage() {
     const derivedInitialStep = useMemo(() => {
         const params = new URLSearchParams(location.search);
         const parsed = Number(params.get('step'));
-        if (!isNaN(parsed) && parsed >= 1 && parsed <= 7) {
+        if (!isNaN(parsed) && parsed >= 1 && parsed <= 6) {
             return parsed;
         }
         return 1;
@@ -22,6 +30,8 @@ export function OnboardingPage() {
     const [uploadingTarget, setUploadingTarget] = useState<'aesthetic' | 'collection' | null>(null);
     
     const [formData, setFormData] = useState<PersonalQuestionnaire>({
+        fullName: user?.name || '',
+        primaryResidence: '',
         collectionType: 'individual',
         decisionMakersDescription: '',
         aboutYourself: '',
@@ -29,6 +39,9 @@ export function OnboardingPage() {
         hasOtherResidences: false,
         otherResidencesDescription: '',
         collectionGoals: '',
+        collectingReasons: [],
+        collectingStatus: undefined,
+        collectingDetails: '',
         hasPersonalCollection: undefined,
         personalCollection: {
             description: '',
@@ -51,6 +64,9 @@ export function OnboardingPage() {
             setFormData(prev => ({
                 ...prev,
                 ...user.personalQuestionnaire,
+                fullName: user.personalQuestionnaire?.fullName || user?.name || '',
+                primaryResidence: user.personalQuestionnaire?.primaryResidence || user.personalQuestionnaire?.currentLocation || '',
+                collectingReasons: user.personalQuestionnaire?.collectingReasons || [],
                 personalCollection: {
                     description: user.personalQuestionnaire?.personalCollection?.description || '',
                     imageUrls: user.personalQuestionnaire?.personalCollection?.imageUrls || []
@@ -64,7 +80,14 @@ export function OnboardingPage() {
     }, [user]);
 
     const updateFormData = (updates: Partial<PersonalQuestionnaire>) => {
-        setFormData(prev => ({ ...prev, ...updates }));
+        setFormData(prev => {
+            const next = { ...prev, ...updates };
+            // Keep primaryResidence and currentLocation in sync to satisfy older downstream consumers
+            if (updates.primaryResidence !== undefined) {
+                next.currentLocation = updates.primaryResidence;
+            }
+            return next;
+        });
     };
 
     const updateAesthetic = (updates: Partial<{ description: string; imageUrls: string[] }>) => {
@@ -87,11 +110,24 @@ export function OnboardingPage() {
         }));
     };
 
+    const toggleCollectingReason = useCallback((reason: string) => {
+        setFormData(prev => {
+            const reasons = new Set(prev.collectingReasons || []);
+            if (reasons.has(reason)) {
+                reasons.delete(reason);
+            } else if (reasons.size < 3) {
+                reasons.add(reason);
+            }
+            const nextReasons = Array.from(reasons);
+            return { ...prev, collectingReasons: nextReasons, collectionGoals: nextReasons.join(', ') };
+        });
+    }, []);
+
     const handleNext = async () => {
         // Save progress on each step
         try {
             await apiClient.updateQuestionnaire({ personalQuestionnaire: formData });
-            if (step < 7) {
+            if (step < 6) {
                 setStep(step + 1);
             } else {
                 await handleComplete();
@@ -156,48 +192,37 @@ export function OnboardingPage() {
             case 1:
                 return (
                     <div className="space-y-6">
-                        <h2 className="text-2xl font-bold text-gray-900">Decision Making</h2>
+                        <h2 className="text-2xl font-bold text-gray-900">Basic Info</h2>
                         <div className="space-y-4">
-                            <label className="block text-sm font-medium text-gray-700">
-                                Are you collecting for yourself, or is consensus required among several decision-makers?
-                            </label>
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <button
-                                    onClick={() => updateFormData({ collectionType: 'individual' })}
-                                    className={`p-4 border rounded-lg text-left transition-all ${
-                                        formData.collectionType === 'individual'
-                                            ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                                            : 'border-gray-200 hover:border-blue-300'
-                                    }`}
-                                >
-                                    <span className="font-medium block">Just myself</span>
-                                </button>
-                                <button
-                                    onClick={() => updateFormData({ collectionType: 'group' })}
-                                    className={`p-4 border rounded-lg text-left transition-all ${
-                                        formData.collectionType === 'group'
-                                            ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                                            : 'border-gray-200 hover:border-blue-300'
-                                    }`}
-                                >
-                                    <span className="font-medium block">Requires group consensus</span>
-                                </button>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                                <input
+                                    type="text"
+                                    value={formData.fullName || ''}
+                                    onChange={(e) => updateFormData({ fullName: e.target.value })}
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                    placeholder="Your name"
+                                />
                             </div>
-                            
-                            {formData.collectionType === 'group' && (
-                                <div className="mt-4">
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        If Others, describe who is involved:
-                                    </label>
-                                    <textarea
-                                        value={formData.decisionMakersDescription || ''}
-                                        onChange={(e) => updateFormData({ decisionMakersDescription: e.target.value })}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        rows={3}
-                                        placeholder="e.g. My partner and I..."
-                                    />
-                                </div>
-                            )}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                                <input
+                                    type="email"
+                                    value={user?.email || ''}
+                                    disabled
+                                    className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Primary Residence</label>
+                                <input
+                                    type="text"
+                                    value={formData.primaryResidence || ''}
+                                    onChange={(e) => updateFormData({ primaryResidence: e.target.value })}
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                    placeholder="City, State/Province, Country"
+                                />
+                            </div>
                         </div>
                     </div>
                 );
@@ -208,12 +233,13 @@ export function OnboardingPage() {
                         <h2 className="text-2xl font-bold text-gray-900">About You</h2>
                         <div className="space-y-4">
                             <label className="block text-sm font-medium text-gray-700">
-                                In a few sentences, tell us about yourself:
+                                In a few sentences, tell us about yourself.
                             </label>
+                            <p className="text-xs text-gray-500">Background, interests, what you’re drawn to — anything you’d like us to know.</p>
                             <textarea
                                 value={formData.aboutYourself || ''}
                                 onChange={(e) => updateFormData({ aboutYourself: e.target.value })}
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                 rows={6}
                                 placeholder="Your background, interests, lifestyle..."
                             />
@@ -223,164 +249,28 @@ export function OnboardingPage() {
 
             case 3:
                 return (
-                    <div className="space-y-6">
-                        <h2 className="text-2xl font-bold text-gray-900">Location</h2>
-                        <div className="space-y-4">
-                            <label className="block text-sm font-medium text-gray-700">
-                                Where do you currently live?
-                            </label>
-                            <input
-                                type="text"
-                                value={formData.currentLocation || ''}
-                                onChange={(e) => updateFormData({ currentLocation: e.target.value })}
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="City, State/Province, Country"
-                            />
-                        </div>
-                    </div>
-                );
-
-            case 4:
-                return (
-                    <div className="space-y-6">
-                        <h2 className="text-2xl font-bold text-gray-900">Other Residences</h2>
-                        <div className="space-y-4">
-                            <label className="block text-sm font-medium text-gray-700">
-                                Do you own residences in any other locations?
-                            </label>
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={() => updateFormData({ hasOtherResidences: true })}
-                                    className={`px-6 py-3 border rounded-lg transition-all ${
-                                        formData.hasOtherResidences === true
-                                            ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
-                                            : 'border-gray-200 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    Yes
-                                </button>
-                                <button
-                                    onClick={() => updateFormData({ hasOtherResidences: false })}
-                                    className={`px-6 py-3 border rounded-lg transition-all ${
-                                        formData.hasOtherResidences === false
-                                            ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
-                                            : 'border-gray-200 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    No
-                                </button>
-                            </div>
-
-                            {formData.hasOtherResidences && (
-                                <div className="mt-4">
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        If yes, please list the city and country of any other residences you maintain:
-                                    </label>
-                                    <textarea
-                                        value={formData.otherResidencesDescription || ''}
-                                        onChange={(e) => updateFormData({ otherResidencesDescription: e.target.value })}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        rows={3}
-                                        placeholder="e.g. Vacation home in Aspen, USA..."
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                );
-
-            case 5:
-                return (
-                    <div className="space-y-6">
-                        <h2 className="text-2xl font-bold text-gray-900">Collection Goals</h2>
-                        <div className="space-y-4">
-                            <label className="block text-sm font-medium text-gray-700">
-                                What are you hoping to achieve with your art collection?
-                            </label>
-                            <p className="text-xs text-gray-500">e.g., enjoyment, investment, building a legacy, decorating specific spaces</p>
-                            <textarea
-                                value={formData.collectionGoals || ''}
-                                onChange={(e) => updateFormData({ collectionGoals: e.target.value })}
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                rows={5}
-                            />
-                        </div>
-                    </div>
-                );
-
-            case 6:
-                return (
-                    <div className="space-y-6">
-                        <h2 className="text-2xl font-bold text-gray-900">Collaborators</h2>
-                        <div className="space-y-4">
-                            <label className="block text-sm font-medium text-gray-700">
-                                Are you currently working with an architect or interior designer?
-                            </label>
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={() => updateFormData({ worksWithDesigner: true })}
-                                    className={`px-6 py-3 border rounded-lg transition-all ${
-                                        formData.worksWithDesigner === true
-                                            ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
-                                            : 'border-gray-200 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    Yes
-                                </button>
-                                <button
-                                    onClick={() => updateFormData({ worksWithDesigner: false, designerDetails: '' })}
-                                    className={`px-6 py-3 border rounded-lg transition-all ${
-                                        formData.worksWithDesigner === false
-                                            ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
-                                            : 'border-gray-200 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    No
-                                </button>
-                            </div>
-
-                            {formData.worksWithDesigner && (
-                                <div className="mt-4">
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        If yes, let us know who they are:
-                                    </label>
-                                    <textarea
-                                        value={formData.designerDetails || ''}
-                                        onChange={(e) => updateFormData({ designerDetails: e.target.value })}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        rows={3}
-                                        placeholder="Name, firm, or any helpful notes..."
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                );
-
-            case 7:
-                return (
                     <div className="space-y-6" id="collection-section">
-                        <h2 className="text-2xl font-bold text-gray-900">Visual References</h2>
+                        <h2 className="text-2xl font-bold text-gray-900">Your Relationship with Art</h2>
                         <div className="space-y-4">
                             <label className="block text-sm font-medium text-gray-700">
-                                Do you currently maintain an art collection?
+                                Do you currently collect art?
                             </label>
                             <div className="flex gap-4">
                                 <button
-                                    onClick={() => updateFormData({ hasPersonalCollection: true })}
+                                    onClick={() => updateFormData({ hasPersonalCollection: true, collectingStatus: 'collector' })}
                                     className={`px-6 py-3 border rounded-lg transition-all ${
                                         formData.hasPersonalCollection === true
-                                            ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'
                                             : 'border-gray-200 hover:bg-gray-50'
                                     }`}
                                 >
                                     Yes
                                 </button>
                                 <button
-                                    onClick={() => updateFormData({ hasPersonalCollection: false })}
+                                    onClick={() => updateFormData({ hasPersonalCollection: false, collectingStatus: 'not_yet', collectingDetails: '', personalCollection: { ...formData.personalCollection, imageUrls: formData.personalCollection?.imageUrls || [], description: '' } })}
                                     className={`px-6 py-3 border rounded-lg transition-all ${
                                         formData.hasPersonalCollection === false
-                                            ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'
                                             : 'border-gray-200 hover:bg-gray-50'
                                     }`}
                                 >
@@ -393,19 +283,22 @@ export function OnboardingPage() {
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        My Collection
+                                        If yes, share artists you collect or details about works you own.
                                     </label>
                                     <textarea
-                                        value={formData.personalCollection?.description || ''}
-                                        onChange={(e) => updatePersonalCollection({ description: e.target.value })}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        value={formData.collectingDetails || formData.personalCollection?.description || ''}
+                                        onChange={(e) => {
+                                            updateFormData({ collectingDetails: e.target.value });
+                                            updatePersonalCollection({ description: e.target.value });
+                                        }}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                         rows={4}
-                                        placeholder="Tell us about your existing collection or highlight key pieces..."
+                                        placeholder="Artists, styles, themes you collect..."
                                     />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Upload photos of your collection
+                                        Upload photos of works you own (optional)
                                     </label>
                                     <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 transition-colors relative">
                                         <div className="space-y-1 text-center">
@@ -415,7 +308,7 @@ export function OnboardingPage() {
                                                 <Upload className="mx-auto h-12 w-12 text-gray-400" />
                                             )}
                                             <div className="flex text-sm text-gray-600">
-                                                <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                                                <label className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
                                                     <span>Upload a file</span>
                                                     <input
                                                         type="file"
@@ -442,78 +335,127 @@ export function OnboardingPage() {
                                 </div>
                             </div>
                         )}
+                    </div>
+                );
 
-                        {formData.hasPersonalCollection === false && (
-                            <div className="space-y-6">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Aesthetic Inspiration
-                                    </label>
-                                    <textarea
-                                        value={formData.aestheticAdmiration?.description || ''}
-                                        onChange={(e) => updateAesthetic({ description: e.target.value })}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        rows={4}
-                                        placeholder="Share the designers, artists, or aesthetics that resonate with you..."
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Upload inspiration images
-                                    </label>
-                                    <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 transition-colors relative">
-                                        <div className="space-y-1 text-center">
-                                            {uploadingTarget === 'aesthetic' ? (
-                                                <Loader2 className="mx-auto h-12 w-12 text-gray-400 animate-spin" />
-                                            ) : (
-                                                <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                                            )}
-                                            <div className="flex text-sm text-gray-600">
-                                                <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
-                                                    <span>Upload a file</span>
-                                                    <input
-                                                        type="file"
-                                                        className="sr-only"
-                                                        accept="image/*"
-                                                        onChange={(event) => handleImageUpload(event, 'aesthetic')}
-                                                        disabled={uploadingTarget !== null}
-                                                    />
-                                                </label>
-                                                <p className="pl-1">or drag and drop</p>
-                                            </div>
-                                            <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
-                                        </div>
-                                    </div>
-                                    {formData.aestheticAdmiration?.imageUrls && formData.aestheticAdmiration.imageUrls.length > 0 && (
-                                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
-                                            {formData.aestheticAdmiration.imageUrls.map((url, idx) => (
-                                                <div key={idx} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
-                                                    <img src={url} alt={`Upload ${idx + 1}`} className="w-full h-full object-cover" />
-                                                </div>
-                                            ))}
-                                        </div>
+            case 4:
+                return (
+                    <div className="space-y-6">
+                        <h2 className="text-2xl font-bold text-gray-900">Why You Collect (select up to 3)</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {COLLECTING_REASONS.map((reason) => {
+                                const isSelected = formData.collectingReasons?.includes(reason);
+                                const selectionFull = (formData.collectingReasons?.length || 0) >= 3 && !isSelected;
+                                return (
+                                    <button
+                                        key={reason}
+                                        type="button"
+                                        onClick={() => toggleCollectingReason(reason)}
+                                        disabled={selectionFull}
+                                        className={`p-4 border rounded-lg text-left transition-all ${
+                                            isSelected
+                                                ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200'
+                                                : 'border-gray-200 hover:border-indigo-200 hover:bg-indigo-50'
+                                        } ${selectionFull ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    >
+                                        <span className="font-medium">{reason}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+
+            case 5:
+                return (
+                    <div className="space-y-6">
+                        <h2 className="text-2xl font-bold text-gray-900">Practical Details (optional)</h2>
+                        <div className="space-y-4">
+                            <label className="block text-sm font-medium text-gray-700">
+                                Are there specific size or dimension requirements we should know about?
+                            </label>
+                            <textarea
+                                value={formData.practicalDetails || ''}
+                                onChange={(e) => updateFormData({ practicalDetails: e.target.value })}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                rows={4}
+                                placeholder="Wall sizes, ceiling heights, frame preferences, etc."
+                            />
+                        </div>
+                    </div>
+                );
+
+            case 6:
+                return (
+                    <div className="space-y-6">
+                        <h2 className="text-2xl font-bold text-gray-900">Aesthetic References</h2>
+                        <div className="space-y-4">
+                            <label className="block text-sm font-medium text-gray-700">
+                                Are there any artists you admire? Upload screenshots or photos if helpful.
+                            </label>
+                            <textarea
+                                value={formData.aestheticAdmiration?.description || ''}
+                                onChange={(e) => updateAesthetic({ description: e.target.value })}
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                rows={4}
+                                placeholder="Artists, movements, color palettes, or moods you love..."
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Upload aesthetic references (optional)
+                            </label>
+                            <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 transition-colors relative">
+                                <div className="space-y-1 text-center">
+                                    {uploadingTarget === 'aesthetic' ? (
+                                        <Loader2 className="mx-auto h-12 w-12 text-gray-400 animate-spin" />
+                                    ) : (
+                                        <Upload className="mx-auto h-12 w-12 text-gray-400" />
                                     )}
+                                    <div className="flex text-sm text-gray-600">
+                                        <label className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                                            <span>Upload a file</span>
+                                            <input
+                                                type="file"
+                                                className="sr-only"
+                                                accept="image/*"
+                                                onChange={(event) => handleImageUpload(event, 'aesthetic')}
+                                                disabled={uploadingTarget !== null}
+                                            />
+                                        </label>
+                                        <p className="pl-1">or drag and drop</p>
+                                    </div>
+                                    <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
                                 </div>
                             </div>
-                        )}
+                            {formData.aestheticAdmiration?.imageUrls && formData.aestheticAdmiration.imageUrls.length > 0 && (
+                                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                    {formData.aestheticAdmiration.imageUrls.map((url, idx) => (
+                                        <div key={idx} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
+                                            <img src={url} alt={`Upload ${idx + 1}`} className="w-full h-full object-cover" />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 );
         }
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-gradient-to-b from-purple-50 via-white to-purple-50 py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-2xl mx-auto">
                 {/* Progress Bar */}
                 <div className="mb-8">
                     <div className="h-2 bg-gray-200 rounded-full">
                         <div 
-                            className="h-2 bg-blue-600 rounded-full transition-all duration-300"
-                            style={{ width: `${(step / 7) * 100}%` }}
+                            className="h-2 bg-indigo-600 rounded-full transition-all duration-300"
+                            style={{ width: `${(step / 6) * 100}%` }}
                         />
                     </div>
                     <div className="mt-2 text-sm text-gray-500 text-right">
-                        Step {step} of 7
+                        Step {step} of 6
                     </div>
                 </div>
 
@@ -538,11 +480,11 @@ export function OnboardingPage() {
                         <button
                             onClick={handleNext}
                             disabled={isSubmitting || uploadingTarget !== null}
-                            className="flex items-center px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isSubmitting ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : step === 7 ? (
+                            ) : step === 6 ? (
                                 <>
                                     Complete
                                     <CheckCircle className="w-4 h-4 ml-2" />

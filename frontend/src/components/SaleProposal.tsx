@@ -525,7 +525,7 @@ export default function SaleProposal({
                                 <div className="lg:w-1/4 bg-gray-50 relative">
                                     {artwork?.filename ? (
                                         <div className="aspect-[4/3] lg:aspect-auto lg:h-full w-full">
-                                            <img src={artwork.filename} alt={item.artworkId} className="w-full h-full object-cover" />
+                                            <img src={artwork.filename} alt={item.artworkId} className="max-h-full max-w-full object-contain" />
                                         </div>
                                     ) : (
                                         <div className="w-full h-64 lg:h-full bg-gray-100 flex items-center justify-center text-sm text-gray-400">No image</div>

@@ -169,7 +169,7 @@ export default function CatalogForUser({
                 return (
                     <article key={artwork.id} className="flex flex-col gap-3 group">
                         {/* Image Container */}
-                        <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-gray-100 shadow-sm transition-all duration-300 group-hover:shadow-md">
+                        <div className="relative w-full min-h-[220px] max-h-[320px] overflow-hidden rounded-2xl bg-gray-100 shadow-sm transition-all duration-300 group-hover:shadow-md flex items-center justify-center">
                             <button
                                 type="button"
                                 className="absolute inset-0 z-0 w-full h-full cursor-pointer focus:outline-none"
@@ -180,7 +180,7 @@ export default function CatalogForUser({
                                     <img
                                         src={artwork.filename}
                                         alt={artwork.title}
-                                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                        className="max-h-full max-w-full object-contain transition-transform duration-500 group-hover:scale-105"
                                         loading="lazy"
                                     />
                                 ) : (

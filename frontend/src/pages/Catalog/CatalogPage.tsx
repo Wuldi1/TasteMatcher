@@ -845,11 +845,13 @@ export function CatalogPage() {
               <div className="flex flex-col md:flex-row gap-6">
                 {/* Artwork Image */}
                 <div className="flex-shrink-0 w-full md:w-1/2">
-                  <img
-                    src={selectedArtwork.thumbnails?.[2]?.url || selectedArtwork.filename}
-                    alt={selectedArtwork.title}
-                    className="rounded-lg object-cover w-full h-72 sm:h-80 md:h-96"
-                  />
+                  <div className="bg-gray-50 rounded-lg border border-gray-100 overflow-hidden flex items-center justify-center">
+                    <img
+                      src={selectedArtwork.thumbnails?.[2]?.url || selectedArtwork.filename}
+                      alt={selectedArtwork.title}
+                      className="w-full h-full max-h-[24rem] object-contain"
+                    />
+                  </div>
                 </div>
 
                 {/* Artwork Details */}

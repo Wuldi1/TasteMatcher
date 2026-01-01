@@ -1,10 +1,11 @@
 import { useState, FormEvent, useRef, useEffect, ChangeEvent, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { X, Save, Sparkles, Upload as UploadIcon, RotateCcw, RotateCw, Loader2, Lock } from 'lucide-react';
+import { X, Save, Sparkles, Upload as UploadIcon, Loader2, Lock } from 'lucide-react';
+import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 import type { Artwork } from '@tastematcher/common';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../utils/api';
-import Cropper, { Area } from 'react-easy-crop';
 
 interface EditArtworkModalProps {
   artwork: Artwork;
@@ -34,24 +35,13 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
   const [isEditingImage, setIsEditingImage] = useState(false);
   const [editingSource, setEditingSource] = useState<string | null>(null);
   const [editingFileName, setEditingFileName] = useState<string>('artwork-edit.jpg');
-  const [crop, setCrop] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [rotation, setRotation] = useState(0);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [crop, setCrop] = useState<Crop>({ unit: '%', width: 90, height: 90, x: 5, y: 5 });
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
   const [isPreparingEdit, setIsPreparingEdit] = useState(false);
   const [isApplyingEdits, setIsApplyingEdits] = useState(false);
   const canEditPrivacy = Boolean(user?.id && artwork.uploadedBy === user.id);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const onCropComplete = useCallback((_croppedArea: Area, croppedPixels: Area) => {
-    setCroppedAreaPixels(croppedPixels);
-  }, []);
-
-  const handleRotationChange = (delta: number) => {
-    setRotation((prev) => {
-      const next = prev + delta;
-      return ((next % 360) + 360) % 360;
-    });
-  };
+  const imageRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     return () => {
@@ -149,10 +139,8 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
     }
     setEditingSource(source);
     setEditingFileName(fileName);
-    setCrop({ x: 0, y: 0 });
-    setZoom(1);
-    setRotation(0);
-    setCroppedAreaPixels(null);
+    setCrop({ unit: '%', width: 90, height: 90, x: 5, y: 5 });
+    setCompletedCrop(null);
     setIsEditingImage(true);
   }, [editingSource]);
 
@@ -195,18 +183,56 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
       URL.revokeObjectURL(editingSource);
     }
     setEditingSource(null);
-    setCroppedAreaPixels(null);
+    setCompletedCrop(null);
     setIsApplyingEdits(false);
   };
 
   const handleApplyImageEdits = async () => {
-    if (!editingSource || !croppedAreaPixels) {
+    if (!editingSource || !completedCrop || !imageRef.current) {
       setError('Please adjust the crop area before applying.');
       return;
     }
+    if (completedCrop.width <= 0 || completedCrop.height <= 0) {
+      setError('Crop size is too small. Please adjust and try again.');
+      return;
+    }
+    const imgEl = imageRef.current;
+    const scaleX = imgEl.naturalWidth / imgEl.width;
+    const scaleY = imgEl.naturalHeight / imgEl.height;
+    const outputWidth = Math.max(1, Math.round(completedCrop.width * scaleX));
+    const outputHeight = Math.max(1, Math.round(completedCrop.height * scaleY));
+
     try {
       setIsApplyingEdits(true);
-      const blob = await getCroppedImg(editingSource, croppedAreaPixels, rotation);
+      const canvas = document.createElement('canvas');
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Failed to get canvas context');
+      }
+      ctx.drawImage(
+        imgEl,
+        Math.round(completedCrop.x * scaleX),
+        Math.round(completedCrop.y * scaleY),
+        outputWidth,
+        outputHeight,
+        0,
+        0,
+        outputWidth,
+        outputHeight,
+      );
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((b) => {
+          if (!b) {
+            reject(new Error('Canvas is empty'));
+          } else {
+            resolve(b);
+          }
+        }, 'image/jpeg', 0.95);
+      });
+
       const extension = editingFileName.split('.').pop();
       const sanitizedName = editingFileName.replace(/\.[^/.]+$/, '');
       const finalName = `${sanitizedName || 'artwork-edit'}.${extension || 'jpg'}`;
@@ -517,53 +543,30 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
               <X className="w-5 h-5" />
             </button>
             <h3 className="text-lg font-semibold text-gray-900 mb-4 pr-8">Adjust Artwork Image</h3>
-            <div className="relative w-full h-[55vh] bg-gray-900 rounded-xl overflow-hidden">
-              <Cropper
-                image={editingSource}
+            <div className="relative w-full max-h-[60vh] min-h-[45vh] bg-gray-900 rounded-xl overflow-hidden flex items-center justify-center">
+              <ReactCrop
                 crop={crop}
-                zoom={zoom}
-                rotation={rotation}
-                aspect={3 / 4}
-                onCropChange={setCrop}
-                onCropComplete={onCropComplete}
-                onZoomChange={setZoom}
-                onRotationChange={setRotation}
-              />
-            </div>
-            <div className="mt-6 space-y-4">
-              <div>
-                <label className="text-xs uppercase font-semibold text-gray-500 mb-1 block">Zoom</label>
-                <input
-                  type="range"
-                  min={1}
-                  max={3}
-                  step={0.01}
-                  value={zoom}
-                  onChange={(e) => setZoom(Number(e.target.value))}
-                  className="w-full accent-blue-600"
+                onChange={(nextCrop: any) => setCrop(nextCrop)}
+                onComplete={(c: any) => setCompletedCrop(c as PixelCrop)}
+                keepSelection
+                className="w-full h-full flex items-center justify-center"
+                style={{ maxHeight: '60vh' }}
+              >
+                <img
+                  ref={imageRef}
+                  src={editingSource}
+                  alt="Crop source"
+                  onLoad={(event) => {
+                    const { naturalWidth, naturalHeight } = event.currentTarget;
+                    // center a generous default crop
+                    const width = Math.min(90, (naturalWidth / naturalHeight) > 1 ? 90 : 80);
+                    const height = Math.min(90, (naturalHeight / naturalWidth) > 1 ? 90 : 80);
+                    setCrop({ unit: '%', x: (100 - width) / 2, y: (100 - height) / 2, width, height });
+                  }}
+                  className="w-full h-full object-contain"
+                  style={{ maxHeight: '60vh', maxWidth: '100%' }}
                 />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleRotationChange(-90)}
-                    className="inline-flex items-center justify-center rounded-full border border-gray-200 p-2 text-gray-600 hover:bg-gray-50"
-                    aria-label="Rotate left"
-                  >
-                    <RotateCcw className="w-5 h-5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRotationChange(90)}
-                    className="inline-flex items-center justify-center rounded-full border border-gray-200 p-2 text-gray-600 hover:bg-gray-50"
-                    aria-label="Rotate right"
-                  >
-                    <RotateCw className="w-5 h-5" />
-                  </button>
-                </div>
-                <span className="text-sm font-medium text-gray-600">{rotation}°</span>
-              </div>
+              </ReactCrop>
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -594,66 +597,4 @@ export function EditArtworkModal({ artwork, onClose, onSave }: EditArtworkModalP
       )}
     </div>
   );
-}
-
-function createImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.addEventListener('load', () => resolve(image));
-    image.addEventListener('error', (error) => reject(error));
-    image.setAttribute('crossOrigin', 'anonymous');
-    image.src = url;
-  });
-}
-
-const getRadianAngle = (degreeValue: number) => (degreeValue * Math.PI) / 180;
-
-function rotateSize(width: number, height: number, rotation: number) {
-  const rotRad = getRadianAngle(rotation);
-  return {
-    width: Math.abs(Math.cos(rotRad) * width) + Math.abs(Math.sin(rotRad) * height),
-    height: Math.abs(Math.sin(rotRad) * width) + Math.abs(Math.cos(rotRad) * height),
-  };
-}
-
-async function getCroppedImg(imageSrc: string, pixelCrop: Area, rotation = 0): Promise<Blob> {
-  const image = await createImage(imageSrc);
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-
-  if (!ctx) {
-    throw new Error('Failed to get canvas context');
-  }
-
-  const rotRad = getRadianAngle(rotation);
-  const { width: bBoxWidth, height: bBoxHeight } = rotateSize(image.width, image.height, rotation);
-
-  canvas.width = bBoxWidth;
-  canvas.height = bBoxHeight;
-
-  ctx.translate(bBoxWidth / 2, bBoxHeight / 2);
-  ctx.rotate(rotRad);
-  ctx.translate(-image.width / 2, -image.height / 2);
-  ctx.drawImage(image, 0, 0);
-
-  const data = ctx.getImageData(pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height);
-
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
-
-  ctx.putImageData(data, 0, 0);
-
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          reject(new Error('Canvas is empty'));
-          return;
-        }
-        resolve(blob);
-      },
-      'image/jpeg',
-      0.95,
-    );
-  });
 }

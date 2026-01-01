@@ -32,6 +32,10 @@ export interface PersonalCollection extends AestheticAdmiration {}
  * Complete personal questionnaire structure
  */
 export interface PersonalQuestionnaire {
+  // Basic info
+  fullName?: string;
+  primaryResidence?: string;
+
   // Decision Making
   collectionType?: 'individual' | 'group';
   decisionMakersDescription?: string;
@@ -42,12 +46,17 @@ export interface PersonalQuestionnaire {
   // Location
   currentLocation?: string;
 
+  // Relationship with art
+  collectingStatus?: 'collector' | 'not_yet';
+  collectingDetails?: string;
+
   // Other Residences
   hasOtherResidences?: boolean;
   otherResidencesDescription?: string;
 
   // Collection Goals
   collectionGoals?: string;
+  collectingReasons?: string[];
 
   // Aesthetic Preferences
   aestheticAdmiration?: AestheticAdmiration;
@@ -55,6 +64,9 @@ export interface PersonalQuestionnaire {
   // Collection Ownership
   hasPersonalCollection?: boolean;
   personalCollection?: PersonalCollection;
+
+  // Practical details
+  practicalDetails?: string;
 
   // Professional collaborators
   worksWithDesigner?: boolean;

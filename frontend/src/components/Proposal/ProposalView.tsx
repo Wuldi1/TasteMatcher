@@ -296,11 +296,11 @@ export default function ProposalView({
                 {/* Image Section */}
                 <div className="lg:w-1/3 xl:w-1/4 bg-gray-50 relative group">
                   {artwork?.filename ? (
-                    <div className="aspect-[4/3] lg:aspect-auto lg:h-full w-full relative">
+                    <div className="w-full lg:h-full relative bg-gray-100 flex items-center justify-center overflow-hidden">
                         <img 
                             src={artwork.filename} 
                             alt={artwork.title || item.artworkId} 
-                            className="w-full h-full object-cover" 
+                            className="max-h-full max-w-full object-contain" 
                         />
                         <a 
                             href={artwork.filename} 

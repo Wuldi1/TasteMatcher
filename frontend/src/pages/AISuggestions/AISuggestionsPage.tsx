@@ -357,7 +357,7 @@ export const AISuggestionsPage = ({
                   </div>
 
                   {/* Image */}
-                  <div className="relative aspect-[4/3] w-full bg-gray-100 mx-auto">
+                  <div className="relative w-full min-h-[220px] max-h-[320px] bg-gray-100 mx-auto flex items-center justify-center overflow-hidden">
                     <button
                       type="button"
                       className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none"
@@ -371,7 +371,7 @@ export const AISuggestionsPage = ({
                         <img
                           src={item.filename}
                           alt={item.title}
-                          className="h-full w-full object-cover"
+                          className="max-h-full max-w-full object-contain"
                           loading="lazy"
                         />
                       ) : (
@@ -516,11 +516,13 @@ export const AISuggestionsPage = ({
 
             <div className="flex flex-col md:flex-row gap-6">
               <div className="flex-shrink-0 w-full md:w-1/2">
-                <img
-                  src={selectedArtwork.filename}
-                  alt={selectedArtwork.title}
-                  className="rounded-lg object-cover w-full h-96"
-                />
+                <div className="bg-gray-50 rounded-lg border border-gray-100 overflow-hidden flex items-center justify-center">
+                  <img
+                    src={selectedArtwork.filename}
+                    alt={selectedArtwork.title}
+                    className="w-full h-full max-h-[24rem] object-contain"
+                  />
+                </div>
               </div>
               <div className="flex-1 flex flex-col">
                 <h2 id="modal-title" className="text-2xl font-bold text-gray-900 mb-2">{selectedArtwork.title}</h2>
