@@ -686,7 +686,7 @@ export function CatalogPage() {
                     className={`flex flex-col gap-3 group transition-opacity duration-300 ${isDeleting ? 'opacity-0 scale-95' : 'opacity-100'}`}
                   >
                     {/* Image Container */}
-                    <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-gray-100 shadow-sm transition-all duration-300 group-hover:shadow-md">
+                    <div className="relative w-full min-h-[220px] max-h-[320px] overflow-hidden rounded-2xl bg-gray-50 border border-gray-200 shadow-sm transition-all duration-300 group-hover:shadow-md flex items-center justify-center">
                       {/* Select checkbox - visible on hover or if selected, top-left */}
                       {user?.role !== 'customer' && (
                         <button
@@ -700,7 +700,7 @@ export function CatalogPage() {
 
                       <button
                         type="button"
-                        className="absolute inset-0 z-0 w-full h-full cursor-pointer focus:outline-none"
+                        className="absolute inset-0 z-0 w-full h-full cursor-pointer focus:outline-none flex items-center justify-center"
                         onClick={() => handleArtworkClick(artwork)}
                         aria-label={`View details for ${artwork.title}`}
                       >
@@ -708,7 +708,7 @@ export function CatalogPage() {
                           <img
                             src={artwork.filename}
                             alt={artwork.title}
-                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            className="max-h-full max-w-full object-contain transition-transform duration-500 group-hover:scale-105"
                             loading="lazy"
                           />
                         ) : (

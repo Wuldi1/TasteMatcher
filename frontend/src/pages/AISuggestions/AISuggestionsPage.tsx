@@ -360,7 +360,7 @@ export const AISuggestionsPage = ({
                   <div className="relative w-full min-h-[220px] max-h-[320px] bg-gray-100 mx-auto flex items-center justify-center overflow-hidden">
                     <button
                       type="button"
-                      className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none"
+                      className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none flex items-center justify-center"
                       onClick={() => {
                         setSelectedArtwork(item);
                         onArtworkClick?.(item);

@@ -172,7 +172,7 @@ export default function CatalogForUser({
                         <div className="relative w-full min-h-[220px] max-h-[320px] overflow-hidden rounded-2xl bg-gray-100 shadow-sm transition-all duration-300 group-hover:shadow-md flex items-center justify-center">
                             <button
                                 type="button"
-                                className="absolute inset-0 z-0 w-full h-full cursor-pointer focus:outline-none"
+                                className="absolute inset-0 z-0 w-full h-full cursor-pointer focus:outline-none flex items-center justify-center"
                                 onClick={() => onArtworkClick?.(artwork)}
                                 aria-label={`View details for ${artwork.title}`}
                             >

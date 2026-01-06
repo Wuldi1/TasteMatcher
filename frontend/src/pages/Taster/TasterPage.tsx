@@ -270,13 +270,13 @@ export function TasterPage() {
               role="img"
               aria-label={currentArtwork.title}
             >
-              <div style={{ position: 'relative', flex: '1', overflow: 'hidden' }}>
+              <div style={{ position: 'relative', flex: '1', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8f8f8' }}>
                 <img
                   src={currentArtwork.thumbnails?.[1]?.url || currentArtwork.filename}
                   alt={currentArtwork.title}
                   className="taster-card__image"
                   draggable="false"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', top: 0, left: 0 }}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 />
                 
                 {/* Swipe indicators moved inside image container */}
