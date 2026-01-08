@@ -11,15 +11,33 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { useMemo, useState } from 'react';
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '../../contexts/AuthContext';
-import { Search, X, ThumbsUp, ThumbsDown, Edit, Trash2, CheckSquare, Square, Eye, EyeOff, Sparkles, Lock, Unlock } from 'lucide-react';
-import type { Artwork } from '@tastematcher/common';
-import { apiClient } from '../../utils/api';
-import { EditArtworkModal } from '../../components/EditArtworkModal/EditArtworkModal';
-import './CatalogPage.css';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useMemo, useState } from "react";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useAuth } from "../../contexts/AuthContext";
+import {
+  Search,
+  X,
+  ThumbsUp,
+  ThumbsDown,
+  Edit,
+  Trash2,
+  CheckSquare,
+  Square,
+  Eye,
+  EyeOff,
+  Sparkles,
+  Lock,
+  Unlock,
+} from "lucide-react";
+import type { Artwork } from "@tastematcher/common";
+import { apiClient } from "../../utils/api";
+import { EditArtworkModal } from "../../components/EditArtworkModal/EditArtworkModal";
+import "./CatalogPage.css";
+import { useLocation, useNavigate } from "react-router-dom";
 
 /**
  * Catalog page displaying all uploaded artworks in a responsive grid.
@@ -30,17 +48,21 @@ export function CatalogPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<string>('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<string>("createdAt");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [editingArtwork, setEditingArtwork] = useState<Artwork | null>(null);
-  const [selectedArtworks, setSelectedArtworks] = useState<Set<string>>(new Set()); // For multi-select
-  const [deletingArtworks, setDeletingArtworks] = useState<Set<string>>(new Set()); // For animation
+  const [selectedArtworks, setSelectedArtworks] = useState<Set<string>>(
+    new Set()
+  ); // For multi-select
+  const [deletingArtworks, setDeletingArtworks] = useState<Set<string>>(
+    new Set()
+  ); // For animation
   const preferenceFilter = useMemo(() => {
     const params = new URLSearchParams(location.search);
-    const value = params.get('view');
-    if (value === 'liked' || value === 'disliked') {
+    const value = params.get("view");
+    if (value === "liked" || value === "disliked") {
       return value;
     }
     return undefined;
@@ -49,8 +71,11 @@ export function CatalogPage() {
   const clearPreferenceFilter = () => {
     if (!preferenceFilter) return;
     const params = new URLSearchParams(location.search);
-    params.delete('view');
-    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    params.delete("view");
+    navigate(
+      { pathname: location.pathname, search: params.toString() },
+      { replace: true }
+    );
   };
 
   // Fetch artworks with infinite scroll
@@ -62,10 +87,17 @@ export function CatalogPage() {
     isLoading: queryLoading,
     error,
   } = useInfiniteQuery({
-    queryKey: ['artworks', user?.domainId, searchQuery, sortBy, sortOrder, preferenceFilter],
+    queryKey: [
+      "artworks",
+      user?.domainId,
+      searchQuery,
+      sortBy,
+      sortOrder,
+      preferenceFilter,
+    ],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
       if (!user?.domainId) {
-        throw new Error('No domain ID');
+        throw new Error("No domain ID");
       }
       const result = await apiClient.getArtworks(user.domainId, {
         limit: 20,
@@ -79,7 +111,12 @@ export function CatalogPage() {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
       // Defensive: lastPage may be undefined or not an object
-      if (!lastPage || typeof lastPage !== 'object' || !('continuationToken' in lastPage)) return undefined;
+      if (
+        !lastPage ||
+        typeof lastPage !== "object" ||
+        !("continuationToken" in lastPage)
+      )
+        return undefined;
       return lastPage.continuationToken ?? undefined;
     },
     enabled: !!user?.domainId,
@@ -89,167 +126,251 @@ export function CatalogPage() {
 
   // Defensive: flatten pages only if data.pages is an array
   const allArtworks = Array.isArray(data?.pages)
-    ? data.pages.flatMap((page) => Array.isArray(page?.items) ? page.items : [])
+    ? data.pages.flatMap((page) =>
+        Array.isArray(page?.items) ? page.items : []
+      )
     : [];
 
   // Filter artworks by search query (client-side)
   const filteredArtworks = searchQuery
     ? allArtworks.filter((artwork) => {
-      const query = searchQuery.toLowerCase();
-      return (
-        artwork.title?.toLowerCase().includes(query) ||
-        artwork.artist?.toLowerCase().includes(query) ||
-        artwork.description?.toLowerCase().includes(query) ||
-        artwork.medium?.toLowerCase().includes(query) ||
-        artwork.signature?.toLowerCase().includes(query) ||
-        artwork.date?.toLowerCase().includes(query) ||
-        artwork.tags?.some(tag => tag.toLowerCase().includes(query))
-      );
-    })
+        const query = searchQuery.toLowerCase();
+        return (
+          artwork.title?.toLowerCase().includes(query) ||
+          artwork.artist?.toLowerCase().includes(query) ||
+          artwork.description?.toLowerCase().includes(query) ||
+          artwork.medium?.toLowerCase().includes(query) ||
+          artwork.signature?.toLowerCase().includes(query) ||
+          artwork.date?.toLowerCase().includes(query) ||
+          artwork.tags?.some((tag) => tag.toLowerCase().includes(query))
+        );
+      })
     : allArtworks;
 
-  const selectedArtworkRecords = filteredArtworks.filter((artwork) => selectedArtworks.has(artwork.id));
+  const selectedArtworkRecords = filteredArtworks.filter((artwork) =>
+    selectedArtworks.has(artwork.id)
+  );
   const canModifyPrivacy = Boolean(
     user?.id &&
-    selectedArtworkRecords.length > 0 &&
-    selectedArtworkRecords.every((artwork) => artwork.uploadedBy === user.id),
+      selectedArtworkRecords.length > 0 &&
+      selectedArtworkRecords.every((artwork) => artwork.uploadedBy === user.id)
   );
 
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: (artworkId: string) => {
-      if (!user?.domainId) throw new Error('No domain ID');
+      if (!user?.domainId) throw new Error("No domain ID");
       return apiClient.deleteArtwork(user.domainId, artworkId);
     },
     onSuccess: (_, artworkId) => {
       // Immediately remove from cache
-      queryClient.setQueryData(['artworks', user?.domainId, searchQuery, sortBy, sortOrder], (oldData: any) => {
-        if (!oldData || !Array.isArray(oldData.pages)) return oldData;
-        return {
-          ...oldData,
-          pages: oldData.pages.map((page: any) => ({
-            ...page,
-            items: Array.isArray(page.items) ? page.items.filter((item: any) => item.id !== artworkId) : page.items,
-          })),
-        };
-      });
+      queryClient.setQueryData(
+        ["artworks", user?.domainId, searchQuery, sortBy, sortOrder],
+        (oldData: any) => {
+          if (!oldData || !Array.isArray(oldData.pages)) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page: any) => ({
+              ...page,
+              items: Array.isArray(page.items)
+                ? page.items.filter((item: any) => item.id !== artworkId)
+                : page.items,
+            })),
+          };
+        }
+      );
       setSelectedArtwork(null);
-      setDeletingArtworks(prev => new Set(prev).add(artworkId));
-      setTimeout(() => setDeletingArtworks(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(artworkId);
-        return newSet;
-      }), 300); // Animation duration
+      setDeletingArtworks((prev) => new Set(prev).add(artworkId));
+      setTimeout(
+        () =>
+          setDeletingArtworks((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(artworkId);
+            return newSet;
+          }),
+        300
+      ); // Animation duration
       // Invalidate to ensure cache consistency
-      queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
+      queryClient.invalidateQueries({ queryKey: ["artworks", user?.domainId] });
     },
   });
 
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
     mutationFn: async (artworkIds: string[]) => {
-      if (!user?.domainId) throw new Error('No domain ID');
-      await Promise.all(artworkIds.map(id => apiClient.deleteArtwork(user.domainId!, id)));
+      if (!user?.domainId) throw new Error("No domain ID");
+      await Promise.all(
+        artworkIds.map((id) => apiClient.deleteArtwork(user.domainId!, id))
+      );
     },
     onSuccess: (_, artworkIds) => {
       // Immediately remove from cache
-      queryClient.setQueryData(['artworks', user?.domainId, searchQuery, sortBy, sortOrder], (oldData: any) => {
-        if (!oldData || !Array.isArray(oldData.pages)) return oldData;
-        return {
-          ...oldData,
-          pages: oldData.pages.map((page: any) => ({
-            ...page,
-            items: Array.isArray(page.items) ? page.items.filter((item: any) => !artworkIds.includes(item.id)) : page.items,
-          })),
-        };
-      });
+      queryClient.setQueryData(
+        ["artworks", user?.domainId, searchQuery, sortBy, sortOrder],
+        (oldData: any) => {
+          if (!oldData || !Array.isArray(oldData.pages)) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page: any) => ({
+              ...page,
+              items: Array.isArray(page.items)
+                ? page.items.filter(
+                    (item: any) => !artworkIds.includes(item.id)
+                  )
+                : page.items,
+            })),
+          };
+        }
+      );
       setSelectedArtworks(new Set());
-      artworkIds.forEach(id => {
-        setDeletingArtworks(prev => new Set(prev).add(id));
-        setTimeout(() => setDeletingArtworks(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(id);
-          return newSet;
-        }), 300);
+      artworkIds.forEach((id) => {
+        setDeletingArtworks((prev) => new Set(prev).add(id));
+        setTimeout(
+          () =>
+            setDeletingArtworks((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(id);
+              return newSet;
+            }),
+          300
+        );
       });
       // Invalidate to ensure cache consistency
-      queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
+      queryClient.invalidateQueries({ queryKey: ["artworks", user?.domainId] });
     },
   });
 
   // Bulk update price visibility
   const bulkUpdatePriceVisibility = useMutation({
-    mutationFn: async ({ artworkIds, shouldDisplayPrice }: { artworkIds: string[]; shouldDisplayPrice: boolean }) => {
-      if (!user?.domainId) throw new Error('No domain ID');
-      await Promise.all(artworkIds.map(id => apiClient.updateArtwork(user.domainId!, id, { shouldDisplayPrice })));
+    mutationFn: async ({
+      artworkIds,
+      shouldDisplayPrice,
+    }: {
+      artworkIds: string[];
+      shouldDisplayPrice: boolean;
+    }) => {
+      if (!user?.domainId) throw new Error("No domain ID");
+      await Promise.all(
+        artworkIds.map((id) =>
+          apiClient.updateArtwork(user.domainId!, id, { shouldDisplayPrice })
+        )
+      );
     },
     onSuccess: (_, { artworkIds, shouldDisplayPrice }) => {
       // Update cache
-      queryClient.setQueryData(['artworks', user?.domainId, searchQuery, sortBy, sortOrder], (oldData: any) => {
-        if (!oldData || !Array.isArray(oldData.pages)) return oldData;
-        return {
-          ...oldData,
-          pages: oldData.pages.map((page: any) => ({
-            ...page,
-            items: Array.isArray(page.items) ? page.items.map((item: any) =>
-              artworkIds.includes(item.id) ? { ...item, shouldDisplayPrice } : item
-            ) : page.items,
-          })),
-        };
-      });
+      queryClient.setQueryData(
+        ["artworks", user?.domainId, searchQuery, sortBy, sortOrder],
+        (oldData: any) => {
+          if (!oldData || !Array.isArray(oldData.pages)) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page: any) => ({
+              ...page,
+              items: Array.isArray(page.items)
+                ? page.items.map((item: any) =>
+                    artworkIds.includes(item.id)
+                      ? { ...item, shouldDisplayPrice }
+                      : item
+                  )
+                : page.items,
+            })),
+          };
+        }
+      );
       setSelectedArtworks(new Set());
     },
   });
 
   const bulkUpdateTasterFlag = useMutation({
-    mutationFn: async ({ artworkIds, useForTaster }: { artworkIds: string[]; useForTaster: boolean }) => {
-      if (!user?.domainId) throw new Error('No domain ID');
-      await Promise.all(artworkIds.map(id => apiClient.updateArtwork(user.domainId!, id, { useForTaster })));
+    mutationFn: async ({
+      artworkIds,
+      useForTaster,
+    }: {
+      artworkIds: string[];
+      useForTaster: boolean;
+    }) => {
+      if (!user?.domainId) throw new Error("No domain ID");
+      await Promise.all(
+        artworkIds.map((id) =>
+          apiClient.updateArtwork(user.domainId!, id, { useForTaster })
+        )
+      );
     },
     onSuccess: (_, { artworkIds, useForTaster }) => {
-      queryClient.setQueryData(['artworks', user?.domainId, searchQuery, sortBy, sortOrder], (oldData: any) => {
-        if (!oldData || !Array.isArray(oldData.pages)) return oldData;
-        return {
-          ...oldData,
-          pages: oldData.pages.map((page: any) => ({
-            ...page,
-            items: Array.isArray(page.items)
-              ? page.items.map((item: any) => (artworkIds.includes(item.id) ? { ...item, useForTaster } : item))
-              : page.items,
-          })),
-        };
-      });
+      queryClient.setQueryData(
+        ["artworks", user?.domainId, searchQuery, sortBy, sortOrder],
+        (oldData: any) => {
+          if (!oldData || !Array.isArray(oldData.pages)) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page: any) => ({
+              ...page,
+              items: Array.isArray(page.items)
+                ? page.items.map((item: any) =>
+                    artworkIds.includes(item.id)
+                      ? { ...item, useForTaster }
+                      : item
+                  )
+                : page.items,
+            })),
+          };
+        }
+      );
       setSelectedArtworks(new Set());
     },
   });
 
   const bulkUpdatePrivacy = useMutation({
-    mutationFn: async ({ artworkIds, isPrivate }: { artworkIds: string[]; isPrivate: boolean }) => {
-      if (!user?.domainId) throw new Error('No domain ID');
-      await Promise.all(artworkIds.map(id => apiClient.updateArtwork(user.domainId!, id, { isPrivate })));
+    mutationFn: async ({
+      artworkIds,
+      isPrivate,
+    }: {
+      artworkIds: string[];
+      isPrivate: boolean;
+    }) => {
+      if (!user?.domainId) throw new Error("No domain ID");
+      await Promise.all(
+        artworkIds.map((id) =>
+          apiClient.updateArtwork(user.domainId!, id, { isPrivate })
+        )
+      );
     },
     onSuccess: (_, { artworkIds, isPrivate }) => {
-      queryClient.setQueryData(['artworks', user?.domainId, searchQuery, sortBy, sortOrder], (oldData: any) => {
-        if (!oldData || !Array.isArray(oldData.pages)) return oldData;
-        return {
-          ...oldData,
-          pages: oldData.pages.map((page: any) => ({
-            ...page,
-            items: Array.isArray(page.items)
-              ? page.items.map((item: any) => (artworkIds.includes(item.id) ? { ...item, isPrivate } : item))
-              : page.items,
-          })),
-        };
-      });
-      setSelectedArtwork((prev) => (prev && artworkIds.includes(prev.id) ? { ...prev, isPrivate } : prev));
+      queryClient.setQueryData(
+        ["artworks", user?.domainId, searchQuery, sortBy, sortOrder],
+        (oldData: any) => {
+          if (!oldData || !Array.isArray(oldData.pages)) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page: any) => ({
+              ...page,
+              items: Array.isArray(page.items)
+                ? page.items.map((item: any) =>
+                    artworkIds.includes(item.id) ? { ...item, isPrivate } : item
+                  )
+                : page.items,
+            })),
+          };
+        }
+      );
+      setSelectedArtwork((prev) =>
+        prev && artworkIds.includes(prev.id) ? { ...prev, isPrivate } : prev
+      );
       setSelectedArtworks(new Set());
     },
   });
 
   // Replace custom hook with local mutation that performs a safe optimistic update
   const savePreferenceMutation = useMutation({
-    mutationFn: async ({ artworkId, liked }: { artworkId: string; liked: boolean }) => {
-      if (!user?.domainId || !user?.id) throw new Error('User not authenticated');
+    mutationFn: async ({
+      artworkId,
+      liked,
+    }: {
+      artworkId: string;
+      liked: boolean;
+    }) => {
+      if (!user?.domainId || !user?.id)
+        throw new Error("User not authenticated");
       return apiClient.saveArtworkPreference(user.domainId, user.id, {
         domainId: user.domainId,
         artworkId,
@@ -257,8 +378,21 @@ export function CatalogPage() {
       });
     },
     // Optimistic update
-    onMutate: async ({ artworkId, liked }: { artworkId: string; liked: boolean }) => {
-      const queryKey = ['artworks', user?.domainId, searchQuery, sortBy, sortOrder, preferenceFilter];
+    onMutate: async ({
+      artworkId,
+      liked,
+    }: {
+      artworkId: string;
+      liked: boolean;
+    }) => {
+      const queryKey = [
+        "artworks",
+        user?.domainId,
+        searchQuery,
+        sortBy,
+        sortOrder,
+        preferenceFilter,
+      ];
       await queryClient.cancelQueries({ queryKey });
 
       const previousData = queryClient.getQueryData(queryKey);
@@ -266,7 +400,9 @@ export function CatalogPage() {
       // Defensive clone
       let newData: any = undefined;
       try {
-        newData = previousData ? JSON.parse(JSON.stringify(previousData)) : previousData;
+        newData = previousData
+          ? JSON.parse(JSON.stringify(previousData))
+          : previousData;
       } catch {
         newData = previousData;
       }
@@ -276,8 +412,10 @@ export function CatalogPage() {
           ...page,
           items: Array.isArray(page?.items)
             ? page.items.map((it: any) =>
-              it?.id === artworkId ? { ...it, likedStatus: liked ? 'Liked' : 'Disliked' } : it
-            )
+                it?.id === artworkId
+                  ? { ...it, likedStatus: liked ? "Liked" : "Disliked" }
+                  : it
+              )
             : page.items,
         }));
         queryClient.setQueryData(queryKey, newData);
@@ -287,13 +425,23 @@ export function CatalogPage() {
       const prevSelected = selectedArtwork;
       if (prevSelected && prevSelected.id === artworkId) {
         // @ts-ignore
-        setSelectedArtwork({ ...prevSelected, likedStatus: liked ? 'Liked' : 'Disliked' });
+        setSelectedArtwork({
+          ...prevSelected,
+          // @ts-ignore
+          likedStatus: liked ? "Liked" : "Disliked",
+        });
       }
 
       return { previousData, prevSelected };
     },
     onError: (err, variables, context: any) => {
-      const queryKey = ['artworks', user?.domainId, searchQuery, sortBy, sortOrder];
+      const queryKey = [
+        "artworks",
+        user?.domainId,
+        searchQuery,
+        sortBy,
+        sortOrder,
+      ];
       if (context?.previousData) {
         queryClient.setQueryData(queryKey, context.previousData);
       }
@@ -301,7 +449,7 @@ export function CatalogPage() {
       if (context?.prevSelected) {
         setSelectedArtwork(context.prevSelected);
       }
-      console.error('Failed saving preference', err);
+      console.error("Failed saving preference", err);
     },
   });
 
@@ -312,7 +460,7 @@ export function CatalogPage() {
   };
 
   const handleClearSearch = () => {
-    setSearchQuery('');
+    setSearchQuery("");
   };
 
   const handleArtworkClick = (artwork: Artwork) => {
@@ -337,7 +485,7 @@ export function CatalogPage() {
 
   // Multi-select handlers
   const handleSelectArtwork = (artworkId: string, selected: boolean) => {
-    setSelectedArtworks(prev => {
+    setSelectedArtworks((prev) => {
       const newSet = new Set(prev);
       if (selected) {
         newSet.add(artworkId);
@@ -352,7 +500,7 @@ export function CatalogPage() {
     if (selectedArtworks.size === filteredArtworks.length) {
       setSelectedArtworks(new Set());
     } else {
-      setSelectedArtworks(new Set(filteredArtworks.map(a => a.id)));
+      setSelectedArtworks(new Set(filteredArtworks.map((a) => a.id)));
     }
   };
 
@@ -367,33 +515,55 @@ export function CatalogPage() {
   };
 
   const handleBulkMakePricesVisible = () => {
-    bulkUpdatePriceVisibility.mutate({ artworkIds: Array.from(selectedArtworks), shouldDisplayPrice: true });
+    bulkUpdatePriceVisibility.mutate({
+      artworkIds: Array.from(selectedArtworks),
+      shouldDisplayPrice: true,
+    });
   };
 
   const handleBulkMakePricesHidden = () => {
-    bulkUpdatePriceVisibility.mutate({ artworkIds: Array.from(selectedArtworks), shouldDisplayPrice: false });
+    bulkUpdatePriceVisibility.mutate({
+      artworkIds: Array.from(selectedArtworks),
+      shouldDisplayPrice: false,
+    });
   };
 
   const handleBulkEnableTaster = () => {
-    bulkUpdateTasterFlag.mutate({ artworkIds: Array.from(selectedArtworks), useForTaster: true });
+    bulkUpdateTasterFlag.mutate({
+      artworkIds: Array.from(selectedArtworks),
+      useForTaster: true,
+    });
   };
 
   const handleBulkDisableTaster = () => {
-    bulkUpdateTasterFlag.mutate({ artworkIds: Array.from(selectedArtworks), useForTaster: false });
+    bulkUpdateTasterFlag.mutate({
+      artworkIds: Array.from(selectedArtworks),
+      useForTaster: false,
+    });
   };
 
   const handleBulkMakePrivate = () => {
-    bulkUpdatePrivacy.mutate({ artworkIds: Array.from(selectedArtworks), isPrivate: true });
+    bulkUpdatePrivacy.mutate({
+      artworkIds: Array.from(selectedArtworks),
+      isPrivate: true,
+    });
   };
 
   const handleBulkMakePublic = () => {
-    bulkUpdatePrivacy.mutate({ artworkIds: Array.from(selectedArtworks), isPrivate: false });
+    bulkUpdatePrivacy.mutate({
+      artworkIds: Array.from(selectedArtworks),
+      isPrivate: false,
+    });
   };
 
   // Handler to like/dislike from catalog or modal
-  const handlePreferenceClick = (artworkId: string, liked: boolean, e?: React.MouseEvent) => {
+  const handlePreferenceClick = (
+    artworkId: string,
+    liked: boolean,
+    e?: React.MouseEvent
+  ) => {
     e?.stopPropagation();
-    if (!user || user.role !== 'customer') return;
+    if (!user || user.role !== "customer") return;
 
     savePreferenceMutation.mutate({ artworkId, liked });
   };
@@ -402,7 +572,9 @@ export function CatalogPage() {
     <div
       className="p-4 sm:p-6 md:p-8"
       // ensure page content and fixed toolbar are above mobile nav / home indicator
-      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 16px) + 160px)' }}
+      style={{
+        paddingBottom: "calc(env(safe-area-inset-bottom, 16px) + 160px)",
+      }}
     >
       <div className="catalog-page">
         <header className="catalog-header">
@@ -449,9 +621,9 @@ export function CatalogPage() {
                   className="catalog-filter-select"
                   value={`${sortBy}-${sortOrder}`}
                   onChange={(e) => {
-                    const [field, order] = e.target.value.split('-');
+                    const [field, order] = e.target.value.split("-");
                     setSortBy(field);
-                    setSortOrder(order as 'asc' | 'desc');
+                    setSortOrder(order as "asc" | "desc");
                   }}
                 >
                   <optgroup label="Date Added">
@@ -475,22 +647,26 @@ export function CatalogPage() {
             </div>
 
             {/* Select All Checkbox */}
-            {user?.role !== 'customer' && (
+            {user?.role !== "customer" && (
               <div className="catalog-select-all hidden md:block">
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={selectedArtworks.size === filteredArtworks.length && filteredArtworks.length > 0}
+                    checked={
+                      selectedArtworks.size === filteredArtworks.length &&
+                      filteredArtworks.length > 0
+                    }
                     onChange={handleSelectAll}
                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   <span>Select All</span>
                 </label>
-              </div>)}
+              </div>
+            )}
           </div>
 
           {/* Multi-select toolbar */}
-          {selectedArtworks.size > 0 && user?.role !== 'customer' && (
+          {selectedArtworks.size > 0 && user?.role !== "customer" && (
             <>
               {/* Desktop Toolbar */}
               <div className="hidden md:flex mt-4 items-center justify-between rounded-lg bg-blue-50 p-4 animate-in fade-in slide-in-from-top-2">
@@ -566,28 +742,32 @@ export function CatalogPage() {
               <div
                 className="md:hidden fixed left-4 right-4 z-50 bg-white rounded-xl shadow-xl border border-gray-200 p-3 flex items-center justify-between animate-in slide-in-from-bottom-4"
                 // lift toolbar well above mobile navigation / home-indicator
-                style={{ bottom: 'calc(env(safe-area-inset-bottom, 16px) + 88px)' }}
+                style={{
+                  bottom: "calc(env(safe-area-inset-bottom, 16px) + 88px)",
+                }}
               >
                 <div className="flex items-center gap-3">
-                  <button 
-                    onClick={handleUnselectAll} 
+                  <button
+                    onClick={handleUnselectAll}
                     className="p-2 text-gray-500 hover:bg-gray-100 rounded-full"
                     aria-label="Unselect all"
                   >
                     <X className="w-5 h-5" />
                   </button>
-                  <span className="text-sm font-bold text-gray-900">{selectedArtworks.size} selected</span>
+                  <span className="text-sm font-bold text-gray-900">
+                    {selectedArtworks.size} selected
+                  </span>
                 </div>
                 <div className="flex gap-2">
-                  <button 
-                    onClick={handleBulkMakePricesVisible} 
+                  <button
+                    onClick={handleBulkMakePricesVisible}
                     className="p-2.5 text-green-600 bg-green-50 rounded-lg active:scale-95 transition-transform"
                     aria-label="Make prices visible"
                   >
                     <Eye className="w-5 h-5" />
                   </button>
-                  <button 
-                    onClick={handleBulkMakePricesHidden} 
+                  <button
+                    onClick={handleBulkMakePricesHidden}
                     className="p-2.5 text-gray-600 bg-gray-100 rounded-lg active:scale-95 transition-transform"
                     aria-label="Make prices hidden"
                   >
@@ -625,8 +805,8 @@ export function CatalogPage() {
                       </button>
                     </>
                   )}
-                  <button 
-                    onClick={handleBulkDelete} 
+                  <button
+                    onClick={handleBulkDelete}
                     className="p-2.5 text-red-600 bg-red-50 rounded-lg active:scale-95 transition-transform"
                     aria-label="Delete selected"
                   >
@@ -641,7 +821,8 @@ export function CatalogPage() {
         {preferenceFilter && (
           <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-sm text-blue-800">
             <span className="font-semibold">
-              Showing {preferenceFilter === 'liked' ? 'liked' : 'disliked'} artworks only.
+              Showing {preferenceFilter === "liked" ? "liked" : "disliked"}{" "}
+              artworks only.
             </span>
             <button
               type="button"
@@ -657,13 +838,17 @@ export function CatalogPage() {
         {/* Gallery grid */}
         {authLoading || queryLoading ? (
           <div className="catalog-loading" role="status" aria-live="polite">
-            <p>{authLoading ? 'Authenticating...' : 'Loading artworks...'}</p>
+            <p>{authLoading ? "Authenticating..." : "Loading artworks..."}</p>
           </div>
         ) : error ? (
           <div className="catalog-error" role="alert">
             <p>Error loading artworks: {error.message}</p>
             <button
-              onClick={() => queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] })}
+              onClick={() =>
+                queryClient.invalidateQueries({
+                  queryKey: ["artworks", user?.domainId],
+                })
+              }
               className="catalog-retry-button"
             >
               Retry
@@ -671,7 +856,10 @@ export function CatalogPage() {
           </div>
         ) : filteredArtworks.length === 0 ? (
           <div className="catalog-empty" role="status">
-            <p>No artworks found{searchQuery ? ' matching your search' : ''}. {!searchQuery && 'Start by uploading some!'}</p>
+            <p>
+              No artworks found{searchQuery ? " matching your search" : ""}.{" "}
+              {!searchQuery && "Start by uploading some!"}
+            </p>
           </div>
         ) : (
           <>
@@ -683,20 +871,29 @@ export function CatalogPage() {
                 return (
                   <article
                     key={artwork.id}
-                    className={`flex flex-col gap-3 group transition-opacity duration-300 ${isDeleting ? 'opacity-0 scale-95' : 'opacity-100'}`}
+                    className={`flex flex-col gap-3 group transition-opacity duration-300 ${isDeleting ? "opacity-0 scale-95" : "opacity-100"}`}
                   >
                     {/* Image Container */}
                     <div className="relative w-full min-h-[220px] max-h-[320px] overflow-hidden rounded-2xl bg-gray-50 border border-gray-200 shadow-sm transition-all duration-300 group-hover:shadow-md flex items-center justify-center">
                       {/* Select checkbox - visible on hover or if selected, top-left */}
-                      {user?.role !== 'customer' && (
+                      {user?.role !== "customer" && (
                         <button
                           type="button"
-                          onClick={() => handleSelectArtwork(artwork.id, !isSelected)}
-                          className={`absolute top-3 left-3 z-20 p-1 bg-white/90 backdrop-blur-sm rounded-full shadow-sm transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                          aria-label={isSelected ? 'Deselect artwork' : 'Select artwork'}
+                          onClick={() =>
+                            handleSelectArtwork(artwork.id, !isSelected)
+                          }
+                          className={`absolute top-3 left-3 z-20 p-1 bg-white/90 backdrop-blur-sm rounded-full shadow-sm transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                          aria-label={
+                            isSelected ? "Deselect artwork" : "Select artwork"
+                          }
                         >
-                          {isSelected ? <CheckSquare className="w-5 h-5 text-blue-600" /> : <Square className="w-5 h-5 text-gray-600" />}
-                        </button>)}
+                          {isSelected ? (
+                            <CheckSquare className="w-5 h-5 text-blue-600" />
+                          ) : (
+                            <Square className="w-5 h-5 text-gray-600" />
+                          )}
+                        </button>
+                      )}
 
                       <button
                         type="button"
@@ -712,16 +909,30 @@ export function CatalogPage() {
                             loading="lazy"
                           />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center text-gray-400">No Image</div>
+                          <div className="flex h-full w-full items-center justify-center text-gray-400">
+                            No Image
+                          </div>
                         )}
                       </button>
 
                       {/* Price Badge */}
-                      {artwork.price !== undefined && (artwork.shouldDisplayPrice ?? true) && (
-                        <div className="absolute top-3 right-3 z-10 bg-white/90 backdrop-blur-sm text-gray-900 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
-                          ${artwork.price.toLocaleString()}
-                        </div>
-                      )}
+                      <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
+                        {artwork.isAuction && (
+                          <span className="bg-purple-600/90 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                            Auction
+                          </span>
+                        )}
+                        {artwork.price !== undefined &&
+                          (artwork.shouldDisplayPrice ?? true) && (
+                            <div className="bg-white/90 backdrop-blur-sm text-gray-900 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                              ${artwork.price.toLocaleString()}
+                              {artwork.isAuction &&
+                              artwork.maxPrice !== undefined
+                                ? ` → $${artwork.maxPrice.toLocaleString()}`
+                                : ""}
+                            </div>
+                          )}
+                      </div>
 
                       {artwork.useForTaster && (
                         <div className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1 rounded-full bg-purple-600/90 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
@@ -740,36 +951,48 @@ export function CatalogPage() {
                     {/* Info & Actions Footer */}
                     <div className="flex items-start justify-between gap-4 px-1">
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-gray-900 truncate leading-tight" title={artwork.title}>
+                        <h3
+                          className="font-semibold text-gray-900 truncate leading-tight"
+                          title={artwork.title}
+                        >
                           {artwork.title}
                         </h3>
-                        <p className="text-sm text-gray-500 truncate mt-0.5" title={artwork.artist}>
+                        <p
+                          className="text-sm text-gray-500 truncate mt-0.5"
+                          title={artwork.artist}
+                        >
                           {artwork.artist}
                         </p>
                       </div>
 
                       {/* Actions */}
                       <div className="flex items-center gap-1 shrink-0">
-                        {user?.role === 'customer' ? (
+                        {user?.role === "customer" ? (
                           <>
                             <button
                               type="button"
-                              onClick={(e) => handlePreferenceClick(artwork.id, true, e)}
-                              className={`p-2 rounded-full transition-colors ${artwork.likedStatus === 'Liked'
-                                ? 'bg-green-100 text-green-600'
-                                : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-                                }`}
+                              onClick={(e) =>
+                                handlePreferenceClick(artwork.id, true, e)
+                              }
+                              className={`p-2 rounded-full transition-colors ${
+                                artwork.likedStatus === "Liked"
+                                  ? "bg-green-100 text-green-600"
+                                  : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                              }`}
                               aria-label="Like"
                             >
                               <ThumbsUp className="w-5 h-5" />
                             </button>
                             <button
                               type="button"
-                              onClick={(e) => handlePreferenceClick(artwork.id, false, e)}
-                              className={`p-2 rounded-full transition-colors ${artwork.likedStatus === 'Disliked'
-                                ? 'bg-red-100 text-red-600'
-                                : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-                                }`}
+                              onClick={(e) =>
+                                handlePreferenceClick(artwork.id, false, e)
+                              }
+                              className={`p-2 rounded-full transition-colors ${
+                                artwork.likedStatus === "Disliked"
+                                  ? "bg-red-100 text-red-600"
+                                  : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                              }`}
                               aria-label="Dislike"
                             >
                               <ThumbsDown className="w-5 h-5" />
@@ -812,7 +1035,7 @@ export function CatalogPage() {
                   disabled={isFetchingNextPage}
                   aria-label="Load more artworks"
                 >
-                  {isFetchingNextPage ? 'Loading...' : 'Load More'}
+                  {isFetchingNextPage ? "Loading..." : "Load More"}
                 </button>
               </div>
             )}
@@ -847,7 +1070,10 @@ export function CatalogPage() {
                 <div className="flex-shrink-0 w-full md:w-1/2">
                   <div className="bg-gray-50 rounded-lg border border-gray-100 overflow-hidden flex items-center justify-center">
                     <img
-                      src={selectedArtwork.thumbnails?.[2]?.url || selectedArtwork.filename}
+                      src={
+                        selectedArtwork.thumbnails?.[2]?.url ||
+                        selectedArtwork.filename
+                      }
                       alt={selectedArtwork.title}
                       className="w-full h-full max-h-[24rem] object-contain"
                     />
@@ -856,15 +1082,43 @@ export function CatalogPage() {
 
                 {/* Artwork Details */}
                 <div className="flex-1 flex flex-col">
-                  <h2 id="modal-title" className="text-2xl font-bold text-gray-900 mb-2">{selectedArtwork.title}</h2>
+                  <h2
+                    id="modal-title"
+                    className="text-2xl font-bold text-gray-900 mb-2"
+                  >
+                    {selectedArtwork.title}
+                  </h2>
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="text-sm text-gray-500">{selectedArtwork.artist}</div>
-                    {selectedArtwork.date && <div className="text-sm text-gray-400">• {selectedArtwork.date}</div>}
+                    <div className="text-sm text-gray-500">
+                      {selectedArtwork.artist}
+                    </div>
+                    {selectedArtwork.date && (
+                      <div className="text-sm text-gray-400">
+                        • {selectedArtwork.date}
+                      </div>
+                    )}
                   </div>
 
-                  {selectedArtwork.price !== undefined && (selectedArtwork.shouldDisplayPrice ?? true) && (
-                    <div className="text-2xl text-green-700 font-semibold mb-4">${selectedArtwork.price.toLocaleString()}</div>
-                  )}
+                  <div className="flex flex-wrap items-center gap-3 mb-4">
+                    {selectedArtwork.isAuction && (
+                      <span className="inline-flex items-center gap-2 rounded-full bg-purple-100 px-3 py-1 text-sm font-semibold text-purple-700">
+                        Auction{" "}
+                        {selectedArtwork.endDate
+                          ? `(ends ${new Date(selectedArtwork.endDate).toLocaleString()})`
+                          : ""}
+                      </span>
+                    )}
+                    {selectedArtwork.price !== undefined &&
+                      (selectedArtwork.shouldDisplayPrice ?? true) && (
+                        <div className="text-2xl text-green-700 font-semibold">
+                          ${selectedArtwork.price.toLocaleString()}
+                          {selectedArtwork.isAuction &&
+                          selectedArtwork.maxPrice !== undefined
+                            ? ` → $${selectedArtwork.maxPrice.toLocaleString()}`
+                            : ""}
+                        </div>
+                      )}
+                  </div>
 
                   {selectedArtwork.useForTaster && (
                     <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-purple-50 px-3 py-1 text-sm font-semibold text-purple-700">
@@ -881,33 +1135,56 @@ export function CatalogPage() {
 
                   <div className="grid grid-cols-2 gap-x-4 gap-y-4 mb-6 text-sm border-t border-b border-gray-100 py-4">
                     <div>
-                      <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Medium</span>
-                      <span className="text-gray-900 font-medium">{selectedArtwork.medium || '—'}</span>
-                    </div>
-                    <div>
-                      <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Dimensions</span>
+                      <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">
+                        Medium
+                      </span>
                       <span className="text-gray-900 font-medium">
-                        {selectedArtwork.width || selectedArtwork.height
-                          ? `${selectedArtwork.width ?? '-'} × ${selectedArtwork.height ?? '-'} in`
-                          : '—'}
+                        {selectedArtwork.medium || "—"}
                       </span>
                     </div>
                     <div>
-                      <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Signature</span>
-                      <span className="text-gray-900 font-medium">{selectedArtwork.signature || '—'}</span>
+                      <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">
+                        Dimensions
+                      </span>
+                      <span className="text-gray-900 font-medium">
+                        {selectedArtwork.width ||
+                        selectedArtwork.height ||
+                        selectedArtwork.depth
+                          ? `${selectedArtwork.width ?? "-"} × ${selectedArtwork.height ?? "-"}${selectedArtwork.depth !== undefined ? ` × ${selectedArtwork.depth}` : ""} in`
+                          : "—"}
+                      </span>
                     </div>
                     <div>
-                      <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Date</span>
-                      <span className="text-gray-900 font-medium">{selectedArtwork.date || '—'}</span>
+                      <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">
+                        Signature
+                      </span>
+                      <span className="text-gray-900 font-medium">
+                        {selectedArtwork.signature || "—"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">
+                        Date
+                      </span>
+                      <span className="text-gray-900 font-medium">
+                        {selectedArtwork.date || "—"}
+                      </span>
                     </div>
                   </div>
 
-                  {selectedArtwork.description && <p className="text-sm text-gray-600 mb-6 leading-relaxed">{selectedArtwork.description}</p>}
+                  {selectedArtwork.description && (
+                    <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+                      {selectedArtwork.description}
+                    </p>
+                  )}
 
                   {selectedArtwork.tags && selectedArtwork.tags.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-6">
                       {selectedArtwork.tags.map((t) => (
-                        <span key={t} className="px-2.5 py-0.5 bg-gray-50 text-gray-600 rounded text-xs font-medium border border-gray-200">
+                        <span
+                          key={t}
+                          className="px-2.5 py-0.5 bg-gray-50 text-gray-600 rounded text-xs font-medium border border-gray-200"
+                        >
                           {t}
                         </span>
                       ))}
@@ -915,31 +1192,41 @@ export function CatalogPage() {
                   )}
 
                   <div className="mt-auto flex items-center gap-4">
-                    {user?.role === 'customer' ? (
+                    {user?.role === "customer" ? (
                       <>
                         <button
                           type="button"
-                          onClick={() => handlePreferenceClick(selectedArtwork.id, true)}
+                          onClick={() =>
+                            handlePreferenceClick(selectedArtwork.id, true)
+                          }
                           aria-label="Like artwork"
-                          className={`p-2 rounded-full ${selectedArtwork.likedStatus === 'Liked' ? 'hover:bg-green-300' : 'hover:bg-green-200'}`}
+                          className={`p-2 rounded-full ${selectedArtwork.likedStatus === "Liked" ? "hover:bg-green-300" : "hover:bg-green-200"}`}
                           disabled={savePreferenceMutation.isPending}
                         >
                           <ThumbsUp
-                            className={`w-6 h-6 ${selectedArtwork.likedStatus === 'Liked' ? 'text-green-500' : 'text-gray-400'
-                              }`}
+                            className={`w-6 h-6 ${
+                              selectedArtwork.likedStatus === "Liked"
+                                ? "text-green-500"
+                                : "text-gray-400"
+                            }`}
                           />
                         </button>
 
                         <button
                           type="button"
-                          onClick={() => handlePreferenceClick(selectedArtwork.id, false)}
+                          onClick={() =>
+                            handlePreferenceClick(selectedArtwork.id, false)
+                          }
                           aria-label="Dislike artwork"
-                          className={`p-2 rounded-full ${selectedArtwork.likedStatus === 'Disliked' ? 'hover:bg-red-300' : 'hover:bg-red-200'}`}
+                          className={`p-2 rounded-full ${selectedArtwork.likedStatus === "Disliked" ? "hover:bg-red-300" : "hover:bg-red-200"}`}
                           disabled={savePreferenceMutation.isPending}
                         >
                           <ThumbsDown
-                            className={`w-6 h-6 hover:text-red-500 ${selectedArtwork.likedStatus === 'Disliked' ? 'text-red-500' : 'text-gray-400'
-                              }`}
+                            className={`w-6 h-6 hover:text-red-500 ${
+                              selectedArtwork.likedStatus === "Disliked"
+                                ? "text-red-500"
+                                : "text-gray-400"
+                            }`}
                           />
                         </button>
                       </>
@@ -983,7 +1270,9 @@ export function CatalogPage() {
               if (selectedArtwork && selectedArtwork.id === updatedArtwork.id) {
                 setSelectedArtwork(updatedArtwork);
               }
-              queryClient.invalidateQueries({ queryKey: ['artworks', user?.domainId] });
+              queryClient.invalidateQueries({
+                queryKey: ["artworks", user?.domainId],
+              });
             }}
           />
         )}

@@ -11,8 +11,8 @@ import {
   Request,
   UseGuards,
   NotFoundException,
-} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+} from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import {
   Artwork,
   BlobService,
@@ -20,14 +20,14 @@ import {
   getOriginalBlobPath,
   ImageProcessingQueueMessage,
   ProcessingStatus,
-  cleanupArtworkBeforeResponseToClient
-} from '@tastematcher/common';
-import { AuthenticatedRequest } from '../auth/types/authenticated-request.interface';
-import { v4 as uuidv4 } from 'uuid';
-import { JwtAuthGuard } from '../auth/utils/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
+  cleanupArtworkBeforeResponseToClient,
+} from "@tastematcher/common";
+import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
+import { v4 as uuidv4 } from "uuid";
+import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
+import { RolesGuard } from "../auth/roles.guard";
 
-@Controller('domains/:domainId/uploads')
+@Controller("domains/:domainId/uploads")
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UploadController {
   private readonly logger = new Logger(UploadController.name);
@@ -40,27 +40,27 @@ export class UploadController {
   }
 
   @Post()
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor("file"))
   async uploadArtwork(
     @Request() req: AuthenticatedRequest,
-    @Param('domainId') domainId: string,
+    @Param("domainId") domainId: string,
     // eslint-disable-next-line
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: Record<string, unknown>,
+    @Body() body: Record<string, unknown>
   ): Promise<ProcessingStatus> {
     const start = Date.now();
     this.logger.debug({
-      route: '/domains/:domainId/uploads',
-      method: 'POST',
-      domainId
+      route: "/domains/:domainId/uploads",
+      method: "POST",
+      domainId,
     });
 
-    if (domainId !== req.user.domainId && req.user.role !== 'global_admin') {
-      throw new BadRequestException('Unauthorized domain access');
+    if (domainId !== req.user.domainId && req.user.role !== "global_admin") {
+      throw new BadRequestException("Unauthorized domain access");
     }
 
     if (!file) {
-      throw new BadRequestException('File is required');
+      throw new BadRequestException("File is required");
     }
 
     try {
@@ -68,20 +68,29 @@ export class UploadController {
 
       // Pass artworkData directly, not wrapped
       const artworkMetadata = this.parseArtworkPayload(body, domainId);
-      const blobName = getOriginalBlobPath(domainId, artworkMetadata.id, file.mimetype);
+      const blobName = getOriginalBlobPath(
+        domainId,
+        artworkMetadata.id,
+        file.mimetype
+      );
 
       this.logger.debug({
-        action: 'uploadArtwork.start',
+        action: "uploadArtwork.start",
         artworkId: artworkMetadata.id,
         domainId,
         blobName,
         containerId: "originals",
         fileSize: file.size,
-        fileMimeType: file.mimetype
+        fileMimeType: file.mimetype,
       });
 
       // upload file to blob storage
-      const artworkUrl = await this.blobService.uploadBlob("originals", blobName, file.buffer, file.mimetype);
+      const artworkUrl = await this.blobService.uploadBlob(
+        "originals",
+        blobName,
+        file.buffer,
+        file.mimetype
+      );
       artworkMetadata.filename = artworkUrl;
       artworkMetadata.isPrivate = artworkMetadata.isPrivate ?? false;
       artworkMetadata.uploadedBy = req.user.id;
@@ -93,10 +102,9 @@ export class UploadController {
       await artworksContainer.items.create(artworkMetadata);
 
       this.logger.log({
-        action: 'createArtworkRecord.success',
+        action: "createArtworkRecord.success",
         artworkId: artworkMetadata.id,
       });
-
 
       // send message to queue for additional processing (thumbnail generation, vectorization, indexing)
       const imageProcessingQueueMessage: ImageProcessingQueueMessage = {
@@ -110,8 +118,8 @@ export class UploadController {
       await this.blobService.sendMessageToQueue(imageProcessingQueueMessage);
 
       this.logger.log({
-        route: '/domains/:domainId/uploads',
-        method: 'POST',
+        route: "/domains/:domainId/uploads",
+        method: "POST",
         domainId,
         durationMs: Date.now() - start,
       });
@@ -119,14 +127,13 @@ export class UploadController {
       // TODO : this is a stupid response, fix it
       return {
         artworkId: artworkMetadata.id,
-        status: 'enqueued',
-        progress: 0
+        status: "enqueued",
+        progress: 0,
       };
-
     } catch (error) {
       this.logger.error({
-        route: '/domains/:domainId/uploads',
-        method: 'POST',
+        route: "/domains/:domainId/uploads",
+        method: "POST",
         domainId,
         errMessage: (error as Error).message,
         stack: (error as Error).stack,
@@ -135,41 +142,48 @@ export class UploadController {
     }
   }
 
-  @Post(':artworkId/image')
-  @UseInterceptors(FileInterceptor('file'))
+  @Post(":artworkId/image")
+  @UseInterceptors(FileInterceptor("file"))
   async replaceArtworkImage(
     @Request() req: AuthenticatedRequest,
-    @Param('domainId') domainId: string,
-    @Param('artworkId') artworkId: string,
+    @Param("domainId") domainId: string,
+    @Param("artworkId") artworkId: string,
     // eslint-disable-next-line
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: Express.Multer.File
   ): Promise<Artwork> {
     this.logger.debug({
-      route: '/domains/:domainId/uploads/:artworkId/image',
-      method: 'POST',
+      route: "/domains/:domainId/uploads/:artworkId/image",
+      method: "POST",
       domainId,
       artworkId,
     });
 
-    if (domainId !== req.user.domainId && req.user.role !== 'global_admin') {
-      throw new BadRequestException('Unauthorized domain access');
+    if (domainId !== req.user.domainId && req.user.role !== "global_admin") {
+      throw new BadRequestException("Unauthorized domain access");
     }
 
     if (!file) {
-      throw new BadRequestException('File is required');
+      throw new BadRequestException("File is required");
     }
 
     this.blobService.validateImageFile(file);
 
     const artworksContainer = await this.cosmosService.getArtworksContainer();
-    const { resource: existingArtwork } = await artworksContainer.item(artworkId, domainId).read<Artwork>();
+    const { resource: existingArtwork } = await artworksContainer
+      .item(artworkId, domainId)
+      .read<Artwork>();
 
     if (!existingArtwork) {
       throw new NotFoundException(`Artwork ${artworkId} not found`);
     }
 
     const blobName = getOriginalBlobPath(domainId, artworkId, file.mimetype);
-    const artworkUrl = await this.blobService.uploadBlob('originals', blobName, file.buffer, file.mimetype);
+    const artworkUrl = await this.blobService.uploadBlob(
+      "originals",
+      blobName,
+      file.buffer,
+      file.mimetype
+    );
 
     const updatedArtwork: Artwork = {
       ...existingArtwork,
@@ -177,7 +191,9 @@ export class UploadController {
       thumbnails: undefined,
     };
 
-    const { resource } = await artworksContainer.item(artworkId, domainId).replace(updatedArtwork);
+    const { resource } = await artworksContainer
+      .item(artworkId, domainId)
+      .replace(updatedArtwork);
 
     const imageProcessingQueueMessage: ImageProcessingQueueMessage = {
       messageId: uuidv4(),
@@ -190,59 +206,94 @@ export class UploadController {
     await this.blobService.sendMessageToQueue(imageProcessingQueueMessage);
 
     this.logger.log({
-      action: 'replaceArtworkImage.success',
+      action: "replaceArtworkImage.success",
       domainId,
       artworkId,
     });
 
-    return cleanupArtworkBeforeResponseToClient(resource as Artwork, req.user.role) as Artwork;
+    return cleanupArtworkBeforeResponseToClient(
+      resource as Artwork,
+      req.user.role
+    ) as Artwork;
   }
 
   private parseArtworkPayload(body: any, domainId: string): Artwork {
-    // Accept direct artwork object or legacy { artwork } or { metadata }
-
-    if (typeof body === 'string') {
+    // Accept direct artwork object, JSON strings, or legacy wrappers { artwork } / { metadata }
+    let raw: any = body;
+    if (typeof body === "string") {
       try {
-        body = JSON.parse(body);
+        raw = JSON.parse(body);
       } catch {
-        throw new BadRequestException('Invalid artwork metadata payload');
+        throw new BadRequestException("Invalid artwork metadata payload");
       }
-    } else if (body && typeof body === 'object') {
-      // If body has 'artwork' or 'metadata', use it; otherwise, use body directly
-      if ('artwork' in body) {
-        body = (body as any).artwork as Partial<Artwork>;
-      } else if ('metadata' in body) {
-        body = (body as any).metadata as Partial<Artwork>;
-      } else {
-        body = body as Partial<Artwork>;
+    } else if (body && typeof body === "object") {
+      if ("artwork" in body) {
+        raw = (body as any).artwork;
+      } else if ("metadata" in body) {
+        raw = (body as any).metadata;
+      }
+    }
+    if (typeof raw === "string") {
+      try {
+        raw = JSON.parse(raw);
+      } catch {
+        throw new BadRequestException("Invalid artwork metadata payload");
       }
     }
 
-    const parsed: Partial<Artwork> = JSON.parse(body as string) as Partial<Artwork>;
+    const parsed: Partial<Artwork> = raw ?? {};
+    const toNumber = (val: unknown): number | undefined => {
+      if (val === undefined || val === null || val === "") return undefined;
+      const n = Number(val);
+      return Number.isNaN(n) ? undefined : n;
+    };
+
+    const parseTags = (val: unknown): string[] => {
+      if (!val) return [];
+      if (Array.isArray(val)) return val as string[];
+      if (typeof val === "string") {
+        try {
+          const parsedTags = JSON.parse(val);
+          return Array.isArray(parsedTags) ? parsedTags : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    };
+
+    const isAuction = !!parsed.isAuction;
 
     return {
       id: uuidv4(),
       domainId,
-      type: 'artwork',
-      title: parsed.title!,
-      artist: parsed.artist!,
-      description: parsed.description!,
-      signature: parsed.signature ?? '',
-      medium: parsed.medium ?? '',
-      width: parsed.width,
-      height: parsed.height,
-      date: parsed.date ?? '',
-      filename: parsed.filename ?? 'unknown',
-      tags: parsed.tags ?? [],
-      createdAt: new Date().getTime(),
-      updatedAt: new Date().getTime(),
-      metadata: parsed.metadata,
-      vector: [],
-      vectorModel: '',
-      price: parsed.price !== undefined ? Number(parsed.price) : undefined,
+      type: "artwork",
+      title: parsed.title ?? "",
+      artist: parsed.artist ?? "",
+      description: parsed.description ?? "",
+      signature: parsed.signature ?? "",
+      medium: parsed.medium ?? "",
+      width: toNumber(parsed.width),
+      height: toNumber(parsed.height),
+      depth: toNumber((parsed as any).depth),
+      price: toNumber(parsed.price),
+      maxPrice: toNumber((parsed as any).maxPrice),
+      date: parsed.date ?? "",
+      endDate: (parsed as any).endDate
+        ? String((parsed as any).endDate)
+        : undefined,
       shouldDisplayPrice: parsed.shouldDisplayPrice ?? false,
       useForTaster: parsed.useForTaster ?? false,
       isPrivate: parsed.isPrivate ?? false,
+      isAuction,
+      filename: parsed.filename ?? "unknown",
+      tags: parseTags(parsed.tags),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      metadata: parsed.metadata,
+      vector: [],
+      vectorModel: "",
+      uploadedBy: parsed.uploadedBy,
     } as Artwork;
   }
 }

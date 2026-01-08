@@ -349,11 +349,19 @@ export const AISuggestionsPage = ({
                         </span>
                       </div>
                     )}
-                    {item.price !== undefined && (item.shouldDisplayPrice ?? true) && (
-                      <span className="text-xs font-semibold text-gray-900">
-                        ${item.price.toLocaleString()}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {item.isAuction && (
+                        <span className="bg-purple-100 text-purple-700 text-[11px] font-semibold px-2 py-0.5 rounded-full">
+                          Auction
+                        </span>
+                      )}
+                      {item.price !== undefined && (item.shouldDisplayPrice ?? true) && (
+                        <span className="text-xs font-semibold text-gray-900">
+                          ${item.price.toLocaleString()}
+                          {item.isAuction && item.maxPrice !== undefined ? ` → $${item.maxPrice.toLocaleString()}` : ''}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Image */}
@@ -540,14 +548,14 @@ export const AISuggestionsPage = ({
                     <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Medium</span>
                     <span className="text-gray-900 font-medium">{selectedArtwork.medium || '—'}</span>
                   </div>
-                  <div>
-                    <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Dimensions</span>
-                    <span className="text-gray-900 font-medium">
-                      {selectedArtwork.width || selectedArtwork.height
-                        ? `${selectedArtwork.width ?? '-'} × ${selectedArtwork.height ?? '-'} in`
-                        : '—'}
-                    </span>
-                  </div>
+                    <div>
+                      <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Dimensions</span>
+                      <span className="text-gray-900 font-medium">
+                        {selectedArtwork.width || selectedArtwork.height || selectedArtwork.depth
+                          ? `${selectedArtwork.width ?? '-'} × ${selectedArtwork.height ?? '-'}${selectedArtwork.depth !== undefined ? ` × ${selectedArtwork.depth}` : ''} in`
+                          : '—'}
+                      </span>
+                    </div>
                   <div>
                     <span className="block text-gray-500 text-xs uppercase tracking-wider mb-1">Signature</span>
                     <span className="text-gray-900 font-medium">{selectedArtwork.signature || '—'}</span>

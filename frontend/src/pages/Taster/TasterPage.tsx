@@ -11,14 +11,14 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '../../contexts/AuthContext';
-import { ThumbsUp, ThumbsDown, ChevronLeft, ChevronRight } from 'lucide-react';
-import { apiClient } from '../../utils/api';
-import './TasterPage.css';
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "../../contexts/AuthContext";
+import { ThumbsUp, ThumbsDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { apiClient } from "../../utils/api";
+import "./TasterPage.css";
 
-type SwipeDirection = 'left' | 'right' | null;
+type SwipeDirection = "left" | "right" | null;
 
 /**
  * Taster page with Tinder-style swipe interface for artwork preferences.
@@ -30,7 +30,9 @@ export function TasterPage() {
   const queryClient = useQueryClient();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeDirection, setSwipeDirection] = useState<SwipeDirection>(null);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(
+    null
+  );
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
   const [showAiUnlockModal, setShowAiUnlockModal] = useState(false);
@@ -39,9 +41,10 @@ export function TasterPage() {
 
   // Fetch untasted artworks for the user
   const { data: untastedData, isLoading } = useQuery({
-    queryKey: ['untasted-artworks', user?.domainId, user?.id],
+    queryKey: ["untasted-artworks", user?.domainId, user?.id],
     queryFn: async () => {
-      if (!user?.domainId || !user?.id) throw new Error('User not authenticated');
+      if (!user?.domainId || !user?.id)
+        throw new Error("User not authenticated");
       return apiClient.fetchUntastedArtworks(user.domainId, user.id, 20);
     },
     enabled: !!user?.domainId && !!user?.id,
@@ -55,9 +58,18 @@ export function TasterPage() {
 
   // Save preference mutation
   const savePreference = useMutation({
-    mutationFn: async ({ artworkId, liked, artworkDomainId }: { artworkId: string; liked: boolean; artworkDomainId?: string }) => {
-      if (!user?.domainId || !user?.id) throw new Error('User not authenticated');
-      
+    mutationFn: async ({
+      artworkId,
+      liked,
+      artworkDomainId,
+    }: {
+      artworkId: string;
+      liked: boolean;
+      artworkDomainId?: string;
+    }) => {
+      if (!user?.domainId || !user?.id)
+        throw new Error("User not authenticated");
+
       await apiClient.saveArtworkPreference(user.domainId, user.id, {
         domainId: artworkDomainId ?? "00000000-0000-0000-0000-000000000000",
         artworkId,
@@ -69,10 +81,12 @@ export function TasterPage() {
       incrementSwipeCount();
 
       // Invalidate stats to update home page
-      queryClient.invalidateQueries({ queryKey: ['artwork-stats', user?.domainId] });
+      queryClient.invalidateQueries({
+        queryKey: ["artwork-stats", user?.domainId],
+      });
     },
     onError: (error) => {
-      console.error('Failed to save preference:', error);
+      console.error("Failed to save preference:", error);
       // TODO: Show error toast to user
     },
   });
@@ -96,22 +110,25 @@ export function TasterPage() {
   }, [stats?.totalSwiped]);
 
   // Handle swipe decision
-  const handleSwipe = useCallback((direction: 'left' | 'right') => {
-    if (!currentArtwork || swipeDirection) return;
+  const handleSwipe = useCallback(
+    (direction: "left" | "right") => {
+      if (!currentArtwork || swipeDirection) return;
 
-    setSwipeDirection(direction);
-    savePreference.mutate({
-      artworkId: currentArtwork.id,
-      liked: direction === 'right',
-      artworkDomainId: currentArtwork.domainId,
-    });
+      setSwipeDirection(direction);
+      savePreference.mutate({
+        artworkId: currentArtwork.id,
+        liked: direction === "right",
+        artworkDomainId: currentArtwork.domainId,
+      });
 
-    setTimeout(() => {
-      setCurrentIndex((prev) => prev + 1);
-      setSwipeDirection(null);
-      setDragOffset({ x: 0, y: 0 });
-    }, 300);
-  }, [currentArtwork, swipeDirection, savePreference]);
+      setTimeout(() => {
+        setCurrentIndex((prev) => prev + 1);
+        setSwipeDirection(null);
+        setDragOffset({ x: 0, y: 0 });
+      }, 300);
+    },
+    [currentArtwork, swipeDirection, savePreference]
+  );
 
   // Mouse/touch drag handlers
   const handleDragStart = (clientX: number, clientY: number) => {
@@ -131,7 +148,7 @@ export function TasterPage() {
 
     const threshold = 100;
     if (Math.abs(dragOffset.x) > threshold) {
-      handleSwipe(dragOffset.x > 0 ? 'right' : 'left');
+      handleSwipe(dragOffset.x > 0 ? "right" : "left");
     } else {
       setDragOffset({ x: 0, y: 0 });
     }
@@ -141,31 +158,41 @@ export function TasterPage() {
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') {
+      if (e.key === "ArrowLeft") {
         e.preventDefault();
-        handleSwipe('left');
-      } else if (e.key === 'ArrowRight') {
+        handleSwipe("left");
+      } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        handleSwipe('right');
+        handleSwipe("right");
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleSwipe]);
 
   // Prefetch next batch when reaching last 3 artworks
   useEffect(() => {
-    if (artworks.length > 0 && currentIndex >= artworks.length - 3 && !isLoading) {
+    if (
+      artworks.length > 0 &&
+      currentIndex >= artworks.length - 3 &&
+      !isLoading
+    ) {
       // Fetch next batch and append to artworks
       (async () => {
         try {
-          const nextBatch = await apiClient.fetchUntastedArtworks(user!.domainId!, user!.id!, 20);
+          const nextBatch = await apiClient.fetchUntastedArtworks(
+            user!.domainId!,
+            user!.id!,
+            20
+          );
           // Only append if there are new artworks
           if (nextBatch.artworks && nextBatch.artworks.length > 0) {
             // Avoid duplicates
-            const existingIds = new Set(artworks.map(a => a.id));
-            const newArtworks = nextBatch.artworks.filter(a => !existingIds.has(a.id));
+            const existingIds = new Set(artworks.map((a) => a.id));
+            const newArtworks = nextBatch.artworks.filter(
+              (a) => !existingIds.has(a.id)
+            );
             if (newArtworks.length > 0) {
               untastedData?.artworks.push(...newArtworks);
             }
@@ -179,7 +206,11 @@ export function TasterPage() {
 
   if (isLoading) {
     return (
-      <div className="taster-page taster-page--loading" role="status" aria-live="polite">
+      <div
+        className="taster-page taster-page--loading"
+        role="status"
+        aria-live="polite"
+      >
         <p>Loading artworks...</p>
       </div>
     );
@@ -192,7 +223,8 @@ export function TasterPage() {
           <ThumbsUp className="taster-empty__icon" aria-hidden="true" />
           <h2 className="taster-empty__title">No Untasted Artworks</h2>
           <p className="taster-empty__description">
-            You've already rated all available artworks! Upload more to continue building your taste profile.
+            You've already rated all available artworks! Upload more to continue
+            building your taste profile.
           </p>
         </div>
       </div>
@@ -206,7 +238,8 @@ export function TasterPage() {
           <ThumbsUp className="taster-complete__icon" aria-hidden="true" />
           <h2 className="taster-complete__title">All Done!</h2>
           <p className="taster-complete__description">
-            You've rated all available artworks. Great job building your taste profile!
+            You've rated all available artworks. Great job building your taste
+            profile!
           </p>
         </div>
       </div>
@@ -221,9 +254,12 @@ export function TasterPage() {
       {showAiUnlockModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Congratulations!</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              Congratulations!
+            </h2>
             <p className="text-gray-600 mb-4">
-              You’ve completed 20 swipes and unlocked the AI Suggestions section. Head over to explore personalized recommendations.
+              You’ve completed 20 swipes and unlocked the AI Suggestions
+              section. Head over to explore personalized recommendations.
             </p>
             <button
               type="button"
@@ -237,9 +273,7 @@ export function TasterPage() {
       )}
       <header className="taster-header">
         <h1 className="taster-title">Taster</h1>
-        <p className="taster-subtitle">
-          Swipe right to like, left to dislike
-        </p>
+        <p className="taster-subtitle">Swipe right to like, left to dislike</p>
       </header>
 
       <div className="taster-container">
@@ -248,37 +282,46 @@ export function TasterPage() {
           {currentArtwork && (
             <div
               ref={cardRef}
-              className={`taster-card ${swipeDirection ? `taster-card--swiping-${swipeDirection}` : ''}`}
+              className={`taster-card ${swipeDirection ? `taster-card--swiping-${swipeDirection}` : ""}`}
               style={{
                 transform: `translateX(${dragOffset.x}px) translateY(${dragOffset.y}px) rotate(${rotation}deg)`,
                 opacity,
-                // Layout changes for info below image
-                display: 'flex',
-                flexDirection: 'column',
-                backgroundColor: '#fff',
-                borderRadius: '16px',
-                overflow: 'hidden',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
               }}
               onMouseDown={(e) => handleDragStart(e.clientX, e.clientY)}
-              onMouseMove={(e) => dragStart && handleDragMove(e.clientX, e.clientY)}
+              onMouseMove={(e) =>
+                dragStart && handleDragMove(e.clientX, e.clientY)
+              }
               onMouseUp={handleDragEnd}
               onMouseLeave={handleDragEnd}
-              onTouchStart={(e) => handleDragStart(e.touches[0].clientX, e.touches[0].clientY)}
-              onTouchMove={(e) => dragStart && handleDragMove(e.touches[0].clientX, e.touches[0].clientY)}
+              onTouchStart={(e) =>
+                handleDragStart(e.touches[0].clientX, e.touches[0].clientY)
+              }
+              onTouchMove={(e) =>
+                dragStart &&
+                handleDragMove(e.touches[0].clientX, e.touches[0].clientY)
+              }
               onTouchEnd={handleDragEnd}
               role="img"
               aria-label={currentArtwork.title}
             >
-              <div style={{ position: 'relative', flex: '1', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8f8f8' }}>
+              <div className="taster-card__header">
+                <h2 className="taster-card__title">{currentArtwork.title}</h2>
+                {currentArtwork.artist && (
+                  <p className="taster-card__artist">{currentArtwork.artist}</p>
+                )}
+              </div>
+
+              <div className="taster-card__media">
                 <img
-                  src={currentArtwork.thumbnails?.[1]?.url || currentArtwork.filename}
+                  src={
+                    currentArtwork.thumbnails?.[1]?.url ||
+                    currentArtwork.filename
+                  }
                   alt={currentArtwork.title}
                   className="taster-card__image"
                   draggable="false"
-                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 />
-                
+
                 {/* Swipe indicators moved inside image container */}
                 <div className="taster-card__indicator taster-card__indicator--like">
                   <ThumbsUp aria-hidden="true" />
@@ -290,28 +333,37 @@ export function TasterPage() {
                 </div>
               </div>
 
-              <div className="taster-card__info" style={{ position: 'relative', background: '#fff', color: '#333', padding: '16px', flexShrink: 0 }}>
-                <h2 className="taster-card__title" style={{ color: '#000', marginBottom: '4px' }}>{currentArtwork.title}</h2>
-                {currentArtwork.artist && (
-                  <p className="taster-card__artist" style={{ color: '#666' }}>by {currentArtwork.artist}</p>
-                )}
+              <div className="taster-card__info">
                 {currentArtwork.date && (
-                  <p className="taster-card__date" style={{ color: '#888' }}>{currentArtwork.date}</p>
+                  <p className="taster-card__date">{currentArtwork.date}</p>
                 )}
-                
+
                 {/* Metadata badges (medium/signature/dimensions) */}
-                <div className="taster-card__metadata" style={{ marginTop: '12px' }}>
-                  {currentArtwork.medium && <span className="taster-card__badge" style={{ background: '#f5f5f5', color: '#555', border: '1px solid #eee' }}>{currentArtwork.medium}</span>}
-                  {currentArtwork.signature && <span className="taster-card__badge" style={{ background: '#f5f5f5', color: '#555', border: '1px solid #eee' }}>Signed</span>}
-                  {(currentArtwork.width !== undefined || currentArtwork.height !== undefined) && (
-                    <span className="taster-card__badge" style={{ background: '#f5f5f5', color: '#555', border: '1px solid #eee' }}>{currentArtwork.width ?? '—'} × {currentArtwork.height ?? '—'} in</span>
+                <div className="taster-card__metadata">
+                  {currentArtwork.medium && (
+                    <span className="taster-card__badge">
+                      {currentArtwork.medium}
+                    </span>
+                  )}
+                  {currentArtwork.signature && (
+                    <span className="taster-card__badge">Signed</span>
+                  )}
+                  {(currentArtwork.width !== undefined ||
+                    currentArtwork.height !== undefined) && (
+                    <span className="taster-card__badge">
+                      {currentArtwork.width ?? "—"} ×{" "}
+                      {currentArtwork.height ?? "—"} in
+                    </span>
                   )}
                 </div>
 
                 {/* Price badge (if visible) */}
-                {currentArtwork.price !== undefined && (currentArtwork.shouldDisplayPrice ?? true) && (
-                  <div className="taster-card__price" style={{ marginTop: '12px', color: '#000', fontWeight: '600' }}>${currentArtwork.price.toLocaleString()}</div>
-                )}
+                {currentArtwork.price !== undefined &&
+                  (currentArtwork.shouldDisplayPrice ?? true) && (
+                    <div className="taster-card__price">
+                      ${currentArtwork.price.toLocaleString()}
+                    </div>
+                  )}
               </div>
             </div>
           )}
@@ -320,7 +372,10 @@ export function TasterPage() {
           {hasMore && artworks[currentIndex + 1] && (
             <div className="taster-card taster-card--next">
               <img
-                src={artworks[currentIndex + 1].thumbnails?.[1]?.url || artworks[currentIndex + 1].filename}
+                src={
+                  artworks[currentIndex + 1].thumbnails?.[1]?.url ||
+                  artworks[currentIndex + 1].filename
+                }
                 alt=""
                 className="taster-card__image"
                 aria-hidden="true"
@@ -330,11 +385,15 @@ export function TasterPage() {
         </div>
 
         {/* Action buttons */}
-        <div className="taster-actions" role="group" aria-label="Rating actions">
+        <div
+          className="taster-actions"
+          role="group"
+          aria-label="Rating actions"
+        >
           <button
             type="button"
             className="taster-action taster-action--dislike"
-            onClick={() => handleSwipe('left')}
+            onClick={() => handleSwipe("left")}
             disabled={!currentArtwork || !!swipeDirection}
             aria-label="Dislike this artwork (left arrow key)"
           >
@@ -344,7 +403,7 @@ export function TasterPage() {
           <button
             type="button"
             className="taster-action taster-action--like"
-            onClick={() => handleSwipe('right')}
+            onClick={() => handleSwipe("right")}
             disabled={!currentArtwork || !!swipeDirection}
             aria-label="Like this artwork (right arrow key)"
           >

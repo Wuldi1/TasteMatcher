@@ -12,10 +12,14 @@ export interface Artwork {
   medium?: string;
   width?: number;
   height?: number;
+  depth?: number; // inches, optional
+  isAuction?: boolean; // defaults to false
   price?: number; // USD price, optional
+  maxPrice?: number; // required when isAuction is true; must be >= price
   shouldDisplayPrice?: boolean; // whether to show price to users
   useForTaster?: boolean; // whether artwork should appear in the Taster experience (defaults to false)
   isPrivate?: boolean;
+  endDate?: string; // ISO datetime when auction closes; required when isAuction is true
   uploadedBy?: string;
   tags?: string[];
   filename: string; // defined by service
@@ -44,9 +48,9 @@ export interface ThumbnailGenerationResult extends ThumbnailInfo {
 }
 
 export enum LikedStatus {
-  Liked = 'Liked',
-  NotTasted = 'NotTasted',
-  Disliked = 'Disliked',
+  Liked = "Liked",
+  NotTasted = "NotTasted",
+  Disliked = "Disliked",
 }
 
 /**
