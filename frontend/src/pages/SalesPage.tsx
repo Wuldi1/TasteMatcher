@@ -122,7 +122,8 @@ export default function SalesPage() {
                                 artworkId: item.artworkId,
                                 comments: item.comments ?? [],
                                 status: item.status ?? 'pending',
-                                askedPrice: item.askedPrice ?? 0
+                                askedPrice: item.askedPrice ?? 0,
+                                askedMaxPrice: item.askedMaxPrice,
                             }))
                         );
                     } else {
@@ -418,7 +419,8 @@ export default function SalesPage() {
                         taggedAt: Date.now(),
                         title: artwork.title,
                         filename: artwork.filename,
-                        askedPrice: 0
+                        askedPrice: 0,
+                        askedMaxPrice: undefined,
                     },
                     ...currentDraft,
                 ];
@@ -839,6 +841,7 @@ export default function SalesPage() {
                                                         title: artwork.title,
                                                         filename: artwork.filename,
                                                         askedPrice: 0,
+                                                        askedMaxPrice: undefined,
                                                     },
                                                     ...currentDraft,
                                                 ];

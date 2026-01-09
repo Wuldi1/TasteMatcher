@@ -26,6 +26,7 @@ export type ProposalItem = {
   comments: Comment[];
   status: ProposalItemStatus;
   askedPrice: number;
+  askedMaxPrice?: number;
 };
 
 export interface Proposal {
