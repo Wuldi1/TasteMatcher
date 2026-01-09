@@ -307,7 +307,7 @@ export class ArtworksService {
         ],
       };
 
-      const totalSwipedQuery = {
+      const totalSwipedGlobalQuery = {
         query: `
           SELECT VALUE COUNT(1) 
           FROM c 
@@ -317,6 +317,19 @@ export class ArtworksService {
           { name: '@type', value: 'artworkPreference' },
           { name: '@userId', value: userId },
           { name: '@domainId', value: GlobalArtworksDomainId },
+        ],
+      };
+
+      const totalSwipedDomainQuery = {
+        query: `
+          SELECT VALUE COUNT(1) 
+          FROM c 
+          WHERE c.type = @type AND c.userId = @userId AND c.domainId = @domainId
+        `,
+        parameters: [
+          { name: '@type', value: 'artworkPreference' },
+          { name: '@userId', value: userId },
+          { name: '@domainId', value: domainId },
         ],
       };
 
@@ -355,9 +368,10 @@ export class ArtworksService {
         ],
       };
 
-      const [totalResult, totalSwipedResult, likesResult, dislikesResult, recentResult] = await Promise.all([
+      const [totalResult, totalSwipedGlobalResult, totalSwipedDomainResult, likesResult, dislikesResult, recentResult] = await Promise.all([
         artworksContainer.items.query(totalQuery).fetchAll(),
-        preferencesContainer.items.query(totalSwipedQuery, { partitionKey: GlobalArtworksDomainId }).fetchAll(),
+        preferencesContainer.items.query(totalSwipedGlobalQuery, { partitionKey: GlobalArtworksDomainId }).fetchAll(),
+        preferencesContainer.items.query(totalSwipedDomainQuery, { partitionKey: domainId }).fetchAll(),
         preferencesContainer.items.query(likesQuery, { partitionKey: domainId }).fetchAll(),
         preferencesContainer.items.query(dislikesQuery, { partitionKey: domainId }).fetchAll(),
         artworksContainer.items.query(recentQuery).fetchAll(),
@@ -367,7 +381,7 @@ export class ArtworksService {
         totalArtworks: totalResult.resources[0] || 0,
         totalLikes: likesResult.resources[0] || 0,
         totalDislikes: dislikesResult.resources[0] || 0,
-        totalSwiped: totalSwipedResult.resources[0] || 0,
+        totalSwiped: (totalSwipedGlobalResult.resources[0] || 0) + (totalSwipedDomainResult.resources[0] || 0),
         recentlyAdded: recentResult.resources[0] || 0,
       };
 

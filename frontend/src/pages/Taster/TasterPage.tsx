@@ -333,38 +333,7 @@ export function TasterPage() {
                 </div>
               </div>
 
-              <div className="taster-card__info">
-                {currentArtwork.date && (
-                  <p className="taster-card__date">{currentArtwork.date}</p>
-                )}
-
-                {/* Metadata badges (medium/signature/dimensions) */}
-                <div className="taster-card__metadata">
-                  {currentArtwork.medium && (
-                    <span className="taster-card__badge">
-                      {currentArtwork.medium}
-                    </span>
-                  )}
-                  {currentArtwork.signature && (
-                    <span className="taster-card__badge">Signed</span>
-                  )}
-                  {(currentArtwork.width !== undefined ||
-                    currentArtwork.height !== undefined) && (
-                    <span className="taster-card__badge">
-                      {currentArtwork.width ?? "—"} ×{" "}
-                      {currentArtwork.height ?? "—"} in
-                    </span>
-                  )}
-                </div>
-
-                {/* Price badge (if visible) */}
-                {currentArtwork.price !== undefined &&
-                  (currentArtwork.shouldDisplayPrice ?? true) && (
-                    <div className="taster-card__price">
-                      ${currentArtwork.price.toLocaleString()}
-                    </div>
-                  )}
-              </div>
+              <div className="taster-card__info" />
             </div>
           )}
 
