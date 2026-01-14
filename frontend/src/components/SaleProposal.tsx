@@ -16,6 +16,7 @@ import {
   XCircle,
   MessageSquare,
   AlertTriangle,
+  Gavel,
 } from "lucide-react";
 
 // Helper component for price input with comma formatting
@@ -713,12 +714,20 @@ export default function SaleProposal({
                         {artwork?.artist ?? "Unknown Artist"}
                       </p>
                     </div>
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full ${color}`}
-                    >
-                      {icon}
-                      {text}
-                    </span>
+                    <div className="flex flex-col items-end gap-2">
+                      {artwork?.isAuction && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-900 text-white">
+                          <Gavel className="w-3.5 h-3.5" />
+                          Auction
+                        </span>
+                      )}
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full ${color}`}
+                      >
+                        {icon}
+                        {text}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm text-gray-600 mb-6">

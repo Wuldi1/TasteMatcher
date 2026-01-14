@@ -35,7 +35,7 @@ export default function ProposalView({
 
   const [localItems, setLocalItems] = useState<ProposalItem[]>(items);
   const [generalComments, setGeneralComments] = useState<Comment[]>(
-    initialGeneralComments,
+    initialGeneralComments
   );
   const [newGeneralComment, setNewGeneralComment] = useState("");
   const [newComments, setNewComments] = useState<Record<string, string>>({});
@@ -82,10 +82,10 @@ export default function ProposalView({
           } catch (err) {
             console.error(
               `Failed to fetch artwork data for ID: ${artworkId}`,
-              err,
+              err
             );
           }
-        }),
+        })
       );
 
       setArtworkDataById(fetchedData);
@@ -99,13 +99,13 @@ export default function ProposalView({
   // Handler to update the status of an individual artwork
   const handleArtworkStatusChange = (
     artworkId: string,
-    status: "approved" | "rejected",
+    status: "approved" | "rejected"
   ) => {
     if (isReadOnly) return;
     setLocalItems((prev) =>
       prev.map((item) =>
-        item.artworkId === artworkId ? { ...item, status } : item,
-      ),
+        item.artworkId === artworkId ? { ...item, status } : item
+      )
     );
   };
 
@@ -128,8 +128,8 @@ export default function ProposalView({
                 },
               ],
             }
-          : item,
-      ),
+          : item
+      )
     );
     setNewComments((prev) => ({ ...prev, [artworkId]: "" }));
   };
@@ -154,6 +154,7 @@ export default function ProposalView({
           comments: item.comments,
           status: item.status,
           askedPrice: item.askedPrice,
+          askedMaxPrice: item.askedMaxPrice,
         })),
         generalComments: updatedGeneralComments,
       };
@@ -189,14 +190,14 @@ export default function ProposalView({
 
   // Calculate summary stats
   const approvedCount = localItems.filter(
-    (item) => item.status === "approved",
+    (item) => item.status === "approved"
   ).length;
   const rejectedCount = localItems.filter(
-    (item) => item.status === "rejected",
+    (item) => item.status === "rejected"
   ).length;
   const pendingCount = Math.max(
     localItems.length - approvedCount - rejectedCount,
-    0,
+    0
   );
   const lastUpdatedDate = proposal.updatedAt
     ? new Date(proposal.updatedAt).toLocaleDateString()
@@ -383,6 +384,11 @@ export default function ProposalView({
             const priceDisplay = artwork?.isAuction
               ? `${askedPriceDisplay}${askedMaxDisplay ? ` → ${askedMaxDisplay}` : ""}`
               : askedPriceDisplay;
+            const priceTitleDisplay = artwork?.isAuction
+              ? item.askedMaxPrice !== undefined
+                ? "Price Range"
+                : "Bidding Start"
+              : "Price";
 
             return (
               <article
@@ -466,7 +472,7 @@ export default function ProposalView({
                     </div>
                     <div>
                       <span className="block text-xs text-gray-400 uppercase tracking-wider">
-                        {artwork?.isAuction ? "Price Range" : "Price"}
+                        {priceTitleDisplay}
                       </span>
                       {priceDisplay}
                       {artwork?.isAuction && artwork.endDate && (
