@@ -15,7 +15,6 @@ import {
   MessageSquare,
   Calendar,
   Image as ImageIcon,
-  Sparkles,
   Gavel,
 } from "lucide-react";
 
