@@ -13,15 +13,28 @@
 import { Artwork } from "../types/artwork.types";
 import { Role } from "../types/user.types";
 
-export const cleanupArtworkBeforeResponseToClient = (artwork: Artwork, role: Role): Partial<Artwork> => {
+export const cleanupArtworkBeforeResponseToClient = (
+  artwork: Artwork,
+  role: Role
+): Partial<Artwork> => {
   // create a shallow copy excluding vector and vectorModel via destructuring
   const { vector, vectorModel, ...base } = artwork;
 
   // Conditionally omit price if shouldDisplayPrice is falsy or role is not customer
-  if (!artwork.shouldDisplayPrice && role === 'customer') {
+  if (!artwork.shouldDisplayPrice && role === "customer") {
     const { price, ...withoutPrice } = base;
     return withoutPrice as Partial<Artwork>;
   }
 
   return base as Partial<Artwork>;
-}
+};
+
+export const isAuctionEnded = (
+  artwork: Pick<Artwork, "isAuction" | "endDate">,
+  nowMs: number = Date.now()
+): boolean => {
+  if (artwork?.isAuction && artwork?.endDate) {
+    return new Date(artwork.endDate).getTime() <= nowMs;
+  }
+  return true;
+};

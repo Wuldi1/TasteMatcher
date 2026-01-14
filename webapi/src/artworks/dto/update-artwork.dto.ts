@@ -33,6 +33,23 @@ export class UpdateArtworkDto {
   @IsPositive()
   price?: number;
 
+  @ApiPropertyOptional({ description: 'Auction max price in USD', type: Number })
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  maxPrice?: number;
+
+  @ApiPropertyOptional({ description: 'Whether this artwork is an auction item', type: Boolean })
+  @IsOptional()
+  @IsBoolean()
+  isAuction?: boolean;
+
+  @ApiPropertyOptional({ description: 'Auction end date (ISO datetime)', maxLength: 50 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  endDate?: string;
+
   @ApiPropertyOptional({ description: 'Whether to display the price to users', type: Boolean })
   @IsOptional()
   @IsBoolean()
@@ -53,6 +70,12 @@ export class UpdateArtworkDto {
   @IsNumber()
   @IsPositive()
   height?: number;
+
+  @ApiPropertyOptional({ description: 'Artwork depth in inches', type: Number })
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  depth?: number;
 
   @ApiPropertyOptional({ description: 'Artwork width in inches', type: Number })
   @IsOptional()

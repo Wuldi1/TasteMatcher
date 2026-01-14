@@ -16,6 +16,7 @@ import {
   Calendar,
   Image as ImageIcon,
   Sparkles,
+  Gavel,
 } from "lucide-react";
 
 export default function ProposalView({
@@ -429,8 +430,8 @@ export default function ProposalView({
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       {artwork?.isAuction && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-700">
-                          <Sparkles className="w-4 h-4" />
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-blue-900 text-white">
+                          <Gavel className="w-4 h-4" />
                           Auction
                         </span>
                       )}

@@ -805,12 +805,13 @@ export function ArtworkUpload() {
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
                     disabled={status === "uploading"}
                   />
-                 <p className="text-xs text-gray-500">
-                   Must be greater than or equal to price.
-                 </p>
+                  <p className="text-xs text-gray-500">
+                    Must be greater than or equal to price.
+                  </p>
                   {auctionMaxInvalid && (
                     <p className="text-xs text-red-600 mt-1">
-                      Max price must be greater than or equal to price for auctions.
+                      Max price must be greater than or equal to price for
+                      auctions.
                     </p>
                   )}
                 </div>
@@ -836,9 +837,9 @@ export function ArtworkUpload() {
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
                     disabled={status === "uploading"}
                   />
-                 <p className="text-xs text-gray-500">
-                   When bidding closes (local time).
-                 </p>
+                  <p className="text-xs text-gray-500">
+                    When bidding closes (local time).
+                  </p>
                   {auctionEndInvalid && (
                     <p className="text-xs text-red-600 mt-1">
                       Auction end date must be in the future.

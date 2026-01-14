@@ -9,7 +9,9 @@ import {
   Trash2,
   Sparkles,
   Lock,
+  Gavel,
 } from "lucide-react";
+import { isAuctionEnded } from "../../utils/general";
 
 const PAGE_SIZE = 30;
 
@@ -203,9 +205,14 @@ export default function CatalogForUser({
                 ? "Disliked"
                 : "NotTasted");
           const inProposal = isInProposal?.(artwork.id) ?? false;
+          const auctionEnded = isAuctionEnded(artwork);
+          const proposalActionDisabled = auctionEnded && !inProposal;
 
           return (
-            <article key={artwork.id} className="flex flex-col gap-3 group">
+            <article
+              key={artwork.id}
+              className={`flex flex-col gap-3 group ${auctionEnded ? "opacity-60" : ""}`}
+            >
               {/* Image Container */}
               <div className="relative w-full min-h-[220px] max-h-[320px] overflow-hidden rounded-2xl bg-gray-100 shadow-sm transition-all duration-300 group-hover:shadow-md flex items-center justify-center">
                 <button
@@ -231,7 +238,8 @@ export default function CatalogForUser({
                 {/* Price Badge */}
                 <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
                   {artwork.isAuction && (
-                    <span className="bg-purple-600/90 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                    <span className="inline-flex items-center gap-1.5 bg-blue-900/90 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                      <Gavel className="w-3.5 h-3.5" />
                       Auction
                     </span>
                   )}
@@ -250,6 +258,11 @@ export default function CatalogForUser({
                 {inProposal && (
                   <div className="absolute top-3 left-3 z-10 bg-blue-500/90 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full shadow-sm">
                     In Proposal
+                  </div>
+                )}
+                {auctionEnded && (
+                  <div className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1 rounded-full bg-gray-800/80 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+                    Auction ended
                   </div>
                 )}
 
@@ -352,6 +365,7 @@ export default function CatalogForUser({
                   {onAddToDraft && (
                     <button
                       type="button"
+                      disabled={proposalActionDisabled}
                       aria-label={
                         isInProposal?.(artwork.id)
                           ? "Remove from Proposal"
@@ -359,13 +373,21 @@ export default function CatalogForUser({
                       }
                       onClick={(e) => {
                         e.stopPropagation();
-                        onAddToDraft(artwork);
+                        if (!proposalActionDisabled) {
+                          onAddToDraft(artwork);
+                        }
                       }}
                       className={`p-2 rounded-full transition-colors ${
                         isInProposal?.(artwork.id)
                           ? "bg-blue-100 text-blue-600"
-                          : "text-gray-400 hover:bg-gray-100 hover:text-blue-600"
+                          : proposalActionDisabled
+                            ? "text-gray-300 cursor-not-allowed"
+                            : "text-gray-400 hover:bg-gray-100 hover:text-blue-600"
                       }`}
+                      aria-disabled={proposalActionDisabled}
+                      title={
+                        proposalActionDisabled ? "Auction ended" : undefined
+                      }
                     >
                       <FileText className="w-5 h-5" />
                     </button>

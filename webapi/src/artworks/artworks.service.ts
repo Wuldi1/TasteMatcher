@@ -13,7 +13,8 @@ import {
   getAIRecommendationsEligibility,
   LikedStatus,
   GlobalArtworksDomainId,
-  Role
+  Role,
+  isAuctionEnded
 } from '@tastematcher/common';
 import { UpdateArtworkDto } from './dto/update-artwork.dto';
 import { SavePreferenceDto } from './dto/save-preference.dto';
@@ -782,6 +783,9 @@ export class ArtworksService {
     artwork: Artwork,
     viewer?: { id: string; role: string; invitedBy?: string | null },
   ): boolean {
+    if (viewer?.role === 'customer' && isAuctionEnded(artwork)) {
+      return false;
+    }
     if (!artwork.isPrivate) {
       return true;
     }

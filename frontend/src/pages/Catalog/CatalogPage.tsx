@@ -32,10 +32,12 @@ import {
   Sparkles,
   Lock,
   Unlock,
+  Gavel,
 } from "lucide-react";
 import type { Artwork } from "@tastematcher/common";
 import { apiClient } from "../../utils/api";
 import { EditArtworkModal } from "../../components/EditArtworkModal/EditArtworkModal";
+import { isAuctionEnded } from "../../utils/general";
 import "./CatalogPage.css";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -867,11 +869,12 @@ export function CatalogPage() {
               {filteredArtworks.map((artwork) => {
                 const isSelected = selectedArtworks.has(artwork.id);
                 const isDeleting = deletingArtworks.has(artwork.id);
+                const auctionEnded = isAuctionEnded(artwork);
 
                 return (
                   <article
                     key={artwork.id}
-                    className={`flex flex-col gap-3 group transition-opacity duration-300 ${isDeleting ? "opacity-0 scale-95" : "opacity-100"}`}
+                    className={`flex flex-col gap-3 group transition-opacity duration-300 ${isDeleting ? "opacity-0 scale-95" : "opacity-100"} ${auctionEnded ? "opacity-60" : ""}`}
                   >
                     {/* Image Container */}
                     <div className="relative w-full min-h-[220px] max-h-[320px] overflow-hidden rounded-2xl bg-gray-50 border border-gray-200 shadow-sm transition-all duration-300 group-hover:shadow-md flex items-center justify-center">
@@ -918,8 +921,14 @@ export function CatalogPage() {
                       {/* Price Badge */}
                       <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
                         {artwork.isAuction && (
-                          <span className="bg-purple-600/90 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                          <span className="inline-flex items-center gap-1.5 bg-blue-900/90 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                            <Gavel className="w-3.5 h-3.5" />
                             Auction
+                          </span>
+                        )}
+                        {auctionEnded && (
+                          <span className="inline-flex items-center gap-1.5 bg-gray-800/80 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                            Auction ended
                           </span>
                         )}
                         {artwork.price !== undefined &&
@@ -1101,7 +1110,8 @@ export function CatalogPage() {
 
                   <div className="flex flex-wrap items-center gap-3 mb-4">
                     {selectedArtwork.isAuction && (
-                      <span className="inline-flex items-center gap-2 rounded-full bg-purple-100 px-3 py-1 text-sm font-semibold text-purple-700">
+                      <span className="inline-flex items-center gap-2 rounded-full bg-blue-900 px-3 py-1 text-sm font-semibold text-white">
+                        <Gavel className="w-4 h-4" />
                         Auction{" "}
                         {selectedArtwork.endDate
                           ? `(ends ${new Date(selectedArtwork.endDate).toLocaleString()})`

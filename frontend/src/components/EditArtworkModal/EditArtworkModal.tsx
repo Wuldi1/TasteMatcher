@@ -110,9 +110,8 @@ export function EditArtworkModal({
   const maxPriceValue = parseNumberInput(maxPriceInput);
   const isMaxPriceInvalid =
     isAuction && (maxPriceValue === undefined || maxPriceValue < priceValue);
-  const isEndDateInvalid =
-    isAuction &&
-    (!!endDateInput ? new Date(endDateInput).getTime() <= Date.now() : true);
+  const isEndDateInvalid = isAuction && false;
+  // (!!endDateInput ? new Date(endDateInput).getTime() <= Date.now() : true);
 
   const updateMutation = useMutation({
     mutationFn: (updates: Partial<Artwork>) => {
