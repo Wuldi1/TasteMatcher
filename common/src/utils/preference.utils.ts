@@ -14,21 +14,26 @@
 /**
  * Generate unique preference ID from userId and artworkId
  * Used as the document ID in Cosmos DB for ArtworkPreference
- * 
+ *
  * @param userId - User ID
  * @param artworkId - Artwork ID
  * @returns Composite ID in format: `${userId}_${artworkId}`
  * @throws Error if userId or artworkId is empty
- * 
+ *
  * @example
  * ```ts
  * const prefId = generatePreferenceId('user-123', 'artwork-456');
  * // Returns: 'user-123_artwork-456'
  * ```
  */
-export function generatePreferenceId(userId: string, artworkId: string): string {
+export function generatePreferenceId(
+  userId: string,
+  artworkId: string,
+): string {
   if (!userId || !artworkId) {
-    throw new Error('userId and artworkId are required to generate preference ID');
+    throw new Error(
+      "userId and artworkId are required to generate preference ID",
+    );
   }
 
   return `${userId}_${artworkId}`;

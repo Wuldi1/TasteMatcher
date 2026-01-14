@@ -3,7 +3,7 @@ import { User } from "./user.types";
 /**
  * Status of a domain
  */
-export type DomainStatus = 'pending_verification' | 'active';
+export type DomainStatus = "pending_verification" | "active";
 
 /**
  * Represents a domain (tenant) in the system.
@@ -59,7 +59,10 @@ export interface DomainVerificationResultResponse {
 /**
  * Status of a domain creation request
  */
-export type DomainRequestStatus = 'pending_verification' | 'approved' | 'rejected';
+export type DomainRequestStatus =
+  | "pending_verification"
+  | "approved"
+  | "rejected";
 
 /**
  * Represents a request to create a new domain
@@ -73,7 +76,7 @@ export interface DomainRequest {
   /**
    * Marker for polymorphic storage in shared container
    */
-  type: 'domainRequest';
+  type: "domainRequest";
 
   /**
    * Partition key placeholder for shared Proposals container

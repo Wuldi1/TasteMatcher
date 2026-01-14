@@ -1,13 +1,13 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { NestFactory } from "@nestjs/core";
+import { AppModule } from "./app.module";
+import { ValidationPipe } from "@nestjs/common";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Enable CORS
   app.enableCors({
-    origin: process.env.CORS_ORIGINS?.split(',') || '*',
+    origin: process.env.CORS_ORIGINS?.split(",") || "*",
     credentials: true,
   });
 
@@ -25,7 +25,7 @@ async function bootstrap() {
 
   const port = 8080;
   await app.listen(port);
-  
+
   console.log(`Application is running on: http://localhost:${port}`);
 }
 bootstrap();

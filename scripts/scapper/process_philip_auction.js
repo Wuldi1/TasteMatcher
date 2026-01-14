@@ -20,7 +20,7 @@ const INPUT_HTML = path.join(__dirname, "inventory", "philip_auction.html");
 const OUTPUT_ROOT = path.join(
   __dirname,
   "inventory",
-  "TasterMatcherPhilipAuction"
+  "TasterMatcherPhilipAuction",
 );
 
 const EUR_TO_USD = 1.1; // static FX
@@ -74,7 +74,7 @@ async function downloadImage(url, destPath) {
   const res = await fetch(url);
   if (!res.ok)
     throw new Error(
-      `Failed to download ${url}: ${res.status} ${res.statusText}`
+      `Failed to download ${url}: ${res.status} ${res.statusText}`,
     );
   await fs.ensureDir(path.dirname(destPath));
   const stream = fs.createWriteStream(destPath);
@@ -101,7 +101,7 @@ async function main() {
       .trim();
     const estimateText = $(el)
       .find(
-        ".seldon-object-tile__estimate [data-testid='text'].seldon-text--bodySmall"
+        ".seldon-object-tile__estimate [data-testid='text'].seldon-text--bodySmall",
       )
       .text()
       .trim();
@@ -140,7 +140,7 @@ async function main() {
           endDate: "2026-01-22T23:59",
           sourceImage: item.imageUrl,
         },
-        { spaces: 2 }
+        { spaces: 2 },
       );
       console.log(`✔ Saved ${item.title}`);
       await sleep(200); // avoid hammering the source

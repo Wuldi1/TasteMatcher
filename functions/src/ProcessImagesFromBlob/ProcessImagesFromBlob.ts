@@ -11,50 +11,61 @@
 // 10. Frontend-specific: N/A (backend service)
 // -----------------------------------------------------------
 
-import { app, InvocationContext } from '@azure/functions';
-import type { ImageProcessingQueueMessage } from '@tastematcher/common';
-import { BlobService, ThumbnailService, VectorizationService, SearchIndexService, createLogger, metrics, loadConfig, CosmosService } from '@tastematcher/common';
+import { app, InvocationContext } from "@azure/functions";
+import type { ImageProcessingQueueMessage } from "@tastematcher/common";
+import {
+  BlobService,
+  ThumbnailService,
+  VectorizationService,
+  SearchIndexService,
+  createLogger,
+  metrics,
+  loadConfig,
+  CosmosService,
+} from "@tastematcher/common";
 
-const logger = createLogger('ProcessImagesFromBlob');
+const logger = createLogger("ProcessImagesFromBlob");
 
 /**
  * Validates the structure of the queue message
  */
-function validateMessage(message: unknown): asserts message is ImageProcessingQueueMessage {
+function validateMessage(
+  message: unknown,
+): asserts message is ImageProcessingQueueMessage {
   const msg = message as Partial<ImageProcessingQueueMessage>;
 
-  if (!msg.messageId || typeof msg.messageId !== 'string') {
-    throw new Error('Invalid message: messageId is required');
+  if (!msg.messageId || typeof msg.messageId !== "string") {
+    throw new Error("Invalid message: messageId is required");
   }
-  if (!msg.artworkId || typeof msg.artworkId !== 'string') {
-    throw new Error('Invalid message: artworkId is required');
+  if (!msg.artworkId || typeof msg.artworkId !== "string") {
+    throw new Error("Invalid message: artworkId is required");
   }
-  if (!msg.domainId || typeof msg.domainId !== 'string') {
-    throw new Error('Invalid message: domainId is required');
+  if (!msg.domainId || typeof msg.domainId !== "string") {
+    throw new Error("Invalid message: domainId is required");
   }
-  if (!msg.blobName || typeof msg.blobName !== 'string') {
-    throw new Error('Invalid message: blobName is required');
+  if (!msg.blobName || typeof msg.blobName !== "string") {
+    throw new Error("Invalid message: blobName is required");
   }
-  if (!msg.fileUrl || typeof msg.fileUrl !== 'string') {
-    throw new Error('Invalid message: fileUrl is required');
+  if (!msg.fileUrl || typeof msg.fileUrl !== "string") {
+    throw new Error("Invalid message: fileUrl is required");
   }
 }
 
 /**
  * Azure Function: Process images from blob storage queue
- * 
+ *
  * Triggered by queue messages containing blob upload metadata.
  * Processes images by:
  * 1. Downloading from blob storage
  * 2. Generating multiple thumbnail sizes
  * 3. Creating vector embeddings for search
  * 4. Indexing in Azure Cognitive Search
- * 
+ *
  * Includes automatic retries, idempotency checks, and comprehensive logging.
  */
 export async function processImagesFromBlob(
   queueItem: unknown,
-  context: InvocationContext
+  context: InvocationContext,
 ): Promise<void> {
   const start = Date.now();
 
@@ -64,17 +75,17 @@ export async function processImagesFromBlob(
     const message = queueItem as ImageProcessingQueueMessage;
 
     logger.info({
-      msg: 'Processing image from queue',
+      msg: "Processing image from queue",
       messageId: message.messageId,
       artworkId: message.artworkId,
       domainId: message.domainId,
       blobName: message.blobName,
       fileUrl: message.fileUrl,
       correlationId: message.messageId,
-      invocationContextId: context.invocationId
+      invocationContextId: context.invocationId,
     });
 
-    metrics.increment('image_processing.received', {
+    metrics.increment("image_processing.received", {
       domainId: message.domainId,
     });
 
@@ -87,66 +98,69 @@ export async function processImagesFromBlob(
 
     // Step 1: Download blob
     logger.debug({
-      msg: 'Downloading blob',
+      msg: "Downloading blob",
       artworkId: message.artworkId,
       blob: message.blobName,
       messageId: message.messageId,
-      invocationContextId: context.invocationId
+      invocationContextId: context.invocationId,
     });
 
     const imageBuffer = await blobService.downloadBlob(
       "originals",
-      message.blobName
+      message.blobName,
     );
 
-    metrics.increment('image_processing.downloaded', {
+    metrics.increment("image_processing.downloaded", {
       domainId: message.domainId,
     });
 
     // Step 2: Generate thumbnails
     logger.debug({
-      msg: 'Generating thumbnails',
+      msg: "Generating thumbnails",
       imageUrl: message.fileUrl,
       artworkId: message.artworkId,
       messageId: message.messageId,
-      invocationContextId: context.invocationId
+      invocationContextId: context.invocationId,
     });
 
     const thumbnails = await thumbnailService.generateAndUploadThumbnails(
       imageBuffer,
       message.domainId,
-      message.artworkId
+      message.artworkId,
     );
 
-    metrics.increment('image_processing.thumbnails_generated', {
+    metrics.increment("image_processing.thumbnails_generated", {
       domainId: message.domainId,
       count: thumbnails.length,
     });
 
     // Step 3: Generate vector embedding
     logger.debug({
-      msg: 'Generating vector embedding',
+      msg: "Generating vector embedding",
       artworkId: message.artworkId,
       messageId: message.messageId,
       imageUrl: message.fileUrl,
-      invocationContextId: context.invocationId
+      invocationContextId: context.invocationId,
     });
 
-    const vectorEmbedding = await vectorizationService.generateEmbedding(message.fileUrl, message.messageId);
+    const vectorEmbedding = await vectorizationService.generateEmbedding(
+      message.fileUrl,
+      message.messageId,
+    );
 
-    metrics.increment('image_processing.vectorized', {
+    metrics.increment("image_processing.vectorized", {
       artworkId: message.artworkId,
       domainId: message.domainId,
       messageId: message.messageId,
-      invocationContextId: context.invocationId
+      invocationContextId: context.invocationId,
     });
 
     // Step 4: Index in cognitive search
     logger.debug({
-      msg: 'Indexing in cognitive search',
+      msg: "Indexing in cognitive search",
       artworkId: message.artworkId,
       messageId: message.messageId,
-      invocationContextId: context.invocationId
+      invocationContextId: context.invocationId,
     });
 
     await searchIndexService.indexArtwork({
@@ -155,52 +169,50 @@ export async function processImagesFromBlob(
       vectorEmbedding,
     });
 
-    metrics.increment('image_processing.indexed', {
+    metrics.increment("image_processing.indexed", {
       domainId: message.domainId,
     });
 
-
     // store vector embedding in cosmos db aswell
     // TODO : use Patch operation instead of read + replace
-    const artworksContainer = await cosmosService.getContainer('Artworks');
+    const artworksContainer = await cosmosService.getContainer("Artworks");
 
     await artworksContainer.item(message.artworkId, message.domainId).patch([
-      { op: 'set', path: '/vector', value: vectorEmbedding.vector },
-      { op: 'set', path: '/vectorModel', value: vectorEmbedding.model },
-      { op: 'replace', path: '/updatedAt', value: Date.now() }
+      { op: "set", path: "/vector", value: vectorEmbedding.vector },
+      { op: "set", path: "/vectorModel", value: vectorEmbedding.model },
+      { op: "replace", path: "/updatedAt", value: Date.now() },
     ]);
 
-    metrics.increment('image_processing.artwork_updated', {
+    metrics.increment("image_processing.artwork_updated", {
       domainId: message.domainId,
     });
 
     const durationMs = Date.now() - start;
 
     logger.info({
-      msg: 'Image processing completed',
+      msg: "Image processing completed",
       messageId: message.messageId,
       artworkId: message.artworkId,
       domainId: message.domainId,
       durationMs,
-      invocationContextId: context.invocationId
+      invocationContextId: context.invocationId,
     });
 
-    metrics.timing('image_processing.duration', durationMs, {
+    metrics.timing("image_processing.duration", durationMs, {
       domainId: message.domainId,
     });
-
   } catch (error) {
     const durationMs = Date.now() - start;
 
     logger.error({
-      msg: 'Image processing failed',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      msg: "Image processing failed",
+      error: error instanceof Error ? error.message : "Unknown error",
       stack: error instanceof Error ? error.stack : undefined,
-      durationMs
+      durationMs,
     });
 
-    metrics.increment('image_processing.failed', {
-      errorType: error instanceof Error ? error.constructor.name : 'Unknown',
+    metrics.increment("image_processing.failed", {
+      errorType: error instanceof Error ? error.constructor.name : "Unknown",
     });
 
     // Re-throw to trigger Azure Functions retry mechanism
@@ -211,8 +223,8 @@ export async function processImagesFromBlob(
 const appConfig = loadConfig();
 
 // Register Azure Function with queue trigger
-app.storageQueue('ProcessImagesFromBlob', {
+app.storageQueue("ProcessImagesFromBlob", {
   queueName: appConfig.queue.name,
-  connection: 'AzureWebJobsStorage', // Use connection string name, not the actual connection string
+  connection: "AzureWebJobsStorage", // Use connection string name, not the actual connection string
   handler: processImagesFromBlob,
 });

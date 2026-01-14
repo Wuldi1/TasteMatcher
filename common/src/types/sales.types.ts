@@ -1,4 +1,3 @@
-
 // ---------- CODEGEN CHECKLIST (must be satisfied) ----------
 // 1. Uses TypeScript strict types (no `any`). If any `any` present, justify with comment.
 // 2. Uses shared `common` types for API contracts where applicable.
@@ -12,8 +11,8 @@
 // 10. Frontend-specific: UI changes must be responsive (mobile + desktop) and smooth (no visual regressions). Include accessibility considerations (semantic markup, aria attributes, keyboard navigation, focus management) and automated accessibility checks (axe, Playwright/accessibility audit) where applicable.
 // -----------------------------------------------------------
 
-export type ProposalStatus = 'draft' | 'submitted' | 'accepted' | 'rejected';
-export type ProposalItemStatus = 'pending' | 'approved' | 'rejected';
+export type ProposalStatus = "draft" | "submitted" | "accepted" | "rejected";
+export type ProposalItemStatus = "pending" | "approved" | "rejected";
 
 export type Comment = {
   author: string;
@@ -31,7 +30,7 @@ export type ProposalItem = {
 
 export interface Proposal {
   id: string;
-  type: 'proposal';
+  type: "proposal";
   domainId: string;
   userId: string; // customer / owner of artworks
   dealerId?: string; // who created the proposal

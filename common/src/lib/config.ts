@@ -62,17 +62,20 @@ function getRequiredEnv(key: string): string {
   const value = process.env[key];
   if (!value) {
     // More helpful error message with debugging info
-    const availableKeys = Object.keys(process.env).filter(k => 
-      k.startsWith('AZURE') || k.startsWith('IMAGE') || k === 'AzureWebJobsStorage'
+    const availableKeys = Object.keys(process.env).filter(
+      (k) =>
+        k.startsWith("AZURE") ||
+        k.startsWith("IMAGE") ||
+        k === "AzureWebJobsStorage",
     );
-    
+
     throw new Error(
       `Required environment variable '${key}' is not set.\n` +
-      `Available Azure-related env vars: ${availableKeys.join(', ')}\n` +
-      `Check:\n` +
-      `  - Local dev: Ensure 'local.settings.json' exists in the functions directory\n` +
-      `  - Azure: Verify Application Settings are configured for the Function App\n` +
-      `  - Current directory: ${process.cwd()}`
+        `Available Azure-related env vars: ${availableKeys.join(", ")}\n` +
+        `Check:\n` +
+        `  - Local dev: Ensure 'local.settings.json' exists in the functions directory\n` +
+        `  - Azure: Verify Application Settings are configured for the Function App\n` +
+        `  - Current directory: ${process.cwd()}`,
     );
   }
   return value;
@@ -87,44 +90,53 @@ function getOptionalEnv(key: string, defaultValue: string): string {
 
 /**
  * Load and validate configuration from environment.
- * 
+ *
  * Environment variables are provided by:
  * - Local development: local.settings.json (loaded by Azure Functions Core Tools)
  * - Azure deployment: Application Settings (configured via provision script)
- * 
+ *
  * Throws if required variables are missing with helpful debugging information.
  */
 export function loadConfig(): AppConfig {
   // Debug: Log that we're loading config (remove in production)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[Config] Loading configuration from environment...');
+  if (process.env.NODE_ENV === "development") {
+    console.log("[Config] Loading configuration from environment...");
   }
 
   return {
     azure: {
-      storageConnectionString: getRequiredEnv('AzureWebJobsStorage'),
+      storageConnectionString: getRequiredEnv("AzureWebJobsStorage"),
       storageContainerOriginals: "originals",
       storageContainerThumbnails: "derivatives",
-      searchEndpoint: getRequiredEnv('AZURE_SEARCH_ENDPOINT'),
-      searchKey: getRequiredEnv('AZURE_SEARCH_ADMIN_KEY'),
-      searchIndexName: getRequiredEnv('AZURE_SEARCH_INDEX_NAME'),
-      aiVisionEndpoint: getRequiredEnv('AZURE_AI_VISION_ENDPOINT'),
-      aiVisionKey: getRequiredEnv('AZURE_AI_VISION_KEY'),
+      searchEndpoint: getRequiredEnv("AZURE_SEARCH_ENDPOINT"),
+      searchKey: getRequiredEnv("AZURE_SEARCH_ADMIN_KEY"),
+      searchIndexName: getRequiredEnv("AZURE_SEARCH_INDEX_NAME"),
+      aiVisionEndpoint: getRequiredEnv("AZURE_AI_VISION_ENDPOINT"),
+      aiVisionKey: getRequiredEnv("AZURE_AI_VISION_KEY"),
     },
     cosmos: {
-      endpoint: getRequiredEnv('COSMOS_DB_ENDPOINT'),
-      key: getRequiredEnv('COSMOS_DB_KEY'),
-      database: getRequiredEnv('COSMOS_DB_DATABASE'),
+      endpoint: getRequiredEnv("COSMOS_DB_ENDPOINT"),
+      key: getRequiredEnv("COSMOS_DB_KEY"),
+      database: getRequiredEnv("COSMOS_DB_DATABASE"),
     },
     storage: {
-      account: getRequiredEnv('AZURE_STORAGE_ACCOUNT'),
-      accountKey: getRequiredEnv('AZURE_STORAGE_ACCOUNT_KEY'),
-      supportedMimeTypes: getOptionalEnv('SUPPORTED_MIME_TYPES', 'image/jpeg,image/png,image/gif').split(','),
+      account: getRequiredEnv("AZURE_STORAGE_ACCOUNT"),
+      accountKey: getRequiredEnv("AZURE_STORAGE_ACCOUNT_KEY"),
+      supportedMimeTypes: getOptionalEnv(
+        "SUPPORTED_MIME_TYPES",
+        "image/jpeg,image/png,image/gif",
+      ).split(","),
     },
     queue: {
-      name: getRequiredEnv('IMAGE_PROCESSING_QUEUE_NAME'),
-      visibilityTimeout: parseInt(getOptionalEnv('QUEUE_VISIBILITY_TIMEOUT', '300'), 10),
-      maxDequeueCount: parseInt(getOptionalEnv('QUEUE_MAX_DEQUEUE_COUNT', '5'), 10),
+      name: getRequiredEnv("IMAGE_PROCESSING_QUEUE_NAME"),
+      visibilityTimeout: parseInt(
+        getOptionalEnv("QUEUE_VISIBILITY_TIMEOUT", "300"),
+        10,
+      ),
+      maxDequeueCount: parseInt(
+        getOptionalEnv("QUEUE_MAX_DEQUEUE_COUNT", "5"),
+        10,
+      ),
     },
     thumbnails: {
       sizes: [
@@ -134,13 +146,18 @@ export function loadConfig(): AppConfig {
       ],
     },
     retry: {
-      maxAttempts: parseInt(getOptionalEnv('RETRY_MAX_ATTEMPTS', '3'), 10),
-      initialDelayMs: parseInt(getOptionalEnv('RETRY_INITIAL_DELAY_MS', '1000'), 10),
-      maxDelayMs: parseInt(getOptionalEnv('RETRY_MAX_DELAY_MS', '30000'), 10),
-      backoffMultiplier: parseFloat(getOptionalEnv('RETRY_BACKOFF_MULTIPLIER', '2')),
+      maxAttempts: parseInt(getOptionalEnv("RETRY_MAX_ATTEMPTS", "3"), 10),
+      initialDelayMs: parseInt(
+        getOptionalEnv("RETRY_INITIAL_DELAY_MS", "1000"),
+        10,
+      ),
+      maxDelayMs: parseInt(getOptionalEnv("RETRY_MAX_DELAY_MS", "30000"), 10),
+      backoffMultiplier: parseFloat(
+        getOptionalEnv("RETRY_BACKOFF_MULTIPLIER", "2"),
+      ),
     },
     logging: {
-      level: getOptionalEnv('LOG_LEVEL', 'info'),
+      level: getOptionalEnv("LOG_LEVEL", "info"),
     },
   };
 }

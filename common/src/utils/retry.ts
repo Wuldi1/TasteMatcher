@@ -1,4 +1,4 @@
-import { Logger } from '../lib/logger';
+import { Logger } from "../lib/logger";
 
 export interface RetryConfig {
   maxAttempts: number;
@@ -19,14 +19,14 @@ export async function retryWithBackoff<T>(
   operation: () => Promise<T>,
   config: RetryConfig,
   correlationId: string,
-  logger: Logger
+  logger: Logger,
 ): Promise<T> {
   let lastError: Error | undefined;
   let delay = config.initialDelayMs;
 
   for (let attempt = 1; attempt <= config.maxAttempts; attempt++) {
     try {
-      logger.debug({ attempt, correlationId }, 'Attempting operation');
+      logger.debug({ attempt, correlationId }, "Attempting operation");
       return await operation();
     } catch (err) {
       lastError = err as Error;
@@ -38,7 +38,7 @@ export async function retryWithBackoff<T>(
           correlationId,
           errorMessage: lastError.message,
         },
-        'Operation failed, retrying'
+        "Operation failed, retrying",
       );
 
       if (attempt < config.maxAttempts) {
@@ -48,7 +48,10 @@ export async function retryWithBackoff<T>(
     }
   }
 
-  logger.error({ correlationId, err: lastError }, 'Operation failed after all retries');
+  logger.error(
+    { correlationId, err: lastError },
+    "Operation failed after all retries",
+  );
   throw lastError!;
 }
 

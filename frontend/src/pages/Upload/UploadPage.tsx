@@ -11,8 +11,8 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { ArtworkUpload } from '../../components/ArtworkUpload';
-import './UploadPage.css';
+import { ArtworkUpload } from "../../components/ArtworkUpload";
+import "./UploadPage.css";
 
 /**
  * Upload page for artwork management

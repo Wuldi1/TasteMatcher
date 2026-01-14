@@ -10,57 +10,68 @@
 // 9. CI-friendly: code passes lint, typecheck, and tests locally.
 // -----------------------------------------------------------
 
-import { BadRequestException } from '@nestjs/common/exceptions/bad-request.exception';
-import { v4 as uuidv4 } from 'uuid';
+import { BadRequestException } from "@nestjs/common/exceptions/bad-request.exception";
+import { v4 as uuidv4 } from "uuid";
 
 /**
  * Ensures IDs follow UUID-like format for naming functions.
  */
 const validateId = (label: string, value: string): void => {
-  if (typeof value !== 'string' || value.trim().length === 0) {
+  if (typeof value !== "string" || value.trim().length === 0) {
     throw new BadRequestException(`${label} must be a non-empty string`);
   }
 };
 
-export const GlobalArtworksDomainId = '00000000-0000-0000-0000-000000000000';
+export const GlobalArtworksDomainId = "00000000-0000-0000-0000-000000000000";
 
 export const extractFileExtension = (mimeType: string): string => {
-  const ext = mimeType.split('/').pop()?.toLowerCase();
+  const ext = mimeType.split("/").pop()?.toLowerCase();
   if (!ext) {
-    throw new BadRequestException('File must have an extension');
+    throw new BadRequestException("File must have an extension");
   }
 
   // Sanitize extension to prevent path traversal
-  return ext.replace(/[^a-z0-9]/gi, '').toLowerCase();
-}
+  return ext.replace(/[^a-z0-9]/gi, "").toLowerCase();
+};
 
-export const getTemporaryBlobFolder = (domainId: string, userId: string): string => {
-  validateId('domainId', domainId);
-  validateId('userId', userId);
+export const getTemporaryBlobFolder = (
+  domainId: string,
+  userId: string,
+): string => {
+  validateId("domainId", domainId);
+  validateId("userId", userId);
 
   return `${domainId}/preferences/${userId}`;
-}
+};
 
-export const getTemporaryBlobPath = (domainId: string, userId: string, mimeType: string): string => {
-  validateId('domainId', domainId);
-  validateId('userId', userId);
+export const getTemporaryBlobPath = (
+  domainId: string,
+  userId: string,
+  mimeType: string,
+): string => {
+  validateId("domainId", domainId);
+  validateId("userId", userId);
   if (!mimeType) {
-    throw new BadRequestException('mimeType required');
+    throw new BadRequestException("mimeType required");
   }
 
   return `${getTemporaryBlobFolder(domainId, userId)}/${uuidv4()}.${extractFileExtension(mimeType)}`;
 };
 
 export const getDomainBlobFolder = (domainId: string): string => {
-  validateId('domainId', domainId);
+  validateId("domainId", domainId);
   return `${domainId}/artworks`;
-}
+};
 
-export const getOriginalBlobPath = (domainId: string, artworkId: string, mimeType: string): string => {
-  validateId('domainId', domainId);
-  validateId('artworkId', artworkId);
+export const getOriginalBlobPath = (
+  domainId: string,
+  artworkId: string,
+  mimeType: string,
+): string => {
+  validateId("domainId", domainId);
+  validateId("artworkId", artworkId);
   if (!mimeType) {
-    throw new BadRequestException('mimeType required');
+    throw new BadRequestException("mimeType required");
   }
 
   return `${getDomainBlobFolder(domainId)}/${artworkId}/original.${extractFileExtension(mimeType)}`;
@@ -71,41 +82,47 @@ export const getDerivativeBlobPath = (
   artworkId: string,
   size: string,
 ): string => {
-  validateId('domainId', domainId);
-  validateId('artworkId', artworkId);
+  validateId("domainId", domainId);
+  validateId("artworkId", artworkId);
   // size must be one of Small, Medium, Large
-  if (!['Small', 'Medium', 'Large'].includes(size)) {
-    throw new BadRequestException(`Invalid size: ${size}. Allowed values are Small, Medium, Large.`);
+  if (!["Small", "Medium", "Large"].includes(size)) {
+    throw new BadRequestException(
+      `Invalid size: ${size}. Allowed values are Small, Medium, Large.`,
+    );
   }
   return `${getDomainBlobFolder(domainId)}/${artworkId}/${size.toLocaleLowerCase()}.jpg`;
 };
 
 export const getSearchDocId = (domainId: string, artworkId: string): string => {
-  validateId('domainId', domainId);
-  validateId('artworkId', artworkId);
+  validateId("domainId", domainId);
+  validateId("artworkId", artworkId);
   return `${domainId}::${artworkId}`;
 };
 
 export const getQueueName = (env: string): string => {
   const normalized = env.trim().toLowerCase();
   if (!normalized) {
-    throw new BadRequestException('env required');
+    throw new BadRequestException("env required");
   }
   return `tastematcher-${normalized}-queue-indexing`;
 };
 
-export const getQueueDlqName = (env: string): string => `${getQueueName(env)}-dlq`;
+export const getQueueDlqName = (env: string): string =>
+  `${getQueueName(env)}-dlq`;
 
 // Returns thumbnail size string based on dimensions - Small, Medium, Large
-export const getThumbnailSizeFromDimensions = (width: number, height: number): string => {
+export const getThumbnailSizeFromDimensions = (
+  width: number,
+  height: number,
+): string => {
   const size = Math.max(width, height);
 
   switch (true) {
     case size <= 150:
-      return 'Small';
+      return "Small";
     case size <= 400:
-      return 'Medium';
+      return "Medium";
     default:
-      return 'Large';
+      return "Large";
   }
 };

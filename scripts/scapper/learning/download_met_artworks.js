@@ -20,7 +20,7 @@ function shuffleArray(array) {
 
 async function main() {
   console.log("🎨 Fetching artwork IDs from The Met API...");
-  
+
   // Define diverse search queries for different content types
   const searchQueries = [
     { query: "painting", label: "Paintings" },
@@ -42,17 +42,19 @@ async function main() {
     try {
       console.log(`📂 Fetching ${label}...`);
       const searchRes = await fetch(
-        `https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${encodeURIComponent(query)}`
+        `https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${encodeURIComponent(query)}`,
       );
       const { objectIDs } = await searchRes.json();
-      
+
       if (objectIDs?.length) {
         // Take up to 50 from each category
         const categoryIds = shuffleArray(objectIDs).slice(0, 50);
         allIds.push(...categoryIds);
-        console.log(`   Found ${objectIDs.length} total, selected ${categoryIds.length}`);
+        console.log(
+          `   Found ${objectIDs.length} total, selected ${categoryIds.length}`,
+        );
       }
-      
+
       // Small delay between search queries
       await delay(1000);
     } catch (err) {
@@ -71,19 +73,18 @@ async function main() {
   for (const id of ids) {
     try {
       const res = await fetch(
-        `https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`
+        `https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`,
       );
       const data = await res.json();
       if (!data.primaryImageSmall) continue;
 
       // Clean and normalize folder name
-      let folderName =
-        (data.title || `artwork_${id}`)
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "_")
-          .replace(/^_+|_+$/g, "");
+      let folderName = (data.title || `artwork_${id}`)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
       const artDir = path.join(BASE_DIR, folderName);
-      
+
       // Skip if already exists
       if (await fs.pathExists(path.join(artDir, "metadata.json"))) {
         console.log(`⏭️  Skipping existing artwork: ${folderName}`);

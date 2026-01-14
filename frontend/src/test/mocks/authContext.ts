@@ -1,9 +1,11 @@
-import { vi } from 'vitest';
-import type { useAuth } from '../../contexts/AuthContext';
+import { vi } from "vitest";
+import type { useAuth } from "../../contexts/AuthContext";
 
 export type MockAuthContext = ReturnType<typeof useAuth>;
 
-export const createMockAuthContext = (overrides: Partial<MockAuthContext> = {}): MockAuthContext => ({
+export const createMockAuthContext = (
+  overrides: Partial<MockAuthContext> = {},
+): MockAuthContext => ({
   user: null,
   isAuthenticated: false,
   isInitializing: false,

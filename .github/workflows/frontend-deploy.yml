@@ -5,15 +5,15 @@ on:
     branches:
       - main
     paths:
-      - 'frontend/**'
-      - 'common/**'
-      - '.github/workflows/frontend-deploy.yml'
+      - "frontend/**"
+      - "common/**"
+      - ".github/workflows/frontend-deploy.yml"
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Deployment environment'
+        description: "Deployment environment"
         required: true
-        default: 'dev'
+        default: "dev"
         type: choice
         options:
           - dev
@@ -21,14 +21,14 @@ on:
           - prd
 
 env:
-  NODE_VERSION: '22.x'
-  PNPM_VERSION: '8'
+  NODE_VERSION: "22.x"
+  PNPM_VERSION: "8"
   FRONTEND_DIR: frontend
   BUILD_OUTPUT: frontend/build
   # Define API URLs for different environments
-  API_URL_DEV: 'https://tastematcher-dev-api.azurewebsites.net'
-  API_URL_STG: 'https://tastematcher-stg-api.azurewebsites.net'
-  API_URL_PRD: 'https://tastematcher-prd-api.azurewebsites.net'
+  API_URL_DEV: "https://tastematcher-dev-api.azurewebsites.net"
+  API_URL_STG: "https://tastematcher-stg-api.azurewebsites.net"
+  API_URL_PRD: "https://tastematcher-prd-api.azurewebsites.net"
 
 jobs:
   build-pack:
@@ -110,16 +110,16 @@ jobs:
             }
           }
           EOF
-          
+
           # Install dependencies so they're included in the zip
           npm install --production --no-package-lock
-          
+
           # Create .deployment file to tell Azure to skip build
           cat > .deployment <<'EOF'
           [config]
           SCM_DO_BUILD_DURING_DEPLOYMENT = false
           EOF
-          
+
           zip -r ../build.zip .
           cd ..
 
@@ -133,7 +133,7 @@ jobs:
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: build.zip
-          startup-command: 'npm start'
+          startup-command: "npm start"
 
       - name: Azure logout
         if: always()

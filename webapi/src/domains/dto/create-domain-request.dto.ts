@@ -1,4 +1,10 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+} from "class-validator";
 
 /**
  * DTO for requesting a new domain
@@ -22,10 +28,10 @@ export class CreateDomainRequestDto {
   @IsString()
   message?: string;
 
-  constructor(){
-    this.name = '';
-    this.email = '';
-    this.proposedDomainName = '';
-    this.message = '';
+  constructor() {
+    this.name = "";
+    this.email = "";
+    this.proposedDomainName = "";
+    this.message = "";
   }
 }

@@ -56,10 +56,10 @@ export function CatalogPage() {
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [editingArtwork, setEditingArtwork] = useState<Artwork | null>(null);
   const [selectedArtworks, setSelectedArtworks] = useState<Set<string>>(
-    new Set()
+    new Set(),
   ); // For multi-select
   const [deletingArtworks, setDeletingArtworks] = useState<Set<string>>(
-    new Set()
+    new Set(),
   ); // For animation
   const preferenceFilter = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -76,7 +76,7 @@ export function CatalogPage() {
     params.delete("view");
     navigate(
       { pathname: location.pathname, search: params.toString() },
-      { replace: true }
+      { replace: true },
     );
   };
 
@@ -129,7 +129,7 @@ export function CatalogPage() {
   // Defensive: flatten pages only if data.pages is an array
   const allArtworks = Array.isArray(data?.pages)
     ? data.pages.flatMap((page) =>
-        Array.isArray(page?.items) ? page.items : []
+        Array.isArray(page?.items) ? page.items : [],
       )
     : [];
 
@@ -150,12 +150,12 @@ export function CatalogPage() {
     : allArtworks;
 
   const selectedArtworkRecords = filteredArtworks.filter((artwork) =>
-    selectedArtworks.has(artwork.id)
+    selectedArtworks.has(artwork.id),
   );
   const canModifyPrivacy = Boolean(
     user?.id &&
       selectedArtworkRecords.length > 0 &&
-      selectedArtworkRecords.every((artwork) => artwork.uploadedBy === user.id)
+      selectedArtworkRecords.every((artwork) => artwork.uploadedBy === user.id),
   );
 
   // Delete mutation
@@ -179,7 +179,7 @@ export function CatalogPage() {
                 : page.items,
             })),
           };
-        }
+        },
       );
       setSelectedArtwork(null);
       setDeletingArtworks((prev) => new Set(prev).add(artworkId));
@@ -190,7 +190,7 @@ export function CatalogPage() {
             newSet.delete(artworkId);
             return newSet;
           }),
-        300
+        300,
       ); // Animation duration
       // Invalidate to ensure cache consistency
       queryClient.invalidateQueries({ queryKey: ["artworks", user?.domainId] });
@@ -202,7 +202,7 @@ export function CatalogPage() {
     mutationFn: async (artworkIds: string[]) => {
       if (!user?.domainId) throw new Error("No domain ID");
       await Promise.all(
-        artworkIds.map((id) => apiClient.deleteArtwork(user.domainId!, id))
+        artworkIds.map((id) => apiClient.deleteArtwork(user.domainId!, id)),
       );
     },
     onSuccess: (_, artworkIds) => {
@@ -217,12 +217,12 @@ export function CatalogPage() {
               ...page,
               items: Array.isArray(page.items)
                 ? page.items.filter(
-                    (item: any) => !artworkIds.includes(item.id)
+                    (item: any) => !artworkIds.includes(item.id),
                   )
                 : page.items,
             })),
           };
-        }
+        },
       );
       setSelectedArtworks(new Set());
       artworkIds.forEach((id) => {
@@ -234,7 +234,7 @@ export function CatalogPage() {
               newSet.delete(id);
               return newSet;
             }),
-          300
+          300,
         );
       });
       // Invalidate to ensure cache consistency
@@ -254,8 +254,8 @@ export function CatalogPage() {
       if (!user?.domainId) throw new Error("No domain ID");
       await Promise.all(
         artworkIds.map((id) =>
-          apiClient.updateArtwork(user.domainId!, id, { shouldDisplayPrice })
-        )
+          apiClient.updateArtwork(user.domainId!, id, { shouldDisplayPrice }),
+        ),
       );
     },
     onSuccess: (_, { artworkIds, shouldDisplayPrice }) => {
@@ -272,12 +272,12 @@ export function CatalogPage() {
                 ? page.items.map((item: any) =>
                     artworkIds.includes(item.id)
                       ? { ...item, shouldDisplayPrice }
-                      : item
+                      : item,
                   )
                 : page.items,
             })),
           };
-        }
+        },
       );
       setSelectedArtworks(new Set());
     },
@@ -294,8 +294,8 @@ export function CatalogPage() {
       if (!user?.domainId) throw new Error("No domain ID");
       await Promise.all(
         artworkIds.map((id) =>
-          apiClient.updateArtwork(user.domainId!, id, { useForTaster })
-        )
+          apiClient.updateArtwork(user.domainId!, id, { useForTaster }),
+        ),
       );
     },
     onSuccess: (_, { artworkIds, useForTaster }) => {
@@ -311,12 +311,12 @@ export function CatalogPage() {
                 ? page.items.map((item: any) =>
                     artworkIds.includes(item.id)
                       ? { ...item, useForTaster }
-                      : item
+                      : item,
                   )
                 : page.items,
             })),
           };
-        }
+        },
       );
       setSelectedArtworks(new Set());
     },
@@ -333,8 +333,8 @@ export function CatalogPage() {
       if (!user?.domainId) throw new Error("No domain ID");
       await Promise.all(
         artworkIds.map((id) =>
-          apiClient.updateArtwork(user.domainId!, id, { isPrivate })
-        )
+          apiClient.updateArtwork(user.domainId!, id, { isPrivate }),
+        ),
       );
     },
     onSuccess: (_, { artworkIds, isPrivate }) => {
@@ -348,15 +348,17 @@ export function CatalogPage() {
               ...page,
               items: Array.isArray(page.items)
                 ? page.items.map((item: any) =>
-                    artworkIds.includes(item.id) ? { ...item, isPrivate } : item
+                    artworkIds.includes(item.id)
+                      ? { ...item, isPrivate }
+                      : item,
                   )
                 : page.items,
             })),
           };
-        }
+        },
       );
       setSelectedArtwork((prev) =>
-        prev && artworkIds.includes(prev.id) ? { ...prev, isPrivate } : prev
+        prev && artworkIds.includes(prev.id) ? { ...prev, isPrivate } : prev,
       );
       setSelectedArtworks(new Set());
     },
@@ -416,7 +418,7 @@ export function CatalogPage() {
             ? page.items.map((it: any) =>
                 it?.id === artworkId
                   ? { ...it, likedStatus: liked ? "Liked" : "Disliked" }
-                  : it
+                  : it,
               )
             : page.items,
         }));
@@ -562,7 +564,7 @@ export function CatalogPage() {
   const handlePreferenceClick = (
     artworkId: string,
     liked: boolean,
-    e?: React.MouseEvent
+    e?: React.MouseEvent,
   ) => {
     e?.stopPropagation();
     if (!user || user.role !== "customer") return;

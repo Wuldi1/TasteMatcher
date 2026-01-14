@@ -1,12 +1,12 @@
-import { Module, forwardRef } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtStrategy } from './utils/jwt.strategy';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
-import { EmailModule } from '../email/email.module';
-import { DomainsModule } from '../domains/domains.module';
+import { Module, forwardRef } from "@nestjs/common";
+import { JwtModule } from "@nestjs/jwt";
+import { PassportModule } from "@nestjs/passport";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { JwtStrategy } from "./utils/jwt.strategy";
+import { AuthController } from "./auth.controller";
+import { AuthService } from "./auth.service";
+import { EmailModule } from "../email/email.module";
+import { DomainsModule } from "../domains/domains.module";
 
 @Module({
   imports: [
@@ -16,9 +16,11 @@ import { DomainsModule } from '../domains/domains.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') || 'your-secret-key-change-in-production',
+        secret:
+          configService.get<string>("JWT_SECRET") ||
+          "your-secret-key-change-in-production",
         signOptions: {
-          expiresIn: '4h',
+          expiresIn: "4h",
         },
       }),
       inject: [ConfigService],

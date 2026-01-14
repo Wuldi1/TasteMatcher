@@ -1,10 +1,15 @@
-import { CosmosQuery, FilterCondition, QueryParams, SortConfig } from "../../types/query.types";
+import {
+  CosmosQuery,
+  FilterCondition,
+  QueryParams,
+  SortConfig,
+} from "../../types/query.types";
 
 /**
  * Build Cosmos DB query from generic query parameters
  */
 export class CosmosQueryBuilder<T = any> {
-  private baseQuery = 'SELECT * FROM c';
+  private baseQuery = "SELECT * FROM c";
   private whereClauses: string[] = [];
   private parameters: Array<{ name: string; value: any }> = [];
   private paramCounter = 0;
@@ -16,7 +21,7 @@ export class CosmosQueryBuilder<T = any> {
   addPartitionKeyFilter(partitionKey: string, value: string): this {
     this.addFilter({
       field: partitionKey,
-      operator: 'eq',
+      operator: "eq",
       value,
     });
     return this;
@@ -28,12 +33,12 @@ export class CosmosQueryBuilder<T = any> {
   addFilter(filter: FilterCondition<T>): this {
     const paramName = `@param${this.paramCounter++}`;
     const clause = this.buildFilterClause(filter, paramName);
-    
+
     if (clause) {
       this.whereClauses.push(clause);
       this.parameters.push({ name: paramName, value: filter.value });
     }
-    
+
     return this;
   }
 
@@ -41,7 +46,7 @@ export class CosmosQueryBuilder<T = any> {
    * Add multiple filters (AND logic)
    */
   addFilters(filters: FilterCondition<T>[]): this {
-    filters.forEach(filter => this.addFilter(filter));
+    filters.forEach((filter) => this.addFilter(filter));
     return this;
   }
 
@@ -54,14 +59,14 @@ export class CosmosQueryBuilder<T = any> {
     }
 
     const searchValue = query.toLowerCase().trim();
-    const searchClauses = fields.map(field => {
+    const searchClauses = fields.map((field) => {
       const paramName = `@search${this.paramCounter++}`;
       this.parameters.push({ name: paramName, value: searchValue });
       return `CONTAINS(LOWER(c.${field}), ${paramName})`;
     });
 
     if (searchClauses.length > 0) {
-      this.whereClauses.push(`(${searchClauses.join(' OR ')})`);
+      this.whereClauses.push(`(${searchClauses.join(" OR ")})`);
     }
 
     return this;
@@ -71,7 +76,7 @@ export class CosmosQueryBuilder<T = any> {
    * Add sort configuration
    */
   addSort(sort: SortConfig<T>): this {
-    const order = sort.order === 'asc' ? 'ASC' : 'DESC';
+    const order = sort.order === "asc" ? "ASC" : "DESC";
     this.sortClause = `ORDER BY c.${String(sort.field)} ${order}`;
     return this;
   }
@@ -83,7 +88,7 @@ export class CosmosQueryBuilder<T = any> {
     let query = this.baseQuery;
 
     if (this.whereClauses.length > 0) {
-      query += ` WHERE ${this.whereClauses.join(' AND ')}`;
+      query += ` WHERE ${this.whereClauses.join(" AND ")}`;
     }
 
     if (this.sortClause) {
@@ -99,31 +104,34 @@ export class CosmosQueryBuilder<T = any> {
   /**
    * Build filter clause based on operator
    */
-  private buildFilterClause(filter: FilterCondition<T>, paramName: string): string {
+  private buildFilterClause(
+    filter: FilterCondition<T>,
+    paramName: string,
+  ): string {
     const field = `c.${String(filter.field)}`;
 
     switch (filter.operator) {
-      case 'eq':
+      case "eq":
         return `${field} = ${paramName}`;
-      case 'ne':
+      case "ne":
         return `${field} != ${paramName}`;
-      case 'gt':
+      case "gt":
         return `${field} > ${paramName}`;
-      case 'gte':
+      case "gte":
         return `${field} >= ${paramName}`;
-      case 'lt':
+      case "lt":
         return `${field} < ${paramName}`;
-      case 'lte':
+      case "lte":
         return `${field} <= ${paramName}`;
-      case 'contains':
+      case "contains":
         // Use LOWER for case-insensitive comparison
         return `CONTAINS(LOWER(${field}), LOWER(${paramName}))`;
-      case 'in':
+      case "in":
         return `ARRAY_CONTAINS(${paramName}, ${field})`;
-      case 'array_contains':
+      case "array_contains":
         return `ARRAY_CONTAINS(${field}, ${paramName})`;
       default:
-        return '';
+        return "";
     }
   }
 }
@@ -136,7 +144,7 @@ export async function executeCosmosQuery<T>(
   partitionKey: string,
   partitionValue: string,
   queryParams: QueryParams<T>,
-  defaultSort: SortConfig<T> = { field: 'createdAt', order: 'desc' },
+  defaultSort: SortConfig<T> = { field: "createdAt", order: "desc" },
 ): Promise<{ items: T[]; continuationToken?: string; hasMore: boolean }> {
   const builder = new CosmosQueryBuilder<T>();
 
@@ -150,7 +158,10 @@ export async function executeCosmosQuery<T>(
 
   // Add search
   if (queryParams.search?.query && queryParams.search?.fields) {
-    builder.addSearch(queryParams.search.query, queryParams.search.fields as string[]);
+    builder.addSearch(
+      queryParams.search.query,
+      queryParams.search.fields as string[],
+    );
   }
 
   // Add sort
@@ -166,10 +177,11 @@ export async function executeCosmosQuery<T>(
     {
       maxItemCount: limit,
       continuationToken: queryParams.continuationToken,
-    }
+    },
   );
 
-  const { resources, continuationToken, hasMoreResults } = await queryIterator.fetchNext();
+  const { resources, continuationToken, hasMoreResults } =
+    await queryIterator.fetchNext();
 
   return {
     items: resources,

@@ -1,12 +1,15 @@
-import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
-import { QueueServiceClient, StorageSharedKeyCredential as QueueCredential } from '@azure/storage-queue';
-import { createLogger } from '../../lib/logger';
-import { loadConfig, type AppConfig } from '../../lib/config';
-import { retryWithBackoff } from '../../utils/retry';
-import { ImageProcessingQueueMessage } from '../../types/queue.types';
-import { BadRequestException } from '@nestjs/common';
+import { BlobServiceClient, ContainerClient } from "@azure/storage-blob";
+import {
+  QueueServiceClient,
+  StorageSharedKeyCredential as QueueCredential,
+} from "@azure/storage-queue";
+import { createLogger } from "../../lib/logger";
+import { loadConfig, type AppConfig } from "../../lib/config";
+import { retryWithBackoff } from "../../utils/retry";
+import { ImageProcessingQueueMessage } from "../../types/queue.types";
+import { BadRequestException } from "@nestjs/common";
 
-const logger = createLogger('BlobService');
+const logger = createLogger("BlobService");
 
 /**
  * Service for Azure Blob Storage operations with retry logic
@@ -18,29 +21,32 @@ export class BlobService {
 
   // File validation constants
   private static readonly ALLOWED_IMAGE_MIME_TYPES = [
-    'image/jpeg',
-    'image/jpg',
-    'image/png',
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
   ];
-  
+
   private static readonly MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
   constructor() {
     this.appConfig = loadConfig();
 
     this.blobStorageClient = BlobServiceClient.fromConnectionString(
-      this.appConfig.azure.storageConnectionString
+      this.appConfig.azure.storageConnectionString,
     );
 
     // Initialize Azure SDK clients
-    const queueCredential = new QueueCredential(this.appConfig.storage.account, this.appConfig.storage.accountKey);
+    const queueCredential = new QueueCredential(
+      this.appConfig.storage.account,
+      this.appConfig.storage.accountKey,
+    );
     this.queueServiceClient = new QueueServiceClient(
       `https://${this.appConfig.storage.account}.queue.core.windows.net`,
-      queueCredential
+      queueCredential,
     );
 
     this.queueServiceClient = QueueServiceClient.fromConnectionString(
-      this.appConfig.azure.storageConnectionString
+      this.appConfig.azure.storageConnectionString,
     );
   }
 
@@ -49,9 +55,11 @@ export class BlobService {
    * @throws Error if file type is not allowed
    */
   public validateImageMimeType(mimetype: string): void {
-    if (!BlobService.ALLOWED_IMAGE_MIME_TYPES.includes(mimetype.toLowerCase())) {
+    if (
+      !BlobService.ALLOWED_IMAGE_MIME_TYPES.includes(mimetype.toLowerCase())
+    ) {
       throw new BadRequestException(
-        `Invalid file type: ${mimetype}. Only JPEG and PNG images are allowed.`
+        `Invalid file type: ${mimetype}. Only JPEG and PNG images are allowed.`,
       );
     }
   }
@@ -66,7 +74,7 @@ export class BlobService {
       const maxSizeMB = Math.round(maxSize / (1024 * 1024));
       const actualSizeMB = (sizeBytes / (1024 * 1024)).toFixed(2);
       throw new BadRequestException(
-        `File size (${actualSizeMB}MB) exceeds maximum allowed size of ${maxSizeMB}MB.`
+        `File size (${actualSizeMB}MB) exceeds maximum allowed size of ${maxSizeMB}MB.`,
       );
     }
   }
@@ -81,7 +89,9 @@ export class BlobService {
   }
 
   // will be used mostly for health purposes
-  async getBlobContainerClient(containerName: string): Promise<ContainerClient> {
+  async getBlobContainerClient(
+    containerName: string,
+  ): Promise<ContainerClient> {
     return this.blobStorageClient.getContainerClient(containerName);
   }
 
@@ -89,20 +99,21 @@ export class BlobService {
    * Downloads a blob as a Buffer with exponential backoff retry
    */
   async downloadBlob(containerName: string, blobName: string): Promise<Buffer> {
-    return await retryWithBackoff<Buffer>
-      (async () => {
+    return await retryWithBackoff<Buffer>(
+      async () => {
         logger.debug({
-          msg: 'Downloading blob',
+          msg: "Downloading blob",
           container: containerName,
           blob: blobName,
         });
 
-        const containerClient = this.blobStorageClient.getContainerClient(containerName);
+        const containerClient =
+          this.blobStorageClient.getContainerClient(containerName);
         const blobClient = containerClient.getBlobClient(blobName);
         const downloadResponse = await blobClient.download();
 
         if (!downloadResponse.readableStreamBody) {
-          throw new Error('No readable stream in download response');
+          throw new Error("No readable stream in download response");
         }
 
         const chunks: Buffer[] = [];
@@ -113,7 +124,7 @@ export class BlobService {
         const buffer = Buffer.concat(chunks);
 
         logger.debug({
-          msg: 'Blob downloaded successfully',
+          msg: "Blob downloaded successfully",
           container: containerName,
           blob: blobName,
           sizeBytes: buffer.length,
@@ -121,23 +132,23 @@ export class BlobService {
 
         return buffer;
       },
-        {
-          maxAttempts: 2,
-          initialDelayMs: 1000,
-          maxDelayMs: 10000,
-          backoffMultiplier: 2,
-        },
-        `downloadBlob-${containerName}-${blobName}`,
-        logger)
-      .catch((err: Error) => {
-        logger.error({
-          msg: 'Failed to download blob after retries',
-          container: containerName,
-          blob: blobName,
-          err,
-        });
-        throw err;
+      {
+        maxAttempts: 2,
+        initialDelayMs: 1000,
+        maxDelayMs: 10000,
+        backoffMultiplier: 2,
+      },
+      `downloadBlob-${containerName}-${blobName}`,
+      logger,
+    ).catch((err: Error) => {
+      logger.error({
+        msg: "Failed to download blob after retries",
+        container: containerName,
+        blob: blobName,
+        err,
       });
+      throw err;
+    });
   }
 
   /**
@@ -147,15 +158,16 @@ export class BlobService {
     containerName: string,
     blobName: string,
     fileBuffer: Buffer,
-    contentType: string
+    contentType: string,
   ): Promise<string> {
-    const containerClient = this.blobStorageClient.getContainerClient(containerName);
+    const containerClient =
+      this.blobStorageClient.getContainerClient(containerName);
     const blobClient = containerClient.getBlockBlobClient(blobName);
 
     return retryWithBackoff<string>(
       async () => {
         logger.debug({
-          msg: 'Uploading blob',
+          msg: "Uploading blob",
           container: containerName,
           blob: blobName,
           sizeBytes: fileBuffer.length,
@@ -164,16 +176,19 @@ export class BlobService {
         await blobClient.uploadData(fileBuffer, {
           blobHTTPHeaders: {
             blobContentType: contentType,
-            blobCacheControl: 'public, max-age=31536000', // 1 year cache
+            blobCacheControl: "public, max-age=31536000", // 1 year cache
           },
           metadata: {
             uploadedAt: new Date().toISOString(),
             originalSize: fileBuffer.length.toString(),
           },
           onProgress: (progress: { loadedBytes?: number }) => {
-            if (progress.loadedBytes && progress.loadedBytes % (1024 * 1024) === 0) {
+            if (
+              progress.loadedBytes &&
+              progress.loadedBytes % (1024 * 1024) === 0
+            ) {
               logger.debug({
-                msg: 'Upload progress',
+                msg: "Upload progress",
                 container: containerName,
                 blob: blobName,
                 loadedBytes: progress.loadedBytes,
@@ -183,9 +198,9 @@ export class BlobService {
         });
 
         logger.debug({
-          action: 'uploadToBlob.success',
+          action: "uploadToBlob.success",
           blobName,
-          fileUrl: blobClient.url
+          fileUrl: blobClient.url,
         });
 
         return this.appendCacheBustingParam(blobClient.url);
@@ -197,10 +212,10 @@ export class BlobService {
         backoffMultiplier: 2,
       },
       `uploadBlob-${containerName}-${blobName}`,
-      logger
+      logger,
     ).catch((err: Error) => {
       logger.error({
-        msg: 'Failed to upload blob after retries',
+        msg: "Failed to upload blob after retries",
         container: containerName,
         blob: blobName,
         err,
@@ -213,11 +228,12 @@ export class BlobService {
    * Delete blob if it exists
    */
   async deleteBlobIfExists(container: string, blobName: string): Promise<void> {
-    const containerClient = this.blobStorageClient.getContainerClient(container);
+    const containerClient =
+      this.blobStorageClient.getContainerClient(container);
     const blobClient = containerClient.getBlockBlobClient(blobName);
     await blobClient.deleteIfExists();
     logger.debug({
-      msg: 'Deleted blob if exists',
+      msg: "Deleted blob if exists",
       container,
       blobName,
     });
@@ -229,17 +245,21 @@ export class BlobService {
    * @param containerName - The container name
    * @param prefix - The blob prefix (folder path) to delete, e.g., "temp/preferences/userId123/"
    */
-  async deleteBlobsWithPrefix(containerName: string, prefix: string): Promise<void> {
+  async deleteBlobsWithPrefix(
+    containerName: string,
+    prefix: string,
+  ): Promise<void> {
     return retryWithBackoff<void>(
       async () => {
         logger.debug({
-          msg: 'Deleting blobs with prefix',
+          msg: "Deleting blobs with prefix",
           container: containerName,
           prefix,
         });
 
-        const containerClient = this.blobStorageClient.getContainerClient(containerName);
-        
+        const containerClient =
+          this.blobStorageClient.getContainerClient(containerName);
+
         // List all blobs with the given prefix
         const blobsToDelete: string[] = [];
         for await (const blob of containerClient.listBlobsFlat({ prefix })) {
@@ -248,7 +268,7 @@ export class BlobService {
 
         if (blobsToDelete.length === 0) {
           logger.debug({
-            msg: 'No blobs found with prefix',
+            msg: "No blobs found with prefix",
             container: containerName,
             prefix,
           });
@@ -256,7 +276,7 @@ export class BlobService {
         }
 
         logger.debug({
-          msg: 'Found blobs to delete',
+          msg: "Found blobs to delete",
           container: containerName,
           prefix,
           count: blobsToDelete.length,
@@ -272,25 +292,25 @@ export class BlobService {
                 const blobClient = containerClient.getBlockBlobClient(blobName);
                 await blobClient.deleteIfExists();
                 logger.debug({
-                  msg: 'Deleted blob',
+                  msg: "Deleted blob",
                   container: containerName,
                   blobName,
                 });
               } catch (err) {
                 logger.error({
-                  msg: 'Failed to delete blob',
+                  msg: "Failed to delete blob",
                   container: containerName,
                   blobName,
                   err,
                 });
                 // Continue with other blobs even if one fails
               }
-            })
+            }),
           );
         }
 
         logger.debug({
-          msg: 'Successfully deleted blobs with prefix',
+          msg: "Successfully deleted blobs with prefix",
           container: containerName,
           prefix,
           deletedCount: blobsToDelete.length,
@@ -303,10 +323,10 @@ export class BlobService {
         backoffMultiplier: 2,
       },
       `deleteBlobsWithPrefix-${containerName}-${prefix}`,
-      logger
+      logger,
     ).catch((err: Error) => {
       logger.error({
-        msg: 'Failed to delete blobs with prefix after retries',
+        msg: "Failed to delete blobs with prefix after retries",
         container: containerName,
         prefix,
         err,
@@ -315,21 +335,25 @@ export class BlobService {
     });
   }
 
-  async sendMessageToQueue(message: ImageProcessingQueueMessage): Promise<void> {
-    const queueClient = this.queueServiceClient.getQueueClient(this.appConfig.queue.name);
+  async sendMessageToQueue(
+    message: ImageProcessingQueueMessage,
+  ): Promise<void> {
+    const queueClient = this.queueServiceClient.getQueueClient(
+      this.appConfig.queue.name,
+    );
     await queueClient.createIfNotExists();
 
-    const messageText = Buffer.from(JSON.stringify(message)).toString('base64');
+    const messageText = Buffer.from(JSON.stringify(message)).toString("base64");
     await queueClient.sendMessage(messageText);
 
     logger.debug({
-      msg: 'Sent message to queue',
+      msg: "Sent message to queue",
       queueName: this.appConfig.queue.name,
-      });
+    });
   }
 
   private appendCacheBustingParam(url: string): string {
-    const separator = url.includes('?') ? '&' : '?';
+    const separator = url.includes("?") ? "&" : "?";
     return `${url}${separator}t=${Date.now()}`;
   }
 }

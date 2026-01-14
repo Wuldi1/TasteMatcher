@@ -1,33 +1,33 @@
 {
-    "compilerOptions": {
-        "target": "ES2022",
-        "module": "nodenext",
-        "lib": ["ES2022"],
-        "outDir": "./build",
-        "rootDir": "./src",
-        "strict": true,
-        "esModuleInterop": true,
-        "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true,
-        "resolveJsonModule": true,
-        "moduleResolution": "nodenext",
-        "declaration": true,
-        "declarationMap": true,
-        "sourceMap": true,
-        "isolatedModules": true,
-        "noUnusedLocals": true,
-        "noUnusedParameters": true,
-        "noImplicitReturns": true,
-        "noFallthroughCasesInSwitch": true,
-        "paths": {
-            "@tastematcher/common": ["../common/src/*"]
-        }
-    },
-    "include": ["src/**/*", "../common/src/utils/retry.ts", "../common/src/lib"],
-    "exclude": ["node_modules", "build", "**/*.spec.ts"],
-    "references": [
-        {
-            "path": "../common"
-        }
-    ]
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "nodenext",
+    "lib": ["ES2022"],
+    "outDir": "./build",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "nodenext",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "isolatedModules": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@tastematcher/common": ["../common/src/*"]
+    }
+  },
+  "include": ["src/**/*", "../common/src/utils/retry.ts", "../common/src/lib"],
+  "exclude": ["node_modules", "build", "**/*.spec.ts"],
+  "references": [
+    {
+      "path": "../common"
+    }
+  ]
 }

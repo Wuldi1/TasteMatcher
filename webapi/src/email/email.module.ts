@@ -9,8 +9,8 @@
 // 8. Adds meaningful JSDoc for exported functions/classes.
 // 9. CI-friendly: code passes lint, typecheck, and tests locally.
 // -----------------------------------------------------------
-import { Module } from '@nestjs/common';
-import { EmailService } from './email.service';
+import { Module } from "@nestjs/common";
+import { EmailService } from "./email.service";
 
 /**
  * Email module for handling all email operations

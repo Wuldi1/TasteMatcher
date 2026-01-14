@@ -39,7 +39,12 @@ export interface ImageProcessingResult {
  */
 export interface ProcessingError {
   artworkId: string;
-  errorCode: 'DOWNLOAD_FAILED' | 'THUMBNAIL_FAILED' | 'VECTORIZE_FAILED' | 'SEARCH_INDEX_FAILED' | 'UNKNOWN';
+  errorCode:
+    | "DOWNLOAD_FAILED"
+    | "THUMBNAIL_FAILED"
+    | "VECTORIZE_FAILED"
+    | "SEARCH_INDEX_FAILED"
+    | "UNKNOWN";
   message: string;
   retryCount: number;
   failedAt: string;

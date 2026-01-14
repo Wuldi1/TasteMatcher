@@ -1,5 +1,5 @@
-import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
-import { Role } from '@tastematcher/common';
+import { IsEnum, IsOptional, IsString, MinLength } from "class-validator";
+import { Role } from "@tastematcher/common";
 
 /**
  * DTO for updating user information
@@ -12,6 +12,6 @@ export class UpdateUserDto {
   name?: string;
 
   @IsOptional()
-  @IsEnum(['dealer', 'customer'])
+  @IsEnum(["dealer", "customer"])
   role?: Role;
 }

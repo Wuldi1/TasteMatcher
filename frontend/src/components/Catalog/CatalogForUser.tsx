@@ -26,7 +26,7 @@ export type CatalogForUserProps = {
   onPreferenceClick?: (
     artworkId: string,
     liked: boolean,
-    e?: React.MouseEvent
+    e?: React.MouseEvent,
   ) => void;
   showPreferenceButtons?: boolean; // actionable thumbs for customer
   showReadOnlyThumbs?: boolean; // show thumbs as indicators (non-actionable)
@@ -56,7 +56,7 @@ export default function CatalogForUser({
     Record<string, boolean | undefined>
   >({});
   const [continuationToken, setContinuationToken] = useState<string | null>(
-    null
+    null,
   );
   const [hasMore, setHasMore] = useState<boolean>(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -175,7 +175,7 @@ export default function CatalogForUser({
       },
       {
         rootMargin: "200px",
-      }
+      },
     );
 
     observer.observe(sentinel);

@@ -1,6 +1,6 @@
-import { ReactNode } from 'react';
-import { AuthProvider } from './AuthContext';
-import { DomainProvider } from './DomainContext'; // Assuming you have this
+import { ReactNode } from "react";
+import { AuthProvider } from "./AuthContext";
+import { DomainProvider } from "./DomainContext"; // Assuming you have this
 
 interface AppProvidersProps {
   children: ReactNode;

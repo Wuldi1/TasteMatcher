@@ -5,15 +5,15 @@ on:
     branches:
       - main
     paths:
-      - 'webapi/**'
-      - 'common/**'
-      - '.github/workflows/webapi-deploy.yml'
+      - "webapi/**"
+      - "common/**"
+      - ".github/workflows/webapi-deploy.yml"
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Deployment environment'
+        description: "Deployment environment"
         required: true
-        default: 'dev'
+        default: "dev"
         type: choice
         options:
           - dev
@@ -21,8 +21,8 @@ on:
           - prd
 
 env:
-  NODE_VERSION: '22.x'
-  PNPM_VERSION: '8'
+  NODE_VERSION: "22.x"
+  PNPM_VERSION: "8"
   WEBAPI_DIR: webapi
   BUILD_OUTPUT: webapi/build
 
@@ -115,7 +115,7 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
           package: webapi-build.zip
-          startup-command: 'npm start'
+          startup-command: "npm start"
 
       - name: Azure logout
         if: always()

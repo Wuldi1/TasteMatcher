@@ -1,14 +1,14 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { MulterModule } from '@nestjs/platform-express';
-import { DomainsModule } from './domains/domains.module';
-import { UploadModule } from './upload/upload.module';
-import { ArtworksModule } from './artworks/artworks.module';
-import { HealthModule } from './health/health.module';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
-import { EmailModule } from './email/email.module';
-import { SalesModule } from './sales/sales.module';
+import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { MulterModule } from "@nestjs/platform-express";
+import { DomainsModule } from "./domains/domains.module";
+import { UploadModule } from "./upload/upload.module";
+import { ArtworksModule } from "./artworks/artworks.module";
+import { HealthModule } from "./health/health.module";
+import { AuthModule } from "./auth/auth.module";
+import { UsersModule } from "./users/users.module";
+import { EmailModule } from "./email/email.module";
+import { SalesModule } from "./sales/sales.module";
 
 @Module({
   imports: [

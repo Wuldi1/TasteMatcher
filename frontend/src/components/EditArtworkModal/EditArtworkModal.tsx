@@ -39,34 +39,34 @@ export function EditArtworkModal({
   const [signature, setSignature] = useState<string>(artwork.signature ?? "");
   const [medium, setMedium] = useState<string>(artwork.medium ?? "");
   const [widthInput, setWidthInput] = useState<string>(
-    artwork.width !== undefined ? String(artwork.width) : ""
+    artwork.width !== undefined ? String(artwork.width) : "",
   );
   const [heightInput, setHeightInput] = useState<string>(
-    artwork.height !== undefined ? String(artwork.height) : ""
+    artwork.height !== undefined ? String(artwork.height) : "",
   );
   const [depthInput, setDepthInput] = useState<string>(
-    artwork.depth !== undefined ? String(artwork.depth) : ""
+    artwork.depth !== undefined ? String(artwork.depth) : "",
   );
   const [priceInput, setPriceInput] = useState<string>(
-    artwork.price !== undefined ? String(artwork.price) : ""
+    artwork.price !== undefined ? String(artwork.price) : "",
   );
   const [maxPriceInput, setMaxPriceInput] = useState<string>(
-    artwork.maxPrice !== undefined ? String(artwork.maxPrice) : ""
+    artwork.maxPrice !== undefined ? String(artwork.maxPrice) : "",
   );
   const [endDateInput, setEndDateInput] = useState<string>(
-    artwork.endDate ?? ""
+    artwork.endDate ?? "",
   );
   const [isAuction, setIsAuction] = useState<boolean>(
-    artwork.isAuction ?? false
+    artwork.isAuction ?? false,
   );
   const [shouldDisplayPrice, setShouldDisplayPrice] = useState<boolean>(
-    artwork.shouldDisplayPrice ?? false
+    artwork.shouldDisplayPrice ?? false,
   );
   const [useForTaster, setUseForTaster] = useState<boolean>(
-    artwork.useForTaster ?? false
+    artwork.useForTaster ?? false,
   );
   const [isPrivate, setIsPrivate] = useState<boolean | undefined>(
-    artwork.isPrivate ?? undefined
+    artwork.isPrivate ?? undefined,
   );
   const [date, setDate] = useState(artwork.date || "");
   const [tags, setTags] = useState(artwork.tags?.join(", ") || "");
@@ -133,7 +133,7 @@ export function EditArtworkModal({
     if (isAuction) {
       if (isMaxPriceInvalid || isEndDateInvalid) {
         setError(
-          "Please provide a valid max price (>= price) and a future end date for auctions."
+          "Please provide a valid max price (>= price) and a future end date for auctions.",
         );
         return;
       }
@@ -187,7 +187,7 @@ export function EditArtworkModal({
         await apiClient.replaceArtworkImage(
           user.domainId,
           artwork.id,
-          newImageFile
+          newImageFile,
         );
         setNewImageFile(null);
         if (imagePreviewUrl) {
@@ -198,7 +198,7 @@ export function EditArtworkModal({
         setError(
           uploadErr instanceof Error
             ? uploadErr.message
-            : "Failed to upload new image"
+            : "Failed to upload new image",
         );
         setIsUploadingImage(false);
         return;
@@ -232,7 +232,7 @@ export function EditArtworkModal({
       setCompletedCrop(null);
       setIsEditingImage(true);
     },
-    [editingSource]
+    [editingSource],
   );
 
   const handleEditExistingImage = async () => {
@@ -244,7 +244,7 @@ export function EditArtworkModal({
       const objectUrl = URL.createObjectURL(blob);
       openImageEditor(
         objectUrl,
-        `artwork-${artwork.id}.${blob.type.split("/")[1] || "jpg"}`
+        `artwork-${artwork.id}.${blob.type.split("/")[1] || "jpg"}`,
       );
     } catch (err) {
       console.error("Failed to load artwork image for editing", err);
@@ -314,7 +314,7 @@ export function EditArtworkModal({
         0,
         0,
         outputWidth,
-        outputHeight
+        outputHeight,
       );
 
       const blob = await new Promise<Blob>((resolve, reject) => {
@@ -327,7 +327,7 @@ export function EditArtworkModal({
             }
           },
           "image/jpeg",
-          0.95
+          0.95,
         );
       });
 
@@ -533,7 +533,7 @@ export function EditArtworkModal({
                           value={maxPriceInput}
                           onChange={(e) =>
                             setMaxPriceInput(
-                              e.target.value.replace(/[^0-9.]/g, "")
+                              e.target.value.replace(/[^0-9.]/g, ""),
                             )
                           }
                           className="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
@@ -792,11 +792,11 @@ export function EditArtworkModal({
                     // center a generous default crop
                     const width = Math.min(
                       90,
-                      naturalWidth / naturalHeight > 1 ? 90 : 80
+                      naturalWidth / naturalHeight > 1 ? 90 : 80,
                     );
                     const height = Math.min(
                       90,
-                      naturalHeight / naturalWidth > 1 ? 90 : 80
+                      naturalHeight / naturalWidth > 1 ? 90 : 80,
                     );
                     setCrop({
                       unit: "%",

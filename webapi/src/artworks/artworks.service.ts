@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, Logger, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Logger,
+  BadRequestException,
+  ForbiddenException,
+} from "@nestjs/common";
 import {
   Artwork,
   PaginatedResponse,
@@ -14,10 +20,10 @@ import {
   LikedStatus,
   GlobalArtworksDomainId,
   Role,
-  isAuctionEnded
-} from '@tastematcher/common';
-import { UpdateArtworkDto } from './dto/update-artwork.dto';
-import { SavePreferenceDto } from './dto/save-preference.dto';
+  isAuctionEnded,
+} from "@tastematcher/common";
+import { UpdateArtworkDto } from "./dto/update-artwork.dto";
+import { SavePreferenceDto } from "./dto/save-preference.dto";
 
 @Injectable()
 export class ArtworksService {
@@ -45,33 +51,37 @@ export class ArtworksService {
       ...queryParams,
       filters: [
         ...(queryParams.filters ?? []),
-        { field: 'type', operator: 'eq', value: 'artwork' },
+        { field: "type", operator: "eq", value: "artwork" },
       ],
     };
 
     try {
       const result = await executeCosmosQuery<Artwork>(
         container,
-        'domainId',
+        "domainId",
         domainId,
         normalizedQueryParams,
-        { field: 'createdAt', order: 'desc' }
+        { field: "createdAt", order: "desc" },
       );
 
-      this.logger.log(`Fetched ${result.items.length} artworks for domain ${domainId}`);
+      this.logger.log(
+        `Fetched ${result.items.length} artworks for domain ${domainId}`,
+      );
 
       // If requestedUserId provided, fetch that user's preferences and map them
       if (requestedUserId) {
         try {
-          const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
+          const preferencesContainer =
+            await this.cosmosService.getArtworkPreferencesContainer();
 
           // Query preferences for this user (stored in Artworks container, partitioned by domainId)
           const prefQuery = {
-            query: 'SELECT c.artworkId, c.liked, c.comment FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId',
+            query:
+              "SELECT c.artworkId, c.liked, c.comment FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId",
             parameters: [
-              { name: '@type', value: 'artworkPreference' },
-              { name: '@domainId', value: domainId },
-              { name: '@userId', value: requestedUserId },
+              { name: "@type", value: "artworkPreference" },
+              { name: "@domainId", value: domainId },
+              { name: "@userId", value: requestedUserId },
             ],
           };
 
@@ -79,11 +89,14 @@ export class ArtworksService {
             .query(prefQuery, { partitionKey: domainId })
             .fetchAll();
 
-          const prefMap = new Map<string, { liked?: boolean; comment?: string }>();
+          const prefMap = new Map<
+            string,
+            { liked?: boolean; comment?: string }
+          >();
           for (const p of prefs) {
             if (p && p.artworkId) {
               prefMap.set(p.artworkId, {
-                liked: typeof p.liked === 'boolean' ? p.liked : undefined,
+                liked: typeof p.liked === "boolean" ? p.liked : undefined,
                 comment: p.comment,
               });
             }
@@ -106,7 +119,10 @@ export class ArtworksService {
             return artAny as Artwork;
           });
         } catch (prefErr) {
-          this.logger.warn(`Failed to enrich artworks with user preferences for user ${requestedUserId}`, prefErr);
+          this.logger.warn(
+            `Failed to enrich artworks with user preferences for user ${requestedUserId}`,
+            prefErr,
+          );
           // continue without likedStatus
         }
       }
@@ -121,7 +137,10 @@ export class ArtworksService {
         hasMore: result.hasMore,
       };
     } catch (error) {
-      this.logger.error(`Failed to fetch artworks for domain ${domainId}`, error);
+      this.logger.error(
+        `Failed to fetch artworks for domain ${domainId}`,
+        error,
+      );
       throw error;
     }
   }
@@ -136,7 +155,8 @@ export class ArtworksService {
     queryParams: QueryParams<Artwork>,
     viewer?: { id: string; role: Role; invitedBy?: string | null },
   ): Promise<PaginatedResponse<Artwork>> {
-    const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
+    const preferencesContainer =
+      await this.cosmosService.getArtworkPreferencesContainer();
     const artworksContainer = await this.cosmosService.getArtworksContainer();
 
     const limit = queryParams.limit ?? 20;
@@ -149,10 +169,10 @@ export class ArtworksService {
         ORDER BY c.createdAt DESC
       `,
       parameters: [
-        { name: '@type', value: 'artworkPreference' },
-        { name: '@domainId', value: domainId },
-        { name: '@userId', value: userId },
-        { name: '@liked', value: liked },
+        { name: "@type", value: "artworkPreference" },
+        { name: "@domainId", value: domainId },
+        { name: "@userId", value: userId },
+        { name: "@liked", value: liked },
       ],
     };
 
@@ -167,7 +187,9 @@ export class ArtworksService {
     const preferences = prefResponse.resources ?? [];
     const preferenceContinuation = prefResponse.continuationToken ?? null;
 
-    const artworkIds = preferences.map((pref) => pref.artworkId).filter(Boolean);
+    const artworkIds = preferences
+      .map((pref) => pref.artworkId)
+      .filter(Boolean);
     if (artworkIds.length === 0) {
       return {
         items: [],
@@ -182,7 +204,9 @@ export class ArtworksService {
         continue;
       }
       const { artworkId } = preference;
-      const { resource: art } = await artworksContainer.item(artworkId, domainId).read<Artwork>();
+      const { resource: art } = await artworksContainer
+        .item(artworkId, domainId)
+        .read<Artwork>();
       if (!art) continue;
       const enriched = art as Artwork;
       enriched.likedStatus = liked ? LikedStatus.Liked : LikedStatus.Disliked;
@@ -238,19 +262,31 @@ export class ArtworksService {
     const container = await this.cosmosService.getArtworksContainer();
 
     try {
-      const { resource: existing } = await container.item(artworkId, domainId).read();
+      const { resource: existing } = await container
+        .item(artworkId, domainId)
+        .read();
 
       if (!existing) {
         throw new NotFoundException(`Artwork ${artworkId} not found`);
       }
 
-      const privacyChangeRequested = Object.prototype.hasOwnProperty.call(updateDto, 'isPrivate');
-      if (privacyChangeRequested && updateDto.isPrivate !== existing.isPrivate) {
+      const privacyChangeRequested = Object.prototype.hasOwnProperty.call(
+        updateDto,
+        "isPrivate",
+      );
+      if (
+        privacyChangeRequested &&
+        updateDto.isPrivate !== existing.isPrivate
+      ) {
         if (!user?.id) {
-          throw new ForbiddenException('Only the uploader can change artwork privacy.');
+          throw new ForbiddenException(
+            "Only the uploader can change artwork privacy.",
+          );
         }
         if (!existing.uploadedBy || existing.uploadedBy !== user.id) {
-          throw new ForbiddenException('You can only change privacy on artworks you uploaded.');
+          throw new ForbiddenException(
+            "You can only change privacy on artworks you uploaded.",
+          );
         }
       }
 
@@ -260,7 +296,9 @@ export class ArtworksService {
         updatedAt: Date.now(),
       };
 
-      const { resource } = await container.item(artworkId, domainId).replace(updated);
+      const { resource } = await container
+        .item(artworkId, domainId)
+        .replace(updated);
 
       this.logger.log(`Updated artwork ${artworkId} in domain ${domainId}`);
 
@@ -295,16 +333,18 @@ export class ArtworksService {
    */
   async getStats(domainId: string, userId: string): Promise<ArtworkStats> {
     const artworksContainer = await this.cosmosService.getArtworksContainer();
-    const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
+    const preferencesContainer =
+      await this.cosmosService.getArtworkPreferencesContainer();
 
     try {
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
       const totalQuery = {
-        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.type = @type',
+        query:
+          "SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.type = @type",
         parameters: [
-          { name: '@domainId', value: domainId },
-          { name: '@type', value: 'artwork' },
+          { name: "@domainId", value: domainId },
+          { name: "@type", value: "artwork" },
         ],
       };
 
@@ -315,9 +355,9 @@ export class ArtworksService {
           WHERE c.type = @type AND c.userId = @userId AND c.domainId = @domainId
         `,
         parameters: [
-          { name: '@type', value: 'artworkPreference' },
-          { name: '@userId', value: userId },
-          { name: '@domainId', value: GlobalArtworksDomainId },
+          { name: "@type", value: "artworkPreference" },
+          { name: "@userId", value: userId },
+          { name: "@domainId", value: GlobalArtworksDomainId },
         ],
       };
 
@@ -328,9 +368,9 @@ export class ArtworksService {
           WHERE c.type = @type AND c.userId = @userId AND c.domainId = @domainId
         `,
         parameters: [
-          { name: '@type', value: 'artworkPreference' },
-          { name: '@userId', value: userId },
-          { name: '@domainId', value: domainId },
+          { name: "@type", value: "artworkPreference" },
+          { name: "@userId", value: userId },
+          { name: "@domainId", value: domainId },
         ],
       };
 
@@ -341,9 +381,9 @@ export class ArtworksService {
           WHERE c.type = @type AND c.userId = @userId AND c.domainId = @domainId AND c.liked = true
         `,
         parameters: [
-          { name: '@type', value: 'artworkPreference' },
-          { name: '@userId', value: userId },
-          { name: '@domainId', value: domainId },
+          { name: "@type", value: "artworkPreference" },
+          { name: "@userId", value: userId },
+          { name: "@domainId", value: domainId },
         ],
       };
 
@@ -354,27 +394,45 @@ export class ArtworksService {
           WHERE c.type = @type AND c.userId = @userId AND c.domainId = @domainId AND c.liked = false
         `,
         parameters: [
-          { name: '@type', value: 'artworkPreference' },
-          { name: '@userId', value: userId },
-          { name: '@domainId', value: domainId },
+          { name: "@type", value: "artworkPreference" },
+          { name: "@userId", value: userId },
+          { name: "@domainId", value: domainId },
         ],
       };
 
       const recentQuery = {
-        query: 'SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.type = @type AND c.createdAt >= @sevenDaysAgo',
+        query:
+          "SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.type = @type AND c.createdAt >= @sevenDaysAgo",
         parameters: [
-          { name: '@domainId', value: domainId },
-          { name: '@type', value: 'artwork' },
-          { name: '@sevenDaysAgo', value: sevenDaysAgo },
+          { name: "@domainId", value: domainId },
+          { name: "@type", value: "artwork" },
+          { name: "@sevenDaysAgo", value: sevenDaysAgo },
         ],
       };
 
-      const [totalResult, totalSwipedGlobalResult, totalSwipedDomainResult, likesResult, dislikesResult, recentResult] = await Promise.all([
+      const [
+        totalResult,
+        totalSwipedGlobalResult,
+        totalSwipedDomainResult,
+        likesResult,
+        dislikesResult,
+        recentResult,
+      ] = await Promise.all([
         artworksContainer.items.query(totalQuery).fetchAll(),
-        preferencesContainer.items.query(totalSwipedGlobalQuery, { partitionKey: GlobalArtworksDomainId }).fetchAll(),
-        preferencesContainer.items.query(totalSwipedDomainQuery, { partitionKey: domainId }).fetchAll(),
-        preferencesContainer.items.query(likesQuery, { partitionKey: domainId }).fetchAll(),
-        preferencesContainer.items.query(dislikesQuery, { partitionKey: domainId }).fetchAll(),
+        preferencesContainer.items
+          .query(totalSwipedGlobalQuery, {
+            partitionKey: GlobalArtworksDomainId,
+          })
+          .fetchAll(),
+        preferencesContainer.items
+          .query(totalSwipedDomainQuery, { partitionKey: domainId })
+          .fetchAll(),
+        preferencesContainer.items
+          .query(likesQuery, { partitionKey: domainId })
+          .fetchAll(),
+        preferencesContainer.items
+          .query(dislikesQuery, { partitionKey: domainId })
+          .fetchAll(),
         artworksContainer.items.query(recentQuery).fetchAll(),
       ]);
 
@@ -382,7 +440,9 @@ export class ArtworksService {
         totalArtworks: totalResult.resources[0] || 0,
         totalLikes: likesResult.resources[0] || 0,
         totalDislikes: dislikesResult.resources[0] || 0,
-        totalSwiped: (totalSwipedGlobalResult.resources[0] || 0) + (totalSwipedDomainResult.resources[0] || 0),
+        totalSwiped:
+          (totalSwipedGlobalResult.resources[0] || 0) +
+          (totalSwipedDomainResult.resources[0] || 0),
         recentlyAdded: recentResult.resources[0] || 0,
       };
 
@@ -407,16 +467,18 @@ export class ArtworksService {
     viewer?: { id: string; role: Role; invitedBy?: string | null },
   ): Promise<UntastedArtworksResponse> {
     const artworksContainer = await this.cosmosService.getArtworksContainer();
-    const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
+    const preferencesContainer =
+      await this.cosmosService.getArtworkPreferencesContainer();
 
     try {
       // Step 1: Get all artwork IDs the user has already tasted
       const tastedQuery = {
-        query: 'SELECT VALUE c.artworkId FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId',
+        query:
+          "SELECT VALUE c.artworkId FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId",
         parameters: [
-          { name: '@type', value: 'artworkPreference' },
-          { name: '@domainId', value: GlobalArtworksDomainId },
-          { name: '@userId', value: userId },
+          { name: "@type", value: "artworkPreference" },
+          { name: "@domainId", value: GlobalArtworksDomainId },
+          { name: "@userId", value: userId },
         ],
       };
 
@@ -424,35 +486,44 @@ export class ArtworksService {
         .query(tastedQuery, { partitionKey: GlobalArtworksDomainId })
         .fetchAll();
 
-      this.logger.debug(`User ${userId} has tasted ${tastedArtworkIds.length} artworks`);
+      this.logger.debug(
+        `User ${userId} has tasted ${tastedArtworkIds.length} artworks`,
+      );
 
       // Step 2: Query artworks NOT in the tasted list
       let artworksQuery: string;
       const parameters: Array<{ name: string; value: any }> = [
-        { name: '@primaryDomainId', value: primaryDomainId },
-        { name: '@limit', value: limit },
+        { name: "@primaryDomainId", value: primaryDomainId },
+        { name: "@limit", value: limit },
       ];
-      const secondaryDomainId = includeDomainId && includeDomainId !== primaryDomainId ? includeDomainId : undefined;
+      const secondaryDomainId =
+        includeDomainId && includeDomainId !== primaryDomainId
+          ? includeDomainId
+          : undefined;
       if (secondaryDomainId) {
-        parameters.push({ name: '@secondaryDomainId', value: secondaryDomainId });
+        parameters.push({
+          name: "@secondaryDomainId",
+          value: secondaryDomainId,
+        });
       }
 
       const domainFilterClause = secondaryDomainId
-        ? '(c.domainId = @primaryDomainId OR (c.domainId = @secondaryDomainId AND c.useForTaster = true))'
-        : 'c.domainId = @primaryDomainId';
-      const typeClause = 'c.type = @artworkType';
+        ? "(c.domainId = @primaryDomainId OR (c.domainId = @secondaryDomainId AND c.useForTaster = true))"
+        : "c.domainId = @primaryDomainId";
+      const typeClause = "c.type = @artworkType";
 
       const randomOrderFields = [
-        'createdAt',
-        'title',
-        'artist',
-        'date',
-        'signature',
-        '_ts',
-        '_rid',
+        "createdAt",
+        "title",
+        "artist",
+        "date",
+        "signature",
+        "_ts",
+        "_rid",
       ];
-      const orderField = randomOrderFields[Math.floor(Math.random() * randomOrderFields.length)];
-      const orderDirection = Math.random() > 0.5 ? 'ASC' : 'DESC';
+      const orderField =
+        randomOrderFields[Math.floor(Math.random() * randomOrderFields.length)];
+      const orderDirection = Math.random() > 0.5 ? "ASC" : "DESC";
       const orderClause = `ORDER BY c.${orderField} ${orderDirection}`;
 
       if (tastedArtworkIds.length === 0) {
@@ -473,21 +544,24 @@ export class ArtworksService {
             AND NOT ARRAY_CONTAINS(@tastedIds, c.id)
           ${orderClause}
         `;
-        parameters.push({ name: '@tastedIds', value: tastedArtworkIds });
+        parameters.push({ name: "@tastedIds", value: tastedArtworkIds });
       }
 
-      parameters.push({ name: '@artworkType', value: 'artwork' });
+      parameters.push({ name: "@artworkType", value: "artwork" });
 
       const { resources: untastedArtworks } = await artworksContainer.items
         .query({ query: artworksQuery, parameters })
         .fetchAll();
 
       this.logger.log(
-        `Found ${untastedArtworks.length} untasted artworks for user ${userId} in domains ${primaryDomainId}${secondaryDomainId ? ` and ${secondaryDomainId}` : ''
+        `Found ${untastedArtworks.length} untasted artworks for user ${userId} in domains ${primaryDomainId}${
+          secondaryDomainId ? ` and ${secondaryDomainId}` : ""
         }`,
       );
 
-      const visible = untastedArtworks.filter((art) => this.canViewerSeeArtwork(art, viewer));
+      const visible = untastedArtworks.filter((art) =>
+        this.canViewerSeeArtwork(art, viewer),
+      );
 
       return {
         artworks: visible,
@@ -495,7 +569,7 @@ export class ArtworksService {
       };
     } catch (error) {
       this.logger.error(
-        `Failed to get untasted artworks for user ${userId} in domains ${primaryDomainId}${includeDomainId ? ` and ${includeDomainId}` : ''}`,
+        `Failed to get untasted artworks for user ${userId} in domains ${primaryDomainId}${includeDomainId ? ` and ${includeDomainId}` : ""}`,
         error,
       );
       throw error;
@@ -505,27 +579,33 @@ export class ArtworksService {
   /**
    * Save or update artwork preference (like/dislike) for a user
    */
-  async savePreference(domainId: string, userId: string, artworkId: string, saveDto: SavePreferenceDto): Promise<ArtworkPreference> {
-    const artworkPreferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
+  async savePreference(
+    domainId: string,
+    userId: string,
+    artworkId: string,
+    saveDto: SavePreferenceDto,
+  ): Promise<ArtworkPreference> {
+    const artworkPreferencesContainer =
+      await this.cosmosService.getArtworkPreferencesContainer();
 
     try {
-
       const preferenceId = generatePreferenceId(userId, artworkId);
       let updatedResource;
 
       // Check if preference already exists
-      const { resource: existingPreference } = await artworkPreferencesContainer.item(preferenceId, domainId).read();
-
+      const { resource: existingPreference } = await artworkPreferencesContainer
+        .item(preferenceId, domainId)
+        .read();
 
       if (existingPreference) {
         // Update existing preference
         const updatedPreference = {
           ...existingPreference,
           ...saveDto,
-          type: existingPreference.type ?? 'artworkPreference',
+          type: existingPreference.type ?? "artworkPreference",
           domainId,
           liked:
-            typeof saveDto.liked === 'boolean'
+            typeof saveDto.liked === "boolean"
               ? saveDto.liked
               : existingPreference.liked,
           updatedAt: Date.now(),
@@ -535,63 +615,79 @@ export class ArtworksService {
           .item(preferenceId, domainId)
           .replace(updatedPreference);
         updatedResource = replacement;
-        this.logger.log(`Updated preference for artwork ${artworkId} by user ${userId}`);
-
+        this.logger.log(
+          `Updated preference for artwork ${artworkId} by user ${userId}`,
+        );
       } else {
         // Create new preference
         const newPreference = {
           id: preferenceId,
-          type: 'artworkPreference' as const,
+          type: "artworkPreference" as const,
           userId,
           ...saveDto,
-          liked: typeof saveDto.liked === 'boolean' ? saveDto.liked : undefined,
+          liked: typeof saveDto.liked === "boolean" ? saveDto.liked : undefined,
           createdAt: Date.now(),
           updatedAt: Date.now(),
         };
 
-        const { resource: created } = await artworkPreferencesContainer.items.create(newPreference);
+        const { resource: created } =
+          await artworkPreferencesContainer.items.create(newPreference);
         updatedResource = created;
 
-        this.logger.log(`Saved new preference for artwork ${artworkId} by user ${userId}`);
+        this.logger.log(
+          `Saved new preference for artwork ${artworkId} by user ${userId}`,
+        );
       }
 
       // first, get the user preferenceVector from his existing record
-      const usersContainer = await this.cosmosService.getContainer('Core');
-      const { resource: userRecord } = await usersContainer.item(userId, domainId).read();
+      const usersContainer = await this.cosmosService.getContainer("Core");
+      const { resource: userRecord } = await usersContainer
+        .item(userId, domainId)
+        .read();
       const userPreferenceVector = userRecord.preferenceVector;
 
       const artworkResource = await this.findOne(saveDto.domainId, artworkId);
       if (!artworkResource) {
-        throw new NotFoundException(`Artwork ${artworkId} not found for updating preference vector`);
+        throw new NotFoundException(
+          `Artwork ${artworkId} not found for updating preference vector`,
+        );
       }
 
       const imageVector = artworkResource.vector;
 
       // if preferenceVector exists and is valid, update it using the new preference
       if (
-        typeof saveDto.liked === 'boolean' &&
-        Array.isArray(userPreferenceVector) && userPreferenceVector.length === 1024 &&
-        imageVector && imageVector.length === 1024
+        typeof saveDto.liked === "boolean" &&
+        Array.isArray(userPreferenceVector) &&
+        userPreferenceVector.length === 1024 &&
+        imageVector &&
+        imageVector.length === 1024
       ) {
         // Here you would implement the logic to update the user's preference vector
         // based on the new preference. This could involve calling an external service
         // or running a local algorithm to adjust the vector.
-        const updatedPreferenceVector = this.searchIndexService.calculateUpdatedPreferenceVector(
-          userPreferenceVector,
-          imageVector,
-          saveDto.liked
-        );
+        const updatedPreferenceVector =
+          this.searchIndexService.calculateUpdatedPreferenceVector(
+            userPreferenceVector,
+            imageVector,
+            saveDto.liked,
+          );
 
         // store updated preference vector back to user record
         userRecord.preferenceVector = updatedPreferenceVector;
         await usersContainer.item(userId, domainId).replace(userRecord);
 
-        this.logger.log(`Updated preference vector for user ${userId} after saving preference for artwork ${artworkId}`);
+        this.logger.log(
+          `Updated preference vector for user ${userId} after saving preference for artwork ${artworkId}`,
+        );
       }
 
       return updatedResource!;
     } catch (error) {
-      this.logger.error(`Failed to save preference for artwork ${artworkId} by user ${userId}`, error);
+      this.logger.error(
+        `Failed to save preference for artwork ${artworkId} by user ${userId}`,
+        error,
+      );
       throw error;
     }
   }
@@ -607,7 +703,10 @@ export class ArtworksService {
     offset: number = 0,
   ): Promise<Array<Artwork>> {
     const resolvedUserId =
-      (requester.role === 'dealer' || requester.role === 'domain_owner' || requester.role === 'global_admin') && targetUserId
+      (requester.role === "dealer" ||
+        requester.role === "domain_owner" ||
+        requester.role === "global_admin") &&
+      targetUserId
         ? targetUserId
         : requester.id;
 
@@ -615,7 +714,7 @@ export class ArtworksService {
     const fetchCount = (offset + limit) * 3;
     const start = Date.now();
     this.logger.debug({
-      msg: 'Fetching AI suggestions',
+      msg: "Fetching AI suggestions",
       domainId,
       requesterId: requester.id,
       targetUserId: resolvedUserId,
@@ -624,22 +723,28 @@ export class ArtworksService {
     });
 
     try {
-      const userRecord = await this.cosmosService.getUser(domainId, resolvedUserId);
+      const userRecord = await this.cosmosService.getUser(
+        domainId,
+        resolvedUserId,
+      );
 
       const { totalSwiped } = await this.getStats(domainId, resolvedUserId);
       userRecord.swipeCount = totalSwiped;
 
-      const { isEligible, reasons } = getAIRecommendationsEligibility(userRecord);
+      const { isEligible, reasons } =
+        getAIRecommendationsEligibility(userRecord);
 
       if (!isEligible) {
         this.logger.log({
-          msg: `User not eligible for AI suggestions: ${reasons.join(', ')}`,
+          msg: `User not eligible for AI suggestions: ${reasons.join(", ")}`,
           domainId,
           targetUserId: resolvedUserId,
           durationMs: Date.now() - start,
         });
 
-        throw new BadRequestException(`User not eligible for AI suggestions: ${reasons.join(', ')}`);
+        throw new BadRequestException(
+          `User not eligible for AI suggestions: ${reasons.join(", ")}`,
+        );
       }
 
       const preferenceVector = Array.isArray(userRecord.preferenceVector)
@@ -648,7 +753,7 @@ export class ArtworksService {
 
       if (!preferenceVector || preferenceVector.length !== 1024) {
         this.logger.warn({
-          msg: 'Missing or invalid preference vector; skipping AI suggestions',
+          msg: "Missing or invalid preference vector; skipping AI suggestions",
           domainId,
           targetUserId: resolvedUserId,
         });
@@ -657,7 +762,7 @@ export class ArtworksService {
       }
 
       this.logger.debug({
-        msg: 'Generating AI suggestions using preference vector',
+        msg: "Generating AI suggestions using preference vector",
         domainId,
         targetUserId: resolvedUserId,
         preferenceVector: preferenceVector,
@@ -670,16 +775,18 @@ export class ArtworksService {
       );
 
       const artworksContainer = await this.cosmosService.getArtworksContainer();
-      const preferencesContainer = await this.cosmosService.getArtworkPreferencesContainer();
+      const preferencesContainer =
+        await this.cosmosService.getArtworkPreferencesContainer();
       const recommendedArtworks: Artwork[] = [];
 
       // Fetch preferences for the user
       const preferencesQuery = {
-        query: 'SELECT c.artworkId, c.liked, c.comment FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId',
+        query:
+          "SELECT c.artworkId, c.liked, c.comment FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId",
         parameters: [
-          { name: '@type', value: 'artworkPreference' },
-          { name: '@domainId', value: domainId },
-          { name: '@userId', value: resolvedUserId },
+          { name: "@type", value: "artworkPreference" },
+          { name: "@domainId", value: domainId },
+          { name: "@userId", value: resolvedUserId },
         ],
       };
 
@@ -687,10 +794,13 @@ export class ArtworksService {
         .query(preferencesQuery, { partitionKey: domainId })
         .fetchAll();
 
-      const preferencesMap = new Map<string, { liked?: boolean; comment?: string }>();
+      const preferencesMap = new Map<
+        string,
+        { liked?: boolean; comment?: string }
+      >();
       preferences.forEach((pref) => {
         preferencesMap.set(pref.artworkId, {
-          liked: typeof pref.liked === 'boolean' ? pref.liked : undefined,
+          liked: typeof pref.liked === "boolean" ? pref.liked : undefined,
           comment: pref.comment,
         });
       });
@@ -701,9 +811,9 @@ export class ArtworksService {
         const comment = prefEntry?.comment;
         let shouldInclude = true;
 
-        if (requester.role === 'customer') {
+        if (requester.role === "customer") {
           // Customer: filter out all artworks with either liked status (liked and disliked)
-          if (typeof liked === 'boolean') {
+          if (typeof liked === "boolean") {
             shouldInclude = false;
           }
         } else {
@@ -743,7 +853,7 @@ export class ArtworksService {
           }
         } catch (lookupError) {
           this.logger.warn({
-            msg: 'Failed to fetch artwork during AI suggestions',
+            msg: "Failed to fetch artwork during AI suggestions",
             domainId,
             artworkId: match.artworkId,
             error: (lookupError as Error).message,
@@ -752,7 +862,7 @@ export class ArtworksService {
       }
 
       this.logger.log({
-        msg: 'AI suggestions generated successfully',
+        msg: "AI suggestions generated successfully",
         domainId,
         targetUserId: resolvedUserId,
         recommendationCount: recommendedArtworks.length,
@@ -765,10 +875,9 @@ export class ArtworksService {
 
       // Apply pagination
       return visibleRecommendations.slice(offset, offset + limit);
-
     } catch (error) {
       this.logger.error({
-        msg: 'Failed to generate AI suggestions',
+        msg: "Failed to generate AI suggestions",
         domainId,
         requesterId: requester.id,
         targetUserId: resolvedUserId,
@@ -783,7 +892,7 @@ export class ArtworksService {
     artwork: Artwork,
     viewer?: { id: string; role: string; invitedBy?: string | null },
   ): boolean {
-    if (viewer?.role === 'customer' && isAuctionEnded(artwork)) {
+    if (viewer?.role === "customer" && isAuctionEnded(artwork)) {
       return false;
     }
     if (!artwork.isPrivate) {
@@ -792,14 +901,16 @@ export class ArtworksService {
     if (!viewer) {
       return true;
     }
-    if (viewer.role === 'global_admin' || viewer.role === 'domain_owner') {
+    if (viewer.role === "global_admin" || viewer.role === "domain_owner") {
       return true;
     }
-    if (viewer.role === 'dealer') {
+    if (viewer.role === "dealer") {
       return artwork.uploadedBy === viewer.id;
     }
-    if (viewer.role === 'customer') {
-      return Boolean(viewer.invitedBy && artwork.uploadedBy === viewer.invitedBy);
+    if (viewer.role === "customer") {
+      return Boolean(
+        viewer.invitedBy && artwork.uploadedBy === viewer.invitedBy,
+      );
     }
     return false;
   }

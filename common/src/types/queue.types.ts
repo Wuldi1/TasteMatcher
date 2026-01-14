@@ -1,6 +1,11 @@
 import { Artwork, ThumbnailInfo } from "./artwork.types";
 
-export type UploadStatus = 'pending' | 'enqueued' | 'processing' | 'completed' | 'failed';
+export type UploadStatus =
+  | "pending"
+  | "enqueued"
+  | "processing"
+  | "completed"
+  | "failed";
 
 export interface ImageProcessingQueueMessage {
   /** Unique message identifier for idempotency */
@@ -20,9 +25,9 @@ export interface ImageProcessingQueueMessage {
 export interface ProcessingStatus {
   artworkId: string;
   status: UploadStatus;
-  progress: number;       // 0-100 percentage
+  progress: number; // 0-100 percentage
   thumbnails?: Array<ThumbnailInfo>;
-  error?: string;          // error message if failed
+  error?: string; // error message if failed
 }
 
 // ---------- CODEGEN CHECKLIST (must be satisfied) ----------

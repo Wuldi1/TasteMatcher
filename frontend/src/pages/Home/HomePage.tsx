@@ -11,10 +11,10 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { useAuth } from '../../contexts/AuthContext';
-import { CustomerHomePage } from './CustomerHomePage';
-import { DealerHomePage } from './DealerHomePage';
-import { LogOut } from 'lucide-react';
+import { useAuth } from "../../contexts/AuthContext";
+import { CustomerHomePage } from "./CustomerHomePage";
+import { DealerHomePage } from "./DealerHomePage";
+import { LogOut } from "lucide-react";
 
 export function HomePage() {
   const { user, logout } = useAuth();
@@ -23,7 +23,7 @@ export function HomePage() {
     return null;
   }
 
-  const isCustomer = user.role === 'customer';
+  const isCustomer = user.role === "customer";
 
   return (
     <div className="relative">

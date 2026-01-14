@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { NAVIGATION_LINKS } from '../constants/navigation';
-import { useAuth } from '../contexts/AuthContext';
+import { useState, useEffect } from "react";
+import { NAVIGATION_LINKS } from "../constants/navigation";
+import { useAuth } from "../contexts/AuthContext";
 
-const TOUR_STORAGE_KEY = 'welcomeTourCompleted';
+const TOUR_STORAGE_KEY = "welcomeTourCompleted";
 
 export function useWelcomeTour() {
   const { user } = useAuth();
@@ -10,10 +10,12 @@ export function useWelcomeTour() {
   const [isTourActive, setIsTourActive] = useState(false);
 
   // Filter steps based on user role
-  const steps = NAVIGATION_LINKS.filter((link) => link.roles.includes(user?.role || '')).map((link) => link.id);
+  const steps = NAVIGATION_LINKS.filter((link) =>
+    link.roles.includes(user?.role || ""),
+  ).map((link) => link.id);
 
   useEffect(() => {
-    const hasCompletedTour = localStorage.getItem(TOUR_STORAGE_KEY) === 'true';
+    const hasCompletedTour = localStorage.getItem(TOUR_STORAGE_KEY) === "true";
 
     if (!hasCompletedTour && steps.length > 0) {
       setCurrentStep(steps[0]); // Start with the first step
@@ -47,7 +49,7 @@ export function useWelcomeTour() {
   const completeTour = () => {
     setIsTourActive(false);
     setCurrentStep(null);
-    localStorage.setItem(TOUR_STORAGE_KEY, 'true');
+    localStorage.setItem(TOUR_STORAGE_KEY, "true");
   };
 
   return {

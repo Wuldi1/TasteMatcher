@@ -6,31 +6,31 @@
 // 5. Adds structured error handling.
 // -----------------------------------------------------------
 
-import js from '@eslint/js';
-import typescript from '@typescript-eslint/eslint-plugin';
-import typescriptParser from '@typescript-eslint/parser';
-import globals from 'globals';
+import js from "@eslint/js";
+import typescript from "@typescript-eslint/eslint-plugin";
+import typescriptParser from "@typescript-eslint/parser";
+import globals from "globals";
 
 export default [
   // Ignore patterns
   {
     ignores: [
-      'build/**',
-      'node_modules/**',
-      'coverage/**',
-      '*.config.js',
-      '*.config.mjs',
+      "build/**",
+      "node_modules/**",
+      "coverage/**",
+      "*.config.js",
+      "*.config.mjs",
     ],
   },
 
   // Base JavaScript/TypeScript config
   {
-    files: ['**/*.ts'],
+    files: ["**/*.ts"],
     languageOptions: {
       parser: typescriptParser,
       parserOptions: {
-        ecmaVersion: 'latest',
-        sourceType: 'module',
+        ecmaVersion: "latest",
+        sourceType: "module",
         // Remove project reference for simpler parsing
         // project: './tsconfig.json',
       },
@@ -40,35 +40,35 @@ export default [
       },
     },
     plugins: {
-      '@typescript-eslint': typescript,
+      "@typescript-eslint": typescript,
     },
     rules: {
       ...js.configs.recommended.rules,
       ...typescript.configs.recommended.rules,
 
       // TypeScript-specific rules
-      '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/explicit-function-return-type': 'off',
-      '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/explicit-function-return-type": "off",
+      "@typescript-eslint/explicit-module-boundary-types": "off",
+      "@typescript-eslint/no-unused-vars": "off",
 
       // Azure Functions-specific conventions
-      '@typescript-eslint/interface-name-prefix': 'off',
-      '@typescript-eslint/no-inferrable-types': 'off',
+      "@typescript-eslint/interface-name-prefix": "off",
+      "@typescript-eslint/no-inferrable-types": "off",
 
       // Best practices
-      'no-console': 'off', // Allow console for Azure Functions logging
-      'no-undef': 'off', // Disable for TypeScript - @typescript-eslint handles this
-      'prefer-const': 'error',
-      'no-var': 'error',
+      "no-console": "off", // Allow console for Azure Functions logging
+      "no-undef": "off", // Disable for TypeScript - @typescript-eslint handles this
+      "prefer-const": "error",
+      "no-var": "error",
     },
   },
 
   // Test files - relaxed rules
   {
-    files: ['**/*.spec.ts', '**/*.test.ts'],
+    files: ["**/*.spec.ts", "**/*.test.ts"],
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
+      "@typescript-eslint/no-explicit-any": "off",
     },
   },
 ];

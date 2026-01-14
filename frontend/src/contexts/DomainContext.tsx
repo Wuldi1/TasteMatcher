@@ -10,10 +10,18 @@
 // 9. CI-friendly: passes typecheck and lint.
 // -----------------------------------------------------------
 
-import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
-import { Domain } from '@tastematcher/common';
-import { useAuth } from './AuthContext';
-import { apiClient } from '../utils/api';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useMemo,
+  useCallback,
+} from "react";
+import { Domain } from "@tastematcher/common";
+import { useAuth } from "./AuthContext";
+import { apiClient } from "../utils/api";
 
 interface DomainContextType {
   currentDomain: Domain | null;
@@ -21,9 +29,11 @@ interface DomainContextType {
   isLoading: boolean;
 }
 
-export const DomainContext = createContext<DomainContextType | undefined>(undefined);
+export const DomainContext = createContext<DomainContextType | undefined>(
+  undefined,
+);
 
-const DOMAIN_STORAGE_KEY = 'tm_current_domain';
+const DOMAIN_STORAGE_KEY = "tm_current_domain";
 
 export function DomainProvider({ children }: { children: ReactNode }) {
   const [currentDomain, _setCurrentDomain] = useState<Domain | null>(() => {
@@ -66,9 +76,9 @@ export function DomainProvider({ children }: { children: ReactNode }) {
       // This can happen if the user logs into a different account.
       if (currentDomain && user.domainId !== currentDomain.id) {
         // The cached domain is stale, clear it and re-fetch.
-        setCurrentDomain(null); 
+        setCurrentDomain(null);
       }
-      
+
       // If we have a user and a matching domain in cache, we are done.
       if (currentDomain && user.domainId === currentDomain.id) {
         setLoading(false);
@@ -82,7 +92,7 @@ export function DomainProvider({ children }: { children: ReactNode }) {
           const domain = await apiClient.getDomainById(user.domainId);
           setCurrentDomain(domain);
         } catch (error) {
-          console.error('Failed to fetch domain details:', error);
+          console.error("Failed to fetch domain details:", error);
           setCurrentDomain(null);
         } finally {
           setLoading(false);
@@ -99,16 +109,14 @@ export function DomainProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <DomainContext.Provider value={value}>
-      {children}
-    </DomainContext.Provider>
+    <DomainContext.Provider value={value}>{children}</DomainContext.Provider>
   );
 }
 
 export function useDomain() {
   const context = useContext(DomainContext);
   if (context === undefined) {
-    throw new Error('useDomain must be used within a DomainProvider');
+    throw new Error("useDomain must be used within a DomainProvider");
   }
   return context;
 }

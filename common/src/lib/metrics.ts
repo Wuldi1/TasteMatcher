@@ -1,6 +1,6 @@
-import { createLogger } from './logger';
+import { createLogger } from "./logger";
 
-const logger = createLogger('Metrics');
+const logger = createLogger("Metrics");
 
 interface MetricTags {
   [key: string]: string | number;
@@ -13,7 +13,7 @@ interface MetricTags {
 class Metrics {
   increment(name: string, tags?: MetricTags): void {
     logger.debug({
-      metric: 'increment',
+      metric: "increment",
       name,
       tags,
     });
@@ -22,7 +22,7 @@ class Metrics {
 
   timing(name: string, value: number, tags?: MetricTags): void {
     logger.debug({
-      metric: 'timing',
+      metric: "timing",
       name,
       value,
       tags,

@@ -1,16 +1,16 @@
 /**
  * Generic filter operator
  */
-export type FilterOperator = 
-  | 'eq'      // equals
-  | 'ne'      // not equals
-  | 'gt'      // greater than
-  | 'gte'     // greater than or equal
-  | 'lt'      // less than
-  | 'lte'     // less than or equal
-  | 'contains' // string contains
-  | 'in'      // value in array
-  | 'array_contains'; // array contains value
+export type FilterOperator =
+  | "eq" // equals
+  | "ne" // not equals
+  | "gt" // greater than
+  | "gte" // greater than or equal
+  | "lt" // less than
+  | "lte" // less than or equal
+  | "contains" // string contains
+  | "in" // value in array
+  | "array_contains"; // array contains value
 
 /**
  * Generic filter condition
@@ -26,7 +26,7 @@ export interface FilterCondition<T = any> {
  */
 export interface SortConfig<T = any> {
   field: keyof T | string;
-  order: 'asc' | 'desc';
+  order: "asc" | "desc";
 }
 
 /**

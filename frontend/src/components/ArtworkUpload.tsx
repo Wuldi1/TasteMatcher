@@ -67,7 +67,7 @@ export function ArtworkUpload() {
 
   const isReadyToUpload = useMemo(
     () => Boolean(currentDomain && file),
-    [currentDomain, file]
+    [currentDomain, file],
   );
   const priceValue = metadata.price ?? 0;
   const auctionMaxInvalid = metadata.isAuction
@@ -137,7 +137,7 @@ export function ArtworkUpload() {
         fileInputRef.current.value = "";
       }
     },
-    [previewUrl]
+    [previewUrl],
   );
 
   const handleFiles = useCallback(
@@ -157,14 +157,14 @@ export function ArtworkUpload() {
         setPreviewUrl(null);
       }
     },
-    [previewUrl]
+    [previewUrl],
   );
 
   const handleFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       handleFiles(event.target.files);
     },
-    [handleFiles]
+    [handleFiles],
   );
 
   const handleDragOver = useCallback(
@@ -173,7 +173,7 @@ export function ArtworkUpload() {
       event.stopPropagation();
       setIsDragActive(true);
     },
-    []
+    [],
   );
 
   const handleDragLeave = useCallback(
@@ -182,7 +182,7 @@ export function ArtworkUpload() {
       event.stopPropagation();
       setIsDragActive(false);
     },
-    []
+    [],
   );
 
   const handleDrop = useCallback(
@@ -192,7 +192,7 @@ export function ArtworkUpload() {
       setIsDragActive(false);
       handleFiles(event.dataTransfer.files);
     },
-    [handleFiles]
+    [handleFiles],
   );
 
   const handleMetadataChange = useCallback(
@@ -204,7 +204,7 @@ export function ArtworkUpload() {
           [field]: value.length > 0 ? value : undefined,
         }));
       },
-    []
+    [],
   );
 
   const addTag = useCallback(() => {
@@ -233,7 +233,7 @@ export function ArtworkUpload() {
     (event: React.ChangeEvent<HTMLInputElement>) => {
       setTagInput(event.target.value);
     },
-    []
+    [],
   );
 
   const handleTagInputKeyDown = useCallback(
@@ -248,7 +248,7 @@ export function ArtworkUpload() {
         }
       }
     },
-    [addTag, metadata.tags, removeTag, tagInput]
+    [addTag, metadata.tags, removeTag, tagInput],
   );
 
   const handleTagInputBlur = useCallback(() => {
@@ -276,7 +276,7 @@ export function ArtworkUpload() {
       setPriceInput(formatPrice(raw));
       setMetadata((prev) => ({ ...prev, price: Number(raw) }));
     },
-    []
+    [],
   );
 
   const handleMaxPriceChange = useCallback(
@@ -290,7 +290,7 @@ export function ArtworkUpload() {
       setMaxPriceInput(formatPrice(raw));
       setMetadata((prev) => ({ ...prev, maxPrice: Number(raw) }));
     },
-    []
+    [],
   );
 
   // Numeric metadata input handler (width, height) — allow digits and a single dot (.) as decimal separator.
@@ -327,7 +327,7 @@ export function ArtworkUpload() {
         setMetadata((prev) => ({ ...prev, [field]: numeric }));
       }
     },
-    []
+    [],
   );
 
   // Prevent non-numeric chars in width/height inputs; allow digits, one period, navigation keys
@@ -353,7 +353,7 @@ export function ArtworkUpload() {
       // otherwise prevent
       event.preventDefault();
     },
-    []
+    [],
   );
 
   const handleSubmit = useCallback(
@@ -389,17 +389,17 @@ export function ArtworkUpload() {
         if (error instanceof ApiError) {
           setStatus("error");
           setMessage(
-            error.message || "Failed to upload artwork. Please try again."
+            error.message || "Failed to upload artwork. Please try again.",
           );
         } else {
           setStatus("error");
           setMessage(
-            "Network error. Please check your connection and try again."
+            "Network error. Please check your connection and try again.",
           );
         }
       }
     },
-    [file, metadata, resetForm, currentDomain, validationMessage]
+    [file, metadata, resetForm, currentDomain, validationMessage],
   );
 
   useEffect(() => {

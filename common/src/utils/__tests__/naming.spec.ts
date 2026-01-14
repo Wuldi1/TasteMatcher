@@ -16,35 +16,37 @@ import {
   getQueueDlqName,
   getQueueName,
   getSearchDocId,
-} from '../naming';
+} from "../naming";
 
-describe('naming utils', () => {
-  const domainId = '11111111-1111-1111-1111-111111111111';
-  const artworkId = '22222222-2222-2222-2222-222222222222';
+describe("naming utils", () => {
+  const domainId = "11111111-1111-1111-1111-111111111111";
+  const artworkId = "22222222-2222-2222-2222-222222222222";
 
-  it('returns original blob path', () => {
-    expect(getOriginalBlobPath(domainId, artworkId, 'jpg')).toBe(
+  it("returns original blob path", () => {
+    expect(getOriginalBlobPath(domainId, artworkId, "jpg")).toBe(
       `${domainId}/artworks/${artworkId}/original.jpg`,
     );
   });
 
-  it('returns derivative path', () => {
+  it("returns derivative path", () => {
     expect(getDerivativeBlobPath(domainId, artworkId, "Small")).toBe(
       `${domainId}/artworks/${artworkId}/small.webp`,
     );
   });
 
-  it('returns search doc id', () => {
-    expect(getSearchDocId(domainId, artworkId)).toBe(`${domainId}::${artworkId}`);
+  it("returns search doc id", () => {
+    expect(getSearchDocId(domainId, artworkId)).toBe(
+      `${domainId}::${artworkId}`,
+    );
   });
 
-  it('returns queue name', () => {
-    expect(getQueueName('Dev')).toBe('tastematcher-dev-queue-indexing');
-    expect(getQueueDlqName('Dev')).toBe('tastematcher-dev-queue-indexing-dlq');
+  it("returns queue name", () => {
+    expect(getQueueName("Dev")).toBe("tastematcher-dev-queue-indexing");
+    expect(getQueueDlqName("Dev")).toBe("tastematcher-dev-queue-indexing-dlq");
   });
 
-  it('throws for invalid ids', () => {
-    expect(() => getOriginalBlobPath('', artworkId, 'jpg')).toThrow();
+  it("throws for invalid ids", () => {
+    expect(() => getOriginalBlobPath("", artworkId, "jpg")).toThrow();
     expect(() => getDerivativeBlobPath(domainId, artworkId, "Small")).toThrow();
   });
 });

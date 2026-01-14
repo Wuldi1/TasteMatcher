@@ -1,4 +1,4 @@
-import pino from 'pino';
+import pino from "pino";
 
 export interface Logger {
   debug(obj: object, msg?: string): void;
@@ -8,7 +8,7 @@ export interface Logger {
 }
 
 const baseLogger = pino({
-  level: process.env.LOG_LEVEL || 'info',
+  level: process.env.LOG_LEVEL || "info",
   formatters: {
     level: (label) => {
       return { level: label };
@@ -16,13 +16,13 @@ const baseLogger = pino({
   },
   timestamp: pino.stdTimeFunctions.isoTime,
   transport:
-    process.env.NODE_ENV !== 'production'
+    process.env.NODE_ENV !== "production"
       ? {
-          target: 'pino-pretty',
+          target: "pino-pretty",
           options: {
             colorize: true,
-            translateTime: 'HH:MM:ss.l',
-            ignore: 'pid,hostname',
+            translateTime: "HH:MM:ss.l",
+            ignore: "pid,hostname",
           },
         }
       : undefined,

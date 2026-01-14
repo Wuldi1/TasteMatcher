@@ -62,12 +62,16 @@
   background: radial-gradient(circle at 30% 30%, #fdf6ff, #ffffff);
   border-radius: 1.25rem;
   border: 1px solid #e5e7eb;
-  box-shadow: 0 12px 30px -8px rgba(24, 16, 64, 0.18), 0 4px 10px -6px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 12px 30px -8px rgba(24, 16, 64, 0.18),
+    0 4px 10px -6px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   cursor: grab;
   user-select: none;
   touch-action: none;
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition:
+    transform 0.3s ease,
+    opacity 0.3s ease;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;

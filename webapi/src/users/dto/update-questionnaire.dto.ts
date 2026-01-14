@@ -1,5 +1,5 @@
-import { IsOptional, IsObject } from 'class-validator';
-import { PersonalQuestionnaire } from '@tastematcher/common';
+import { IsOptional, IsObject } from "class-validator";
+import { PersonalQuestionnaire } from "@tastematcher/common";
 
 /**
  * DTO for updating user's personal questionnaire

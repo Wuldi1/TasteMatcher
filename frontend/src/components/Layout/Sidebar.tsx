@@ -25,7 +25,7 @@ export const Sidebar = () => {
 
   // Filter links based on user role
   const filteredLinks = NAVIGATION_LINKS.filter((link) =>
-    link.roles.includes(user?.role || "")
+    link.roles.includes(user?.role || ""),
   );
 
   // Fetch if the user has a submitted proposal

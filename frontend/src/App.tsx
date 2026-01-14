@@ -10,12 +10,12 @@
 // 9. CI-friendly: passes typecheck and lint.
 // -----------------------------------------------------------
 
-import { BrowserRouter } from 'react-router-dom';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { AuthProvider } from './contexts/AuthContext';
-import { DomainProvider } from './contexts/DomainContext';
-import { queryClient } from './utils/react-query';
-import { AppRoutes } from './routes/AppRoutes';
+import { BrowserRouter } from "react-router-dom";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { AuthProvider } from "./contexts/AuthContext";
+import { DomainProvider } from "./contexts/DomainContext";
+import { queryClient } from "./utils/react-query";
+import { AppRoutes } from "./routes/AppRoutes";
 
 /**
  * Main application component with routing and context providers

@@ -1,6 +1,6 @@
 # Common Package
 
-The `common` package contains shared types and utilities used across both the frontend and backend components of the TasteMatcher application. 
+The `common` package contains shared types and utilities used across both the frontend and backend components of the TasteMatcher application.
 
 ## Structure
 
@@ -13,7 +13,7 @@ The `common` package contains shared types and utilities used across both the fr
 
 ## Usage
 
-This package is intended to be imported by both the backend and frontend applications to ensure consistency in type definitions and shared logic. 
+This package is intended to be imported by both the backend and frontend applications to ensure consistency in type definitions and shared logic.
 
 ## Installation
 

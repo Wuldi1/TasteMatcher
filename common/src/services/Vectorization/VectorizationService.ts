@@ -3,12 +3,12 @@
 // 2. Follows Azure best practices for AI Vision API
 // -----------------------------------------------------------
 
-import { createLogger } from '../../lib/logger';
-import { loadConfig, type AppConfig } from '../../lib/config';
-import { retryWithBackoff } from '../../utils/retry';
-import { VectorEmbedding } from '../../types/processing.types';
+import { createLogger } from "../../lib/logger";
+import { loadConfig, type AppConfig } from "../../lib/config";
+import { retryWithBackoff } from "../../utils/retry";
+import { VectorEmbedding } from "../../types/processing.types";
 
-const logger = createLogger('VectorizationService');
+const logger = createLogger("VectorizationService");
 
 interface SingleVectorResultApiModel {
   vector: number[];
@@ -27,7 +27,10 @@ export class VectorizationService {
   constructor() {
     this.appConfig = loadConfig();
     // Remove trailing slash if present
-    this.visionEndpoint = this.appConfig.azure.aiVisionEndpoint.replace(/\/$/, '');
+    this.visionEndpoint = this.appConfig.azure.aiVisionEndpoint.replace(
+      /\/$/,
+      "",
+    );
     this.visionKey = this.appConfig.azure.aiVisionKey;
   }
 
@@ -39,12 +42,12 @@ export class VectorizationService {
    */
   async generateEmbedding(
     imageUrl: string,
-    correlationId: string
+    correlationId: string,
   ): Promise<VectorEmbedding> {
-
-    return await retryWithBackoff(async () => {
+    return await retryWithBackoff(
+      async () => {
         logger.debug({
-          msg: 'Generating embedding with Azure AI Vision Vectorize Images API',
+          msg: "Generating embedding with Azure AI Vision Vectorize Images API",
           imageUrl,
           endpoint: this.visionEndpoint,
           correlationId,
@@ -54,26 +57,26 @@ export class VectorizationService {
         const vectorizeUrl = `${this.visionEndpoint}/computervision/retrieval:vectorizeImage?api-version=2024-02-01&model-version=2023-04-15`;
 
         logger.debug({
-          msg: 'Making request to Azure AI Vision',
+          msg: "Making request to Azure AI Vision",
           url: vectorizeUrl,
           correlationId,
         });
 
         const response = await fetch(vectorizeUrl, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            'Ocp-Apim-Subscription-Key': this.visionKey,
+            "Content-Type": "application/json",
+            "Ocp-Apim-Subscription-Key": this.visionKey,
           },
           body: JSON.stringify({
-            url: imageUrl
-          })
+            url: imageUrl,
+          }),
         });
 
         if (!response.ok) {
           const errorText = await response.text();
           logger.error({
-            msg: 'Azure AI Vision API error',
+            msg: "Azure AI Vision API error",
             status: response.status,
             statusText: response.statusText,
             error: errorText,
@@ -81,30 +84,30 @@ export class VectorizationService {
             correlationId,
           });
           throw new Error(
-            `Azure AI Vision Vectorize API returned status ${response.status}: ${errorText}`
+            `Azure AI Vision Vectorize API returned status ${response.status}: ${errorText}`,
           );
         }
 
-        const result = await response.json() as SingleVectorResultApiModel;
+        const result = (await response.json()) as SingleVectorResultApiModel;
 
         const embedding: number[] = result.vector || [];
 
         if (embedding.length < this.minEmbeddingDimensions) {
           throw new Error(
-            `Invalid embedding dimensions: ${embedding.length}, expected at least ${this.minEmbeddingDimensions}`
+            `Invalid embedding dimensions: ${embedding.length}, expected at least ${this.minEmbeddingDimensions}`,
           );
         }
 
         logger.debug({
-          msg: 'Embedding generated successfully',
+          msg: "Embedding generated successfully",
           dimensions: embedding.length,
-          model: result.modelVersion || '2023-04-15',
+          model: result.modelVersion || "2023-04-15",
           correlationId,
         });
 
         return {
           vector: embedding,
-          model: result.modelVersion || 'azure-vision-vectorize-2023-04-15',
+          model: result.modelVersion || "azure-vision-vectorize-2023-04-15",
         };
       },
       {
@@ -114,7 +117,7 @@ export class VectorizationService {
         backoffMultiplier: 4,
       },
       `generateEmbedding-${correlationId}`,
-      logger
+      logger,
     );
   }
 }

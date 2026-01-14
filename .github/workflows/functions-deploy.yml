@@ -13,15 +13,15 @@ on:
     branches:
       - main
     paths:
-      - 'functions/**'
-      - 'common/**'
-      - '.github/workflows/functions-deploy.yml'
+      - "functions/**"
+      - "common/**"
+      - ".github/workflows/functions-deploy.yml"
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Deployment environment'
+        description: "Deployment environment"
         required: true
-        default: 'dev'
+        default: "dev"
         type: choice
         options:
           - dev
@@ -29,13 +29,13 @@ on:
           - prd
 
 env:
-  NODE_VERSION: '22.x'
+  NODE_VERSION: "22.x"
 
 jobs:
   build:
     name: Build Azure Functions
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -76,7 +76,7 @@ jobs:
             mkdir -p deploy/ProcessImagesFromBlob
             cp ProcessImagesFromBlob/function.json deploy/ProcessImagesFromBlob/
           fi
-          
+
           # Install production dependencies in temp directory
           TEMP_DIR=$(mktemp -d)
           cat > "$TEMP_DIR/package.json" <<EOF
@@ -90,16 +90,16 @@ jobs:
             }
           }
           EOF
-          
+
           cd "$TEMP_DIR"
           npm install --omit=dev --no-package-lock --production
-          
+
           # Get back to project root to access functions/deploy
           cd $GITHUB_WORKSPACE/functions
-          
+
           # Copy node_modules to deploy
           cp -r "$TEMP_DIR/node_modules" deploy/
-          
+
           # Copy common package build
           if [ -d "$GITHUB_WORKSPACE/common/build" ]; then
             mkdir -p deploy/node_modules/@tastematcher/common
@@ -107,7 +107,7 @@ jobs:
             cp $GITHUB_WORKSPACE/common/package.json deploy/node_modules/@tastematcher/common/
             sed -i 's|build/index.|index.|g' deploy/node_modules/@tastematcher/common/package.json
           fi
-          
+
           # Create minimal package.json
           cd deploy
           cat > package.json <<'PKGJSON'

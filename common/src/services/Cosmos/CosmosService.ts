@@ -1,10 +1,16 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { CosmosClient, CosmosClientOptions, Container, Database, PartitionKeyKind } from '@azure/cosmos';
-import { AppConfig, loadConfig } from '../../lib/config';
-import { createLogger } from '../../lib/logger';
-import { User } from '../../types/user.types';
+import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import {
+  CosmosClient,
+  CosmosClientOptions,
+  Container,
+  Database,
+  PartitionKeyKind,
+} from "@azure/cosmos";
+import { AppConfig, loadConfig } from "../../lib/config";
+import { createLogger } from "../../lib/logger";
+import { User } from "../../types/user.types";
 
-const logger = createLogger('CosmosService');
+const logger = createLogger("CosmosService");
 
 /**
  * CosmosService manages the lifecycle of the shared CosmosClient instance and exposes typed container accessors.
@@ -22,13 +28,16 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     const start = Date.now();
-    logger.debug({ msg: 'Initializing CosmosService', database: this.appConfig.cosmos.database });
+    logger.debug({
+      msg: "Initializing CosmosService",
+      database: this.appConfig.cosmos.database,
+    });
 
     // Create ArtworkPreferences container if it doesn't exist
     const preferencesContainerDef = {
-      id: 'ArtworkPreferences',
+      id: "ArtworkPreferences",
       partitionKey: {
-        paths: ['/userId'], // Partition by userId for efficient user-scoped queries
+        paths: ["/userId"], // Partition by userId for efficient user-scoped queries
         kind: PartitionKeyKind.Hash,
       },
     };
@@ -36,19 +45,19 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
     const database = await this.getDatabase();
 
     await database.containers.createIfNotExists(preferencesContainerDef);
-    logger.debug({ msg: 'ArtworkPreferences container initialized' });
+    logger.debug({ msg: "ArtworkPreferences container initialized" });
 
     logger.debug({
-      msg: 'CosmosService initialized',
+      msg: "CosmosService initialized",
       database: this.appConfig.cosmos.database,
       durationMs: Date.now() - start,
     });
   }
 
   async onModuleDestroy(): Promise<void> {
-    logger.debug({ msg: 'Disposing CosmosService' });
+    logger.debug({ msg: "Disposing CosmosService" });
     await this.client?.dispose?.();
-    logger.debug({ msg: 'CosmosService disposed' });
+    logger.debug({ msg: "CosmosService disposed" });
   }
 
   /**
@@ -81,7 +90,7 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
     const container = this.database!.container(containerName);
     this.containerCache.set(containerName, container);
 
-    logger.debug({ msg: 'Cached Cosmos container', containerName });
+    logger.debug({ msg: "Cached Cosmos container", containerName });
     return container;
   }
 
@@ -89,23 +98,25 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
    * Convenience getter for the ArtworkPreferences container.
    */
   async getArtworkPreferencesContainer(): Promise<Container> {
-    return this.getContainer('Artworks');
+    return this.getContainer("Artworks");
   }
 
   /**
    * Convenience getter for the Artworks container.
    */
   async getArtworksContainer(): Promise<Container> {
-    return this.getContainer('Artworks');
+    return this.getContainer("Artworks");
   }
 
   async getUser(domainId: string, userId: string): Promise<User> {
-    const usersContainer = await this.getContainer('Core');
-    const { resource } = await usersContainer.item(userId, domainId).read<User>();
+    const usersContainer = await this.getContainer("Core");
+    const { resource } = await usersContainer
+      .item(userId, domainId)
+      .read<User>();
     if (!resource) {
       throw new Error(`User not found: ${userId} in domain ${domainId}`);
     }
-    logger.info({ msg: 'Fetched user from Cosmos DB' });
+    logger.info({ msg: "Fetched user from Cosmos DB" });
     return resource;
   }
 
@@ -117,18 +128,18 @@ export class CosmosService implements OnModuleInit, OnModuleDestroy {
     try {
       const options: CosmosClientOptions = {
         endpoint: this.appConfig.cosmos.endpoint,
-        key: this.appConfig.cosmos.key
+        key: this.appConfig.cosmos.key,
       };
 
       this.client = new CosmosClient(options);
       this.database = this.client.database(this.appConfig.cosmos.database);
       logger.debug({
-        msg: 'Cosmos client created',
-        database: this.appConfig.cosmos.database
+        msg: "Cosmos client created",
+        database: this.appConfig.cosmos.database,
       });
     } catch (error) {
       logger.error({
-        msg: 'Failed to initialize Cosmos client',
+        msg: "Failed to initialize Cosmos client",
         error,
       });
       throw error;

@@ -11,7 +11,7 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { Login } from '../../components/Login';
+import { Login } from "../../components/Login";
 
 /**
  * Authentication page with email-based login

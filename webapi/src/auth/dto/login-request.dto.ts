@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty } from 'class-validator';
+import { IsEmail, IsNotEmpty } from "class-validator";
 
 /**
  * DTO for requesting login verification code
@@ -9,6 +9,6 @@ export class LoginRequestDto {
   email: string;
 
   constructor() {
-    this.email = '';
+    this.email = "";
   }
 }

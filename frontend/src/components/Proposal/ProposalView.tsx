@@ -1,22 +1,22 @@
-import { useEffect, useState, useMemo } from "react";
-import { apiClient } from "../../utils/api";
 import type {
+  Artwork,
+  Comment,
   Proposal,
   ProposalItem,
-  Comment,
-  Artwork,
 } from "@tastematcher/common";
 import {
-  CheckCircle,
-  XCircle,
-  Clock,
-  Send,
-  Save,
-  MessageSquare,
   Calendar,
-  Image as ImageIcon,
+  CheckCircle,
+  Clock,
   Gavel,
+  Image as ImageIcon,
+  MessageSquare,
+  Save,
+  Send,
+  XCircle,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { apiClient } from "../../utils/api";
 
 export default function ProposalView({
   proposal,
@@ -35,7 +35,7 @@ export default function ProposalView({
 
   const [localItems, setLocalItems] = useState<ProposalItem[]>(items);
   const [generalComments, setGeneralComments] = useState<Comment[]>(
-    initialGeneralComments
+    initialGeneralComments,
   );
   const [newGeneralComment, setNewGeneralComment] = useState("");
   const [newComments, setNewComments] = useState<Record<string, string>>({});
@@ -82,10 +82,10 @@ export default function ProposalView({
           } catch (err) {
             console.error(
               `Failed to fetch artwork data for ID: ${artworkId}`,
-              err
+              err,
             );
           }
-        })
+        }),
       );
 
       setArtworkDataById(fetchedData);
@@ -99,13 +99,13 @@ export default function ProposalView({
   // Handler to update the status of an individual artwork
   const handleArtworkStatusChange = (
     artworkId: string,
-    status: "approved" | "rejected"
+    status: "approved" | "rejected",
   ) => {
     if (isReadOnly) return;
     setLocalItems((prev) =>
       prev.map((item) =>
-        item.artworkId === artworkId ? { ...item, status } : item
-      )
+        item.artworkId === artworkId ? { ...item, status } : item,
+      ),
     );
   };
 
@@ -128,8 +128,8 @@ export default function ProposalView({
                 },
               ],
             }
-          : item
-      )
+          : item,
+      ),
     );
     setNewComments((prev) => ({ ...prev, [artworkId]: "" }));
   };
@@ -189,14 +189,14 @@ export default function ProposalView({
 
   // Calculate summary stats
   const approvedCount = localItems.filter(
-    (item) => item.status === "approved"
+    (item) => item.status === "approved",
   ).length;
   const rejectedCount = localItems.filter(
-    (item) => item.status === "rejected"
+    (item) => item.status === "rejected",
   ).length;
   const pendingCount = Math.max(
     localItems.length - approvedCount - rejectedCount,
-    0
+    0,
   );
   const lastUpdatedDate = proposal.updatedAt
     ? new Date(proposal.updatedAt).toLocaleDateString()

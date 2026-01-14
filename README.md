@@ -63,10 +63,12 @@ To get started with the TasteMatcher application, follow these steps:
 ## New: Sales page (dealer flow)
 
 We added a new Sales page (frontend/src/pages/SalesPage.tsx) that provides:
+
 - User selector (dropdown)
 - Tabs: Details, Catalog, AI Suggestions, Sale Proposal
 
 Backend endpoints (skeleton) were added under backend/src/sales:
+
 - GET /domains/:domainId/sales/users
 - GET /domains/:domainId/sales/catalog?userId=&hasFeedback=
 - GET /domains/:domainId/sales/ai-suggestions?userId=&limit=

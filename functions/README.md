@@ -9,12 +9,14 @@ Azure Functions service for asynchronous image processing workflows.
 **Trigger**: Azure Storage Queue (`image-processing`)
 
 **Purpose**: Process uploaded artwork images by:
+
 1. Downloading original image from Blob Storage
 2. Generating multiple thumbnail sizes (150px, 400px, 800px)
 3. Creating vector embeddings using Azure AI Vision
 4. Indexing in Azure Cognitive Search for semantic similarity
 
 **Features**:
+
 - ✅ Idempotency checks (prevents duplicate processing)
 - ✅ Exponential backoff retry (3 attempts with 1s → 30s delays)
 - ✅ Structured logging with correlation IDs
@@ -129,39 +131,41 @@ Send a test message to the queue:
 ```
 
 ```typescript
-import { QueueClient } from '@azure/storage-queue';
+import { QueueClient } from "@azure/storage-queue";
 
 const queueClient = new QueueClient(
-  'UseDevelopmentStorage=true',
-  'image-processing'
+  "UseDevelopmentStorage=true",
+  "image-processing",
 );
 
-await queueClient.sendMessage(JSON.stringify({
-  messageId: 'test-001',
-  artworkId: 'artwork-001',
-  domainId: 'domain-001',
-  containerName: 'artworks',
-  blobName: 'test-image.jpg',
-  originalFilename: 'test-image.jpg',
-  contentType: 'image/jpeg',
-  enqueuedAt: new Date().toISOString(),
-  correlationId: 'corr-001'
-}));
+await queueClient.sendMessage(
+  JSON.stringify({
+    messageId: "test-001",
+    artworkId: "artwork-001",
+    domainId: "domain-001",
+    containerName: "artworks",
+    blobName: "test-image.jpg",
+    originalFilename: "test-image.jpg",
+    contentType: "image/jpeg",
+    enqueuedAt: new Date().toISOString(),
+    correlationId: "corr-001",
+  }),
+);
 ```
 
 ## Environment Variables
 
-| Variable | Required | Description | Example |
-|----------|----------|-------------|---------|
-| `AzureWebJobsStorage` | Yes | Storage connection for Functions runtime | `UseDevelopmentStorage=true` |
-| `AZURE_STORAGE_CONNECTION_STRING` | Yes | Storage for blobs and queues | Same as above for local |
-| `AZURE_SEARCH_ENDPOINT` | Yes | Cognitive Search endpoint | `https://mysearch.search.windows.net` |
-| `AZURE_SEARCH_ADMIN_KEY` | Yes | Search admin key | From Azure Portal |
-| `AZURE_SEARCH_INDEX_NAME` | Yes | Index name for artworks | `artworks` |
-| `AZURE_AI_VISION_ENDPOINT` | Yes | AI Vision endpoint | `https://myvision.cognitiveservices.azure.com/` |
-| `AZURE_AI_VISION_KEY` | Yes | Vision API key | From Azure Portal |
-| `IMAGE_PROCESSING_QUEUE_NAME` | No | Queue name (default: `image-processing`) | `image-processing` |
-| `LOG_LEVEL` | No | Logging level (default: `info`) | `debug`, `info`, `warn`, `error` |
+| Variable                          | Required | Description                              | Example                                         |
+| --------------------------------- | -------- | ---------------------------------------- | ----------------------------------------------- |
+| `AzureWebJobsStorage`             | Yes      | Storage connection for Functions runtime | `UseDevelopmentStorage=true`                    |
+| `AZURE_STORAGE_CONNECTION_STRING` | Yes      | Storage for blobs and queues             | Same as above for local                         |
+| `AZURE_SEARCH_ENDPOINT`           | Yes      | Cognitive Search endpoint                | `https://mysearch.search.windows.net`           |
+| `AZURE_SEARCH_ADMIN_KEY`          | Yes      | Search admin key                         | From Azure Portal                               |
+| `AZURE_SEARCH_INDEX_NAME`         | Yes      | Index name for artworks                  | `artworks`                                      |
+| `AZURE_AI_VISION_ENDPOINT`        | Yes      | AI Vision endpoint                       | `https://myvision.cognitiveservices.azure.com/` |
+| `AZURE_AI_VISION_KEY`             | Yes      | Vision API key                           | From Azure Portal                               |
+| `IMAGE_PROCESSING_QUEUE_NAME`     | No       | Queue name (default: `image-processing`) | `image-processing`                              |
+| `LOG_LEVEL`                       | No       | Logging level (default: `info`)          | `debug`, `info`, `warn`, `error`                |
 
 ## Deployment
 
@@ -215,6 +219,7 @@ func azure functionapp logstream tastematcher-functions
 ### Application Insights
 
 The function automatically logs to Application Insights when deployed to Azure. View:
+
 - Request traces
 - Dependencies (Blob, Search, Vision API calls)
 - Exceptions
@@ -250,4 +255,3 @@ The function automatically logs to Application Insights when deployed to Azure. 
 4. Review Search service quota (documents, storage)
 
 ## Architecture
-

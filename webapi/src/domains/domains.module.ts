@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
-import { DomainsController } from './domains.controller';
-import { DomainsService } from './domains.service';
-import { EmailModule } from '../email/email.module';
+import { Module } from "@nestjs/common";
+import { DomainsController } from "./domains.controller";
+import { DomainsService } from "./domains.service";
+import { EmailModule } from "../email/email.module";
 
 /**
  * Domains module for domain management operations

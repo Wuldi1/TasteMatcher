@@ -31,7 +31,7 @@ export function TasterPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeDirection, setSwipeDirection] = useState<SwipeDirection>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(
-    null
+    null,
   );
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
@@ -127,7 +127,7 @@ export function TasterPage() {
         setDragOffset({ x: 0, y: 0 });
       }, 300);
     },
-    [currentArtwork, swipeDirection, savePreference]
+    [currentArtwork, swipeDirection, savePreference],
   );
 
   // Mouse/touch drag handlers
@@ -184,14 +184,14 @@ export function TasterPage() {
           const nextBatch = await apiClient.fetchUntastedArtworks(
             user!.domainId!,
             user!.id!,
-            20
+            20,
           );
           // Only append if there are new artworks
           if (nextBatch.artworks && nextBatch.artworks.length > 0) {
             // Avoid duplicates
             const existingIds = new Set(artworks.map((a) => a.id));
             const newArtworks = nextBatch.artworks.filter(
-              (a) => !existingIds.has(a.id)
+              (a) => !existingIds.has(a.id),
             );
             if (newArtworks.length > 0) {
               untastedData?.artworks.push(...newArtworks);

@@ -1,10 +1,10 @@
-import { SearchClient, AzureKeyCredential } from '@azure/search-documents';
-import { createLogger } from '../../lib/logger';
-import { loadConfig, type AppConfig } from '../../lib/config';
-import { retryWithBackoff } from '../../utils/retry';
-import { VectorEmbedding } from '../../types/processing.types';
+import { SearchClient, AzureKeyCredential } from "@azure/search-documents";
+import { createLogger } from "../../lib/logger";
+import { loadConfig, type AppConfig } from "../../lib/config";
+import { retryWithBackoff } from "../../utils/retry";
+import { VectorEmbedding } from "../../types/processing.types";
 
-const logger = createLogger('SearchIndexService');
+const logger = createLogger("SearchIndexService");
 
 interface ArtworkSearchDocument {
   artworkId: string; // Unique identifier for the artwork
@@ -31,7 +31,7 @@ export class SearchIndexService {
     this.searchClient = new SearchClient<ArtworkSearchDocument>(
       this.appConfig.azure.searchEndpoint,
       this.appConfig.azure.searchIndexName,
-      new AzureKeyCredential(this.appConfig.azure.searchKey)
+      new AzureKeyCredential(this.appConfig.azure.searchKey),
     );
   }
 
@@ -41,7 +41,7 @@ export class SearchIndexService {
    */
   async indexArtwork(input: IndexArtworkInput): Promise<void> {
     logger.debug({
-      msg: 'Indexing artwork',
+      msg: "Indexing artwork",
       artworkId: input.artworkId,
       domainId: input.domainId,
       vectorDimensions: input.vectorEmbedding.vector.length, // Log actual dimensions
@@ -50,7 +50,7 @@ export class SearchIndexService {
     // Validate vector dimensions
     if (input.vectorEmbedding.vector.length !== 1024) {
       throw new Error(
-        `Invalid vector dimensions: expected 1024 (Azure AI Vision), got ${input.vectorEmbedding.vector.length}`
+        `Invalid vector dimensions: expected 1024 (Azure AI Vision), got ${input.vectorEmbedding.vector.length}`,
       );
     }
 
@@ -60,41 +60,48 @@ export class SearchIndexService {
       imageVector: input.vectorEmbedding.vector,
     };
 
-    retryWithBackoff(() => {
-      return this.mergeOrUploadDocument(input, document);
-    },
+    retryWithBackoff(
+      () => {
+        return this.mergeOrUploadDocument(input, document);
+      },
       {
         maxAttempts: 2,
         initialDelayMs: 1000,
         maxDelayMs: 30000,
         backoffMultiplier: 2,
-      }, input.artworkId, logger).catch(err => {
-        logger.error({
-          msg: 'Failed to index artwork after retries',
-          artworkId: input.artworkId,
-          domainId: input.domainId,
-          err,
-        });
-        throw err;
+      },
+      input.artworkId,
+      logger,
+    ).catch((err) => {
+      logger.error({
+        msg: "Failed to index artwork after retries",
+        artworkId: input.artworkId,
+        domainId: input.domainId,
+        err,
       });
+      throw err;
+    });
   }
 
-  async mergeOrUploadDocument(input: IndexArtworkInput, document: ArtworkSearchDocument): Promise<void> {
+  async mergeOrUploadDocument(
+    input: IndexArtworkInput,
+    document: ArtworkSearchDocument,
+  ): Promise<void> {
     // Use mergeOrUpload for idempotency
     const result = await this.searchClient.mergeOrUploadDocuments([document]);
 
-    const success = result.results.every(r => r.succeeded);
+    const success = result.results.every((r) => r.succeeded);
 
     if (!success) {
       const errors = result.results
-        .filter(r => !r.succeeded)
-        .map(r => r.errorMessage)
-        .join(', ');
+        .filter((r) => !r.succeeded)
+        .map((r) => r.errorMessage)
+        .join(", ");
       throw new Error(`Index operation failed: ${errors}`);
     }
 
     logger.info({
-      msg: 'Artwork indexed successfully',
+      msg: "Artwork indexed successfully",
       artworkId: input.artworkId,
       domainId: input.domainId,
     });
@@ -109,10 +116,10 @@ export class SearchIndexService {
   async searchSimilarArtworks(
     domainId: string,
     userVector: number[],
-    topK: number = 15
+    topK: number = 15,
   ): Promise<Array<{ artworkId: string; score: number }>> {
     logger.debug({
-      msg: 'Searching similar artworks',
+      msg: "Searching similar artworks",
       domainId,
       vectorDimensions: userVector.length,
       topK,
@@ -121,25 +128,25 @@ export class SearchIndexService {
     // Validate vector dimensions
     if (userVector.length !== 1024) {
       throw new Error(
-        `Invalid vector dimensions: expected 1024 (Azure AI Vision), got ${userVector.length}`
+        `Invalid vector dimensions: expected 1024 (Azure AI Vision), got ${userVector.length}`,
       );
     }
 
     try {
-      const searchResults = await this.searchClient.search('*', {
+      const searchResults = await this.searchClient.search("*", {
         vectorSearchOptions: {
           queries: [
             {
-              kind: 'vector',
+              kind: "vector",
               vector: userVector,
               kNearestNeighborsCount: topK,
-              fields: ['imageVector'],
+              fields: ["imageVector"],
             },
           ],
         },
         filter: `domainId eq '${domainId}'`,
         top: topK,
-        select: ['artworkId'],
+        select: ["artworkId"],
       });
 
       const results: Array<{ artworkId: string; score: number }> = [];
@@ -152,7 +159,7 @@ export class SearchIndexService {
       }
 
       logger.info({
-        msg: 'Similar artworks found',
+        msg: "Similar artworks found",
         domainId,
         count: results.length,
       });
@@ -161,7 +168,7 @@ export class SearchIndexService {
       return results.sort((a, b) => b.score - a.score);
     } catch (err) {
       logger.error({
-        msg: 'Failed to search similar artworks',
+        msg: "Failed to search similar artworks",
         domainId,
         err,
       });
@@ -180,13 +187,13 @@ export class SearchIndexService {
     } catch (err: any) {
       if (err.statusCode === 404) {
         logger.warn({
-          msg: 'Artwork not found in search index',
+          msg: "Artwork not found in search index",
           artworkId,
         });
         return null;
       }
       logger.error({
-        msg: 'Failed to get artwork vector from search index',
+        msg: "Failed to get artwork vector from search index",
         artworkId,
         err,
       });
@@ -199,11 +206,13 @@ export class SearchIndexService {
    * Returns a new vector with unit length (or all zeros if input is zero vector).
    */
   normalizeVector(vector: number[]): number[] {
-    const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
+    const magnitude = Math.sqrt(
+      vector.reduce((sum, val) => sum + val * val, 0),
+    );
     if (magnitude === 0) {
       return new Array(vector.length).fill(0);
     }
-    return vector.map(val => val / magnitude);
+    return vector.map((val) => val / magnitude);
   }
 
   /**
@@ -216,14 +225,14 @@ export class SearchIndexService {
   calculateUpdatedPreferenceVector(
     userVector: number[],
     imageVector: number[],
-    liked: boolean
+    liked: boolean,
   ): number[] {
     if (userVector.length !== imageVector.length) {
-      throw new Error('Vector dimensions do not match');
+      throw new Error("Vector dimensions do not match");
     }
     // Move toward or away from the image vector
     const updated = userVector.map((v, i) =>
-      liked ? v + imageVector[i] : v - imageVector[i]
+      liked ? v + imageVector[i] : v - imageVector[i],
     );
     return this.normalizeVector(updated);
   }

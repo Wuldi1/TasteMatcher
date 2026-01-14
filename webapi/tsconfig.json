@@ -15,9 +15,7 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
-  "references": [
-    { "path": "../common" }
-  ],
+  "references": [{ "path": "../common" }],
   "include": ["src/**/*"],
   "exclude": ["node_modules", "build", "**/*.spec.ts", "**/*.test.ts"]
 }

@@ -1,19 +1,19 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { AuthPage } from '../pages/Auth/AuthPage';
-import { HomePage } from '../pages/Home/HomePage';
-import ProtectedRoute from './ProtectedRoute';
-import { Sidebar } from '../components/Layout/Sidebar';
-import { MobileSidebar } from '../components/Layout/MobileSidebar';
-import { useAuth } from '../contexts/AuthContext';
-import { CatalogPage } from '../pages/Catalog/CatalogPage';
-import { TasterPage } from '../pages/Taster/TasterPage';
-import { UploadPage } from '../pages/Upload/UploadPage';
-import { Management } from '../pages/Management/Management';
-import { AISuggestionsPage } from '../pages/AISuggestions/AISuggestionsPage';
-import SalesPage from '../pages/SalesPage';
-import { BuyingProposalPage } from '../pages/BuyingProposal/BuyingProposalPage';
-import { OnboardingPage } from '../pages/Onboarding/OnboardingPage';
+import React from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { AuthPage } from "../pages/Auth/AuthPage";
+import { HomePage } from "../pages/Home/HomePage";
+import ProtectedRoute from "./ProtectedRoute";
+import { Sidebar } from "../components/Layout/Sidebar";
+import { MobileSidebar } from "../components/Layout/MobileSidebar";
+import { useAuth } from "../contexts/AuthContext";
+import { CatalogPage } from "../pages/Catalog/CatalogPage";
+import { TasterPage } from "../pages/Taster/TasterPage";
+import { UploadPage } from "../pages/Upload/UploadPage";
+import { Management } from "../pages/Management/Management";
+import { AISuggestionsPage } from "../pages/AISuggestions/AISuggestionsPage";
+import SalesPage from "../pages/SalesPage";
+import { BuyingProposalPage } from "../pages/BuyingProposal/BuyingProposalPage";
+import { OnboardingPage } from "../pages/Onboarding/OnboardingPage";
 
 /**
  * Wrapper component that redirects authenticated users away from auth pages

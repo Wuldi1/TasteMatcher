@@ -9,11 +9,11 @@
 // 8. Adds meaningful JSDoc for exported functions/classes.
 // 9. CI-friendly: code passes lint, typecheck, and tests locally.
 // -----------------------------------------------------------
-import { Logger } from '@nestjs/common';
-import { EmailClient } from '@azure/communication-email';
-import { EmailService, SendVerificationEmailPayload } from './email.service';
+import { Logger } from "@nestjs/common";
+import { EmailClient } from "@azure/communication-email";
+import { EmailService, SendVerificationEmailPayload } from "./email.service";
 
-jest.mock('@azure/communication-email', () => {
+jest.mock("@azure/communication-email", () => {
   class EmailPoller {
     async pollUntilDone(): Promise<void> {
       return Promise.resolve();
@@ -29,9 +29,9 @@ jest.mock('@azure/communication-email', () => {
 
 const MockedEmailClient = EmailClient as unknown as jest.Mock;
 const getMockedBeginSend = () =>
-  (MockedEmailClient.mock.results[0].value.beginSend as jest.Mock);
+  MockedEmailClient.mock.results[0].value.beginSend as jest.Mock;
 
-describe('EmailService', () => {
+describe("EmailService", () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
@@ -44,47 +44,52 @@ describe('EmailService', () => {
     jest.restoreAllMocks();
   });
 
-  it('sends verification email when configuration is provided', async () => {
-    process.env.AZURE_COMMUNICATION_CONNECTION_STRING = 'endpoint=https://unit-test/;accessKey=abc';
-    process.env.AZURE_EMAIL_SENDER = 'no-reply@example.com';
+  it("sends verification email when configuration is provided", async () => {
+    process.env.AZURE_COMMUNICATION_CONNECTION_STRING =
+      "endpoint=https://unit-test/;accessKey=abc";
+    process.env.AZURE_EMAIL_SENDER = "no-reply@example.com";
 
     const service = new EmailService();
     const payload: SendVerificationEmailPayload = {
-      recipient: 'user@example.com',
-      domainName: 'Test Gallery',
-      code: '123456',
-      expiresAt: new Date('2025-01-01T00:00:00.000Z').getTime(),
+      recipient: "user@example.com",
+      domainName: "Test Gallery",
+      code: "123456",
+      expiresAt: new Date("2025-01-01T00:00:00.000Z").getTime(),
     };
 
     await service.sendVerificationEmail(payload);
 
-    expect(MockedEmailClient).toHaveBeenCalledWith('endpoint=https://unit-test/;accessKey=abc');
+    expect(MockedEmailClient).toHaveBeenCalledWith(
+      "endpoint=https://unit-test/;accessKey=abc",
+    );
     expect(getMockedBeginSend()).toHaveBeenCalledWith({
-      senderAddress: 'no-reply@example.com',
+      senderAddress: "no-reply@example.com",
       content: expect.objectContaining({
-        subject: 'Your TasteMatcher verification code',
+        subject: "Your TasteMatcher verification code",
       }),
       recipients: { to: [{ address: payload.recipient }] },
     });
   });
 
-  it('logs a warning and skips sending when configuration is missing', async () => {
+  it("logs a warning and skips sending when configuration is missing", async () => {
     delete process.env.AZURE_COMMUNICATION_CONNECTION_STRING;
     delete process.env.AZURE_EMAIL_SENDER;
 
-    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const warnSpy = jest
+      .spyOn(Logger.prototype, "warn")
+      .mockImplementation(() => undefined);
     const service = new EmailService();
 
     await service.sendVerificationEmail({
-      recipient: 'user@example.com',
-      domainName: 'Test Gallery',
-      code: '654321',
-      expiresAt: new Date('2025-01-01T00:00:00.000Z').getTime(),
+      recipient: "user@example.com",
+      domainName: "Test Gallery",
+      code: "654321",
+      expiresAt: new Date("2025-01-01T00:00:00.000Z").getTime(),
     });
 
     expect(MockedEmailClient).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledWith(
-      'Azure Communication Services email configuration missing; verification emails will be logged only.',
+      "Azure Communication Services email configuration missing; verification emails will be logged only.",
     );
   });
 });

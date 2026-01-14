@@ -14,7 +14,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function getDomainIdFromToken(token) {
   try {
     const payload = JSON.parse(
-      Buffer.from(token.split(".")[1], "base64").toString()
+      Buffer.from(token.split(".")[1], "base64").toString(),
     );
     return payload.domainId;
   } catch (err) {
@@ -77,14 +77,14 @@ async function uploadArtwork(folderPath, token, domainId, apiBaseUrl) {
   if (!res.ok) {
     const errorText = await res.text().catch(() => "");
     throw new Error(
-      `Upload failed for ${metadata.title}: ${res.statusText} - ${errorText}`
+      `Upload failed for ${metadata.title}: ${res.statusText} - ${errorText}`,
     );
   }
 
   var result = await res.json();
 
   console.log(
-    `✅ Artwork ${metadata.title} [${result.artworkId}] uploaded successfuly`
+    `✅ Artwork ${metadata.title} [${result.artworkId}] uploaded successfuly`,
   );
 
   return true;
@@ -108,7 +108,7 @@ async function main() {
         const found = options.find(
           (o) =>
             o.value &&
-            String(envOverride).toLowerCase() === String(o.value).toLowerCase()
+            String(envOverride).toLowerCase() === String(o.value).toLowerCase(),
         );
         if (found) return found.value;
       }
@@ -122,7 +122,7 @@ async function main() {
         ? defaultIndex
         : Math.max(
             0,
-            Math.min(options.length - 1, (parseInt(raw, 10) || 1) - 1)
+            Math.min(options.length - 1, (parseInt(raw, 10) || 1) - 1),
           );
     return options[idx].value;
   }
@@ -135,7 +135,7 @@ async function main() {
         { label: "Dev", value: "dev" },
         { label: "Prod", value: "prd" },
       ],
-      1
+      1,
     );
     const apiBaseUrl =
       env === "prd"
@@ -149,7 +149,7 @@ async function main() {
         { label: "Inventory", value: "inventory" },
         { label: "Learning", value: "learning" },
       ],
-      0
+      0,
     );
 
     // Owner (only asked for inventory). [1] Gal [2] Jaclyn (default Gal)
@@ -162,7 +162,7 @@ async function main() {
           { label: "Jaclyn", value: "jaclyn" },
           { label: "Jaclyn Test", value: "jaclyntest" },
         ],
-        0
+        0,
       );
     } else {
       console.log("Learning mode selected — owner auto-set to 'gal'");
@@ -221,7 +221,7 @@ async function main() {
     let uploadCount = 0;
 
     console.log(
-      `\n📤 Starting upload of ${folders.length} artworks from ${CONTENT_DIR}...\n`
+      `\n📤 Starting upload of ${folders.length} artworks from ${CONTENT_DIR}...\n`,
     );
 
     for (const folder of folders) {
@@ -240,7 +240,7 @@ async function main() {
           folderPath,
           token,
           domainId,
-          apiBaseUrl
+          apiBaseUrl,
         );
         if (success) {
           uploadCount++;
@@ -257,7 +257,7 @@ async function main() {
     }
 
     console.log(
-      `\n🎉 Upload complete! Successfully uploaded ${uploadCount} artworks.`
+      `\n🎉 Upload complete! Successfully uploaded ${uploadCount} artworks.`,
     );
   } catch (err) {
     console.error("❌ Fatal error:", err);

@@ -31,7 +31,7 @@ const FormattedPriceInput = ({
   disabled?: boolean;
 }) => {
   const [displayValue, setDisplayValue] = useState(
-    value?.toLocaleString() ?? ""
+    value?.toLocaleString() ?? "",
   );
 
   useEffect(() => {
@@ -112,7 +112,7 @@ export default function SaleProposal({
   const [items, setItems] = useState<ProposalItem[]>(draftItems ?? []);
   const [generalComments, setGeneralComments] = useState<Comment[]>([]);
   const [proposalStatus, setProposalStatus] = useState<string | undefined>(
-    undefined
+    undefined,
   );
   const [isDirty, setIsDirty] = useState(false);
   const isLocalChangeRef = React.useRef<boolean>(false);
@@ -217,7 +217,7 @@ export default function SaleProposal({
             filename: item.filename,
             askedPrice: item.askedPrice ?? 0,
             askedMaxPrice: item.askedMaxPrice,
-          })
+          }),
         );
         setItems(normalized);
         setGeneralComments(fetched.generalComments || []);
@@ -263,10 +263,10 @@ export default function SaleProposal({
           } catch (err) {
             console.error(
               `Failed to fetch artwork data for ID: ${artworkId}`,
-              err
+              err,
             );
           }
-        })
+        }),
       );
 
       setArtworkDataById(fetchedData);
@@ -283,8 +283,8 @@ export default function SaleProposal({
       prev.map((item) =>
         item.artworkId === artworkId
           ? { ...item, askedPrice: price ?? 0 }
-          : item
-      )
+          : item,
+      ),
     );
     isLocalChangeRef.current = true;
     setIsDirty(true);
@@ -305,8 +305,8 @@ export default function SaleProposal({
       prev.map((item) =>
         item.artworkId === artworkId
           ? { ...item, askedMaxPrice: price ?? undefined }
-          : item
-      )
+          : item,
+      ),
     );
     isLocalChangeRef.current = true;
     setIsDirty(true);
@@ -324,7 +324,7 @@ export default function SaleProposal({
     if (isReadOnly) {
       showAlert(
         "Proposal Locked",
-        "This proposal has already been accepted or rejected and is now read-only."
+        "This proposal has already been accepted or rejected and is now read-only.",
       );
       return;
     }
@@ -420,7 +420,7 @@ export default function SaleProposal({
 
       showProposalSummaryAlert(
         proposalId ? "Proposal updated" : "Proposal created",
-        data
+        data,
       );
     } catch (err) {
       console.error("Failed to save proposal", err);
@@ -455,7 +455,7 @@ export default function SaleProposal({
           console.error("Failed to delete proposal", err);
           showAlert("Error", "Failed to delete proposal");
         }
-      }
+      },
     );
   }
 
@@ -503,8 +503,8 @@ export default function SaleProposal({
                 },
               ],
             }
-          : item
-      )
+          : item,
+      ),
     );
     setNewComments((prev) => ({ ...prev, [artworkId]: "" }));
   }
@@ -514,7 +514,7 @@ export default function SaleProposal({
     if (isReadOnly) {
       showAlert(
         "Proposal Locked",
-        "Accepted or rejected proposals are read-only."
+        "Accepted or rejected proposals are read-only.",
       );
       return;
     }

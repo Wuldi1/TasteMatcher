@@ -18,7 +18,14 @@ import {
   getAIRecommendationsEligibility,
   isAuctionEnded,
 } from "../../utils/general";
-import { ThumbsUp, ThumbsDown, FileText, X, Sparkles, Gavel } from "lucide-react";
+import {
+  ThumbsUp,
+  ThumbsDown,
+  FileText,
+  X,
+  Sparkles,
+  Gavel,
+} from "lucide-react";
 import { useSavePreference } from "../../utils/savePreference";
 
 interface DomainUserOption {
@@ -51,7 +58,7 @@ export const AISuggestionsPage = ({
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>(
-    {}
+    {},
   );
   const [savingCommentId, setSavingCommentId] = useState<string | null>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -99,7 +106,7 @@ export const AISuggestionsPage = ({
             label: domainUser.name ?? domainUser.email ?? domainUser.id,
             onboardingStatus: (domainUser as any).onboardingStatus,
             swipeCount: (domainUser as any).swipeCount,
-          }))
+          })),
         );
       } catch (err) {
         console.error("Failed to load users for AI suggestions", err);
@@ -132,7 +139,7 @@ export const AISuggestionsPage = ({
           user.domainId!,
           targetUserId !== user?.id ? targetUserId : undefined,
           LIMIT,
-          0 // Initial offset
+          0, // Initial offset
         );
         setRecommendations(newRecommendations);
         if (newRecommendations.length < LIMIT) {
@@ -164,7 +171,7 @@ export const AISuggestionsPage = ({
         user.domainId!,
         targetUserId !== user?.id ? targetUserId : undefined,
         LIMIT,
-        nextOffset
+        nextOffset,
       );
 
       setRecommendations((prev) => [...prev, ...newRecommendations]);
@@ -189,7 +196,7 @@ export const AISuggestionsPage = ({
           loadMore();
         }
       },
-      { threshold: 0.1 }
+      { threshold: 0.1 },
     );
 
     if (element) {
@@ -219,7 +226,7 @@ export const AISuggestionsPage = ({
             next.preferenceComment = updates.comment;
           }
           return next;
-        })
+        }),
       );
 
       setSelectedArtwork((prev) => {

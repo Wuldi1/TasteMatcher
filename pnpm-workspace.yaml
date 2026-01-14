@@ -1,5 +1,5 @@
 packages:
-  - 'common'
-  - 'webapi'
-  - 'frontend'
-  - 'functions'
+  - "common"
+  - "webapi"
+  - "frontend"
+  - "functions"

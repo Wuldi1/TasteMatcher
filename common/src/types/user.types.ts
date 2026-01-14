@@ -7,16 +7,20 @@ import { ArtworkStats } from "./artwork.types";
 import { Comment } from "./sales.types";
 
 // -----------------------------------------------------------
-export type Role = 'global_admin' | 'domain_owner' | 'dealer' | 'customer';
+export type Role = "global_admin" | "domain_owner" | "dealer" | "customer";
 
 /**
  * Represents the verification status of a user.
  * - `pending_verification`: The user has been invited but has not yet logged in.
  * - `active`: The user has logged in and is active.
  */
-export type UserStatus = 'pending_verification' | 'active';
+export type UserStatus = "pending_verification" | "active";
 
-export type UserOnboardingStatus = 'not_started' | 'in_progress' | 'completed' | 'skipped';
+export type UserOnboardingStatus =
+  | "not_started"
+  | "in_progress"
+  | "completed"
+  | "skipped";
 
 /**
  * Aesthetic admiration section
@@ -37,7 +41,7 @@ export interface PersonalQuestionnaire {
   primaryResidence?: string;
 
   // Decision Making
-  collectionType?: 'individual' | 'group';
+  collectionType?: "individual" | "group";
   decisionMakersDescription?: string;
 
   // About You
@@ -47,7 +51,7 @@ export interface PersonalQuestionnaire {
   currentLocation?: string;
 
   // Relationship with art
-  collectingStatus?: 'collector' | 'not_yet';
+  collectingStatus?: "collector" | "not_yet";
   collectingDetails?: string;
 
   // Other Residences

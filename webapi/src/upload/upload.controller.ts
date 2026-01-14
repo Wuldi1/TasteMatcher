@@ -46,7 +46,7 @@ export class UploadController {
     @Param("domainId") domainId: string,
     // eslint-disable-next-line
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: Record<string, unknown>
+    @Body() body: Record<string, unknown>,
   ): Promise<ProcessingStatus> {
     const start = Date.now();
     this.logger.debug({
@@ -71,7 +71,7 @@ export class UploadController {
       const blobName = getOriginalBlobPath(
         domainId,
         artworkMetadata.id,
-        file.mimetype
+        file.mimetype,
       );
 
       this.logger.debug({
@@ -89,7 +89,7 @@ export class UploadController {
         "originals",
         blobName,
         file.buffer,
-        file.mimetype
+        file.mimetype,
       );
       artworkMetadata.filename = artworkUrl;
       artworkMetadata.isPrivate = artworkMetadata.isPrivate ?? false;
@@ -149,7 +149,7 @@ export class UploadController {
     @Param("domainId") domainId: string,
     @Param("artworkId") artworkId: string,
     // eslint-disable-next-line
-    @UploadedFile() file: Express.Multer.File
+    @UploadedFile() file: Express.Multer.File,
   ): Promise<Artwork> {
     this.logger.debug({
       route: "/domains/:domainId/uploads/:artworkId/image",
@@ -182,7 +182,7 @@ export class UploadController {
       "originals",
       blobName,
       file.buffer,
-      file.mimetype
+      file.mimetype,
     );
 
     const updatedArtwork: Artwork = {
@@ -213,7 +213,7 @@ export class UploadController {
 
     return cleanupArtworkBeforeResponseToClient(
       resource as Artwork,
-      req.user.role
+      req.user.role,
     ) as Artwork;
   }
 
