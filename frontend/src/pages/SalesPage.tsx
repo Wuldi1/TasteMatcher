@@ -118,7 +118,7 @@ export default function SalesPage() {
   const [isUploadingChatAttachment, setIsUploadingChatAttachment] =
     useState(false);
   const chatFileInputRef = useRef<HTMLInputElement | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   // Lightbox state
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
@@ -309,10 +309,16 @@ export default function SalesPage() {
       .finally(() => setUserDetailsLoading(false));
   }, [selectedUserId, refreshSelectedUserDetails]);
 
-  // Scroll chat to bottom when comments update
+  // Scroll chat container to bottom when comments update
   useEffect(() => {
     if (activeTab === "details" && userDetails?.comments) {
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      const chatContainer = chatScrollRef.current;
+      if (chatContainer) {
+        chatContainer.scrollTo({
+          top: chatContainer.scrollHeight,
+          behavior: "smooth",
+        });
+      }
     }
   }, [userDetails?.comments, activeTab]);
 
@@ -868,7 +874,10 @@ export default function SalesPage() {
                     </span>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/30">
+                  <div
+                    ref={chatScrollRef}
+                    className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/30"
+                  >
                     {!userDetails.comments ||
                     userDetails.comments.length === 0 ? (
                       <div className="h-full flex flex-col items-center justify-center text-gray-400">
@@ -937,7 +946,6 @@ export default function SalesPage() {
                         );
                       })
                     )}
-                    <div ref={chatEndRef} />
                   </div>
 
                   <div className="p-4 bg-white border-t border-gray-100">

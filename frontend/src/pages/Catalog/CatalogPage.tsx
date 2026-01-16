@@ -922,12 +922,6 @@ export function CatalogPage() {
 
                       {/* Price Badge */}
                       <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
-                        {artwork.isAuction && (
-                          <span className="inline-flex items-center gap-1.5 bg-blue-900/90 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
-                            <Gavel className="w-3.5 h-3.5" />
-                            Auction
-                          </span>
-                        )}
                         {auctionEnded && (
                           <span className="inline-flex items-center gap-1.5 bg-gray-800/80 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
                             Auction ended
@@ -945,10 +939,20 @@ export function CatalogPage() {
                           )}
                       </div>
 
-                      {artwork.useForTaster && (
-                        <div className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1 rounded-full bg-purple-600/90 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
-                          <Sparkles className="w-4 h-4" />
-                          Taster
+                      {(artwork.isAuction || artwork.useForTaster) && (
+                        <div className="absolute bottom-3 left-3 z-10 flex flex-col items-start gap-2">
+                          {artwork.isAuction && (
+                            <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-900/90 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+                              <Gavel className="w-3.5 h-3.5" />
+                              Auction
+                            </div>
+                          )}
+                          {artwork.useForTaster && (
+                            <div className="inline-flex items-center gap-1 rounded-full bg-purple-600/90 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+                              <Sparkles className="w-4 h-4" />
+                              Taster
+                            </div>
+                          )}
                         </div>
                       )}
                       {artwork.isPrivate && (

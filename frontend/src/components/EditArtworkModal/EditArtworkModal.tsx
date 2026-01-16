@@ -661,7 +661,7 @@ export function EditArtworkModal({
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
                     Dimensions (in)
                   </label>
-                  <div className="grid grid-cols-3 gap-2 items-center">
+                  <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] gap-2 items-center">
                     <input
                       type="text"
                       inputMode="decimal"
@@ -670,7 +670,7 @@ export function EditArtworkModal({
                         setWidthInput(e.target.value.replace(/[^0-9.]/g, ""))
                       }
                       className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="W"
+                      placeholder="Width"
                     />
                     <span className="text-gray-400 flex items-center justify-center">
                       ×
@@ -683,7 +683,7 @@ export function EditArtworkModal({
                         setHeightInput(e.target.value.replace(/[^0-9.]/g, ""))
                       }
                       className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="H"
+                      placeholder="Height"
                     />
                     <span className="text-gray-400 flex items-center justify-center">
                       ×
@@ -696,7 +696,7 @@ export function EditArtworkModal({
                         setDepthInput(e.target.value.replace(/[^0-9.]/g, ""))
                       }
                       className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="D"
+                      placeholder="Depth"
                     />
                   </div>
                 </div>

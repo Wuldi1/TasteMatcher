@@ -27,10 +27,10 @@ export function getAIRecommendationsEligibility(user: Partial<User>): {
 
 export const isAuctionEnded = (
   artwork: Pick<Artwork, "isAuction" | "endDate">,
-  nowMs: number = Date.now(),
+  nowMs: number = Date.now()
 ): boolean => {
   if (artwork?.isAuction && artwork?.endDate) {
     return new Date(artwork.endDate).getTime() <= nowMs;
   }
-  return true;
+  return false;
 };

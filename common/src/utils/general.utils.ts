@@ -15,7 +15,7 @@ import { Role } from "../types/user.types";
 
 export const cleanupArtworkBeforeResponseToClient = (
   artwork: Artwork,
-  role: Role,
+  role: Role
 ): Partial<Artwork> => {
   // create a shallow copy excluding vector and vectorModel via destructuring
   const { vector, vectorModel, ...base } = artwork;
@@ -31,10 +31,10 @@ export const cleanupArtworkBeforeResponseToClient = (
 
 export const isAuctionEnded = (
   artwork: Pick<Artwork, "isAuction" | "endDate">,
-  nowMs: number = Date.now(),
+  nowMs: number = Date.now()
 ): boolean => {
   if (artwork?.isAuction && artwork?.endDate) {
     return new Date(artwork.endDate).getTime() <= nowMs;
   }
-  return true;
+  return false;
 };

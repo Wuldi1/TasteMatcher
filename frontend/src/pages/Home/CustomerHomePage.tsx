@@ -41,7 +41,7 @@ export function CustomerHomePage() {
   const [isSendingComment, setIsSendingComment] = useState(false);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const commentsEndRef = useRef<HTMLDivElement>(null);
+  const commentsScrollRef = useRef<HTMLDivElement>(null);
 
   // Fetch proposal metadata
   const { hasSubmittedProposal, proposalMetadata, loading } = useProposalData(
@@ -73,10 +73,16 @@ export function CustomerHomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
-  // Scroll to bottom of comments when they change
+  // Scroll comments container to bottom when they change
   useEffect(() => {
     if (user?.comments?.length) {
-      commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      const commentsContainer = commentsScrollRef.current;
+      if (commentsContainer) {
+        commentsContainer.scrollTo({
+          top: commentsContainer.scrollHeight,
+          behavior: "smooth",
+        });
+      }
     }
   }, [user?.comments]);
 
@@ -360,7 +366,10 @@ export function CustomerHomePage() {
             <span className="font-medium text-gray-700">Messages</span>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/30">
+          <div
+            ref={commentsScrollRef}
+            className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/30"
+          >
             {!user.comments || user.comments.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-gray-400">
                 <MessageSquare className="w-12 h-12 mb-2 opacity-20" />
@@ -422,7 +431,6 @@ export function CustomerHomePage() {
                 );
               })
             )}
-            <div ref={commentsEndRef} />
           </div>
 
           <div className="p-4 bg-white border-t border-gray-100">

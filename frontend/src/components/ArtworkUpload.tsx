@@ -10,28 +10,29 @@
 // 9. CI-friendly: passes typecheck and lint.
 // -----------------------------------------------------------
 
-import React, {
-  useState,
-  useRef,
-  useMemo,
-  useCallback,
-  useEffect,
-} from "react";
 import type { Artwork } from "@tastematcher/common";
-import { useDomain } from "../contexts/DomainContext";
-import { apiClient, ApiError } from "../utils/api";
 import {
-  FileText,
-  User as UserIcon,
-  Tag,
-  DollarSign,
   CalendarDays,
+  DollarSign,
+  FileText,
+  Gavel,
   Layers,
+  Lock,
+  Sparkles,
+  Tag,
   Trash2,
   Upload,
-  Sparkles,
-  Lock,
+  User as UserIcon,
 } from "lucide-react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useDomain } from "../contexts/DomainContext";
+import { apiClient, ApiError } from "../utils/api";
 
 type UploadStatus = "idle" | "uploading" | "success" | "error";
 
@@ -67,7 +68,7 @@ export function ArtworkUpload() {
 
   const isReadyToUpload = useMemo(
     () => Boolean(currentDomain && file),
-    [currentDomain, file],
+    [currentDomain, file]
   );
   const priceValue = metadata.price ?? 0;
   const auctionMaxInvalid = metadata.isAuction
@@ -137,7 +138,7 @@ export function ArtworkUpload() {
         fileInputRef.current.value = "";
       }
     },
-    [previewUrl],
+    [previewUrl]
   );
 
   const handleFiles = useCallback(
@@ -157,14 +158,14 @@ export function ArtworkUpload() {
         setPreviewUrl(null);
       }
     },
-    [previewUrl],
+    [previewUrl]
   );
 
   const handleFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       handleFiles(event.target.files);
     },
-    [handleFiles],
+    [handleFiles]
   );
 
   const handleDragOver = useCallback(
@@ -173,7 +174,7 @@ export function ArtworkUpload() {
       event.stopPropagation();
       setIsDragActive(true);
     },
-    [],
+    []
   );
 
   const handleDragLeave = useCallback(
@@ -182,7 +183,7 @@ export function ArtworkUpload() {
       event.stopPropagation();
       setIsDragActive(false);
     },
-    [],
+    []
   );
 
   const handleDrop = useCallback(
@@ -192,7 +193,7 @@ export function ArtworkUpload() {
       setIsDragActive(false);
       handleFiles(event.dataTransfer.files);
     },
-    [handleFiles],
+    [handleFiles]
   );
 
   const handleMetadataChange = useCallback(
@@ -204,7 +205,7 @@ export function ArtworkUpload() {
           [field]: value.length > 0 ? value : undefined,
         }));
       },
-    [],
+    []
   );
 
   const addTag = useCallback(() => {
@@ -233,7 +234,7 @@ export function ArtworkUpload() {
     (event: React.ChangeEvent<HTMLInputElement>) => {
       setTagInput(event.target.value);
     },
-    [],
+    []
   );
 
   const handleTagInputKeyDown = useCallback(
@@ -248,7 +249,7 @@ export function ArtworkUpload() {
         }
       }
     },
-    [addTag, metadata.tags, removeTag, tagInput],
+    [addTag, metadata.tags, removeTag, tagInput]
   );
 
   const handleTagInputBlur = useCallback(() => {
@@ -276,7 +277,7 @@ export function ArtworkUpload() {
       setPriceInput(formatPrice(raw));
       setMetadata((prev) => ({ ...prev, price: Number(raw) }));
     },
-    [],
+    []
   );
 
   const handleMaxPriceChange = useCallback(
@@ -290,7 +291,7 @@ export function ArtworkUpload() {
       setMaxPriceInput(formatPrice(raw));
       setMetadata((prev) => ({ ...prev, maxPrice: Number(raw) }));
     },
-    [],
+    []
   );
 
   // Numeric metadata input handler (width, height) — allow digits and a single dot (.) as decimal separator.
@@ -327,7 +328,7 @@ export function ArtworkUpload() {
         setMetadata((prev) => ({ ...prev, [field]: numeric }));
       }
     },
-    [],
+    []
   );
 
   // Prevent non-numeric chars in width/height inputs; allow digits, one period, navigation keys
@@ -353,7 +354,7 @@ export function ArtworkUpload() {
       // otherwise prevent
       event.preventDefault();
     },
-    [],
+    []
   );
 
   const handleSubmit = useCallback(
@@ -389,17 +390,17 @@ export function ArtworkUpload() {
         if (error instanceof ApiError) {
           setStatus("error");
           setMessage(
-            error.message || "Failed to upload artwork. Please try again.",
+            error.message || "Failed to upload artwork. Please try again."
           );
         } else {
           setStatus("error");
           setMessage(
-            "Network error. Please check your connection and try again.",
+            "Network error. Please check your connection and try again."
           );
         }
       }
     },
-    [file, metadata, resetForm, currentDomain, validationMessage],
+    [file, metadata, resetForm, currentDomain, validationMessage]
   );
 
   useEffect(() => {
@@ -633,76 +634,59 @@ export function ArtworkUpload() {
               Where and how the artist signed the work (optional).
             </p>
           </div>
-          {/* Width */}
-          <div className="space-y-1">
-            <label
-              htmlFor="metadata-width"
-              className="text-sm font-medium text-gray-700 flex items-center gap-2"
-            >
+          {/* Dimensions */}
+          <div className="space-y-1 sm:col-span-2">
+            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
               <FileText className="w-4 h-4 text-gray-500" />
-              Width (in)
+              Dimensions (in)
             </label>
-            <input
-              id="metadata-width"
-              type="text"
-              inputMode="decimal"
-              pattern="[0-9.]*"
-              value={widthInput}
-              onChange={handleNumberMetadataChange("width" as keyof Artwork)}
-              onKeyDown={handleNumericWithPeriodKeyDown}
-              placeholder="e.g., 24"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-              disabled={status === "uploading"}
-            />
-            <p className="text-xs text-gray-500">Width in inches (optional).</p>
-          </div>
-          {/* Height */}
-          <div className="space-y-1">
-            <label
-              htmlFor="metadata-height"
-              className="text-sm font-medium text-gray-700 flex items-center gap-2"
-            >
-              <FileText className="w-4 h-4 text-gray-500" />
-              Height (in)
-            </label>
-            <input
-              id="metadata-height"
-              type="text"
-              inputMode="decimal"
-              pattern="[0-9.]*"
-              value={heightInput}
-              onChange={handleNumberMetadataChange("height" as keyof Artwork)}
-              onKeyDown={handleNumericWithPeriodKeyDown}
-              placeholder="e.g., 18"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-              disabled={status === "uploading"}
-            />
+            <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] gap-2 items-center">
+              <input
+                id="metadata-width"
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9.]*"
+                value={widthInput}
+                onChange={handleNumberMetadataChange("width" as keyof Artwork)}
+                onKeyDown={handleNumericWithPeriodKeyDown}
+                placeholder="Width"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                disabled={status === "uploading"}
+              />
+              <span className="text-gray-400 flex items-center justify-center">
+                ×
+              </span>
+              <input
+                id="metadata-height"
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9.]*"
+                value={heightInput}
+                onChange={handleNumberMetadataChange("height" as keyof Artwork)}
+                onKeyDown={handleNumericWithPeriodKeyDown}
+                placeholder="Height"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                disabled={status === "uploading"}
+              />
+              <span className="text-gray-400 flex items-center justify-center">
+                ×
+              </span>
+              <input
+                id="metadata-depth"
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9.]*"
+                value={depthInput}
+                onChange={handleNumberMetadataChange("depth" as keyof Artwork)}
+                onKeyDown={handleNumericWithPeriodKeyDown}
+                placeholder="Depth"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                disabled={status === "uploading"}
+              />
+            </div>
             <p className="text-xs text-gray-500">
-              Height in inches (optional).
+              Width × Height × Depth (optional).
             </p>
-          </div>
-          {/* Depth */}
-          <div className="space-y-1">
-            <label
-              htmlFor="metadata-depth"
-              className="text-sm font-medium text-gray-700 flex items-center gap-2"
-            >
-              <FileText className="w-4 h-4 text-gray-500" />
-              Depth (in)
-            </label>
-            <input
-              id="metadata-depth"
-              type="text"
-              inputMode="decimal"
-              pattern="[0-9.]*"
-              value={depthInput}
-              onChange={handleNumberMetadataChange("depth" as keyof Artwork)}
-              onKeyDown={handleNumericWithPeriodKeyDown}
-              placeholder="e.g., 2"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-              disabled={status === "uploading"}
-            />
-            <p className="text-xs text-gray-500">Depth in inches (optional).</p>
           </div>
           {/* Date (Year) */}
           <div className="space-y-1">
@@ -766,140 +750,144 @@ export function ArtworkUpload() {
             </p>
           </div>
 
-          {/* Auction */}
-          <div className="space-y-3 sm:col-span-2 rounded-xl border border-purple-100 bg-purple-50/50 p-4">
-            <label className="text-sm font-semibold text-purple-800 flex items-center gap-2">
-              <Sparkles className="w-4 h-4" />
-              Auction settings
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm text-gray-800">
-              <input
-                type="checkbox"
-                checked={metadata.isAuction ?? false}
-                onChange={toggleIsAuction}
-                disabled={status === "uploading"}
-                aria-checked={metadata.isAuction ?? false}
-                className="h-4 w-4 rounded border-gray-300 focus:ring-purple-500"
-              />
-              <span>Mark this artwork as an auction</span>
-            </label>
+          {/* Settings */}
+          <div className="sm:col-span-2 space-y-3">
+            <div className="text-sm font-semibold text-gray-800">Settings</div>
+            <div className="grid gap-4 lg:grid-cols-3">
+              {/* Auction */}
+              <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                <label className="text-sm font-semibold text-blue-900 flex items-center gap-2">
+                  <Gavel className="w-4 h-4" />
+                  Auction
+                </label>
+                <label className="inline-flex items-center gap-2 text-sm text-gray-800">
+                  <input
+                    type="checkbox"
+                    checked={metadata.isAuction ?? false}
+                    onChange={toggleIsAuction}
+                    disabled={status === "uploading"}
+                    aria-checked={metadata.isAuction ?? false}
+                    className="h-4 w-4 rounded border-gray-300 focus:ring-blue-600"
+                  />
+                  <span>Mark this artwork as an auction</span>
+                </label>
 
-            {metadata.isAuction && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label
-                    htmlFor="metadata-maxprice"
-                    className="text-sm font-medium text-gray-700 flex items-center gap-2"
-                  >
-                    <DollarSign className="w-4 h-4 text-green-600" />
-                    Max price / reserve
-                  </label>
-                  <input
-                    id="metadata-maxprice"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9,]*"
-                    value={maxPriceInput}
-                    onChange={handleMaxPriceChange}
-                    placeholder="e.g., 1,800"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
-                    disabled={status === "uploading"}
-                  />
-                  <p className="text-xs text-gray-500">
-                    Must be greater than or equal to price.
-                  </p>
-                  {auctionMaxInvalid && (
-                    <p className="text-xs text-red-600 mt-1">
-                      Max price must be greater than or equal to price for
-                      auctions.
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <label
-                    htmlFor="metadata-enddate"
-                    className="text-sm font-medium text-gray-700 flex items-center gap-2"
-                  >
-                    <CalendarDays className="w-4 h-4 text-gray-500" />
-                    Auction end date
-                  </label>
-                  <input
-                    id="metadata-enddate"
-                    type="datetime-local"
-                    value={endDateInput}
-                    onChange={(e) => {
-                      setEndDateInput(e.target.value);
-                      setMetadata((prev) => ({
-                        ...prev,
-                        endDate: e.target.value || undefined,
-                      }));
-                    }}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
-                    disabled={status === "uploading"}
-                  />
-                  <p className="text-xs text-gray-500">
-                    When bidding closes (local time).
-                  </p>
-                  {auctionEndInvalid && (
-                    <p className="text-xs text-red-600 mt-1">
-                      Auction end date must be in the future.
-                    </p>
-                  )}
-                </div>
+                {metadata.isAuction && (
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="space-y-1">
+                      <label
+                        htmlFor="metadata-maxprice"
+                        className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                      >
+                        <DollarSign className="w-4 h-4 text-green-600" />
+                        Max price / reserve
+                      </label>
+                      <input
+                        id="metadata-maxprice"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9,]*"
+                        value={maxPriceInput}
+                        onChange={handleMaxPriceChange}
+                        placeholder="e.g., 1,800"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                        disabled={status === "uploading"}
+                      />
+                      <p className="text-xs text-gray-500">
+                        Must be greater than or equal to price.
+                      </p>
+                      {auctionMaxInvalid && (
+                        <p className="text-xs text-red-600 mt-1">
+                          Max price must be greater than or equal to price for
+                          auctions.
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <label
+                        htmlFor="metadata-enddate"
+                        className="text-sm font-medium text-gray-700 flex items-center gap-2"
+                      >
+                        <CalendarDays className="w-4 h-4 text-gray-500" />
+                        Auction end date
+                      </label>
+                      <input
+                        id="metadata-enddate"
+                        type="datetime-local"
+                        value={endDateInput}
+                        onChange={(e) => {
+                          setEndDateInput(e.target.value);
+                          setMetadata((prev) => ({
+                            ...prev,
+                            endDate: e.target.value || undefined,
+                          }));
+                        }}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                        disabled={status === "uploading"}
+                      />
+                      <p className="text-xs text-gray-500">
+                        When bidding closes (local time).
+                      </p>
+                      {auctionEndInvalid && (
+                        <p className="text-xs text-red-600 mt-1">
+                          Auction end date must be in the future.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {/* Taster availability */}
-          <div className="space-y-2 sm:col-span-2">
-            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-600" />
-              Taster availability
-            </label>
-            <p className="text-xs text-gray-500">
-              Allow this artwork to appear in the Taster learning experience for
-              your collectors. Only domain owners, dealers, and admins can see
-              this toggle.
-            </p>
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                checked={metadata.useForTaster ?? false}
-                onChange={toggleUseForTaster}
-                disabled={status === "uploading"}
-                aria-checked={metadata.useForTaster ?? false}
-                aria-label="Include artwork in Taster experience"
-                className="h-4 w-4 rounded border-gray-300 focus:ring-purple-500"
-              />
-              <span>Use this artwork in the Taster experience</span>
-            </label>
-          </div>
+              {/* Taster */}
+              <div className="space-y-2 rounded-xl border border-purple-100 bg-purple-50/60 p-4">
+                <label className="text-sm font-semibold text-purple-800 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-600" />
+                  Taster
+                </label>
+                <p className="text-xs text-gray-600">
+                  Allow this artwork to appear in the Taster learning experience
+                  for your collectors. Only domain owners, dealers, and admins
+                  can see this toggle.
+                </p>
+                <label className="inline-flex items-center gap-2 text-sm text-gray-800">
+                  <input
+                    type="checkbox"
+                    checked={metadata.useForTaster ?? false}
+                    onChange={toggleUseForTaster}
+                    disabled={status === "uploading"}
+                    aria-checked={metadata.useForTaster ?? false}
+                    aria-label="Include artwork in Taster experience"
+                    className="h-4 w-4 rounded border-gray-300 focus:ring-purple-500"
+                  />
+                  <span>Use this artwork in the Taster experience</span>
+                </label>
+              </div>
 
-          {/* Privacy */}
-          <div className="space-y-2 sm:col-span-2 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
-            <label className="text-sm font-medium text-gray-800 flex items-center gap-2">
-              <Lock className="w-4 h-4 text-gray-600" />
-              Privacy
-            </label>
-            <p className="text-xs text-gray-600">
-              Private artworks stay visible only to you and customers you
-              invite. Domain owners and TasteMatcher admins can still review
-              everything.
-            </p>
-            <label className="inline-flex items-center gap-3 text-sm text-gray-800">
-              <input
-                type="checkbox"
-                checked={metadata.isPrivate ?? false}
-                onChange={togglePrivacy}
-                disabled={status === "uploading"}
-                aria-checked={metadata.isPrivate ?? false}
-                aria-label="Mark artwork as private"
-                className="h-4 w-4 rounded border-gray-300 focus:ring-gray-500"
-              />
-              {metadata.isPrivate
-                ? "Only I and my invitees can see this piece"
-                : "Share with all collectors in my domain"}
-            </label>
+              {/* Privacy */}
+              <div className="space-y-2 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+                <label className="text-sm font-medium text-gray-800 flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-gray-600" />
+                  Privacy
+                </label>
+                <p className="text-xs text-gray-600">
+                  Private artworks stay visible only to you and customers you
+                  invite. Domain owners and TasteMatcher admins can still review
+                  everything.
+                </p>
+                <label className="inline-flex items-center gap-3 text-sm text-gray-800">
+                  <input
+                    type="checkbox"
+                    checked={metadata.isPrivate ?? false}
+                    onChange={togglePrivacy}
+                    disabled={status === "uploading"}
+                    aria-checked={metadata.isPrivate ?? false}
+                    aria-label="Mark artwork as private"
+                    className="h-4 w-4 rounded border-gray-300 focus:ring-gray-500"
+                  />
+                  Accessible only to me and my invitees
+                </label>
+              </div>
+            </div>
           </div>
         </div>
 

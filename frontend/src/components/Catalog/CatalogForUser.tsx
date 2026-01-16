@@ -237,12 +237,6 @@ export default function CatalogForUser({
 
                 {/* Price Badge */}
                 <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
-                  {artwork.isAuction && (
-                    <span className="inline-flex items-center gap-1.5 bg-blue-900/90 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
-                      <Gavel className="w-3.5 h-3.5" />
-                      Auction
-                    </span>
-                  )}
                   {artwork.price !== undefined &&
                     (artwork.shouldDisplayPrice ?? true) && (
                       <div className="bg-white/90 backdrop-blur-sm text-gray-900 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
@@ -260,16 +254,25 @@ export default function CatalogForUser({
                     In Proposal
                   </div>
                 )}
-                {auctionEnded && (
-                  <div className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1 rounded-full bg-gray-800/80 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
-                    Auction ended
-                  </div>
-                )}
-
-                {artwork.useForTaster && (
-                  <div className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1 rounded-full bg-purple-600/90 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
-                    <Sparkles className="w-4 h-4" />
-                    Taster
+                {(auctionEnded || artwork.isAuction || artwork.useForTaster) && (
+                  <div className="absolute bottom-3 left-3 z-10 flex flex-col items-start gap-2">
+                    {auctionEnded && (
+                      <div className="inline-flex items-center gap-1 rounded-full bg-gray-800/80 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+                        Auction ended
+                      </div>
+                    )}
+                    {artwork.isAuction && (
+                      <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-900/90 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+                        <Gavel className="w-3.5 h-3.5" />
+                        Auction
+                      </div>
+                    )}
+                    {artwork.useForTaster && (
+                      <div className="inline-flex items-center gap-1 rounded-full bg-purple-600/90 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+                        <Sparkles className="w-4 h-4" />
+                        Taster
+                      </div>
+                    )}
                   </div>
                 )}
                 {artwork.isPrivate && (
