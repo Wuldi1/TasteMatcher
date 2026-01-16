@@ -11,7 +11,7 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -50,11 +50,19 @@ export function CatalogPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const isGlobalAdmin = user?.role === "global_admin";
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<string>("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [editingArtwork, setEditingArtwork] = useState<Artwork | null>(null);
+  const [domains, setDomains] = useState<Array<{ id: string; name?: string }>>(
+    [],
+  );
+  const [domainsLoading, setDomainsLoading] = useState(false);
+  const [selectedDomainId, setSelectedDomainId] = useState<string | undefined>(
+    undefined,
+  );
   const [selectedArtworks, setSelectedArtworks] = useState<Set<string>>(
     new Set(),
   ); // For multi-select
@@ -69,6 +77,36 @@ export function CatalogPage() {
     }
     return undefined;
   }, [location.search]);
+
+  const effectiveDomainId = isGlobalAdmin ? selectedDomainId : user?.domainId;
+
+  useEffect(() => {
+    if (!isGlobalAdmin) {
+      setSelectedDomainId(user?.domainId);
+      return;
+    }
+    setDomainsLoading(true);
+    (async () => {
+      try {
+        const domainsResponse = await apiClient.getAllDomains();
+        setDomains(domainsResponse.map((domain) => ({ id: domain.id, name: domain.name })));
+        if (!selectedDomainId && domainsResponse.length > 0) {
+          setSelectedDomainId(domainsResponse[0].id);
+        }
+      } catch (err) {
+        console.error("Failed to load domains for catalog", err);
+        setDomains([]);
+      } finally {
+        setDomainsLoading(false);
+      }
+    })();
+  }, [isGlobalAdmin, selectedDomainId, user?.domainId]);
+
+  useEffect(() => {
+    setSelectedArtworks(new Set());
+    setSelectedArtwork(null);
+    setEditingArtwork(null);
+  }, [effectiveDomainId]);
 
   const clearPreferenceFilter = () => {
     if (!preferenceFilter) return;
@@ -91,17 +129,17 @@ export function CatalogPage() {
   } = useInfiniteQuery({
     queryKey: [
       "artworks",
-      user?.domainId,
+      effectiveDomainId,
       searchQuery,
       sortBy,
       sortOrder,
       preferenceFilter,
     ],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
-      if (!user?.domainId) {
+      if (!effectiveDomainId) {
         throw new Error("No domain ID");
       }
-      const result = await apiClient.getArtworks(user.domainId, {
+      const result = await apiClient.getArtworks(effectiveDomainId, {
         limit: 20,
         continuationToken: pageParam,
         sortBy,
@@ -121,7 +159,7 @@ export function CatalogPage() {
         return undefined;
       return lastPage.continuationToken ?? undefined;
     },
-    enabled: !!user?.domainId,
+    enabled: !!effectiveDomainId,
     staleTime: 30000,
     retry: 2,
   });
@@ -161,13 +199,13 @@ export function CatalogPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: (artworkId: string) => {
-      if (!user?.domainId) throw new Error("No domain ID");
-      return apiClient.deleteArtwork(user.domainId, artworkId);
+      if (!effectiveDomainId) throw new Error("No domain ID");
+      return apiClient.deleteArtwork(effectiveDomainId, artworkId);
     },
     onSuccess: (_, artworkId) => {
       // Immediately remove from cache
       queryClient.setQueryData(
-        ["artworks", user?.domainId, searchQuery, sortBy, sortOrder],
+        ["artworks", effectiveDomainId, searchQuery, sortBy, sortOrder],
         (oldData: any) => {
           if (!oldData || !Array.isArray(oldData.pages)) return oldData;
           return {
@@ -193,22 +231,22 @@ export function CatalogPage() {
         300,
       ); // Animation duration
       // Invalidate to ensure cache consistency
-      queryClient.invalidateQueries({ queryKey: ["artworks", user?.domainId] });
+      queryClient.invalidateQueries({ queryKey: ["artworks", effectiveDomainId] });
     },
   });
 
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
     mutationFn: async (artworkIds: string[]) => {
-      if (!user?.domainId) throw new Error("No domain ID");
+      if (!effectiveDomainId) throw new Error("No domain ID");
       await Promise.all(
-        artworkIds.map((id) => apiClient.deleteArtwork(user.domainId!, id)),
+        artworkIds.map((id) => apiClient.deleteArtwork(effectiveDomainId, id)),
       );
     },
     onSuccess: (_, artworkIds) => {
       // Immediately remove from cache
       queryClient.setQueryData(
-        ["artworks", user?.domainId, searchQuery, sortBy, sortOrder],
+        ["artworks", effectiveDomainId, searchQuery, sortBy, sortOrder],
         (oldData: any) => {
           if (!oldData || !Array.isArray(oldData.pages)) return oldData;
           return {
@@ -238,7 +276,7 @@ export function CatalogPage() {
         );
       });
       // Invalidate to ensure cache consistency
-      queryClient.invalidateQueries({ queryKey: ["artworks", user?.domainId] });
+      queryClient.invalidateQueries({ queryKey: ["artworks", effectiveDomainId] });
     },
   });
 
@@ -251,17 +289,17 @@ export function CatalogPage() {
       artworkIds: string[];
       shouldDisplayPrice: boolean;
     }) => {
-      if (!user?.domainId) throw new Error("No domain ID");
+      if (!effectiveDomainId) throw new Error("No domain ID");
       await Promise.all(
         artworkIds.map((id) =>
-          apiClient.updateArtwork(user.domainId!, id, { shouldDisplayPrice }),
+          apiClient.updateArtwork(effectiveDomainId, id, { shouldDisplayPrice }),
         ),
       );
     },
     onSuccess: (_, { artworkIds, shouldDisplayPrice }) => {
       // Update cache
       queryClient.setQueryData(
-        ["artworks", user?.domainId, searchQuery, sortBy, sortOrder],
+        ["artworks", effectiveDomainId, searchQuery, sortBy, sortOrder],
         (oldData: any) => {
           if (!oldData || !Array.isArray(oldData.pages)) return oldData;
           return {
@@ -291,16 +329,16 @@ export function CatalogPage() {
       artworkIds: string[];
       useForTaster: boolean;
     }) => {
-      if (!user?.domainId) throw new Error("No domain ID");
+      if (!effectiveDomainId) throw new Error("No domain ID");
       await Promise.all(
         artworkIds.map((id) =>
-          apiClient.updateArtwork(user.domainId!, id, { useForTaster }),
+          apiClient.updateArtwork(effectiveDomainId, id, { useForTaster }),
         ),
       );
     },
     onSuccess: (_, { artworkIds, useForTaster }) => {
       queryClient.setQueryData(
-        ["artworks", user?.domainId, searchQuery, sortBy, sortOrder],
+        ["artworks", effectiveDomainId, searchQuery, sortBy, sortOrder],
         (oldData: any) => {
           if (!oldData || !Array.isArray(oldData.pages)) return oldData;
           return {
@@ -330,16 +368,16 @@ export function CatalogPage() {
       artworkIds: string[];
       isPrivate: boolean;
     }) => {
-      if (!user?.domainId) throw new Error("No domain ID");
+      if (!effectiveDomainId) throw new Error("No domain ID");
       await Promise.all(
         artworkIds.map((id) =>
-          apiClient.updateArtwork(user.domainId!, id, { isPrivate }),
+          apiClient.updateArtwork(effectiveDomainId, id, { isPrivate }),
         ),
       );
     },
     onSuccess: (_, { artworkIds, isPrivate }) => {
       queryClient.setQueryData(
-        ["artworks", user?.domainId, searchQuery, sortBy, sortOrder],
+        ["artworks", effectiveDomainId, searchQuery, sortBy, sortOrder],
         (oldData: any) => {
           if (!oldData || !Array.isArray(oldData.pages)) return oldData;
           return {
@@ -373,10 +411,10 @@ export function CatalogPage() {
       artworkId: string;
       liked: boolean;
     }) => {
-      if (!user?.domainId || !user?.id)
+      if (!effectiveDomainId || !user?.id)
         throw new Error("User not authenticated");
-      return apiClient.saveArtworkPreference(user.domainId, user.id, {
-        domainId: user.domainId,
+      return apiClient.saveArtworkPreference(effectiveDomainId, user.id, {
+        domainId: effectiveDomainId,
         artworkId,
         liked,
       });
@@ -391,7 +429,7 @@ export function CatalogPage() {
     }) => {
       const queryKey = [
         "artworks",
-        user?.domainId,
+        effectiveDomainId,
         searchQuery,
         sortBy,
         sortOrder,
@@ -441,7 +479,7 @@ export function CatalogPage() {
     onError: (err, variables, context: any) => {
       const queryKey = [
         "artworks",
-        user?.domainId,
+        effectiveDomainId,
         searchQuery,
         sortBy,
         sortOrder,
@@ -616,6 +654,31 @@ export function CatalogPage() {
 
             {/* Sort and Filter Controls */}
             <div className="catalog-filters">
+              {isGlobalAdmin && (
+                <div className="catalog-filter-group">
+                  <label htmlFor="domain-select" className="catalog-filter-label">
+                    Domain
+                  </label>
+                  <select
+                    id="domain-select"
+                    className="catalog-filter-select"
+                    value={selectedDomainId ?? ""}
+                    onChange={(e) =>
+                      setSelectedDomainId(e.target.value || undefined)
+                    }
+                    disabled={domainsLoading || domains.length === 0}
+                  >
+                    <option value="" disabled>
+                      {domainsLoading ? "Loading domains..." : "Select domain"}
+                    </option>
+                    {domains.map((domain) => (
+                      <option key={domain.id} value={domain.id}>
+                        {domain.name ? `${domain.name} (${domain.id})` : domain.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="catalog-filter-group">
                 <label htmlFor="sort-by" className="catalog-filter-label">
                   Sort By
@@ -850,7 +913,7 @@ export function CatalogPage() {
             <button
               onClick={() =>
                 queryClient.invalidateQueries({
-                  queryKey: ["artworks", user?.domainId],
+                  queryKey: ["artworks", effectiveDomainId],
                 })
               }
               className="catalog-retry-button"
@@ -1287,7 +1350,7 @@ export function CatalogPage() {
                 setSelectedArtwork(updatedArtwork);
               }
               queryClient.invalidateQueries({
-                queryKey: ["artworks", user?.domainId],
+                queryKey: ["artworks", effectiveDomainId],
               });
             }}
           />

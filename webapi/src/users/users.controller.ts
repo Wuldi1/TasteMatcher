@@ -1,33 +1,33 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
+  BadRequestException,
   Body,
-  Param,
-  UseGuards,
-  Request,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
-  UploadedFile,
-  UseInterceptors,
-  BadRequestException,
-  ForbiddenException,
+  Param,
+  Patch,
+  Post,
   Query,
+  Request,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { UsersService } from "./users.service";
-import { InviteUserDto } from "./dto/invite-user.dto";
-import { UpdateUserDto } from "./dto/update-user.dto";
-import { UpdateQuestionnaireDto } from "./dto/update-questionnaire.dto";
-import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
-import { RolesGuard } from "../auth/utils/roles.guard";
-import { Roles } from "../auth/utils/roles.decorator";
 import { User, UserStatsResponse } from "@tastematcher/common";
-import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
-import { AuthService } from "../auth/auth.service";
 import { ArtworksService } from "../artworks/artworks.service";
+import { AuthService } from "../auth/auth.service";
+import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
+import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
+import { Roles } from "../auth/utils/roles.decorator";
+import { RolesGuard } from "../auth/utils/roles.guard";
+import { InviteUserDto } from "./dto/invite-user.dto";
+import { UpdateQuestionnaireDto } from "./dto/update-questionnaire.dto";
+import { UpdateUserDto } from "./dto/update-user.dto";
+import { UsersService } from "./users.service";
 
 @Controller("users")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -35,7 +35,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly authService: AuthService,
-    private readonly artworksService: ArtworksService,
+    private readonly artworksService: ArtworksService
   ) {}
 
   /**
@@ -54,7 +54,7 @@ export class UsersController {
   @Roles("global_admin")
   async findAllInSpecificDomain(
     @Request() req: AuthenticatedRequest,
-    @Param("domainId") domainId: string,
+    @Param("domainId") domainId: string
   ): Promise<User[]> {
     return this.usersService.findAllInDomain(domainId, req.user, true);
   }
@@ -64,7 +64,7 @@ export class UsersController {
    */
   @Get("stats")
   async getUserStats(
-    @Request() req: AuthenticatedRequest,
+    @Request() req: AuthenticatedRequest
   ): Promise<UserStatsResponse> {
     const { id: userId, domainId } = req.user;
 
@@ -86,7 +86,7 @@ export class UsersController {
   async findOne(
     @Request() req: AuthenticatedRequest,
     @Param("id") userId: string,
-    @Query("domainId") domainId?: string,
+    @Query("domainId") domainId?: string
   ): Promise<User> {
     if (
       domainId &&
@@ -94,7 +94,7 @@ export class UsersController {
       req.user.role !== "global_admin"
     ) {
       throw new ForbiddenException(
-        "You are not authorized to access this domain.",
+        "You are not authorized to access this domain."
       );
     }
     return this.usersService.findOne(domainId ?? req.user.domainId, userId);
@@ -108,13 +108,13 @@ export class UsersController {
   async update(
     @Request() req: AuthenticatedRequest,
     @Param("id") userId: string,
-    @Body() updateDto: UpdateUserDto,
+    @Body() updateDto: UpdateUserDto
   ): Promise<User> {
     return this.usersService.update(
       req.user.domainId,
       userId,
       updateDto,
-      req.user.id,
+      req.user.id
     );
   }
 
@@ -126,7 +126,7 @@ export class UsersController {
   async addComment(
     @Request() req: AuthenticatedRequest,
     @Param("id") userId: string,
-    @Body("text") text: string,
+    @Body("text") text: string
   ): Promise<User> {
     if (!text) {
       throw new BadRequestException("Comment text is required");
@@ -136,7 +136,7 @@ export class UsersController {
     if (req.user.id !== userId) {
       if (req.user.role === "customer") {
         throw new ForbiddenException(
-          "You can only comment on your own profile.",
+          "You can only comment on your own profile."
         );
       }
       // For dealers/admins, domain check is handled in service or by finding user in domain
@@ -146,7 +146,7 @@ export class UsersController {
       req.user.domainId,
       userId,
       text,
-      req.user,
+      req.user
     );
   }
 
@@ -158,7 +158,7 @@ export class UsersController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(
     @Request() req: AuthenticatedRequest,
-    @Param("id") userId: string,
+    @Param("id") userId: string
   ): Promise<void> {
     return this.usersService.remove(req.user.domainId, userId, req.user.id);
   }
@@ -170,18 +170,34 @@ export class UsersController {
   @Roles("domain_owner", "global_admin", "dealer")
   async invite(
     @Request() req: AuthenticatedRequest,
-    @Body() inviteDto: InviteUserDto,
+    @Body() inviteDto: InviteUserDto
   ): Promise<User> {
     const currentUser = req.user as User;
+
+    console.log(inviteDto);
+
+    if (inviteDto.domainId == undefined || inviteDto.domainId == "") {
+      // empty!
+      inviteDto.domainId = currentUser.domainId;
+    }
+
+    if (
+      inviteDto.domainId != currentUser.domainId &&
+      currentUser.role != "global_admin"
+    ) {
+      throw new ForbiddenException(
+        "You don't have permissions to this domain!"
+      );
+    }
 
     if (currentUser.role === "dealer" && inviteDto.role !== "customer") {
       throw new ForbiddenException("Dealers can only invite customers.");
     }
 
     return this.usersService.inviteUser(
-      req.user.domainId,
+      inviteDto.domainId,
       inviteDto,
-      req.user.id,
+      currentUser.id
     );
   }
 
@@ -191,12 +207,12 @@ export class UsersController {
   @Patch("me/questionnaire")
   async updateQuestionnaire(
     @Request() req: AuthenticatedRequest,
-    @Body() questionnaireDto: UpdateQuestionnaireDto,
+    @Body() questionnaireDto: UpdateQuestionnaireDto
   ): Promise<User> {
     return this.usersService.updateQuestionnaire(
       req.user.id,
       req.user.domainId,
-      questionnaireDto,
+      questionnaireDto
     );
   }
 
@@ -206,7 +222,7 @@ export class UsersController {
   @Post("me/complete-onboarding")
   @HttpCode(HttpStatus.OK)
   async completeOnboarding(
-    @Request() req: AuthenticatedRequest,
+    @Request() req: AuthenticatedRequest
   ): Promise<User> {
     return this.usersService.completeOnboarding(req.user.id, req.user.domainId);
   }
@@ -231,7 +247,7 @@ export class UsersController {
     @Request() req: AuthenticatedRequest,
     // eslint-disable-next-line
     @UploadedFile() file: Express.Multer.File,
-    @Query("section") section?: "aesthetic" | "collection" | "shared_gallery",
+    @Query("section") section?: "aesthetic" | "collection" | "shared_gallery"
   ): Promise<{ success: boolean; message: string; vectorized: number }> {
     if (!file) {
       throw new BadRequestException("No file uploaded");
@@ -241,7 +257,7 @@ export class UsersController {
       req.user.id,
       req.user.domainId,
       file,
-      section,
+      section
     );
   }
 
@@ -252,11 +268,11 @@ export class UsersController {
   @Post("me/finalize-preference-vectors")
   @HttpCode(HttpStatus.OK)
   async finalizePreferenceVectors(
-    @Request() req: AuthenticatedRequest,
+    @Request() req: AuthenticatedRequest
   ): Promise<{ success: boolean; message: string; totalVectors: number }> {
     return this.usersService.finalizePreferenceVectors(
       req.user.id,
-      req.user.domainId,
+      req.user.domainId
     );
   }
 
@@ -265,12 +281,12 @@ export class UsersController {
    */
   @Get("me/refresh")
   async refreshCurrentUser(
-    @Request() req: AuthenticatedRequest,
+    @Request() req: AuthenticatedRequest
   ): Promise<{ user: User; token: string }> {
     const user = await this.usersService.findOne(
       req.user.domainId,
       req.user.id,
-      true,
+      true
     );
     const token = this.authService.generateUserToken(user);
 

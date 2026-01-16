@@ -11,17 +11,17 @@
 // -----------------------------------------------------------
 
 import {
-  Domain,
-  DomainVerificationResultResponse,
   Artwork,
-  User,
-  Role,
-  DomainRequest,
-  PersonalQuestionnaire,
   ArtworkStats,
-  UntastedArtworksResponse,
+  Domain,
+  DomainRequest,
+  DomainVerificationResultResponse,
   PaginatedResponse,
+  PersonalQuestionnaire,
   Proposal,
+  Role,
+  UntastedArtworksResponse,
+  User,
   UserStatsResponse,
 } from "@tastematcher/common";
 
@@ -32,7 +32,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
-    public code?: string,
+    public code?: string
   ) {
     super(message);
     this.name = "ApiError";
@@ -57,12 +57,12 @@ class BaseApiClient {
       this.baseURL = "http://localhost:8080";
     } else if (window.location.hostname.includes("tastematcher-dev-web")) {
       console.log(
-        "Setting baseURL to tastematcher-dev-api.azurewebsites.net for development",
+        "Setting baseURL to tastematcher-dev-api.azurewebsites.net for development"
       );
       this.baseURL = "https://tastematcher-dev-api.azurewebsites.net";
     } else if (window.location.hostname.includes("tastematcher-stg-web")) {
       console.log(
-        "Setting baseURL to tastematcher-stg-api.azurewebsites.net for staging",
+        "Setting baseURL to tastematcher-stg-api.azurewebsites.net for staging"
       );
       this.baseURL = "https://tastematcher-stg-api.azurewebsites.net";
     } else if (window.location.hostname.includes("tastematcher.art")) {
@@ -137,7 +137,7 @@ class BaseApiClient {
    */
   protected async request<T>(
     endpoint: string,
-    options: RequestInit = {},
+    options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
 
@@ -171,7 +171,7 @@ class BaseApiClient {
    */
   private async handleErrorResponse(
     response: Response,
-    url: string,
+    url: string
   ): Promise<never> {
     if (response.status === 401) {
       this.clearAuthToken();
@@ -211,7 +211,7 @@ class BaseApiClient {
   protected async uploadFile<T>(
     endpoint: string,
     file: File,
-    additionalData?: Record<string, any>,
+    additionalData?: Record<string, any>
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     const formData = new FormData();
@@ -222,7 +222,7 @@ class BaseApiClient {
         if (value !== undefined && value !== null) {
           formData.append(
             key,
-            typeof value === "object" ? JSON.stringify(value) : String(value),
+            typeof value === "object" ? JSON.stringify(value) : String(value)
           );
         }
       });
@@ -317,7 +317,7 @@ class ApiClient extends BaseApiClient {
    */
   async verifyDomainCode(
     adminEmail: string,
-    code: string,
+    code: string
   ): Promise<DomainVerificationResultResponse> {
     if (!code || code.length !== 6) {
       throw new ApiError("Verification code must be 6 digits", 400);
@@ -328,7 +328,7 @@ class ApiClient extends BaseApiClient {
       {
         method: "POST",
         body: JSON.stringify({ code }),
-      },
+      }
     );
   }
 
@@ -352,7 +352,7 @@ class ApiClient extends BaseApiClient {
    */
   async updateDomain(
     domainId: string,
-    data: { name?: string },
+    data: { name?: string }
   ): Promise<Domain> {
     this.validateRequired(domainId, "Domain ID");
     return this.request<Domain>(`/domains/${domainId}`, {
@@ -434,7 +434,7 @@ class ApiClient extends BaseApiClient {
    */
   async updateUser(
     userId: string,
-    data: { name?: string; role?: Role },
+    data: { name?: string; role?: Role }
   ): Promise<User> {
     this.validateRequired(userId, "User ID");
     return this.request<User>(`/users/${userId}`, {
@@ -469,6 +469,7 @@ class ApiClient extends BaseApiClient {
   async inviteUser(data: {
     name: string;
     email: string;
+    domainId: string;
     role: Role;
   }): Promise<User> {
     this.validateRequired(data.name, "Name");
@@ -505,7 +506,7 @@ class ApiClient extends BaseApiClient {
   async uploadArtwork(
     domainId: string,
     file: File,
-    artworkMetadata?: Partial<Artwork>,
+    artworkMetadata?: Partial<Artwork>
   ): Promise<Artwork> {
     this.validateRequired(domainId, "Domain ID");
     this.validateRequired(file, "File");
@@ -513,21 +514,21 @@ class ApiClient extends BaseApiClient {
     return this.uploadFile<Artwork>(
       `/domains/${domainId}/uploads`,
       file,
-      artworkMetadata ? { artwork: artworkMetadata } : undefined,
+      artworkMetadata ? { artwork: artworkMetadata } : undefined
     );
   }
 
   async replaceArtworkImage(
     domainId: string,
     artworkId: string,
-    file: File,
+    file: File
   ): Promise<Artwork> {
     this.validateRequired(domainId, "Domain ID");
     this.validateRequired(artworkId, "Artwork ID");
     this.validateRequired(file, "File");
     return this.uploadFile<Artwork>(
       `/domains/${domainId}/uploads/${artworkId}/image`,
-      file,
+      file
     );
   }
 
@@ -557,7 +558,7 @@ class ApiClient extends BaseApiClient {
       filterBy?: string;
       userId?: string;
       preference?: "liked" | "disliked";
-    },
+    }
   ): Promise<PaginatedResponse<Artwork>> {
     this.validateRequired(domainId, "Domain ID");
     const params = new URLSearchParams();
@@ -596,7 +597,7 @@ class ApiClient extends BaseApiClient {
   async updateArtwork(
     domainId: string,
     artworkId: string,
-    data: Partial<Artwork>,
+    data: Partial<Artwork>
   ): Promise<Artwork> {
     this.validateRequired(domainId, "Domain ID");
     this.validateRequired(artworkId, "Artwork ID");
@@ -623,11 +624,11 @@ class ApiClient extends BaseApiClient {
   async fetchUntastedArtworks(
     domainId: string,
     userId: string,
-    limit: number = 20,
+    limit: number = 20
   ): Promise<UntastedArtworksResponse> {
     return await this.request<UntastedArtworksResponse>(
       `/domains/${domainId}/artworks/untasted/${userId}?limit=${limit}`,
-      { method: "GET" },
+      { method: "GET" }
     );
   }
 
@@ -639,11 +640,11 @@ class ApiClient extends BaseApiClient {
       domainId: string;
       liked?: boolean;
       comment?: string;
-    },
+    }
   ): Promise<void> {
     await this.request<UntastedArtworksResponse>(
       `/domains/${domainId}/artworks/preferences/${userId}`,
-      { method: "POST", body: JSON.stringify(preference) },
+      { method: "POST", body: JSON.stringify(preference) }
     );
   }
 
@@ -654,7 +655,7 @@ class ApiClient extends BaseApiClient {
     domainId: string,
     userId?: string,
     limit?: number,
-    offset?: number,
+    offset?: number
   ): Promise<Array<Artwork>> {
     this.validateRequired(domainId, "Domain ID");
     let params = "";
@@ -673,7 +674,7 @@ class ApiClient extends BaseApiClient {
     }
     return this.request<Array<Artwork>>(
       `/domains/${domainId}/artworks/recommendations${params}`,
-      { method: "GET" },
+      { method: "GET" }
     );
   }
 
@@ -685,7 +686,7 @@ class ApiClient extends BaseApiClient {
   async listProposals(
     domainId: string,
     userId?: string,
-    dealerUserId?: string,
+    dealerUserId?: string
   ): Promise<Proposal[]> {
     this.validateRequired(domainId, "Domain ID");
     let params = "";
@@ -696,7 +697,7 @@ class ApiClient extends BaseApiClient {
     }
     return this.request<Proposal[]>(
       `/domains/${domainId}/sales/proposals${params}`,
-      { method: "GET" },
+      { method: "GET" }
     );
   }
 
@@ -708,7 +709,7 @@ class ApiClient extends BaseApiClient {
     this.validateRequired(proposalId, "Proposal ID");
     return this.request<Proposal>(
       `/domains/${domainId}/sales/proposals/${proposalId}`,
-      { method: "GET" },
+      { method: "GET" }
     );
   }
 
@@ -717,7 +718,7 @@ class ApiClient extends BaseApiClient {
    */
   async createProposal(
     domainId: string,
-    proposal: Partial<Proposal>,
+    proposal: Partial<Proposal>
   ): Promise<Proposal> {
     this.validateRequired(domainId, "Domain ID");
     this.validateRequired(proposal.userId, "User ID");
@@ -733,7 +734,7 @@ class ApiClient extends BaseApiClient {
   async updateProposal(
     domainId: string,
     proposalId: string,
-    update: Partial<Proposal>,
+    update: Partial<Proposal>
   ): Promise<Proposal> {
     this.validateRequired(domainId, "Domain ID");
     this.validateRequired(proposalId, "Proposal ID");
@@ -742,7 +743,7 @@ class ApiClient extends BaseApiClient {
       {
         method: "PATCH",
         body: JSON.stringify(update),
-      },
+      }
     );
   }
 
@@ -754,7 +755,7 @@ class ApiClient extends BaseApiClient {
     this.validateRequired(proposalId, "Proposal ID");
     await this.request<void>(
       `/domains/${domainId}/sales/proposals/${proposalId}`,
-      { method: "DELETE" },
+      { method: "DELETE" }
     );
   }
 
@@ -766,7 +767,7 @@ class ApiClient extends BaseApiClient {
     this.validateRequired(proposalId, "Proposal ID");
     await this.request<void>(
       `/domains/${domainId}/sales/proposals/${proposalId}/ping`,
-      { method: "POST" },
+      { method: "POST" }
     );
   }
 
@@ -788,7 +789,7 @@ class ApiClient extends BaseApiClient {
    */
   async verifyLoginCode(
     email: string,
-    code: string,
+    code: string
   ): Promise<DomainVerificationResultResponse> {
     this.validateEmail(email);
     if (!code || code.length !== 6) {
@@ -799,7 +800,7 @@ class ApiClient extends BaseApiClient {
       {
         method: "POST",
         body: JSON.stringify({ email, code }),
-      },
+      }
     );
   }
 
@@ -810,7 +811,7 @@ class ApiClient extends BaseApiClient {
    */
   async vectorizePreferenceImage(
     file: File,
-    options?: { section?: "aesthetic" | "collection" | "shared_gallery" },
+    options?: { section?: "aesthetic" | "collection" | "shared_gallery" }
   ): Promise<{ success: boolean; message: string; vectorized: number }> {
     this.validateRequired(file, "File");
     const section = options?.section;
@@ -878,7 +879,7 @@ export const apiClient = new ApiClient();
  * @deprecated Use apiClient.getArtworkStats() instead
  */
 export async function fetchArtworkStats(
-  domainId: string,
+  domainId: string
 ): Promise<ArtworkStats> {
   return apiClient.getArtworkStats(domainId);
 }

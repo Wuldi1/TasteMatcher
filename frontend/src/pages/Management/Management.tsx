@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { User, Role, Domain, DomainRequest } from "@tastematcher/common";
+import { Domain, DomainRequest, Role, User } from "@tastematcher/common";
+import { Edit, Mail, Trash2 } from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiClient, ApiError } from "../../utils/api";
-import { Navigate } from "react-router-dom";
 import "./Management.css";
-import { Mail, Edit, Trash2 } from "lucide-react";
 
 type TabType = "users" | "domains" | "domain-requests";
 
@@ -17,7 +17,7 @@ export function Management() {
   const { user } = useAuth();
   const isGlobalAdmin = user?.role === "global_admin";
   const [activeTab, setActiveTab] = useState<TabType>(
-    isGlobalAdmin ? "domains" : "users",
+    isGlobalAdmin ? "domains" : "users"
   );
   const [users, setUsers] = useState<User[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
@@ -31,7 +31,7 @@ export function Management() {
   const [userRoleFilter, setUserRoleFilter] = useState<string>("all");
   const [userStatusFilter, setUserStatusFilter] = useState<string>("all");
   const [userSortBy, setUserSortBy] = useState<"name" | "email" | "createdAt">(
-    "createdAt",
+    "createdAt"
   );
   const [userSortOrder, setUserSortOrder] = useState<"asc" | "desc">("desc");
 
@@ -42,7 +42,7 @@ export function Management() {
     "name" | "adminEmail" | "createdAt"
   >("createdAt");
   const [domainSortOrder, setDomainSortOrder] = useState<"asc" | "desc">(
-    "desc",
+    "desc"
   );
 
   // Filter and sort state for domain requests
@@ -51,7 +51,7 @@ export function Management() {
     "name" | "email" | "createdAt"
   >("createdAt");
   const [requestSortOrder, setRequestSortOrder] = useState<"asc" | "desc">(
-    "desc",
+    "desc"
   );
 
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -71,7 +71,7 @@ export function Management() {
   const [createDomainEmail, setCreateDomainEmail] = useState("");
   const [createDomainName, setCreateDomainName] = useState("");
   const [createDomainError, setCreateDomainError] = useState<string | null>(
-    null,
+    null
   );
   const [isCreatingDomain, setIsCreatingDomain] = useState(false);
 
@@ -112,7 +112,7 @@ export function Management() {
     } catch (err) {
       console.error("Failed to load domains:", err);
       setError(
-        err instanceof ApiError ? err.message : "Failed to load domains",
+        err instanceof ApiError ? err.message : "Failed to load domains"
       );
     } finally {
       setIsLoading(false);
@@ -128,9 +128,7 @@ export function Management() {
     } catch (err) {
       console.error("Failed to load domain requests:", err);
       setError(
-        err instanceof ApiError
-          ? err.message
-          : "Failed to load domain requests",
+        err instanceof ApiError ? err.message : "Failed to load domain requests"
       );
     } finally {
       setIsLoading(false);
@@ -176,6 +174,7 @@ export function Management() {
         await apiClient.inviteUser({
           name: inviteName.trim(),
           email: inviteEmail.trim().toLowerCase(),
+          domainId: selectedDomainId,
           role: inviteRole,
         });
 
@@ -187,7 +186,7 @@ export function Management() {
       } catch (err) {
         console.error("Failed to invite user:", err);
         setInviteError(
-          err instanceof ApiError ? err.message : "Failed to invite user",
+          err instanceof ApiError ? err.message : "Failed to invite user"
         );
       } finally {
         setIsInviting(false);
@@ -200,7 +199,7 @@ export function Management() {
       isGlobalAdmin,
       selectedDomainId,
       loadUsers,
-    ],
+    ]
   );
 
   const handleCreateDomain = useCallback(
@@ -235,13 +234,13 @@ export function Management() {
       } catch (err) {
         console.error("Failed to create domain:", err);
         setCreateDomainError(
-          err instanceof ApiError ? err.message : "Failed to create domain",
+          err instanceof ApiError ? err.message : "Failed to create domain"
         );
       } finally {
         setIsCreatingDomain(false);
       }
     },
-    [createDomainUserName, createDomainEmail, createDomainName, loadDomains],
+    [createDomainUserName, createDomainEmail, createDomainName, loadDomains]
   );
 
   const handleEditUser = useCallback(
@@ -267,7 +266,7 @@ export function Management() {
       } catch (err) {
         console.error("Failed to update user:", err);
         setEditError(
-          err instanceof ApiError ? err.message : "Failed to update user",
+          err instanceof ApiError ? err.message : "Failed to update user"
         );
       } finally {
         setIsEditing(false);
@@ -280,7 +279,7 @@ export function Management() {
       isGlobalAdmin,
       selectedDomainId,
       loadUsers,
-    ],
+    ]
   );
 
   const handleEditDomain = useCallback(
@@ -305,20 +304,20 @@ export function Management() {
       } catch (err) {
         console.error("Failed to update domain:", err);
         setEditDomainError(
-          err instanceof ApiError ? err.message : "Failed to update domain",
+          err instanceof ApiError ? err.message : "Failed to update domain"
         );
       } finally {
         setIsEditingDomain(false);
       }
     },
-    [editingDomain, editDomainName, loadDomains],
+    [editingDomain, editDomainName, loadDomains]
   );
 
   const handleDeleteUser = useCallback(
     async (userId: string, userName: string) => {
       if (
         !window.confirm(
-          `Are you sure you want to delete user "${userName}"? This will also delete all their preferences.`,
+          `Are you sure you want to delete user "${userName}"? This will also delete all their preferences.`
         )
       ) {
         return;
@@ -332,14 +331,14 @@ export function Management() {
         alert(err instanceof ApiError ? err.message : "Failed to delete user");
       }
     },
-    [isGlobalAdmin, selectedDomainId, loadUsers],
+    [isGlobalAdmin, selectedDomainId, loadUsers]
   );
 
   const handleDeleteDomain = useCallback(
     async (domainId: string, domainName: string) => {
       if (
         !window.confirm(
-          `Are you sure you want to delete domain "${domainName}"? This will delete ALL users, artworks, and data associated with this domain. This action cannot be undone.`,
+          `Are you sure you want to delete domain "${domainName}"? This will delete ALL users, artworks, and data associated with this domain. This action cannot be undone.`
         )
       ) {
         return;
@@ -351,29 +350,33 @@ export function Management() {
       } catch (err) {
         console.error("Failed to delete domain:", err);
         alert(
-          err instanceof ApiError ? err.message : "Failed to delete domain",
+          err instanceof ApiError ? err.message : "Failed to delete domain"
         );
       }
     },
-    [loadDomains],
+    [loadDomains]
   );
 
-  const handleResendInvite = useCallback(async (user: User) => {
-    try {
-      await apiClient.inviteUser({
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      });
+  const handleResendInvite = useCallback(
+    async (user: User) => {
+      try {
+        await apiClient.inviteUser({
+          name: user.name,
+          email: user.email,
+          domainId: selectedDomainId,
+          role: user.role,
+        });
 
-      alert(`Invitation email resent to ${user.email}`);
-    } catch (err) {
-      console.error("Failed to resend invitation:", err);
-      alert(
-        err instanceof ApiError ? err.message : "Failed to resend invitation",
-      );
-    }
-  }, []);
+        alert(`Invitation email resent to ${user.email}`);
+      } catch (err) {
+        console.error("Failed to resend invitation:", err);
+        alert(
+          err instanceof ApiError ? err.message : "Failed to resend invitation"
+        );
+      }
+    },
+    [selectedDomainId]
+  );
 
   const handleResendDomainVerification = useCallback(async (domain: Domain) => {
     try {
@@ -382,7 +385,7 @@ export function Management() {
     } catch (err) {
       console.error("Failed to resend verification:", err);
       alert(
-        err instanceof ApiError ? err.message : "Failed to resend verification",
+        err instanceof ApiError ? err.message : "Failed to resend verification"
       );
     }
   }, []);
@@ -418,7 +421,7 @@ export function Management() {
       filtered = filtered.filter(
         (u) =>
           u.name.toLowerCase().includes(query) ||
-          u.email.toLowerCase().includes(query),
+          u.email.toLowerCase().includes(query)
       );
     }
 
@@ -469,14 +472,14 @@ export function Management() {
       filtered = filtered.filter(
         (d) =>
           d.name.toLowerCase().includes(query) ||
-          d.adminEmail.toLowerCase().includes(query),
+          d.adminEmail.toLowerCase().includes(query)
       );
     }
 
     // Apply status filter
     if (domainStatusFilter !== "all") {
       filtered = filtered.filter(
-        (d) => (d.status || "active") === domainStatusFilter,
+        (d) => (d.status || "active") === domainStatusFilter
       );
     }
 
@@ -517,7 +520,7 @@ export function Management() {
         (r) =>
           r.name.toLowerCase().includes(query) ||
           r.email.toLowerCase().includes(query) ||
-          r.proposedDomainName.toLowerCase().includes(query),
+          r.proposedDomainName.toLowerCase().includes(query)
       );
     }
 
@@ -765,7 +768,7 @@ export function Management() {
                           type="button"
                           onClick={() =>
                             setUserSortOrder(
-                              userSortOrder === "asc" ? "desc" : "asc",
+                              userSortOrder === "asc" ? "desc" : "asc"
                             )
                           }
                           className="management-sort-button"
@@ -1080,7 +1083,7 @@ export function Management() {
                         type="button"
                         onClick={() =>
                           setDomainSortOrder(
-                            domainSortOrder === "asc" ? "desc" : "asc",
+                            domainSortOrder === "asc" ? "desc" : "asc"
                           )
                         }
                         className="management-sort-button"
@@ -1327,7 +1330,7 @@ export function Management() {
                         type="button"
                         onClick={() =>
                           setRequestSortOrder(
-                            requestSortOrder === "asc" ? "desc" : "asc",
+                            requestSortOrder === "asc" ? "desc" : "asc"
                           )
                         }
                         className="management-sort-button"
@@ -1646,6 +1649,9 @@ export function Management() {
                   {/* Hide the dealer option if the current user is a dealer */}
                   {user?.role !== "dealer" && (
                     <option value="dealer">Specialist</option>
+                  )}
+                  {user?.role !== "dealer" && (
+                    <option value="domain_owner">Domain Owner</option>
                   )}
                 </select>
               </div>

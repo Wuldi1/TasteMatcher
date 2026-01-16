@@ -1,3 +1,4 @@
+import { Role } from "@tastematcher/common";
 import {
   IsEmail,
   IsEnum,
@@ -5,7 +6,6 @@ import {
   IsString,
   MinLength,
 } from "class-validator";
-import { Role } from "@tastematcher/common";
 
 /**
  * DTO for inviting a new user to a domain
@@ -20,12 +20,16 @@ export class InviteUserDto {
   @IsNotEmpty()
   email: string;
 
-  @IsEnum(["dealer", "customer"])
+  @IsEnum(["dealer", "customer", "domain_owner"])
   role: Role;
+
+  @IsString()
+  domainId: string;
 
   constructor() {
     this.name = "";
     this.email = "";
+    this.domainId = "";
     this.role = "customer";
   }
 }
