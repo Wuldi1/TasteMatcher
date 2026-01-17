@@ -1,23 +1,25 @@
-import React, { useEffect, useState } from "react";
-import { apiClient } from "../utils/api";
 import type {
+  Artwork,
+  Comment,
   Proposal,
   ProposalItem,
-  Comment,
-  Artwork,
 } from "@tastematcher/common";
 import {
-  Trash2,
-  Bell,
-  Save,
-  CheckCircle,
-  Send,
-  Clock,
-  XCircle,
-  MessageSquare,
   AlertTriangle,
+  Bell,
+  CheckCircle,
+  Clock,
+  Download,
   Gavel,
+  MessageSquare,
+  Save,
+  Send,
+  Trash2,
+  XCircle,
 } from "lucide-react";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import React, { useEffect, useState } from "react";
+import { apiClient } from "../utils/api";
 
 // Helper component for price input with comma formatting
 const FormattedPriceInput = ({
@@ -32,7 +34,7 @@ const FormattedPriceInput = ({
   disabled?: boolean;
 }) => {
   const [displayValue, setDisplayValue] = useState(
-    value?.toLocaleString() ?? "",
+    value?.toLocaleString() ?? ""
   );
 
   useEffect(() => {
@@ -113,7 +115,7 @@ export default function SaleProposal({
   const [items, setItems] = useState<ProposalItem[]>(draftItems ?? []);
   const [generalComments, setGeneralComments] = useState<Comment[]>([]);
   const [proposalStatus, setProposalStatus] = useState<string | undefined>(
-    undefined,
+    undefined
   );
   const [isDirty, setIsDirty] = useState(false);
   const isLocalChangeRef = React.useRef<boolean>(false);
@@ -127,6 +129,7 @@ export default function SaleProposal({
   const [artworkDataById, setArtworkDataById] = useState<
     Record<string, Artwork>
   >({});
+  const [domainName, setDomainName] = useState<string | undefined>(undefined);
 
   // Modal states
   const [alertState, setAlertState] = useState<{
@@ -173,6 +176,20 @@ export default function SaleProposal({
     return author || "Unknown";
   };
 
+  const getPdfAuthor = (author: string) => {
+    const normalizedAuthor = (author ?? "").trim().toLowerCase();
+    if (author && isDealerAuthor(author)) {
+      return dealerEmail ?? author;
+    }
+    if (
+      normalizedAuthor === "customer" ||
+      (normalizedCustomerName && normalizedAuthor === normalizedCustomerName)
+    ) {
+      return userName ?? "Customer";
+    }
+    return author || "Unknown";
+  };
+
   // Sync incoming draft changes
   useEffect(() => {
     const normalizedDraft = (draftItems ?? []).map((item) => ({
@@ -187,6 +204,22 @@ export default function SaleProposal({
       setProposalStatus(undefined);
     }
   }, [draftItems, proposalId]);
+
+  useEffect(() => {
+    if (!domainId) {
+      setDomainName(undefined);
+      return;
+    }
+    (async () => {
+      try {
+        const domain = await apiClient.getDomainById(domainId);
+        setDomainName(domain.name ?? domain.id);
+      } catch (err) {
+        console.error("Failed to load domain for PDF export", err);
+        setDomainName(undefined);
+      }
+    })();
+  }, [domainId]);
 
   // Notify parent when items change (only when change originated locally)
   useEffect(() => {
@@ -218,7 +251,7 @@ export default function SaleProposal({
             filename: item.filename,
             askedPrice: item.askedPrice ?? 0,
             askedMaxPrice: item.askedMaxPrice,
-          }),
+          })
         );
         setItems(normalized);
         setGeneralComments(fetched.generalComments || []);
@@ -264,10 +297,10 @@ export default function SaleProposal({
           } catch (err) {
             console.error(
               `Failed to fetch artwork data for ID: ${artworkId}`,
-              err,
+              err
             );
           }
-        }),
+        })
       );
 
       setArtworkDataById(fetchedData);
@@ -284,8 +317,8 @@ export default function SaleProposal({
       prev.map((item) =>
         item.artworkId === artworkId
           ? { ...item, askedPrice: price ?? 0 }
-          : item,
-      ),
+          : item
+      )
     );
     isLocalChangeRef.current = true;
     setIsDirty(true);
@@ -306,8 +339,8 @@ export default function SaleProposal({
       prev.map((item) =>
         item.artworkId === artworkId
           ? { ...item, askedMaxPrice: price ?? undefined }
-          : item,
-      ),
+          : item
+      )
     );
     isLocalChangeRef.current = true;
     setIsDirty(true);
@@ -325,7 +358,7 @@ export default function SaleProposal({
     if (isReadOnly) {
       showAlert(
         "Proposal Locked",
-        "This proposal has already been accepted or rejected and is now read-only.",
+        "This proposal has already been accepted or rejected and is now read-only."
       );
       return;
     }
@@ -421,7 +454,7 @@ export default function SaleProposal({
 
       showProposalSummaryAlert(
         proposalId ? "Proposal updated" : "Proposal created",
-        data,
+        data
       );
     } catch (err) {
       console.error("Failed to save proposal", err);
@@ -456,7 +489,7 @@ export default function SaleProposal({
           console.error("Failed to delete proposal", err);
           showAlert("Error", "Failed to delete proposal");
         }
-      },
+      }
     );
   }
 
@@ -504,8 +537,8 @@ export default function SaleProposal({
                 },
               ],
             }
-          : item,
-      ),
+          : item
+      )
     );
     setNewComments((prev) => ({ ...prev, [artworkId]: "" }));
   }
@@ -515,7 +548,7 @@ export default function SaleProposal({
     if (isReadOnly) {
       showAlert(
         "Proposal Locked",
-        "Accepted or rejected proposals are read-only.",
+        "Accepted or rejected proposals are read-only."
       );
       return;
     }
@@ -527,6 +560,392 @@ export default function SaleProposal({
       const newItems = items.filter((item) => item.artworkId !== artworkId);
       if (onDraftChange) onDraftChange(newItems);
     });
+  }
+
+  const formatCurrency = (value?: number) => {
+    if (value === undefined || Number.isNaN(value)) return "—";
+    return `$${value.toLocaleString()}`;
+  };
+
+  const nonEmptyComments = (comments: Comment[]) =>
+    (comments || []).filter((comment) => comment.text?.trim().length > 0);
+
+  const downloadPdf = (bytes: Uint8Array, filename: string) => {
+    const buffer = bytes.slice().buffer;
+    const blob = new Blob([buffer], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const fetchImageBytes = async (url: string) => {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.statusText}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return new Uint8Array(arrayBuffer);
+  };
+
+  const wrapText = (
+    text: string,
+    maxWidth: number,
+    font: any,
+    fontSize: number
+  ) => {
+    const words = text.split(/\s+/).filter(Boolean);
+    const lines: string[] = [];
+    let current = "";
+    for (const word of words) {
+      const next = current ? `${current} ${word}` : word;
+      const width = font.widthOfTextAtSize(next, fontSize);
+      if (width <= maxWidth) {
+        current = next;
+      } else {
+        if (current) lines.push(current);
+        current = word;
+      }
+    }
+    if (current) lines.push(current);
+    return lines.length ? lines : [""];
+  };
+
+  async function handleExportPdf() {
+    if (items.length === 0) return;
+
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const pageSize: [number, number] = [612, 792]; // letter
+    const margin = 40;
+    const contentWidth = pageSize[0] - margin * 2;
+
+    let page = pdfDoc.addPage(pageSize);
+    let cursorY = pageSize[1] - margin;
+
+    const ensureSpace = (height: number) => {
+      if (cursorY - height < margin) {
+        page = pdfDoc.addPage(pageSize);
+        cursorY = pageSize[1] - margin;
+      }
+    };
+
+    const drawText = (
+      text: string,
+      size: number,
+      options: {
+        bold?: boolean;
+        color?: { r: number; g: number; b: number };
+      } = {}
+    ) => {
+      const usedFont = options.bold ? fontBold : font;
+      const color = options.color
+        ? rgb(options.color.r, options.color.g, options.color.b)
+        : rgb(0.1, 0.1, 0.1);
+      const lines = wrapText(text, contentWidth, usedFont, size);
+      lines.forEach((line) => {
+        ensureSpace(size + 6);
+        page.drawText(line, {
+          x: margin,
+          y: cursorY - size,
+          size,
+          font: usedFont,
+          color,
+        });
+        cursorY -= size + 6;
+      });
+    };
+
+    const drawHeader = (includeGeneralComments: boolean) => {
+      drawText(domainName ?? "Gallery", 12, { bold: true });
+      if (dealerEmail) {
+        drawText(`Seller: ${dealerEmail}`, 10, {
+          color: { r: 0.35, g: 0.35, b: 0.4 },
+        });
+      }
+      drawText("Sale Proposal", 18, { bold: true });
+      drawText(`Generated: ${new Date().toLocaleString()}`, 10, {
+        color: { r: 0.4, g: 0.4, b: 0.45 },
+      });
+      if (proposalStatus) {
+        drawText(`Status: ${proposalStatus}`, 11, { bold: true });
+      }
+      cursorY -= 8;
+
+      if (!includeGeneralComments) return;
+
+      const generalText = generalComments
+        .filter((comment) => comment.text?.trim().length > 0)
+        .map(
+          (comment) =>
+            `${getPdfAuthor(comment.author)} • ${new Date(
+              comment.createdAt
+            ).toLocaleDateString()} — ${comment.text.trim()}`
+        );
+      if (generalText.length > 0) {
+        drawText("General Comments", 12, { bold: true });
+        generalText.forEach((line) => drawText(line, 10));
+        cursorY -= 6;
+      }
+    };
+
+    for (const [index, item] of items.entries()) {
+      if (index > 0) {
+        page = pdfDoc.addPage(pageSize);
+        cursorY = pageSize[1] - margin;
+      }
+      drawHeader(index === 0);
+      const artwork = artworkDataById[item.artworkId];
+      ensureSpace(200);
+
+      const blockPadding = 18;
+      const blockGap = 22;
+      const dividerHeight = 1;
+      const titleSize = 13;
+      const titleGap = 8;
+      const maxImageWidth = contentWidth * 0.4;
+      const maxImageHeight = 220;
+      // const detailsStartXBase = margin + maxImageWidth + blockGap;
+      const detailsWidthBase = contentWidth - maxImageWidth - blockGap;
+      const startY = cursorY;
+      const artistSize = 10;
+      const titleLines = wrapText(
+        artwork?.title ?? "Untitled",
+        contentWidth,
+        fontBold,
+        titleSize
+      );
+      const titleHeight = titleLines.length * (titleSize + 4);
+      const artistHeight = artwork?.artist ? artistSize + 6 : 0;
+      const headerHeight = titleHeight + titleGap + artistHeight;
+      let detailsY = startY - dividerHeight - headerHeight - blockPadding;
+
+      let embeddedImage;
+      if (artwork?.filename) {
+        try {
+          const imageBytes = await fetchImageBytes(artwork.filename);
+          if (artwork.filename.toLowerCase().includes(".png")) {
+            embeddedImage = await pdfDoc.embedPng(imageBytes);
+          } else {
+            embeddedImage = await pdfDoc.embedJpg(imageBytes);
+          }
+        } catch (err) {
+          embeddedImage = undefined;
+        }
+      }
+
+      const metaLines: string[] = [];
+      if (artwork?.medium) metaLines.push(`Medium: ${artwork.medium}`);
+      if (artwork?.width && artwork?.height) {
+        metaLines.push(
+          `Size: ${artwork.width} × ${artwork.height}${artwork.depth ? ` × ${artwork.depth}` : ""}`
+        );
+      }
+      if (artwork?.date) metaLines.push(`Date: ${artwork.date}`);
+
+      const detailSections: Array<{
+        text: string;
+        size: number;
+        bold?: boolean;
+      }> = [];
+      detailSections.push({ text: `Item Status: ${item.status}`, size: 10 });
+      if (artwork?.isAuction) {
+        detailSections.push({ text: "Auction: Yes", size: 10 });
+        if (artwork.endDate) {
+          detailSections.push({
+            text: `Auction Ends: ${new Date(artwork.endDate).toLocaleString()}`,
+            size: 10,
+          });
+        }
+      }
+      if (
+        artwork?.isAuction &&
+        item.askedPrice !== undefined &&
+        item.askedMaxPrice !== undefined
+      ) {
+        detailSections.push({
+          text: `Asked Price Range: ${formatCurrency(item.askedPrice)} – ${formatCurrency(
+            item.askedMaxPrice,
+          )}`,
+          size: 11,
+          bold: true,
+        });
+      } else {
+        detailSections.push({
+          text: `Asked Price: ${formatCurrency(item.askedPrice)}`,
+          size: 11,
+          bold: true,
+        });
+        if (item.askedMaxPrice !== undefined) {
+          detailSections.push({
+            text: `Max Asked Price: ${formatCurrency(item.askedMaxPrice)}`,
+            size: 11,
+          });
+        }
+      }
+      metaLines.forEach((line) =>
+        detailSections.push({ text: line, size: 10 })
+      );
+
+      const detailLineHeights = detailSections.map((section) => {
+        const usedFont = section.bold ? fontBold : font;
+        const lines = wrapText(
+          section.text,
+          detailsWidthBase,
+          usedFont,
+          section.size
+        );
+        return lines.length * (section.size + 6);
+      });
+      const detailsHeight = detailLineHeights.reduce((sum, h) => sum + h, 0);
+
+      let imageRenderWidth = maxImageWidth;
+      let imageHeight = 140;
+      if (embeddedImage) {
+        const scale = Math.min(
+          maxImageWidth / embeddedImage.width,
+          maxImageHeight / embeddedImage.height
+        );
+        imageRenderWidth = embeddedImage.width * scale;
+        imageHeight = embeddedImage.height * scale;
+      }
+
+      const detailsStartX = margin + imageRenderWidth + blockGap * 1.5;
+      const detailsWidth = contentWidth - imageRenderWidth - blockGap * 1.5;
+
+      const itemComments = nonEmptyComments(item.comments);
+      const commentLines = itemComments.flatMap((comment) => {
+        const summary = `${getPdfAuthor(comment.author)} • ${new Date(
+          comment.createdAt
+        ).toLocaleDateString()} — ${comment.text.trim()}`;
+        return wrapText(summary, contentWidth - blockPadding * 2, font, 10);
+      });
+      const commentsHeight =
+        itemComments.length > 0 ? 20 + commentLines.length * 14 : 0;
+
+      const blockHeight =
+        dividerHeight +
+        titleGap +
+        titleSize +
+        blockPadding +
+        Math.max(detailsHeight, imageHeight) +
+        commentsHeight +
+        blockPadding;
+
+      ensureSpace(blockHeight + blockGap);
+
+      page.drawLine({
+        start: { x: margin, y: startY - dividerHeight },
+        end: { x: margin + contentWidth, y: startY - dividerHeight },
+        thickness: dividerHeight,
+        color: rgb(0, 0, 0),
+      });
+
+      let titleY = startY - dividerHeight - titleGap;
+      for (const line of titleLines) {
+        page.drawText(line, {
+          x: margin,
+          y: titleY - titleSize,
+          size: titleSize,
+          font: fontBold,
+          color: rgb(0.1, 0.1, 0.1),
+        });
+        titleY -= titleSize + 4;
+      }
+      if (artwork?.artist) {
+        page.drawText(artwork.artist, {
+          x: margin,
+          y: titleY - artistSize,
+          size: artistSize,
+          font,
+          color: rgb(0.35, 0.35, 0.4),
+        });
+      }
+
+      if (embeddedImage) {
+        page.drawImage(embeddedImage, {
+          x: margin + blockPadding,
+          y: startY - dividerHeight - headerHeight - blockPadding - imageHeight,
+          width: imageRenderWidth,
+          height: imageHeight,
+        });
+      } else {
+        page.drawRectangle({
+          x: margin + blockPadding,
+          y: startY - dividerHeight - headerHeight - blockPadding - imageHeight,
+          width: imageRenderWidth,
+          height: imageHeight,
+          borderColor: rgb(0.85, 0.85, 0.88),
+          borderWidth: 1,
+          color: rgb(0.97, 0.97, 0.98),
+        });
+        page.drawText("Image unavailable", {
+          x: margin + blockPadding + 8,
+          y: startY - dividerHeight - headerHeight - blockPadding - 20,
+          size: 9,
+          font,
+          color: rgb(0.6, 0.2, 0.2),
+        });
+      }
+
+      for (const section of detailSections) {
+        const usedFont = section.bold ? fontBold : font;
+        const lines = wrapText(
+          section.text,
+          detailsWidth,
+          usedFont,
+          section.size
+        );
+        for (const line of lines) {
+          page.drawText(line, {
+            x: detailsStartX,
+            y: detailsY - section.size,
+            size: section.size,
+            font: usedFont,
+            color: rgb(0.1, 0.1, 0.1),
+          });
+          detailsY -= section.size + 6;
+        }
+      }
+
+      if (itemComments.length > 0) {
+        let commentsY =
+          startY -
+          dividerHeight -
+          headerHeight -
+          blockPadding -
+          Math.max(detailsHeight, imageHeight) -
+          8;
+        page.drawText("Artwork Comments", {
+          x: margin + blockPadding,
+          y: commentsY,
+          size: 10,
+          font: fontBold,
+          color: rgb(0.2, 0.2, 0.25),
+        });
+        commentsY -= 12;
+        for (const line of commentLines) {
+          page.drawText(line, {
+            x: margin + blockPadding,
+            y: commentsY,
+            size: 10,
+            font,
+            color: rgb(0.25, 0.25, 0.3),
+          });
+          commentsY -= 14;
+        }
+      }
+
+      cursorY = startY - blockHeight - blockGap;
+    }
+
+    const pdfBytes = await pdfDoc.save();
+    const filename = `proposal-${proposalId ?? "draft"}.pdf`;
+    downloadPdf(pdfBytes, filename);
   }
 
   return (
@@ -588,10 +1007,21 @@ export default function SaleProposal({
                   {items.length} artworks selected
                 </p>
               </div>
-              <div
-                className={`px-3 py-1 rounded-full text-sm font-medium capitalize flex items-center gap-1.5 border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}
-              >
-                Status: {statusStyle.label}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleExportPdf}
+                  className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  disabled={items.length === 0}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Export PDF
+                </button>
+                <div
+                  className={`px-3 py-1 rounded-full text-sm font-medium capitalize flex items-center gap-1.5 border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}
+                >
+                  Status: {statusStyle.label}
+                </div>
               </div>
             </div>
           );
@@ -604,11 +1034,15 @@ export default function SaleProposal({
               {items.length} artworks selected
             </p>
           </div>
-          {proposalId && proposalStatus && (
-            <div className="px-3 py-1 bg-gray-100 rounded-full text-sm font-medium text-gray-600 capitalize">
-              Status: {proposalStatus}
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+            disabled={items.length === 0}
+          >
+            <Download className="w-3.5 h-3.5" />
+            Export PDF
+          </button>
         </div>
       )}
 
@@ -920,6 +1354,15 @@ export default function SaleProposal({
           >
             <Trash2 className="w-4 h-4" />
             Delete
+          </button>
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+            disabled={items.length === 0}
+          >
+            <Download className="w-4 h-4" />
+            Export PDF
           </button>
           <button
             onClick={handlePingProposal}
