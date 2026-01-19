@@ -9,34 +9,34 @@
 // 8. Adds meaningful JSDoc for exported functions/classes.
 // 9. CI-friendly: code passes lint, typecheck, and tests locally.
 // -----------------------------------------------------------
-import { useEffect, useState, useRef, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
-import { apiClient } from "../utils/api";
-import SaleProposal from "../components/SaleProposal";
-import { useAuth } from "../contexts/AuthContext";
 import {
+  Artwork,
   ArtworkStats,
   Proposal,
   ProposalItem,
   User,
-  Artwork,
 } from "@tastematcher/common";
-import { AISuggestionsPage } from "./AISuggestions/AISuggestionsPage";
-import CatalogForUser from "../components/Catalog/CatalogForUser";
 import {
-  Mail,
-  Shield,
   Activity,
-  Database,
-  Layers,
-  MessageSquare,
-  FileText,
   ChevronDown,
-  X,
-  Send,
-  Paperclip,
+  Database,
+  FileText,
+  Layers,
   Loader2,
+  Mail,
+  MessageSquare,
+  Paperclip,
+  Send,
+  Shield,
+  X,
 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import CatalogForUser from "../components/Catalog/CatalogForUser";
+import SaleProposal from "../components/SaleProposal";
+import { useAuth } from "../contexts/AuthContext";
+import { apiClient } from "../utils/api";
+import { AISuggestionsPage } from "./AISuggestions/AISuggestionsPage";
 
 type UserItem = { id: string; name?: string };
 
@@ -83,7 +83,7 @@ export default function SalesPage() {
     { id: string; name?: string; adminEmail?: string }[]
   >([]);
   const [selectedDomainId, setSelectedDomainId] = useState<string | undefined>(
-    isGlobalAdmin ? undefined : domainId,
+    isGlobalAdmin ? undefined : domainId
   );
   const [domainsLoading, setDomainsLoading] = useState<boolean>(false);
 
@@ -94,7 +94,7 @@ export default function SalesPage() {
 
   const [users, setUsers] = useState<UserItem[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | undefined>(
-    undefined,
+    undefined
   );
   const [activeTab, setActiveTab] = useState<
     "details" | "catalog" | "ai" | "proposal"
@@ -142,7 +142,7 @@ export default function SalesPage() {
         setSearchParams(nextParams);
       }
     },
-    [isGlobalAdmin, searchParams, setSearchParams],
+    [isGlobalAdmin, searchParams, setSearchParams]
   );
 
   // Load the correct proposal for the selected user
@@ -157,7 +157,7 @@ export default function SalesPage() {
       try {
         const proposals = await apiClient.listProposals(
           effectiveDomainId,
-          selectedUserId,
+          selectedUserId
         );
         if (proposals.length > 0) {
           const proposal = proposals.find((p) => p.userId === selectedUserId);
@@ -171,7 +171,7 @@ export default function SalesPage() {
                 status: item.status ?? "pending",
                 askedPrice: item.askedPrice ?? 0,
                 askedMaxPrice: item.askedMaxPrice,
-              })),
+              }))
             );
           } else {
             setProposalDetails(null);
@@ -200,7 +200,7 @@ export default function SalesPage() {
             id: domain.id,
             name: domain.name,
             adminEmail: domain.adminEmail,
-          })),
+          }))
         );
         // if none selected, default to first
         if (!selectedDomainId && domainsResponse.length > 0) {
@@ -233,7 +233,7 @@ export default function SalesPage() {
               .map((userItem) => ({
                 id: userItem.id,
                 name: userItem.name ?? userItem.email,
-              })),
+              }))
           );
         } else {
           // domain_owner / dealer: call without domainId so backend uses caller's domain
@@ -244,7 +244,7 @@ export default function SalesPage() {
               .map((userItem) => ({
                 id: userItem.id,
                 name: userItem.name ?? userItem.email,
-              })),
+              }))
           );
         }
       } catch (err) {
@@ -282,7 +282,7 @@ export default function SalesPage() {
       const domainToRequest = isGlobalAdmin ? selectedDomainId : undefined;
       const userResponse = await apiClient.getUser(
         selectedUserId,
-        domainToRequest,
+        domainToRequest
       );
       setUserDetails(userResponse);
       setUserDetailsError(null);
@@ -504,12 +504,12 @@ export default function SalesPage() {
   const handleProposalToggle = (artwork: Artwork) => {
     setProposalItem((currentDraft) => {
       const isAlreadyInProposal = currentDraft.some(
-        (draftItem) => draftItem.artworkId === artwork.id,
+        (draftItem) => draftItem.artworkId === artwork.id
       );
       if (isAlreadyInProposal) {
         // Remove from proposal
         return currentDraft.filter(
-          (draftItem) => draftItem.artworkId !== artwork.id,
+          (draftItem) => draftItem.artworkId !== artwork.id
         );
       } else {
         // Add to proposal
@@ -532,7 +532,7 @@ export default function SalesPage() {
 
   // --- New styled tab bar and enhanced Details panel UI ---
   return (
-    <div className="p-4 sm:p-6 md:p-8">
+    <div className="px-8">
       {/* Lightbox Modal */}
       {lightboxImage && (
         <div
@@ -820,7 +820,7 @@ export default function SalesPage() {
                           (userDetails as any).personalQuestionnaire as Record<
                             string,
                             unknown
-                          >,
+                          >
                         )
                       ) : (
                         <div className="text-gray-500 italic">
@@ -841,7 +841,7 @@ export default function SalesPage() {
                         const isPrimitive =
                           value === null ||
                           ["string", "number", "boolean"].includes(
-                            typeof value,
+                            typeof value
                           );
 
                         if (isPrimitive) {
@@ -891,7 +891,7 @@ export default function SalesPage() {
                           comment.author === userDetails.email;
                         const trimmedText = comment.text?.trim() || "";
                         const isImageMessage = /^https?:\/\//i.test(
-                          trimmedText,
+                          trimmedText
                         );
 
                         return (
@@ -911,7 +911,7 @@ export default function SalesPage() {
                               >
                                 {!isCustomer ? "You" : comment.author} •{" "}
                                 {new Date(
-                                  comment.createdAt,
+                                  comment.createdAt
                                 ).toLocaleDateString()}
                               </div>
                               {isImageMessage ? (
@@ -1053,13 +1053,13 @@ export default function SalesPage() {
                   onAddToDraft={(artwork) => {
                     setProposalItem((currentDraft) => {
                       const isAlreadyInProposal = currentDraft.some(
-                        (draftItem) => draftItem.artworkId === artwork.id,
+                        (draftItem) => draftItem.artworkId === artwork.id
                       );
 
                       if (isAlreadyInProposal) {
                         // Remove from proposal
                         return currentDraft.filter(
-                          (draftItem) => draftItem.artworkId !== artwork.id,
+                          (draftItem) => draftItem.artworkId !== artwork.id
                         );
                       } else {
                         // Add to proposal
@@ -1083,7 +1083,7 @@ export default function SalesPage() {
                   ownersExperience={true}
                   isInProposal={(artworkId) =>
                     proposalItem.some(
-                      (draftItem) => draftItem.artworkId === artworkId,
+                      (draftItem) => draftItem.artworkId === artworkId
                     )
                   }
                 />

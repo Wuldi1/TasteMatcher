@@ -769,7 +769,7 @@ export default function SaleProposal({
       ) {
         detailSections.push({
           text: `Asked Price Range: ${formatCurrency(item.askedPrice)} – ${formatCurrency(
-            item.askedMaxPrice,
+            item.askedMaxPrice
           )}`,
           size: 11,
           bold: true,
@@ -949,10 +949,7 @@ export default function SaleProposal({
   }
 
   return (
-    <div
-      className="space-y-8 pb-[calc(env(safe-area-inset-bottom,0px)+140px)] md:pb-24"
-      // provide large bottom padding so sticky actions don't overlap page content on mobile
-    >
+    <div className="space-y-8">
       {proposalId &&
         proposalStatus &&
         (() => {
@@ -1034,15 +1031,6 @@ export default function SaleProposal({
               {items.length} artworks selected
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleExportPdf}
-            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-            disabled={items.length === 0}
-          >
-            <Download className="w-3.5 h-3.5" />
-            Export PDF
-          </button>
         </div>
       )}
 
@@ -1344,9 +1332,9 @@ export default function SaleProposal({
         )}
       </div>
 
-      {/* Sticky Bottom Actions — positioned above mobile bottom bars using safe-area inset */}
-      <div className="fixed left-0 right-0 bg-white/90 backdrop-blur-md border-t border-gray-200 p-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] bottom-[calc(env(safe-area-inset-bottom,0px)+64px)] md:bottom-0">
-        <div className="max-w-7xl mx-auto flex justify-end gap-3">
+      {/* Sticky Bottom Actions — stays within the page container */}
+      <div className="sticky bottom-0 bg-white/90 backdrop-blur-md border-t border-gray-200 p-4 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <div className="max-w-7xl mx-auto flex flex-wrap justify-end gap-3">
           <button
             onClick={handleDeleteProposal}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-700 rounded-xl font-medium hover:bg-red-50 transition-colors disabled:opacity-50"
@@ -1354,15 +1342,6 @@ export default function SaleProposal({
           >
             <Trash2 className="w-4 h-4" />
             Delete
-          </button>
-          <button
-            type="button"
-            onClick={handleExportPdf}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
-            disabled={items.length === 0}
-          >
-            <Download className="w-4 h-4" />
-            Export PDF
           </button>
           <button
             onClick={handlePingProposal}

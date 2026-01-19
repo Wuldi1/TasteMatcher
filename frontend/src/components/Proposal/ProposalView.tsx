@@ -174,19 +174,19 @@ export default function ProposalView({
     }
   };
 
-  const handleStatusUpdate = async (status: "accepted" | "rejected") => {
-    setSaving(true);
-    try {
-      await apiClient.updateProposal(domainId, id, { status });
-      showAlert("Success", `Proposal ${status}!`);
-      onStatusChange?.(status);
-    } catch (err) {
-      console.error(`Failed to ${status} proposal`, err);
-      showAlert("Error", `Failed to ${status} proposal`);
-    } finally {
-      setSaving(false);
-    }
-  };
+  // const handleStatusUpdate = async (status: "accepted" | "rejected") => {
+  //   setSaving(true);
+  //   try {
+  //     await apiClient.updateProposal(domainId, id, { status });
+  //     showAlert("Success", `Proposal ${status}!`);
+  //     onStatusChange?.(status);
+  //   } catch (err) {
+  //     console.error(`Failed to ${status} proposal`, err);
+  //     showAlert("Error", `Failed to ${status} proposal`);
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // };
 
   // Calculate summary stats
   const approvedCount = localItems.filter(
@@ -204,13 +204,7 @@ export default function ProposalView({
     : new Date(proposal.createdAt).toLocaleDateString();
 
   return (
-    <div
-      className="max-w-6xl mx-auto space-y-8 px-4 sm:px-6"
-      // ensure page content has enough bottom padding to never be hidden by mobile navs
-      style={{
-        paddingBottom: "calc(env(safe-area-inset-bottom, 16px) + 160px)",
-      }}
-    >
+    <div className="max-w-6xl mx-auto space-y-8 px-4 sm:px-6">
       {/* Header */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -590,8 +584,8 @@ export default function ProposalView({
       </div>
 
       {/* Sticky Bottom Actions */}
-      <div className="fixed left-0 right-0 bg-white/90 backdrop-blur-md border-t border-gray-200 p-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] bottom-[calc(env(safe-area-inset-bottom,0px)+64px)] md:bottom-0">
-        <div className="max-w-6xl mx-auto flex justify-end gap-3">
+      <div className="sticky bottom-0 bg-white/90 backdrop-blur-md border-t border-gray-200 p-4 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <div className="max-w-6xl mx-auto flex flex-wrap justify-end gap-3">
           {!isReadOnly && (
             <button
               onClick={handleUpdate}
@@ -600,28 +594,6 @@ export default function ProposalView({
             >
               <Save className={`w-4 h-4 ${saving ? "animate-spin" : ""}`} />
               Update Proposal
-            </button>
-          )}
-
-          {proposal.status !== "rejected" && (
-            <button
-              onClick={() => handleStatusUpdate("rejected")}
-              className="flex items-center gap-2 px-6 py-2.5 bg-red-50 text-red-600 border border-red-100 rounded-xl font-medium hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={isReadOnly || saving}
-            >
-              <XCircle className="w-4 h-4" />
-              Reject Proposal
-            </button>
-          )}
-
-          {proposal.status !== "accepted" && (
-            <button
-              onClick={() => handleStatusUpdate("accepted")}
-              className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={isReadOnly || saving}
-            >
-              <CheckCircle className="w-4 h-4" />
-              Accept Proposal
             </button>
           )}
         </div>
