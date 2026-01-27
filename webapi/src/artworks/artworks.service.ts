@@ -435,6 +435,7 @@ export class ArtworksService {
         { name: "@primaryDomainId", value: primaryDomainId },
         { name: "@limit", value: limit },
         { name: "@fetchLimit", value: fetchLimit },
+        { name: "@nowIso", value: new Date().toISOString() },
       ];
       const secondaryDomainId =
         includeDomainId && includeDomainId !== primaryDomainId
@@ -451,13 +452,14 @@ export class ArtworksService {
         ? "(c.domainId = @primaryDomainId OR (c.domainId = @secondaryDomainId AND c.useForTaster = true))"
         : "c.domainId = @primaryDomainId";
       const typeClause = "c.type = @artworkType";
+      const auctionClause = `(NOT IS_DEFINED(c.isAuction) OR c.isAuction != true OR (IS_DEFINED(c.endDate) AND c.endDate > @nowIso))`;
 
       if (tastedArtworkIds.length === 0) {
         // User hasn't tasted anything yet - return first N artworks
         artworksQuery = `
           SELECT TOP @fetchLimit * 
           FROM c 
-          WHERE ${typeClause} AND ${domainFilterClause}
+          WHERE ${typeClause} AND ${domainFilterClause} AND ${auctionClause}
         `;
       } else {
         // Exclude already tasted artworks using NOT IN
@@ -465,7 +467,7 @@ export class ArtworksService {
         artworksQuery = `
           SELECT TOP @fetchLimit * 
           FROM c 
-          WHERE ${typeClause} AND ${domainFilterClause}
+          WHERE ${typeClause} AND ${domainFilterClause} AND ${auctionClause}
             AND NOT ARRAY_CONTAINS(@tastedIds, c.id)
         `;
         parameters.push({ name: "@tastedIds", value: tastedArtworkIds });
@@ -483,8 +485,10 @@ export class ArtworksService {
         }`,
       );
 
-      const visible = untastedArtworks.filter((art) =>
-        this.canViewerSeeArtwork(art, viewer),
+      const visible = untastedArtworks.filter(
+        (art) =>
+          this.canViewerSeeArtwork(art, viewer) &&
+          !(art.isAuction === true && isAuctionEnded(art.endDate)),
       );
 
       // Shuffle for better randomness and then cap to the requested limit.
