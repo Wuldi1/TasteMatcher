@@ -170,6 +170,16 @@ export interface User {
   swipeCount?: number;
 
   /**
+   * Total number of artworks liked by the user.
+   */
+  totalLikes?: number;
+
+  /**
+   * Total number of artworks disliked by the user.
+   */
+  totalDislikes?: number;
+
+  /**
    * User comments associated with this user.
    */
   comments?: Comment[];

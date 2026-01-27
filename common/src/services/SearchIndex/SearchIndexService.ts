@@ -226,14 +226,38 @@ export class SearchIndexService {
     userVector: number[],
     imageVector: number[],
     liked: boolean,
+    options?: {
+      learningRate?: number;
+      dislikeWeight?: number;
+    },
   ): number[] {
     if (userVector.length !== imageVector.length) {
       throw new Error("Vector dimensions do not match");
     }
-    // Move toward or away from the image vector
-    const updated = userVector.map((v, i) =>
-      liked ? v + imageVector[i] : v - imageVector[i],
+
+    const learningRate =
+      typeof options?.learningRate === "number" ? options.learningRate : 0.2;
+    const dislikeWeight =
+      typeof options?.dislikeWeight === "number" ? options.dislikeWeight : 1.0;
+
+    const userUnit = this.normalizeVector(userVector);
+    const imageUnit = this.normalizeVector(imageVector);
+
+    const direction = liked ? 1 : -1 * dislikeWeight;
+    const blended = userUnit.map(
+      (v, i) => (1 - learningRate) * v + learningRate * direction * imageUnit[i],
     );
-    return this.normalizeVector(updated);
+
+    const normalized = this.normalizeVector(blended);
+
+    // Avoid returning a zero vector when we have some signal.
+    if (normalized.every((v) => v === 0)) {
+      if (liked) {
+        return imageUnit;
+      }
+      return userUnit;
+    }
+
+    return normalized;
   }
 }

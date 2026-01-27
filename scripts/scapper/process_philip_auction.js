@@ -10,17 +10,21 @@
  *   node scripts/scapper/inventory/process_philip_auction.js
  */
 
-import fs from "fs-extra";
-import path from "path";
-import fetch from "node-fetch";
 import { load } from "cheerio";
+import fs from "fs-extra";
+import fetch from "node-fetch";
+import path from "path";
 
 const __dirname = path.dirname(new URL(import.meta.url).pathname);
-const INPUT_HTML = path.join(__dirname, "inventory", "philip_auction.html");
+const INPUT_HTML = path.join(
+  __dirname,
+  "inventory",
+  "phillops_auction_NY030126.html",
+);
 const OUTPUT_ROOT = path.join(
   __dirname,
   "inventory",
-  "TasterMatcherPhilipAuction",
+  "TasterMatcherPhilipAuction_NY030126",
 );
 
 const EUR_TO_USD = 1.1; // static FX
@@ -136,8 +140,10 @@ async function main() {
           artist: item.artist,
           price: item.price,
           maxPrice: item.maxPrice ?? item.price,
+          useForTaster: true,
+          isPrivate: false,
           isAuction: true,
-          endDate: "2026-01-22T23:59",
+          endDate: "2026-02-07T23:59",
           sourceImage: item.imageUrl,
         },
         { spaces: 2 },

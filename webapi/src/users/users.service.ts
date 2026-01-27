@@ -79,15 +79,10 @@ export class UsersService {
       const { resources } = await container.items.query<User>(query).fetchAll();
 
       if (withStats) {
-        // Fetch swipe counts for all users in parallel
-        await Promise.all(
-          resources.map(async (user) => {
-            const numberOfSwipes = await this.artworksService
-              .getStats(domainId, user.id)
-              .then((stats) => stats.totalSwiped);
-            user.swipeCount = numberOfSwipes;
-          }),
-        );
+        for (const user of resources) {
+          user.swipeCount =
+            typeof user.swipeCount === "number" ? user.swipeCount : 0;
+        }
       }
 
       this.logger.log(
@@ -118,10 +113,8 @@ export class UsersService {
       }
 
       if (withStats) {
-        const numberOfSwipes = await this.artworksService
-          .getStats(domainId, userId)
-          .then((stats) => stats.totalSwiped);
-        resource.swipeCount = numberOfSwipes;
+        resource.swipeCount =
+          typeof resource.swipeCount === "number" ? resource.swipeCount : 0;
       }
 
       this.logger.log(`Fetched user ${userId} from domain ${domainId}`);

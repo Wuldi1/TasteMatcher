@@ -333,8 +333,7 @@ export class ArtworksService {
    */
   async getStats(domainId: string, userId: string): Promise<ArtworkStats> {
     const artworksContainer = await this.cosmosService.getArtworksContainer();
-    const preferencesContainer =
-      await this.cosmosService.getArtworkPreferencesContainer();
+    const usersContainer = await this.cosmosService.getContainer("Core");
 
     try {
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -348,58 +347,6 @@ export class ArtworksService {
         ],
       };
 
-      const totalSwipedGlobalQuery = {
-        query: `
-          SELECT VALUE COUNT(1) 
-          FROM c 
-          WHERE c.type = @type AND c.userId = @userId AND c.domainId = @domainId
-        `,
-        parameters: [
-          { name: "@type", value: "artworkPreference" },
-          { name: "@userId", value: userId },
-          { name: "@domainId", value: GlobalArtworksDomainId },
-        ],
-      };
-
-      const totalSwipedDomainQuery = {
-        query: `
-          SELECT VALUE COUNT(1) 
-          FROM c 
-          WHERE c.type = @type AND c.userId = @userId AND c.domainId = @domainId
-        `,
-        parameters: [
-          { name: "@type", value: "artworkPreference" },
-          { name: "@userId", value: userId },
-          { name: "@domainId", value: domainId },
-        ],
-      };
-
-      const likesQuery = {
-        query: `
-          SELECT VALUE COUNT(1) 
-          FROM c 
-          WHERE c.type = @type AND c.userId = @userId AND c.domainId = @domainId AND c.liked = true
-        `,
-        parameters: [
-          { name: "@type", value: "artworkPreference" },
-          { name: "@userId", value: userId },
-          { name: "@domainId", value: domainId },
-        ],
-      };
-
-      const dislikesQuery = {
-        query: `
-          SELECT VALUE COUNT(1) 
-          FROM c 
-          WHERE c.type = @type AND c.userId = @userId AND c.domainId = @domainId AND c.liked = false
-        `,
-        parameters: [
-          { name: "@type", value: "artworkPreference" },
-          { name: "@userId", value: userId },
-          { name: "@domainId", value: domainId },
-        ],
-      };
-
       const recentQuery = {
         query:
           "SELECT VALUE COUNT(1) FROM c WHERE c.domainId = @domainId AND c.type = @type AND c.createdAt >= @sevenDaysAgo",
@@ -410,39 +357,30 @@ export class ArtworksService {
         ],
       };
 
-      const [
-        totalResult,
-        totalSwipedGlobalResult,
-        totalSwipedDomainResult,
-        likesResult,
-        dislikesResult,
-        recentResult,
-      ] = await Promise.all([
+      const [totalResult, recentResult, userResult] = await Promise.all([
         artworksContainer.items.query(totalQuery).fetchAll(),
-        preferencesContainer.items
-          .query(totalSwipedGlobalQuery, {
-            partitionKey: GlobalArtworksDomainId,
-          })
-          .fetchAll(),
-        preferencesContainer.items
-          .query(totalSwipedDomainQuery, { partitionKey: domainId })
-          .fetchAll(),
-        preferencesContainer.items
-          .query(likesQuery, { partitionKey: domainId })
-          .fetchAll(),
-        preferencesContainer.items
-          .query(dislikesQuery, { partitionKey: domainId })
-          .fetchAll(),
         artworksContainer.items.query(recentQuery).fetchAll(),
+        usersContainer.item(userId, domainId).read(),
       ]);
+
+      if (!userResult.resource) {
+        throw new NotFoundException(`User ${userId} not found`);
+      }
 
       const stats: ArtworkStats = {
         totalArtworks: totalResult.resources[0] || 0,
-        totalLikes: likesResult.resources[0] || 0,
-        totalDislikes: dislikesResult.resources[0] || 0,
+        totalLikes:
+          typeof userResult.resource.totalLikes === "number"
+            ? userResult.resource.totalLikes
+            : 0,
+        totalDislikes:
+          typeof userResult.resource.totalDislikes === "number"
+            ? userResult.resource.totalDislikes
+            : 0,
         totalSwiped:
-          (totalSwipedGlobalResult.resources[0] || 0) +
-          (totalSwipedDomainResult.resources[0] || 0),
+          typeof userResult.resource.swipeCount === "number"
+            ? userResult.resource.swipeCount
+            : 0,
         recentlyAdded: recentResult.resources[0] || 0,
       };
 
@@ -492,9 +430,11 @@ export class ArtworksService {
 
       // Step 2: Query artworks NOT in the tasted list
       let artworksQuery: string;
+      const fetchLimit = Math.min(Math.max(limit * 3, limit), 200);
       const parameters: Array<{ name: string; value: any }> = [
         { name: "@primaryDomainId", value: primaryDomainId },
         { name: "@limit", value: limit },
+        { name: "@fetchLimit", value: fetchLimit },
       ];
       const secondaryDomainId =
         includeDomainId && includeDomainId !== primaryDomainId
@@ -512,37 +452,21 @@ export class ArtworksService {
         : "c.domainId = @primaryDomainId";
       const typeClause = "c.type = @artworkType";
 
-      const randomOrderFields = [
-        "createdAt",
-        "title",
-        "artist",
-        "date",
-        "signature",
-        "_ts",
-        "_rid",
-      ];
-      const orderField =
-        randomOrderFields[Math.floor(Math.random() * randomOrderFields.length)];
-      const orderDirection = Math.random() > 0.5 ? "ASC" : "DESC";
-      const orderClause = `ORDER BY c.${orderField} ${orderDirection}`;
-
       if (tastedArtworkIds.length === 0) {
         // User hasn't tasted anything yet - return first N artworks
         artworksQuery = `
-          SELECT TOP @limit * 
+          SELECT TOP @fetchLimit * 
           FROM c 
           WHERE ${typeClause} AND ${domainFilterClause}
-          ${orderClause}
         `;
       } else {
         // Exclude already tasted artworks using NOT IN
         // Note: For large lists, consider pagination or alternative patterns
         artworksQuery = `
-          SELECT TOP @limit * 
+          SELECT TOP @fetchLimit * 
           FROM c 
           WHERE ${typeClause} AND ${domainFilterClause}
             AND NOT ARRAY_CONTAINS(@tastedIds, c.id)
-          ${orderClause}
         `;
         parameters.push({ name: "@tastedIds", value: tastedArtworkIds });
       }
@@ -563,9 +487,18 @@ export class ArtworksService {
         this.canViewerSeeArtwork(art, viewer),
       );
 
+      // Shuffle for better randomness and then cap to the requested limit.
+      for (let i = visible.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = visible[i];
+        visible[i] = visible[j];
+        visible[j] = tmp;
+      }
+      const limited = visible.slice(0, limit);
+
       return {
-        artworks: visible,
-        total: visible.length,
+        artworks: limited,
+        total: limited.length,
       };
     } catch (error) {
       this.logger.error(
@@ -591,6 +524,8 @@ export class ArtworksService {
     try {
       const preferenceId = generatePreferenceId(userId, artworkId);
       let updatedResource;
+      const incomingLiked =
+        typeof saveDto.liked === "boolean" ? saveDto.liked : undefined;
 
       // Check if preference already exists
       const { resource: existingPreference } = await artworkPreferencesContainer
@@ -641,10 +576,27 @@ export class ArtworksService {
 
       // first, get the user preferenceVector from his existing record
       const usersContainer = await this.cosmosService.getContainer("Core");
-      const { resource: userRecord } = await usersContainer
+      let { resource: userRecord } = await usersContainer
         .item(userId, domainId)
         .read();
+      if (!userRecord && domainId === GlobalArtworksDomainId) {
+        const { resources } = await usersContainer.items
+          .query({
+            query: "SELECT * FROM c WHERE c.id = @userId AND c.type = 'user'",
+            parameters: [{ name: "@userId", value: userId }],
+          })
+          .fetchAll();
+        userRecord = resources[0];
+      }
+      if (!userRecord) {
+        throw new NotFoundException(`User ${userId} not found`);
+      }
+      const userPartitionKey = userRecord.domainId ?? domainId;
       const userPreferenceVector = userRecord.preferenceVector;
+      const existingLiked =
+        typeof existingPreference?.liked === "boolean"
+          ? existingPreference.liked
+          : undefined;
 
       const artworkResource = await this.findOne(saveDto.domainId, artworkId);
       if (!artworkResource) {
@@ -654,10 +606,54 @@ export class ArtworksService {
       }
 
       const imageVector = artworkResource.vector;
+      const swipeCountBefore =
+        typeof userRecord.swipeCount === "number" ? userRecord.swipeCount : 0;
+      const totalLikes =
+        typeof userRecord.totalLikes === "number" ? userRecord.totalLikes : 0;
+      const totalDislikes =
+        typeof userRecord.totalDislikes === "number"
+          ? userRecord.totalDislikes
+          : 0;
+      let userRecordUpdated = false;
+
+      const isNewSwipe =
+        typeof incomingLiked === "boolean" && typeof existingLiked !== "boolean";
+      const likedChanged =
+        typeof incomingLiked === "boolean" &&
+        typeof existingLiked === "boolean" &&
+        existingLiked !== incomingLiked;
+
+      if (isNewSwipe) {
+        userRecord.swipeCount = swipeCountBefore + 1;
+        userRecord.totalLikes =
+          totalLikes + (incomingLiked === true ? 1 : 0);
+        userRecord.totalDislikes =
+          totalDislikes + (incomingLiked === false ? 1 : 0);
+        userRecordUpdated = true;
+      } else if (likedChanged) {
+        let likeDelta = 0;
+        let dislikeDelta = 0;
+        if (existingLiked === true) {
+          likeDelta -= 1;
+        }
+        if (existingLiked === false) {
+          dislikeDelta -= 1;
+        }
+        if (incomingLiked === true) {
+          likeDelta += 1;
+        }
+        if (incomingLiked === false) {
+          dislikeDelta += 1;
+        }
+        userRecord.totalLikes = Math.max(0, totalLikes + likeDelta);
+        userRecord.totalDislikes = Math.max(0, totalDislikes + dislikeDelta);
+        userRecordUpdated = true;
+      }
 
       // if preferenceVector exists and is valid, update it using the new preference
       if (
-        typeof saveDto.liked === "boolean" &&
+        typeof incomingLiked === "boolean" &&
+        (isNewSwipe || likedChanged) &&
         Array.isArray(userPreferenceVector) &&
         userPreferenceVector.length === 1024 &&
         imageVector &&
@@ -666,19 +662,27 @@ export class ArtworksService {
         // Here you would implement the logic to update the user's preference vector
         // based on the new preference. This could involve calling an external service
         // or running a local algorithm to adjust the vector.
+        const baseLearningRate = 0.2;
+        const effectiveLearningRate =
+          baseLearningRate / Math.sqrt(1 + swipeCountBefore);
         const updatedPreferenceVector =
           this.searchIndexService.calculateUpdatedPreferenceVector(
             userPreferenceVector,
             imageVector,
-            saveDto.liked,
+            incomingLiked,
+            { learningRate: effectiveLearningRate, dislikeWeight: 0.6 },
           );
 
         // store updated preference vector back to user record
         userRecord.preferenceVector = updatedPreferenceVector;
-        await usersContainer.item(userId, domainId).replace(userRecord);
+        userRecordUpdated = true;
+      }
 
+      if (userRecordUpdated) {
+        userRecord.updatedAt = Date.now();
+        await usersContainer.item(userId, userPartitionKey).replace(userRecord);
         this.logger.log(
-          `Updated preference vector for user ${userId} after saving preference for artwork ${artworkId}`,
+          `Updated user ${userId} after saving preference for artwork ${artworkId}`,
         );
       }
 
