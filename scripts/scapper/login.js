@@ -30,7 +30,7 @@ export async function login(
     input: process.stdin,
     output: process.stdout,
   });
-  const defaultCode = verificationCode ?? "000000";
+  const defaultCode = "000000";
   const inputCode = await rl.question(
     `Enter verification code (default ${defaultCode}): `,
   );

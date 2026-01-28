@@ -181,10 +181,9 @@ async function main() {
     } else {
       CONTENT_DIR = path.resolve(
         "inventory",
-        "TasterMatcherPhilipAuction_NY030126",
+        "TasterMatcherWright20Auction_20260204",
       );
     }
-    CONTENT_DIR = path.resolve("JaclynContent");
 
     rl.close();
 

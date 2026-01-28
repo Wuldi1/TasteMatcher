@@ -45,7 +45,9 @@ export class QueryArtworksDto implements QueryParams<Artwork> {
   @IsString()
   tags?: string;
 
-  @ApiPropertyOptional({ description: "Search query in title/description" })
+  @ApiPropertyOptional({
+    description: "Search query in title/artist/description",
+  })
   @IsOptional()
   @IsString()
   searchQuery?: string;
@@ -88,7 +90,7 @@ export class QueryArtworksDto implements QueryParams<Artwork> {
       search: this.searchQuery
         ? {
             query: this.searchQuery,
-            fields: ["title", "description"],
+            fields: ["title", "artist", "description"],
           }
         : undefined,
     };

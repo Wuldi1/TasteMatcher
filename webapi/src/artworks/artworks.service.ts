@@ -1,29 +1,30 @@
 import {
-  Injectable,
-  NotFoundException,
-  Logger,
   BadRequestException,
   ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
 } from "@nestjs/common";
 import {
   Artwork,
+  ArtworkPreference,
+  ArtworkStats,
+  CosmosService,
+  GlobalArtworksDomainId,
+  LikedStatus,
   PaginatedResponse,
   QueryParams,
-  ArtworkStats,
-  UntastedArtworksResponse,
-  ArtworkPreference,
-  generatePreferenceId,
-  CosmosService,
-  SearchIndexService,
-  executeCosmosQuery,
-  getAIRecommendationsEligibility,
-  LikedStatus,
-  GlobalArtworksDomainId,
   Role,
+  SearchIndexService,
+  UntastedArtworksResponse,
+  executeCosmosQuery,
+  generatePreferenceId,
+  getAIRecommendationsEligibility,
   isAuctionEnded,
 } from "@tastematcher/common";
-import { UpdateArtworkDto } from "./dto/update-artwork.dto";
 import { SavePreferenceDto } from "./dto/save-preference.dto";
+import { UpdateArtworkDto } from "./dto/update-artwork.dto";
 
 @Injectable()
 export class ArtworksService {
@@ -45,6 +46,7 @@ export class ArtworksService {
     queryParams: QueryParams<Artwork>,
     requestedUserId?: string,
     viewer?: { id: string; role: Role; invitedBy?: string | null },
+    hideEndedAuctions: boolean = false,
   ): Promise<PaginatedResponse<Artwork>> {
     const container = await this.cosmosService.getArtworksContainer();
     const normalizedQueryParams: QueryParams<Artwork> = {
@@ -127,9 +129,17 @@ export class ArtworksService {
         }
       }
 
-      const filteredItems = (result.items || []).filter((art) =>
-        this.canViewerSeeArtwork(art, viewer),
-      );
+      const filteredItems = (result.items || []).filter((art) => {
+        if (!this.canViewerSeeArtwork(art, viewer)) return false;
+        if (
+          hideEndedAuctions &&
+          art.isAuction === true &&
+          isAuctionEnded(art)
+        ) {
+          return false;
+        }
+        return true;
+      });
 
       return {
         items: filteredItems,
@@ -154,6 +164,7 @@ export class ArtworksService {
     liked: boolean,
     queryParams: QueryParams<Artwork>,
     viewer?: { id: string; role: Role; invitedBy?: string | null },
+    hideEndedAuctions: boolean = false,
   ): Promise<PaginatedResponse<Artwork>> {
     const preferencesContainer =
       await this.cosmosService.getArtworkPreferencesContainer();
@@ -215,7 +226,12 @@ export class ArtworksService {
       } else {
         delete enriched.preferenceComment;
       }
-      if (this.canViewerSeeArtwork(enriched, viewer)) {
+      if (
+        this.canViewerSeeArtwork(enriched, viewer) &&
+        (!hideEndedAuctions ||
+          enriched.isAuction !== true ||
+          !isAuctionEnded(enriched))
+      ) {
         ordered.push(enriched);
       }
     }
@@ -324,6 +340,18 @@ export class ArtworksService {
     } catch (error) {
       this.logger.error(`Failed to delete artwork ${artworkId}`, error);
       throw new NotFoundException(`Artwork ${artworkId} not found`);
+    }
+
+    try {
+      await this.searchIndexService.deleteArtworkDocument(artworkId);
+    } catch (error) {
+      this.logger.error(
+        `Failed to delete artwork ${artworkId} from search index`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        "Artwork deleted but failed to remove from search index.",
+      );
     }
   }
 
@@ -435,7 +463,6 @@ export class ArtworksService {
         { name: "@primaryDomainId", value: primaryDomainId },
         { name: "@limit", value: limit },
         { name: "@fetchLimit", value: fetchLimit },
-        { name: "@nowIso", value: new Date().toISOString() },
       ];
       const secondaryDomainId =
         includeDomainId && includeDomainId !== primaryDomainId
@@ -452,14 +479,13 @@ export class ArtworksService {
         ? "(c.domainId = @primaryDomainId OR (c.domainId = @secondaryDomainId AND c.useForTaster = true))"
         : "c.domainId = @primaryDomainId";
       const typeClause = "c.type = @artworkType";
-      const auctionClause = `(NOT IS_DEFINED(c.isAuction) OR c.isAuction != true OR (IS_DEFINED(c.endDate) AND c.endDate > @nowIso))`;
 
       if (tastedArtworkIds.length === 0) {
         // User hasn't tasted anything yet - return first N artworks
         artworksQuery = `
           SELECT TOP @fetchLimit * 
           FROM c 
-          WHERE ${typeClause} AND ${domainFilterClause} AND ${auctionClause}
+          WHERE ${typeClause} AND ${domainFilterClause}
         `;
       } else {
         // Exclude already tasted artworks using NOT IN
@@ -467,7 +493,7 @@ export class ArtworksService {
         artworksQuery = `
           SELECT TOP @fetchLimit * 
           FROM c 
-          WHERE ${typeClause} AND ${domainFilterClause} AND ${auctionClause}
+          WHERE ${typeClause} AND ${domainFilterClause}
             AND NOT ARRAY_CONTAINS(@tastedIds, c.id)
         `;
         parameters.push({ name: "@tastedIds", value: tastedArtworkIds });
@@ -621,7 +647,8 @@ export class ArtworksService {
       let userRecordUpdated = false;
 
       const isNewSwipe =
-        typeof incomingLiked === "boolean" && typeof existingLiked !== "boolean";
+        typeof incomingLiked === "boolean" &&
+        typeof existingLiked !== "boolean";
       const likedChanged =
         typeof incomingLiked === "boolean" &&
         typeof existingLiked === "boolean" &&
@@ -629,8 +656,7 @@ export class ArtworksService {
 
       if (isNewSwipe) {
         userRecord.swipeCount = swipeCountBefore + 1;
-        userRecord.totalLikes =
-          totalLikes + (incomingLiked === true ? 1 : 0);
+        userRecord.totalLikes = totalLikes + (incomingLiked === true ? 1 : 0);
         userRecord.totalDislikes =
           totalDislikes + (incomingLiked === false ? 1 : 0);
         userRecordUpdated = true;
@@ -782,6 +808,13 @@ export class ArtworksService {
         fetchCount,
       );
 
+      this.logger.log({
+        msg: "Number of matches",
+        targetUserId: resolvedUserId,
+        domainId,
+        matchesCount: matches.length,
+      });
+
       const artworksContainer = await this.cosmosService.getArtworksContainer();
       const preferencesContainer =
         await this.cosmosService.getArtworkPreferencesContainer();
@@ -801,6 +834,13 @@ export class ArtworksService {
       const { resources: preferences } = await preferencesContainer.items
         .query(preferencesQuery, { partitionKey: domainId })
         .fetchAll();
+
+      this.logger.log({
+        msg: "Number of preferences",
+        targetUserId: resolvedUserId,
+        domainId,
+        preferencesCount: preferences.length,
+      });
 
       const preferencesMap = new Map<
         string,

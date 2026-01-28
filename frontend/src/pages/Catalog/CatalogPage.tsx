@@ -69,6 +69,8 @@ export function CatalogPage() {
   const [deletingArtworks, setDeletingArtworks] = useState<Set<string>>(
     new Set(),
   ); // For animation
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [showEndedAuctions, setShowEndedAuctions] = useState(false);
   const preferenceFilter = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const value = params.get("view");
@@ -108,6 +110,13 @@ export function CatalogPage() {
     setEditingArtwork(null);
   }, [effectiveDomainId]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const clearPreferenceFilter = () => {
     if (!preferenceFilter) return;
     const params = new URLSearchParams(location.search);
@@ -130,10 +139,11 @@ export function CatalogPage() {
     queryKey: [
       "artworks",
       effectiveDomainId,
-      searchQuery,
+      debouncedSearchQuery,
       sortBy,
       sortOrder,
       preferenceFilter,
+      showEndedAuctions,
     ],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
       if (!effectiveDomainId) {
@@ -145,6 +155,8 @@ export function CatalogPage() {
         sortBy,
         sortOrder,
         preference: preferenceFilter,
+        searchQuery: debouncedSearchQuery || undefined,
+        includeEndedAuctions: showEndedAuctions,
       });
       return result;
     },
@@ -171,21 +183,7 @@ export function CatalogPage() {
       )
     : [];
 
-  // Filter artworks by search query (client-side)
-  const filteredArtworks = searchQuery
-    ? allArtworks.filter((artwork) => {
-        const query = searchQuery.toLowerCase();
-        return (
-          artwork.title?.toLowerCase().includes(query) ||
-          artwork.artist?.toLowerCase().includes(query) ||
-          artwork.description?.toLowerCase().includes(query) ||
-          artwork.medium?.toLowerCase().includes(query) ||
-          artwork.signature?.toLowerCase().includes(query) ||
-          artwork.date?.toLowerCase().includes(query) ||
-          artwork.tags?.some((tag) => tag.toLowerCase().includes(query))
-        );
-      })
-    : allArtworks;
+  const filteredArtworks = allArtworks;
 
   const selectedArtworkRecords = filteredArtworks.filter((artwork) =>
     selectedArtworks.has(artwork.id),
@@ -205,7 +203,15 @@ export function CatalogPage() {
     onSuccess: (_, artworkId) => {
       // Immediately remove from cache
       queryClient.setQueryData(
-        ["artworks", effectiveDomainId, searchQuery, sortBy, sortOrder],
+        [
+          "artworks",
+          effectiveDomainId,
+          debouncedSearchQuery,
+          sortBy,
+          sortOrder,
+          preferenceFilter,
+          showEndedAuctions,
+        ],
         (oldData: any) => {
           if (!oldData || !Array.isArray(oldData.pages)) return oldData;
           return {
@@ -246,7 +252,15 @@ export function CatalogPage() {
     onSuccess: (_, artworkIds) => {
       // Immediately remove from cache
       queryClient.setQueryData(
-        ["artworks", effectiveDomainId, searchQuery, sortBy, sortOrder],
+        [
+          "artworks",
+          effectiveDomainId,
+          debouncedSearchQuery,
+          sortBy,
+          sortOrder,
+          preferenceFilter,
+          showEndedAuctions,
+        ],
         (oldData: any) => {
           if (!oldData || !Array.isArray(oldData.pages)) return oldData;
           return {
@@ -710,6 +724,24 @@ export function CatalogPage() {
                     <option value="date-asc">Oldest First</option>
                   </optgroup>
                 </select>
+              </div>
+              <div className="catalog-filter-group">
+                <span className="catalog-filter-label">Auctions</span>
+                <label className="catalog-switch">
+                  <input
+                    id="show-ended"
+                    type="checkbox"
+                    className="catalog-switch__input"
+                    checked={showEndedAuctions}
+                    onChange={(e) => setShowEndedAuctions(e.target.checked)}
+                  />
+                  <span className="catalog-switch__track" aria-hidden="true">
+                    <span className="catalog-switch__thumb" />
+                  </span>
+                  <span className="catalog-switch__text">
+                    Display old auction artworks
+                  </span>
+                </label>
               </div>
             </div>
 

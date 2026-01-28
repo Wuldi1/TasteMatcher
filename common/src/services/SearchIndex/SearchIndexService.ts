@@ -202,6 +202,33 @@ export class SearchIndexService {
   }
 
   /**
+   * Deletes an artwork document from the search index.
+   */
+  async deleteArtworkDocument(artworkId: string): Promise<void> {
+    try {
+      const result = await this.searchClient.deleteDocuments(
+        "artworkId",
+        [artworkId],
+      );
+      const success = result.results.every((r) => r.succeeded);
+      if (!success) {
+        const errors = result.results
+          .filter((r) => !r.succeeded)
+          .map((r) => r.errorMessage)
+          .join(", ");
+        throw new Error(`Search index delete failed: ${errors}`);
+      }
+    } catch (err) {
+      logger.error({
+        msg: "Failed to delete artwork from search index",
+        artworkId,
+        err,
+      });
+      throw err;
+    }
+  }
+
+  /**
    * L2-normalizes the input vector.
    * Returns a new vector with unit length (or all zeros if input is zero vector).
    */

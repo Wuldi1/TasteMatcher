@@ -123,6 +123,8 @@ export class ArtworksController {
     @Query("sortBy") sortBy?: string,
     @Query("sortOrder") sortOrder?: "asc" | "desc",
     @Query("filterBy") filterBy?: string,
+    @Query("searchQuery") searchQuery?: string,
+    @Query("includeEndedAuctions") includeEndedAuctions?: string,
     @Query("userId") userId?: string, // optional user target for dealer/domain_owner
     @Query("preference") preference?: "liked" | "disliked",
   ): Promise<PaginatedResponse<Artwork>> {
@@ -143,6 +145,12 @@ export class ArtworksController {
           }
         : undefined,
       filters: filterBy ? [this.parseFilterBy(filterBy)] : undefined,
+      search: searchQuery
+        ? {
+            query: searchQuery,
+            fields: ["title", "artist", "description"],
+          }
+        : undefined,
     };
 
     // Determine requesterId used to compute likedStatus / preference per-artwork
@@ -177,6 +185,10 @@ export class ArtworksController {
         : preference === "disliked"
           ? "disliked"
           : undefined;
+    const includeEndedAuctionsFlag =
+      includeEndedAuctions === "true" || includeEndedAuctions === "1";
+    const hideEndedAuctions =
+      includeEndedAuctions !== undefined ? !includeEndedAuctionsFlag : false;
 
     if (normalizedPreference && !requesterId) {
       throw new BadRequestException(
@@ -198,6 +210,7 @@ export class ArtworksController {
         normalizedPreference === "liked",
         queryParams,
         viewerContext,
+        hideEndedAuctions,
       );
     } else {
       artworks = await this.artworksService.findAll(
@@ -205,6 +218,7 @@ export class ArtworksController {
         queryParams,
         requesterId,
         viewerContext,
+        hideEndedAuctions,
       );
     }
     return {

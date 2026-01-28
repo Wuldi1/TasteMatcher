@@ -558,6 +558,8 @@ class ApiClient extends BaseApiClient {
       filterBy?: string;
       userId?: string;
       preference?: "liked" | "disliked";
+      searchQuery?: string;
+      includeEndedAuctions?: boolean;
     }
   ): Promise<PaginatedResponse<Artwork>> {
     this.validateRequired(domainId, "Domain ID");
@@ -572,6 +574,13 @@ class ApiClient extends BaseApiClient {
     if (options?.filterBy) params.append("filterBy", options.filterBy);
     if (options?.userId) params.append("userId", options.userId);
     if (options?.preference) params.append("preference", options.preference);
+    if (options?.searchQuery) params.append("searchQuery", options.searchQuery);
+    if (options?.includeEndedAuctions !== undefined) {
+      params.append(
+        "includeEndedAuctions",
+        String(options.includeEndedAuctions),
+      );
+    }
 
     const queryString = params.toString();
     const endpoint = `/domains/${domainId}/artworks${queryString ? `?${queryString}` : ""}`;
