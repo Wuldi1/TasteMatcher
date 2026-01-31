@@ -11,37 +11,37 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useAuth } from "../../contexts/AuthContext";
+import type { Artwork } from "@tastematcher/common";
 import {
-  Search,
-  X,
-  ThumbsUp,
-  ThumbsDown,
-  Edit,
-  Trash2,
   CheckSquare,
-  Square,
-  Eye,
-  EyeOff,
-  Sparkles,
-  Lock,
-  Unlock,
-  Gavel,
   ChevronLeft,
   ChevronRight,
+  Edit,
+  Eye,
+  EyeOff,
+  Gavel,
+  Lock,
+  Search,
+  Sparkles,
+  Square,
+  ThumbsDown,
+  ThumbsUp,
+  Trash2,
+  Unlock,
+  X,
 } from "lucide-react";
-import type { Artwork } from "@tastematcher/common";
-import { apiClient } from "../../utils/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { EditArtworkModal } from "../../components/EditArtworkModal/EditArtworkModal";
+import { useAuth } from "../../contexts/AuthContext";
+import { apiClient } from "../../utils/api";
 import { isAuctionEnded } from "../../utils/general";
 import "./CatalogPage.css";
-import { useLocation, useNavigate } from "react-router-dom";
 
 /**
  * Catalog page displaying all uploaded artworks in a responsive grid.
@@ -94,7 +94,12 @@ export function CatalogPage() {
     (async () => {
       try {
         const domainsResponse = await apiClient.getAllDomains();
-        setDomains(domainsResponse.map((domain) => ({ id: domain.id, name: domain.name })));
+        setDomains(
+          domainsResponse.map((domain) => ({
+            id: domain.id,
+            name: domain.name,
+          })),
+        );
         if (!selectedDomainId && domainsResponse.length > 0) {
           setSelectedDomainId(domainsResponse[0].id);
         }
@@ -240,7 +245,9 @@ export function CatalogPage() {
         300,
       ); // Animation duration
       // Invalidate to ensure cache consistency
-      queryClient.invalidateQueries({ queryKey: ["artworks", effectiveDomainId] });
+      queryClient.invalidateQueries({
+        queryKey: ["artworks", effectiveDomainId],
+      });
     },
   });
 
@@ -293,7 +300,9 @@ export function CatalogPage() {
         );
       });
       // Invalidate to ensure cache consistency
-      queryClient.invalidateQueries({ queryKey: ["artworks", effectiveDomainId] });
+      queryClient.invalidateQueries({
+        queryKey: ["artworks", effectiveDomainId],
+      });
     },
   });
 
@@ -309,7 +318,9 @@ export function CatalogPage() {
       if (!effectiveDomainId) throw new Error("No domain ID");
       await Promise.all(
         artworkIds.map((id) =>
-          apiClient.updateArtwork(effectiveDomainId, id, { shouldDisplayPrice }),
+          apiClient.updateArtwork(effectiveDomainId, id, {
+            shouldDisplayPrice,
+          }),
         ),
       );
     },
@@ -535,14 +546,15 @@ export function CatalogPage() {
     return filteredArtworks.findIndex((a) => a.id === selectedArtwork.id);
   }, [filteredArtworks, selectedArtwork]);
   const hasPrev = selectedIndex > 0;
-  const hasNext = selectedIndex >= 0 && selectedIndex < filteredArtworks.length - 1;
+  const hasNext =
+    selectedIndex >= 0 && selectedIndex < filteredArtworks.length - 1;
 
-  const handlePrevArtwork = () => {
+  const handlePrevArtwork = useCallback(() => {
     if (!hasPrev) return;
     setSelectedArtwork(filteredArtworks[selectedIndex - 1]);
-  };
+  }, [filteredArtworks, hasPrev, selectedIndex]);
 
-  const handleNextArtwork = () => {
+  const handleNextArtwork = useCallback(() => {
     if (!hasNext) {
       if (hasNextPage && !isFetchingNextPage) {
         fetchNextPage();
@@ -550,7 +562,14 @@ export function CatalogPage() {
       return;
     }
     setSelectedArtwork(filteredArtworks[selectedIndex + 1]);
-  };
+  }, [
+    filteredArtworks,
+    hasNext,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    selectedIndex,
+  ]);
 
   useEffect(() => {
     if (!selectedArtwork) return;
@@ -741,7 +760,10 @@ export function CatalogPage() {
             <div className="catalog-filters">
               {isGlobalAdmin && (
                 <div className="catalog-filter-group">
-                  <label htmlFor="domain-select" className="catalog-filter-label">
+                  <label
+                    htmlFor="domain-select"
+                    className="catalog-filter-label"
+                  >
                     Domain
                   </label>
                   <select
@@ -758,7 +780,9 @@ export function CatalogPage() {
                     </option>
                     {domains.map((domain) => (
                       <option key={domain.id} value={domain.id}>
-                        {domain.name ? `${domain.name} (${domain.id})` : domain.id}
+                        {domain.name
+                          ? `${domain.name} (${domain.id})`
+                          : domain.id}
                       </option>
                     ))}
                   </select>
