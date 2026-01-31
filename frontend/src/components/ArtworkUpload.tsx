@@ -61,6 +61,7 @@ export function ArtworkUpload() {
   const [widthInput, setWidthInput] = useState<string>("");
   const [heightInput, setHeightInput] = useState<string>("");
   const [depthInput, setDepthInput] = useState<string>("");
+  const [dimensionUnit, setDimensionUnit] = useState<"in" | "cm">("in");
   const [maxPriceInput, setMaxPriceInput] = useState<string>("");
   const [endDateInput, setEndDateInput] = useState<string>("");
 
@@ -82,6 +83,9 @@ export function ArtworkUpload() {
     : auctionEndInvalid
       ? "Auction end date must be in the future."
       : null;
+  const hasDimensionValues = Boolean(
+    widthInput.trim() || heightInput.trim() || depthInput.trim(),
+  );
 
   useEffect(() => {
     return () => {
@@ -379,9 +383,31 @@ export function ArtworkUpload() {
       setMessage("Uploading artwork...");
 
       try {
+        const parseNumberOrUndefined = (value: string) => {
+          const trimmed = value.trim();
+          if (!trimmed) return undefined;
+          const numeric = Number(trimmed);
+          return Number.isNaN(numeric) ? undefined : numeric;
+        };
+        const toInches = (value?: number) =>
+          value === undefined
+            ? undefined
+            : Math.round(value * 0.3937007874 * 100) / 100;
+        const widthValue = parseNumberOrUndefined(widthInput);
+        const heightValue = parseNumberOrUndefined(heightInput);
+        const depthValue = parseNumberOrUndefined(depthInput);
+        const uploadPayload: Partial<Artwork> = {
+          ...metadata,
+          width:
+            dimensionUnit === "cm" ? toInches(widthValue) : widthValue,
+          height:
+            dimensionUnit === "cm" ? toInches(heightValue) : heightValue,
+          depth:
+            dimensionUnit === "cm" ? toInches(depthValue) : depthValue,
+        };
         // The API client now sends the token, and the backend infers the domain.
         // We no longer pass the domainId from the frontend.
-        await apiClient.uploadArtwork(currentDomain!.id, file, metadata);
+        await apiClient.uploadArtwork(currentDomain!.id, file, uploadPayload);
         setStatus("success");
         setMessage("Artwork uploaded successfully!");
         setShowSuccessToast(true);
@@ -400,7 +426,17 @@ export function ArtworkUpload() {
         }
       }
     },
-    [file, metadata, resetForm, currentDomain, validationMessage]
+    [
+      file,
+      metadata,
+      resetForm,
+      currentDomain,
+      validationMessage,
+      widthInput,
+      heightInput,
+      depthInput,
+      dimensionUnit,
+    ]
   );
 
   useEffect(() => {
@@ -636,10 +672,44 @@ export function ArtworkUpload() {
           </div>
           {/* Dimensions */}
           <div className="space-y-1 sm:col-span-2">
-            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-gray-500" />
-              Dimensions (in)
-            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-gray-500" />
+                Dimensions ({dimensionUnit})
+              </label>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className={`px-2 py-0.5 text-xs rounded-full border ${
+                    dimensionUnit === "in"
+                      ? "bg-gray-900 text-white border-gray-900"
+                      : "bg-white text-gray-600 border-gray-300"
+                  }`}
+                  onClick={() => setDimensionUnit("in")}
+                  disabled={status === "uploading"}
+                >
+                  in
+                </button>
+                <button
+                  type="button"
+                  className={`px-2 py-0.5 text-xs rounded-full border ${
+                    dimensionUnit === "cm"
+                      ? "bg-gray-900 text-white border-gray-900"
+                      : "bg-white text-gray-600 border-gray-300"
+                  }`}
+                  onClick={() => setDimensionUnit("cm")}
+                  disabled={status === "uploading"}
+                >
+                  cm
+                </button>
+                <span
+                  className="text-xs text-gray-400"
+                  title="We store dimensions in inches. If you enter cm, we will convert to inches before saving."
+                >
+                  ⓘ
+                </span>
+              </div>
+            </div>
             <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] gap-2 items-center">
               <input
                 id="metadata-width"
@@ -687,6 +757,11 @@ export function ArtworkUpload() {
             <p className="text-xs text-gray-500">
               Width × Height × Depth (optional).
             </p>
+            {dimensionUnit === "cm" && hasDimensionValues && (
+              <p className="text-xs text-gray-500">
+                Values will be converted to inches before saving.
+              </p>
+            )}
           </div>
           {/* Date (Year) */}
           <div className="space-y-1">

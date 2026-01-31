@@ -10,8 +10,8 @@ export interface Artwork {
   date: string;
   signature?: string;
   medium?: string;
-  width?: number;
-  height?: number;
+  width?: number; // inches, optional
+  height?: number; // inches, optional
   depth?: number; // inches, optional
   isAuction?: boolean; // defaults to false
   price?: number; // USD price, optional

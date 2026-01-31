@@ -47,6 +47,7 @@ export function EditArtworkModal({
   const [depthInput, setDepthInput] = useState<string>(
     artwork.depth !== undefined ? String(artwork.depth) : "",
   );
+  const [dimensionUnit, setDimensionUnit] = useState<"in" | "cm">("in");
   const [priceInput, setPriceInput] = useState<string>(
     artwork.price !== undefined ? String(artwork.price) : "",
   );
@@ -91,6 +92,9 @@ export function EditArtworkModal({
   const canEditPrivacy = Boolean(user?.id && artwork.uploadedBy === user.id);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const hasDimensionValues = Boolean(
+    widthInput.trim() || heightInput.trim() || depthInput.trim(),
+  );
 
   useEffect(() => {
     return () => {
@@ -146,15 +150,23 @@ export function EditArtworkModal({
       return Number.isNaN(n) ? undefined : n;
     };
 
+    const toInches = (value?: number) =>
+      value === undefined
+        ? undefined
+        : Math.round(value * 0.3937007874 * 100) / 100;
+    const widthValue = parseNumberOrUndefined(widthInput);
+    const heightValue = parseNumberOrUndefined(heightInput);
+    const depthValue = parseNumberOrUndefined(depthInput);
+
     const updates: Partial<Artwork> = {
       title: title.trim() || undefined,
       artist: artist.trim() || undefined,
       description: description.trim() || undefined,
       signature: signature.trim() || undefined,
       medium: medium.trim() || undefined,
-      width: parseNumberOrUndefined(widthInput),
-      height: parseNumberOrUndefined(heightInput),
-      depth: parseNumberOrUndefined(depthInput),
+      width: dimensionUnit === "cm" ? toInches(widthValue) : widthValue,
+      height: dimensionUnit === "cm" ? toInches(heightValue) : heightValue,
+      depth: dimensionUnit === "cm" ? toInches(depthValue) : depthValue,
       price: parseNumberOrUndefined(priceInput),
       maxPrice: parseNumberOrUndefined(maxPriceInput),
       endDate: endDateInput || undefined,
@@ -658,9 +670,41 @@ export function EditArtworkModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
-                    Dimensions (in)
-                  </label>
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      Dimensions ({dimensionUnit})
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className={`px-2 py-0.5 text-[10px] rounded-full border ${
+                          dimensionUnit === "in"
+                            ? "bg-gray-900 text-white border-gray-900"
+                            : "bg-white text-gray-500 border-gray-300"
+                        }`}
+                        onClick={() => setDimensionUnit("in")}
+                      >
+                        in
+                      </button>
+                      <button
+                        type="button"
+                        className={`px-2 py-0.5 text-[10px] rounded-full border ${
+                          dimensionUnit === "cm"
+                            ? "bg-gray-900 text-white border-gray-900"
+                            : "bg-white text-gray-500 border-gray-300"
+                        }`}
+                        onClick={() => setDimensionUnit("cm")}
+                      >
+                        cm
+                      </button>
+                      <span
+                        className="text-[10px] text-gray-400"
+                        title="We store dimensions in inches. If you enter cm, we will convert to inches before saving."
+                      >
+                        ⓘ
+                      </span>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] gap-2 items-center">
                     <input
                       type="text"
@@ -699,6 +743,11 @@ export function EditArtworkModal({
                       placeholder="Depth"
                     />
                   </div>
+                  {dimensionUnit === "cm" && hasDimensionValues && (
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      Values will be converted to inches before saving.
+                    </p>
+                  )}
                 </div>
               </div>
 

@@ -11,7 +11,7 @@
 // 10. Frontend-specific: responsive (mobile + desktop), smooth, accessible (WCAG AA).
 // -----------------------------------------------------------
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -33,6 +33,8 @@ import {
   Lock,
   Unlock,
   Gavel,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type { Artwork } from "@tastematcher/common";
 import { apiClient } from "../../utils/api";
@@ -71,6 +73,7 @@ export function CatalogPage() {
   ); // For animation
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [showEndedAuctions, setShowEndedAuctions] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const preferenceFilter = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const value = params.get("view");
@@ -526,6 +529,74 @@ export function CatalogPage() {
   const handleCloseModal = () => {
     setSelectedArtwork(null);
   };
+
+  const selectedIndex = useMemo(() => {
+    if (!selectedArtwork) return -1;
+    return filteredArtworks.findIndex((a) => a.id === selectedArtwork.id);
+  }, [filteredArtworks, selectedArtwork]);
+  const hasPrev = selectedIndex > 0;
+  const hasNext = selectedIndex >= 0 && selectedIndex < filteredArtworks.length - 1;
+
+  const handlePrevArtwork = () => {
+    if (!hasPrev) return;
+    setSelectedArtwork(filteredArtworks[selectedIndex - 1]);
+  };
+
+  const handleNextArtwork = () => {
+    if (!hasNext) {
+      if (hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
+      }
+      return;
+    }
+    setSelectedArtwork(filteredArtworks[selectedIndex + 1]);
+  };
+
+  useEffect(() => {
+    if (!selectedArtwork) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        handlePrevArtwork();
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        handleNextArtwork();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedArtwork, handlePrevArtwork, handleNextArtwork]);
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasNextPage || isFetchingNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: "300px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  useEffect(() => {
+    if (!selectedArtwork) return;
+    if (!hasNextPage || isFetchingNextPage) return;
+    if (selectedIndex >= filteredArtworks.length - 3) {
+      fetchNextPage();
+    }
+  }, [
+    selectedArtwork,
+    selectedIndex,
+    filteredArtworks.length,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  ]);
 
   const handleEditClick = (artwork: Artwork, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1149,6 +1220,7 @@ export function CatalogPage() {
                 </button>
               </div>
             )}
+            <div ref={loadMoreRef} aria-hidden="true" />
           </>
         )}
 
@@ -1174,6 +1246,27 @@ export function CatalogPage() {
               >
                 <X className="w-6 h-6" />
               </button>
+
+              {hasPrev && (
+                <button
+                  type="button"
+                  className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/90 shadow-lg border border-gray-200 p-2 hover:bg-white"
+                  onClick={handlePrevArtwork}
+                  aria-label="Previous artwork"
+                >
+                  <ChevronLeft className="w-5 h-5 text-gray-700" />
+                </button>
+              )}
+              {hasNext && (
+                <button
+                  type="button"
+                  className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/90 shadow-lg border border-gray-200 p-2 hover:bg-white"
+                  onClick={handleNextArtwork}
+                  aria-label="Next artwork"
+                >
+                  <ChevronRight className="w-5 h-5 text-gray-700" />
+                </button>
+              )}
 
               <div className="flex flex-col md:flex-row gap-6">
                 {/* Artwork Image */}
