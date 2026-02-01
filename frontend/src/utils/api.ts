@@ -12,6 +12,7 @@
 
 import {
   Artwork,
+  ArtworkFeedback,
   ArtworkStats,
   Domain,
   DomainRequest,
@@ -598,6 +599,21 @@ class ApiClient extends BaseApiClient {
     return this.request<Artwork>(`/domains/${domainId}/artworks/${artworkId}`, {
       method: "GET",
     });
+  }
+
+  /**
+   * Get feedback for a specific artwork
+   */
+  async getArtworkFeedback(
+    domainId: string,
+    artworkId: string
+  ): Promise<ArtworkFeedback> {
+    this.validateRequired(domainId, "Domain ID");
+    this.validateRequired(artworkId, "Artwork ID");
+    return this.request<ArtworkFeedback>(
+      `/domains/${domainId}/artworks/${artworkId}/feedback`,
+      { method: "GET" }
+    );
   }
 
   /**

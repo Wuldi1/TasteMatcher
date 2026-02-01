@@ -14,10 +14,12 @@ import {
   GlobalArtworksDomainId,
   LikedStatus,
   PaginatedResponse,
+  Proposal,
   QueryParams,
   Role,
   SearchIndexService,
   UntastedArtworksResponse,
+  ArtworkFeedback,
   executeCosmosQuery,
   generatePreferenceId,
   getAIRecommendationsEligibility,
@@ -31,6 +33,11 @@ export class ArtworksService {
   private readonly logger = new Logger(ArtworksService.name);
   private readonly cosmosService: CosmosService;
   private readonly searchIndexService: SearchIndexService;
+  private readonly userCache = new Map<
+    string,
+    { name?: string; email?: string; cachedAt: number }
+  >();
+  private readonly userCacheTtlMs = 10 * 60 * 1000;
 
   constructor() {
     this.cosmosService = new CosmosService();
@@ -934,6 +941,191 @@ export class ArtworksService {
       });
       throw error;
     }
+  }
+
+  /**
+   * Get aggregated feedback for a specific artwork (preferences, comments, proposals).
+   */
+  async getArtworkFeedback(
+    domainId: string,
+    artworkId: string,
+  ): Promise<ArtworkFeedback> {
+    const preferencesContainer =
+      await this.cosmosService.getArtworkPreferencesContainer();
+    const proposalsContainer = await this.cosmosService.getContainer(
+      "Proposals",
+    );
+
+    const prefQuery = {
+      query: `
+        SELECT c.userId, c.liked, c.comment, c.createdAt, c.updatedAt
+        FROM c
+        WHERE c.type = @type AND c.domainId = @domainId AND c.artworkId = @artworkId
+      `,
+      parameters: [
+        { name: "@type", value: "artworkPreference" },
+        { name: "@domainId", value: domainId },
+        { name: "@artworkId", value: artworkId },
+      ],
+    };
+
+    const proposalsQuery = {
+      query: `
+        SELECT *
+        FROM c
+        WHERE c.type = @type AND c.domainId = @domainId
+          AND c.status != @rejected
+          AND ARRAY_CONTAINS(c.items, {"artworkId": @artworkId}, true)
+      `,
+      parameters: [
+        { name: "@type", value: "proposal" },
+        { name: "@domainId", value: domainId },
+        { name: "@rejected", value: "rejected" },
+        { name: "@artworkId", value: artworkId },
+      ],
+    };
+
+    const [prefResult, proposalsResult] = await Promise.all([
+      preferencesContainer.items
+        .query(prefQuery, { partitionKey: domainId })
+        .fetchAll(),
+      proposalsContainer.items
+        .query(proposalsQuery, { partitionKey: domainId })
+        .fetchAll(),
+    ]);
+
+    const preferences = prefResult.resources ?? [];
+    const proposals = (proposalsResult.resources ?? []) as Proposal[];
+
+    const userIds = new Set<string>();
+    preferences.forEach((p) => {
+      if (p?.userId) userIds.add(p.userId);
+    });
+    proposals.forEach((p) => {
+      if (p?.userId) userIds.add(p.userId);
+      if (p?.dealerId) userIds.add(p.dealerId);
+    });
+
+    const userMap = await this.getUserSummaries(domainId, userIds);
+
+    const preferenceItems = preferences.map((p) => ({
+      id: p.id,
+      userId: p.userId,
+      userName: userMap.get(p.userId)?.name,
+      userEmail: userMap.get(p.userId)?.email,
+      liked: typeof p.liked === "boolean" ? p.liked : undefined,
+      comment: p.comment,
+      domainId: p.domainId,
+      artworkId: p.artworkId,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+    }));
+
+    const likes = preferenceItems.filter((p) => p.liked === true).length;
+    const dislikes = preferenceItems.filter((p) => p.liked === false).length;
+
+    const commentItems = preferenceItems
+      .filter((p) => typeof p.comment === "string" && p.comment.trim().length > 0)
+      .map((p) => ({
+        userId: p.userId,
+        userName: p.userName,
+        userEmail: p.userEmail,
+        comment: {
+          author: p.userName || p.userEmail || p.userId,
+          text: p.comment!.trim(),
+          createdAt: p.updatedAt ?? p.createdAt,
+        },
+        createdAt: p.updatedAt ?? p.createdAt,
+      }));
+
+    const commentUsers = new Set(commentItems.map((c) => c.userId));
+
+    const proposalItems = [];
+    for (const proposal of proposals) {
+      const matchingItems = (proposal.items ?? []).filter(
+        (item) => item.artworkId === artworkId,
+      );
+      for (const item of matchingItems) {
+        proposalItems.push({
+          proposal,
+          item,
+          userId: proposal.userId,
+          userName: userMap.get(proposal.userId)?.name,
+          userEmail: userMap.get(proposal.userId)?.email,
+          dealerId: proposal.dealerId,
+        });
+      }
+    }
+
+    return {
+      preferences: {
+        total: preferenceItems.length,
+        likes,
+        dislikes,
+        items: preferenceItems,
+      },
+      comments: {
+        totalUsers: commentUsers.size,
+        totalComments: commentItems.length,
+        items: commentItems,
+      },
+      proposals: {
+        totalActive: proposalItems.length,
+        items: proposalItems,
+      },
+    };
+  }
+
+  private async getUserSummaries(
+    domainId: string,
+    userIds: Set<string>,
+  ): Promise<Map<string, { name?: string; email?: string }>> {
+    const now = Date.now();
+    const result = new Map<string, { name?: string; email?: string }>();
+    const missingIds: string[] = [];
+
+    for (const userId of userIds) {
+      const cacheKey = `${domainId}:${userId}`;
+      const cached = this.userCache.get(cacheKey);
+      if (cached && now - cached.cachedAt < this.userCacheTtlMs) {
+        result.set(userId, { name: cached.name, email: cached.email });
+      } else {
+        missingIds.push(userId);
+      }
+    }
+
+    if (missingIds.length === 0) {
+      return result;
+    }
+
+    const usersContainer = await this.cosmosService.getContainer("Core");
+    const usersQuery = {
+      query: `
+        SELECT c.id, c.name, c.email
+        FROM c
+        WHERE c.type = 'user' AND c.domainId = @domainId
+          AND ARRAY_CONTAINS(@userIds, c.id)
+      `,
+      parameters: [
+        { name: "@domainId", value: domainId },
+        { name: "@userIds", value: missingIds },
+      ],
+    };
+    const { resources } = await usersContainer.items
+      .query(usersQuery, { partitionKey: domainId })
+      .fetchAll();
+
+    (resources ?? []).forEach((u: { id: string; name?: string; email?: string }) => {
+      const cacheKey = `${domainId}:${u.id}`;
+      this.userCache.set(cacheKey, {
+        name: u.name,
+        email: u.email,
+        cachedAt: now,
+      });
+      result.set(u.id, { name: u.name, email: u.email });
+    });
+
+    return result;
   }
 
   private canViewerSeeArtwork(

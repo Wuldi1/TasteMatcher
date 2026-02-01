@@ -28,6 +28,7 @@ import { SavePreferenceDto } from "./dto/save-preference.dto";
 import {
   Artwork,
   ArtworkPreference,
+  ArtworkFeedback,
   PaginatedResponse,
   ArtworkStats,
   UntastedArtworksResponse,
@@ -37,12 +38,14 @@ import {
   Role,
 } from "@tastematcher/common";
 import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
+import { Roles } from "../auth/utils/roles.decorator";
+import { RolesGuard } from "../auth/utils/roles.guard";
 import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
 
 @ApiTags("artworks")
 @Controller("domains/:domainId/artworks")
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class ArtworksController {
   constructor(private readonly artworksService: ArtworksService) {}
@@ -272,6 +275,23 @@ export class ArtworksController {
       artwork,
       req.user.role,
     ) as Artwork;
+  }
+
+  @Get(":artworkId/feedback")
+  @Roles("global_admin", "domain_owner", "dealer")
+  @ApiOperation({ summary: "Get feedback for a specific artwork" })
+  @ApiResponse({ status: 200, description: "Artwork feedback retrieved" })
+  async getArtworkFeedback(
+    @Request() req: AuthenticatedRequest,
+    @Param("domainId") domainId: string,
+    @Param("artworkId") artworkId: string,
+  ): Promise<ArtworkFeedback> {
+    if (req.user.domainId !== domainId && req.user.role !== "global_admin") {
+      throw new ForbiddenException(
+        "You are not authorized to access this domain.",
+      );
+    }
+    return this.artworksService.getArtworkFeedback(domainId, artworkId);
   }
 
   @Patch(":artworkId")

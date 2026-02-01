@@ -14,9 +14,10 @@
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { Artwork } from "@tastematcher/common";
+import type { Artwork, ArtworkFeedback } from "@tastematcher/common";
 import {
   CheckSquare,
   ChevronLeft,
@@ -26,6 +27,7 @@ import {
   EyeOff,
   Gavel,
   Lock,
+  MessageSquare,
   Search,
   Sparkles,
   Square,
@@ -33,6 +35,7 @@ import {
   ThumbsUp,
   Trash2,
   Unlock,
+  User,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -74,6 +77,17 @@ export function CatalogPage() {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [showEndedAuctions, setShowEndedAuctions] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const [feedbackTab, setFeedbackTab] = useState<
+    "preferences" | "comments" | "proposals"
+  >("preferences");
+  const [preferenceSort, setPreferenceSort] = useState<{
+    field: "status" | "timestamp";
+    direction: "asc" | "desc";
+  }>({ field: "timestamp", direction: "desc" });
+  const [commentSort, setCommentSort] = useState<{
+    field: "timestamp" | "username";
+    direction: "asc" | "desc";
+  }>({ field: "timestamp", direction: "desc" });
   const preferenceFilter = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const value = params.get("view");
@@ -84,6 +98,10 @@ export function CatalogPage() {
   }, [location.search]);
 
   const effectiveDomainId = isGlobalAdmin ? selectedDomainId : user?.domainId;
+  const canViewFeedback =
+    user?.role === "global_admin" ||
+    user?.role === "domain_owner" ||
+    user?.role === "dealer";
 
   useEffect(() => {
     if (!isGlobalAdmin) {
@@ -116,7 +134,25 @@ export function CatalogPage() {
     setSelectedArtworks(new Set());
     setSelectedArtwork(null);
     setEditingArtwork(null);
+    setFeedbackTab("preferences");
   }, [effectiveDomainId]);
+
+  useEffect(() => {
+    if (selectedArtwork) {
+      setFeedbackTab("preferences");
+    }
+  }, [selectedArtwork]);
+
+  const feedbackQuery = useQuery({
+    queryKey: ["artwork-feedback", effectiveDomainId, selectedArtwork?.id],
+    queryFn: async (): Promise<ArtworkFeedback> => {
+      if (!effectiveDomainId || !selectedArtwork) {
+        throw new Error("Missing domain or artwork");
+      }
+      return apiClient.getArtworkFeedback(effectiveDomainId, selectedArtwork.id);
+    },
+    enabled: Boolean(canViewFeedback && effectiveDomainId && selectedArtwork),
+  });
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -193,6 +229,45 @@ export function CatalogPage() {
 
   const filteredArtworks = allArtworks;
 
+  const feedbackData = feedbackQuery.data;
+  const sortedPreferences = useMemo(() => {
+    if (!feedbackData?.preferences?.items) return [];
+    const items = [...feedbackData.preferences.items];
+    const direction = preferenceSort.direction === "asc" ? 1 : -1;
+    if (preferenceSort.field === "status") {
+      items.sort((a, b) => {
+        const statusValue = (value?: boolean) =>
+          value === true ? 2 : value === false ? 1 : 0;
+        return (
+          (statusValue(a.liked) - statusValue(b.liked)) * direction
+        );
+      });
+      return items;
+    }
+    items.sort((a, b) => {
+      const aTime = a.updatedAt ?? a.createdAt ?? 0;
+      const bTime = b.updatedAt ?? b.createdAt ?? 0;
+      return (aTime - bTime) * direction;
+    });
+    return items;
+  }, [feedbackData, preferenceSort]);
+
+  const sortedComments = useMemo(() => {
+    if (!feedbackData?.comments?.items) return [];
+    const items = [...feedbackData.comments.items];
+    const direction = commentSort.direction === "asc" ? 1 : -1;
+    if (commentSort.field === "username") {
+      items.sort((a, b) => {
+        const aName = (a.userName || a.userEmail || "").toLowerCase();
+        const bName = (b.userName || b.userEmail || "").toLowerCase();
+        if (aName === bName) return 0;
+        return aName > bName ? direction : -direction;
+      });
+      return items;
+    }
+    items.sort((a, b) => (a.createdAt - b.createdAt) * direction);
+    return items;
+  }, [feedbackData, commentSort]);
   const selectedArtworkRecords = filteredArtworks.filter((artwork) =>
     selectedArtworks.has(artwork.id),
   );
@@ -1483,6 +1558,311 @@ export function CatalogPage() {
                   </div>
                 </div>
               </div>
+
+              {canViewFeedback && (
+                <div className="mt-8 border-t border-gray-100 pt-6">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Customers Feedback
+                    </h3>
+                    {feedbackQuery.isLoading && (
+                      <span className="text-xs text-gray-500">
+                        Loading feedback...
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {["preferences", "comments", "proposals"].map((tab) => (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() =>
+                          setFeedbackTab(
+                            tab as "preferences" | "comments" | "proposals",
+                          )
+                        }
+                        className={`px-3 py-1.5 text-sm rounded-full border ${
+                          feedbackTab === tab
+                            ? "bg-gray-900 text-white border-gray-900"
+                            : "bg-white text-gray-600 border-gray-200"
+                        }`}
+                      >
+                        {tab === "preferences"
+                          ? "Preferences"
+                          : tab === "comments"
+                            ? "Comments"
+                            : "Proposals"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {feedbackQuery.isError && (
+                    <div className="mt-4 text-sm text-red-600">
+                      Failed to load feedback.
+                    </div>
+                  )}
+
+                  {!feedbackQuery.isLoading && feedbackData && (
+                    <div className="mt-6 space-y-6">
+                      {feedbackTab === "preferences" && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="rounded-lg border border-gray-100 p-3">
+                              <div className="text-xs text-gray-500">
+                                Total
+                              </div>
+                              <div className="text-lg font-semibold text-gray-900">
+                                {feedbackData.preferences.total}
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-gray-100 p-3">
+                              <div className="text-xs text-gray-500">Likes</div>
+                              <div className="text-lg font-semibold text-green-600">
+                                {feedbackData.preferences.likes}
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-gray-100 p-3">
+                              <div className="text-xs text-gray-500">
+                                Dislikes
+                              </div>
+                              <div className="text-lg font-semibold text-red-600">
+                                {feedbackData.preferences.dislikes}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-sm">
+                            <label className="text-gray-500">Sort</label>
+                            <select
+                              value={preferenceSort.field}
+                              onChange={(e) =>
+                                setPreferenceSort((prev) => ({
+                                  ...prev,
+                                  field: e.target.value as "status" | "timestamp",
+                                }))
+                              }
+                              className="rounded-md border border-gray-200 px-2 py-1"
+                            >
+                              <option value="timestamp">Timestamp</option>
+                              <option value="status">Status</option>
+                            </select>
+                            <select
+                              value={preferenceSort.direction}
+                              onChange={(e) =>
+                                setPreferenceSort((prev) => ({
+                                  ...prev,
+                                  direction: e.target.value as "asc" | "desc",
+                                }))
+                              }
+                              className="rounded-md border border-gray-200 px-2 py-1"
+                            >
+                              <option value="desc">Desc</option>
+                              <option value="asc">Asc</option>
+                            </select>
+                          </div>
+
+                          <div className="space-y-2">
+                            {sortedPreferences.length === 0 && (
+                              <div className="text-sm text-gray-500">
+                                No preferences yet.
+                              </div>
+                            )}
+                            {sortedPreferences.map((pref) => (
+                              <div
+                                key={`${pref.userId}-${pref.createdAt}`}
+                                className="rounded-lg border border-gray-100 p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <User className="w-4 h-4 text-gray-400" />
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {pref.userName || pref.userEmail || pref.userId}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3 text-sm text-gray-500">
+                                  <span className="inline-flex items-center gap-1">
+                                    {pref.liked === true ? (
+                                      <ThumbsUp className="w-4 h-4 text-green-500" />
+                                    ) : pref.liked === false ? (
+                                      <ThumbsDown className="w-4 h-4 text-red-500" />
+                                    ) : (
+                                      <span className="text-gray-400">—</span>
+                                    )}
+                                    {pref.liked === true
+                                      ? "Liked"
+                                      : pref.liked === false
+                                        ? "Disliked"
+                                        : "Unknown"}
+                                  </span>
+                                  <span>
+                                    {new Date(
+                                      pref.updatedAt ?? pref.createdAt,
+                                    ).toLocaleString()}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {feedbackTab === "comments" && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="rounded-lg border border-gray-100 p-3">
+                              <div className="text-xs text-gray-500">
+                                Users
+                              </div>
+                              <div className="text-lg font-semibold text-gray-900">
+                                {feedbackData.comments.totalUsers}
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-gray-100 p-3">
+                              <div className="text-xs text-gray-500">
+                                Comments
+                              </div>
+                              <div className="text-lg font-semibold text-gray-900">
+                                {feedbackData.comments.totalComments}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-sm">
+                            <label className="text-gray-500">Sort</label>
+                            <select
+                              value={commentSort.field}
+                              onChange={(e) =>
+                                setCommentSort((prev) => ({
+                                  ...prev,
+                                  field: e.target.value as "timestamp" | "username",
+                                }))
+                              }
+                              className="rounded-md border border-gray-200 px-2 py-1"
+                            >
+                              <option value="timestamp">Timestamp</option>
+                              <option value="username">Username</option>
+                            </select>
+                            <select
+                              value={commentSort.direction}
+                              onChange={(e) =>
+                                setCommentSort((prev) => ({
+                                  ...prev,
+                                  direction: e.target.value as "asc" | "desc",
+                                }))
+                              }
+                              className="rounded-md border border-gray-200 px-2 py-1"
+                            >
+                              <option value="desc">Desc</option>
+                              <option value="asc">Asc</option>
+                            </select>
+                          </div>
+
+                          <div className="space-y-3">
+                            {sortedComments.length === 0 && (
+                              <div className="text-sm text-gray-500">
+                                No comments yet.
+                              </div>
+                            )}
+                            {sortedComments.map((comment, idx) => (
+                              <div
+                                key={`${comment.userId}-${comment.createdAt}-${idx}`}
+                                className="rounded-lg border border-gray-100 p-3 space-y-2"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <MessageSquare className="w-4 h-4 text-gray-400" />
+                                    <span className="text-sm font-medium text-gray-900">
+                                      {comment.userName ||
+                                        comment.userEmail ||
+                                        comment.userId}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs text-gray-500">
+                                    #{idx + 1} •{" "}
+                                    {new Date(comment.createdAt).toLocaleString()}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-700">
+                                  {comment.comment.text}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {feedbackTab === "proposals" && (
+                        <div className="space-y-4">
+                          <div className="rounded-lg border border-gray-100 p-3">
+                            <div className="text-xs text-gray-500">
+                              Active proposals
+                            </div>
+                            <div className="text-lg font-semibold text-gray-900">
+                              {feedbackData.proposals.totalActive}
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            {feedbackData.proposals.items.length === 0 && (
+                              <div className="text-sm text-gray-500">
+                                No active proposals.
+                              </div>
+                            )}
+                            {feedbackData.proposals.items.map((proposal) => (
+                              <div
+                                key={`${proposal.proposal.id}-${proposal.userId}`}
+                                className="rounded-lg border border-gray-100 p-3 space-y-2"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <User className="w-4 h-4 text-gray-400" />
+                                    <span className="text-sm font-medium text-gray-900">
+                                      {proposal.userName || proposal.userId}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    Proposal {proposal.proposal.status} •{" "}
+                                    {new Date(
+                                      proposal.proposal.updatedAt ??
+                                        proposal.proposal.createdAt,
+                                    ).toLocaleString()}
+                                  </div>
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  Item status:{" "}
+                                  <span className="font-medium text-gray-900">
+                                    {proposal.item.status}
+                                  </span>
+                                </div>
+                                {proposal.item.comments?.length > 0 && (
+                                  <div className="space-y-2 pt-2">
+                                    {proposal.item.comments.map((c, idx) => (
+                                      <div
+                                        key={`${proposal.proposal.id}-c-${idx}`}
+                                        className="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-700"
+                                      >
+                                        <span className="font-medium">
+                                          {c.author}
+                                        </span>
+                                        <span className="text-gray-400">
+                                          {" "}
+                                          •{" "}
+                                          {new Date(c.createdAt).toLocaleString()}
+                                        </span>
+                                        <div>{c.text}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

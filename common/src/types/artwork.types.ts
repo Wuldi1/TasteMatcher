@@ -1,3 +1,5 @@
+import type { Comment, Proposal, ProposalItem } from "./sales.types";
+
 export type ArtworkMetadata = Record<string, unknown>;
 
 export interface Artwork {
@@ -85,4 +87,44 @@ export interface ArtworkPreference {
 export interface UntastedArtworksResponse {
   artworks: Artwork[];
   total: number;
+}
+
+export interface ArtworkFeedbackPreference extends ArtworkPreference {
+  userName?: string;
+  userEmail?: string;
+}
+
+export interface ArtworkFeedbackComment {
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  comment: Comment;
+  createdAt: number;
+}
+
+export interface ArtworkFeedbackProposalItem {
+  proposal: Proposal;
+  item: ProposalItem;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  dealerId?: string;
+}
+
+export interface ArtworkFeedback {
+  preferences: {
+    total: number;
+    likes: number;
+    dislikes: number;
+    items: ArtworkFeedbackPreference[];
+  };
+  comments: {
+    totalUsers: number;
+    totalComments: number;
+    items: ArtworkFeedbackComment[];
+  };
+  proposals: {
+    totalActive: number;
+    items: ArtworkFeedbackProposalItem[];
+  };
 }
