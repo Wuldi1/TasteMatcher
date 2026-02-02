@@ -468,7 +468,6 @@ export class ArtworksService {
       const fetchLimit = Math.min(Math.max(limit * 3, limit), 200);
       const parameters: Array<{ name: string; value: any }> = [
         { name: "@primaryDomainId", value: primaryDomainId },
-        { name: "@limit", value: limit },
         { name: "@fetchLimit", value: fetchLimit },
       ];
       const secondaryDomainId =
@@ -508,6 +507,8 @@ export class ArtworksService {
 
       parameters.push({ name: "@artworkType", value: "artwork" });
 
+      console.log(artworksQuery, parameters);
+
       const { resources: untastedArtworks } = await artworksContainer.items
         .query({ query: artworksQuery, parameters })
         .fetchAll();
@@ -518,8 +519,7 @@ export class ArtworksService {
         }`,
       );
 
-      const visible = untastedArtworks.filter((art) => !isAuctionEnded(art));
-      const limited = visible.slice(0, limit);
+      const limited = untastedArtworks.slice(0, limit);
 
       return {
         artworks: limited,
