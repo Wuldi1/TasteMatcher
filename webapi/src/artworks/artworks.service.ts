@@ -8,10 +8,15 @@ import {
 } from "@nestjs/common";
 import {
   Artwork,
+  ArtworkFeedback,
   ArtworkPreference,
   ArtworkStats,
   CosmosService,
+  executeCosmosQuery,
+  generatePreferenceId,
+  getAIRecommendationsEligibility,
   GlobalArtworksDomainId,
+  isAuctionEnded,
   LikedStatus,
   PaginatedResponse,
   Proposal,
@@ -19,11 +24,6 @@ import {
   Role,
   SearchIndexService,
   UntastedArtworksResponse,
-  ArtworkFeedback,
-  executeCosmosQuery,
-  generatePreferenceId,
-  getAIRecommendationsEligibility,
-  isAuctionEnded,
 } from "@tastematcher/common";
 import { SavePreferenceDto } from "./dto/save-preference.dto";
 import { UpdateArtworkDto } from "./dto/update-artwork.dto";
@@ -952,9 +952,8 @@ export class ArtworksService {
   ): Promise<ArtworkFeedback> {
     const preferencesContainer =
       await this.cosmosService.getArtworkPreferencesContainer();
-    const proposalsContainer = await this.cosmosService.getContainer(
-      "Proposals",
-    );
+    const proposalsContainer =
+      await this.cosmosService.getContainer("Proposals");
 
     const prefQuery = {
       query: `
@@ -1025,7 +1024,9 @@ export class ArtworksService {
     const dislikes = preferenceItems.filter((p) => p.liked === false).length;
 
     const commentItems = preferenceItems
-      .filter((p) => typeof p.comment === "string" && p.comment.trim().length > 0)
+      .filter(
+        (p) => typeof p.comment === "string" && p.comment.trim().length > 0,
+      )
       .map((p) => ({
         userId: p.userId,
         userName: p.userName,
@@ -1115,15 +1116,17 @@ export class ArtworksService {
       .query(usersQuery, { partitionKey: domainId })
       .fetchAll();
 
-    (resources ?? []).forEach((u: { id: string; name?: string; email?: string }) => {
-      const cacheKey = `${domainId}:${u.id}`;
-      this.userCache.set(cacheKey, {
-        name: u.name,
-        email: u.email,
-        cachedAt: now,
-      });
-      result.set(u.id, { name: u.name, email: u.email });
-    });
+    (resources ?? []).forEach(
+      (u: { id: string; name?: string; email?: string }) => {
+        const cacheKey = `${domainId}:${u.id}`;
+        this.userCache.set(cacheKey, {
+          name: u.name,
+          email: u.email,
+          cachedAt: now,
+        });
+        result.set(u.id, { name: u.name, email: u.email });
+      },
+    );
 
     return result;
   }
@@ -1147,11 +1150,11 @@ export class ArtworksService {
     if (viewer.role === "dealer") {
       return artwork.uploadedBy === viewer.id;
     }
-    if (viewer.role === "customer") {
-      return Boolean(
-        viewer.invitedBy && artwork.uploadedBy === viewer.invitedBy,
-      );
-    }
+    // if (viewer.role === "customer") {
+    //   return Boolean(
+    //     viewer.invitedBy && artwork.uploadedBy === viewer.invitedBy,
+    //   );
+    // }
     return false;
   }
 }
