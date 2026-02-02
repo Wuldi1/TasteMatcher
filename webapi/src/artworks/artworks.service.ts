@@ -459,7 +459,7 @@ export class ArtworksService {
         .query(tastedQuery, { partitionKey: GlobalArtworksDomainId })
         .fetchAll();
 
-      this.logger.debug(
+      this.logger.log(
         `User ${userId} has tasted ${tastedArtworkIds.length} artworks`,
       );
 
@@ -518,19 +518,7 @@ export class ArtworksService {
         }`,
       );
 
-      const visible = untastedArtworks.filter(
-        (art) =>
-          this.canViewerSeeArtwork(art, viewer) &&
-          !(art.isAuction === true && isAuctionEnded(art)),
-      );
-
-      // Shuffle for better randomness and then cap to the requested limit.
-      for (let i = visible.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1));
-        const tmp = visible[i];
-        visible[i] = visible[j];
-        visible[j] = tmp;
-      }
+      const visible = untastedArtworks.filter((art) => !isAuctionEnded(art));
       const limited = visible.slice(0, limit);
 
       return {
