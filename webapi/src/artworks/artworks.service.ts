@@ -485,6 +485,14 @@ export class ArtworksService {
         ? "(c.domainId = @primaryDomainId OR (c.domainId = @secondaryDomainId AND c.useForTaster = true))"
         : "c.domainId = @primaryDomainId";
       const typeClause = "c.type = @artworkType";
+      const orderByCandidates = ["id", "price", "updatedAt", "_etag"] as const;
+      const orderByField =
+        orderByCandidates[Math.floor(Math.random() * orderByCandidates.length)];
+      const orderByDirection = Math.random() < 0.5 ? "ASC" : "DESC";
+      const orderByClause =
+        orderByField === "_etag"
+          ? `ORDER BY c._etag ${orderByDirection}`
+          : `ORDER BY c.${orderByField} ${orderByDirection}`;
 
       if (tastedArtworkIds.length === 0) {
         // User hasn't tasted anything yet - return first N artworks
@@ -492,6 +500,7 @@ export class ArtworksService {
           SELECT TOP @fetchLimit * 
           FROM c 
           WHERE ${typeClause} AND ${domainFilterClause}
+          ${orderByClause}
         `;
       } else {
         // Exclude already tasted artworks using NOT IN
@@ -501,13 +510,12 @@ export class ArtworksService {
           FROM c 
           WHERE ${typeClause} AND ${domainFilterClause}
             AND NOT ARRAY_CONTAINS(@tastedIds, c.id)
+          ${orderByClause}
         `;
         parameters.push({ name: "@tastedIds", value: tastedArtworkIds });
       }
 
       parameters.push({ name: "@artworkType", value: "artwork" });
-
-      console.log(artworksQuery, parameters);
 
       const { resources: untastedArtworks } = await artworksContainer.items
         .query({ query: artworksQuery, parameters })
