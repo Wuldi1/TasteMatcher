@@ -38,41 +38,39 @@ export interface PersonalCollection extends AestheticAdmiration {}
 export interface PersonalQuestionnaire {
   // Basic info
   fullName?: string;
+  emailAddress?: string;
   primaryResidence?: string;
 
-  // Decision Making
-  collectionType?: "individual" | "group";
-  decisionMakersDescription?: string;
-
   // About You
-  aboutYourself?: string;
-
-  // Location
-  currentLocation?: string;
+  unlimitedBudgetPurchase?:
+    | "Paintings"
+    | "Dinosaurs / Fossils"
+    | "Watches"
+    | "Handbags"
+    | "Design"
+    | "Trading Cards"
+    | "Wine"
+    | "Sports Memorabilia";
 
   // Relationship with art
   collectingStatus?: "collector" | "not_yet";
-  collectingDetails?: string;
 
-  // Other Residences
-  hasOtherResidences?: boolean;
-  otherResidencesDescription?: string;
-
-  // Collection Goals
-  collectionGoals?: string;
-  collectingReasons?: string[];
-
-  // Aesthetic Preferences
+  // Aesthetic References
   aestheticAdmiration?: AestheticAdmiration;
 
-  // Collection Ownership
+  // Legacy fields (kept for backward compatibility)
+  collectionType?: "individual" | "group";
+  decisionMakersDescription?: string;
+  aboutYourself?: string;
+  currentLocation?: string;
+  collectingDetails?: string;
+  hasOtherResidences?: boolean;
+  otherResidencesDescription?: string;
+  collectionGoals?: string;
+  collectingReasons?: string[];
   hasPersonalCollection?: boolean;
   personalCollection?: PersonalCollection;
-
-  // Practical details
   practicalDetails?: string;
-
-  // Professional collaborators
   worksWithDesigner?: boolean;
   designerDetails?: string;
 

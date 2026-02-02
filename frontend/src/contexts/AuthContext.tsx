@@ -52,14 +52,11 @@ export const AuthContext = createContext<AuthContextType | undefined>(
  * @returns The total number of questions.
  */
 function calculateTotalQuestions(): number {
-  // 1. Collection Type
-  // 2. About Yourself
-  // 3. Current Location
-  // 4. Other Residences
-  // 5. Collection Goals
-  // 6. Collaborators
-  // 7. Collection / Inspiration uploads
-  return 7;
+  // 1. Basic Info
+  // 2. About You
+  // 3. Relationship with Art
+  // 4. Aesthetic References
+  return 4;
 }
 
 /**
@@ -75,35 +72,20 @@ function calculateAnsweredQuestions(
     Boolean(value && value.trim().length > 0);
   const hasImages = (value?: string[]) => (value?.length ?? 0) > 0;
 
-  if (questionnaire.collectionType) count++;
-  if (hasText(questionnaire.aboutYourself)) count++;
-  if (hasText(questionnaire.currentLocation)) count++;
-  if (questionnaire.hasOtherResidences !== undefined) count++;
-  if (hasText(questionnaire.collectionGoals)) count++;
+  const hasBasicInfo =
+    hasText(questionnaire.fullName) ||
+    hasText(questionnaire.emailAddress) ||
+    hasText(questionnaire.primaryResidence);
+  if (hasBasicInfo) count++;
 
-  if (questionnaire.worksWithDesigner !== undefined) {
-    if (!questionnaire.worksWithDesigner) {
-      count++;
-    } else if (hasText(questionnaire.designerDetails)) {
-      count++;
-    }
-  }
+  if (questionnaire.unlimitedBudgetPurchase) count++;
 
-  const hasCollectionAnswer = questionnaire.hasPersonalCollection !== undefined;
-  let hasCollectionContent = false;
-  if (questionnaire.hasPersonalCollection) {
-    hasCollectionContent =
-      hasText(questionnaire.personalCollection?.description) ||
-      hasImages(questionnaire.personalCollection?.imageUrls);
-  } else {
-    hasCollectionContent =
-      hasText(questionnaire.aestheticAdmiration?.description) ||
-      hasImages(questionnaire.aestheticAdmiration?.imageUrls);
-  }
+  if (questionnaire.collectingStatus) count++;
 
-  if (hasCollectionAnswer && hasCollectionContent) {
-    count++;
-  }
+  const hasAestheticContent =
+    hasText(questionnaire.aestheticAdmiration?.description) ||
+    hasImages(questionnaire.aestheticAdmiration?.imageUrls);
+  if (hasAestheticContent) count++;
 
   return count;
 }

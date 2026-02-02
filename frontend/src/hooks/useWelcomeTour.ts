@@ -13,6 +13,9 @@ export function useWelcomeTour() {
   const steps = NAVIGATION_LINKS.filter((link) =>
     link.roles.includes(user?.role || ""),
   ).map((link) => link.id);
+  const stepIndex = currentStep ? steps.indexOf(currentStep) : -1;
+  const isFirstStep = stepIndex === 0;
+  const isLastStep = stepIndex === steps.length - 1 && stepIndex >= 0;
 
   useEffect(() => {
     const hasCompletedTour = localStorage.getItem(TOUR_STORAGE_KEY) === "true";
@@ -58,5 +61,9 @@ export function useWelcomeTour() {
     nextStep,
     previousStep,
     skipTour,
+    stepIndex,
+    totalSteps: steps.length,
+    isFirstStep,
+    isLastStep,
   };
 }

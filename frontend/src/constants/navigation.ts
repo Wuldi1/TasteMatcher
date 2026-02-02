@@ -28,8 +28,7 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
     icon: Home,
     roles: ["customer", "dealer", "domain_owner", "global_admin"],
     ariaLabel: "Navigate to home page",
-    bubbleText:
-      "This is the Home page. Here you can see an overview of your dashboard.",
+    bubbleText: "Overview of your stats, activity, and next steps.",
   },
   {
     id: "catalog",
@@ -38,7 +37,7 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
     icon: LayoutGrid,
     roles: ["dealer", "domain_owner", "global_admin"],
     ariaLabel: "Navigate to catalog",
-    bubbleText: "This is the Catalog page. Browse all available art pieces.",
+    bubbleText: "Browse artworks, open details, and manage selections.",
   },
   {
     id: "upload",
@@ -47,7 +46,7 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
     icon: Upload,
     roles: ["dealer", "domain_owner", "global_admin"],
     ariaLabel: "Navigate to upload page",
-    bubbleText: "This is the Upload page. Add new artworks to your collection.",
+    bubbleText: "Upload new artworks with images and metadata.",
   },
   {
     id: "taster",
@@ -56,8 +55,7 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
     icon: Compass,
     roles: ["customer"],
     ariaLabel: "Navigate to taster page",
-    bubbleText:
-      "This is the Taster page. Swipe through artworks to refine your preferences.",
+    bubbleText: "Swipe to train your taste profile and unlock AI picks.",
   },
   {
     id: "ai-suggestions",
@@ -66,8 +64,7 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
     icon: Sparkles,
     roles: ["customer"],
     ariaLabel: "Navigate to AI Suggestions page",
-    bubbleText:
-      "This is the AI Suggestions page. Get personalized recommendations.",
+    bubbleText: "Review personalized recommendations from your swipes.",
   },
   {
     id: "sales",
@@ -76,8 +73,7 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
     icon: ShoppingCart,
     roles: ["dealer", "domain_owner", "global_admin"],
     ariaLabel: "Navigate to sales page",
-    bubbleText:
-      "This is the Sales page. Select a user, view catalog, AI suggestions and manage sale proposals.",
+    bubbleText: "Create and manage proposals for customers.",
   },
   {
     id: "management",
@@ -86,7 +82,7 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
     icon: Users,
     roles: ["dealer", "domain_owner", "global_admin"],
     ariaLabel: "Navigate to management page",
-    bubbleText: "This is the Management page. Manage users and domains here.",
+    bubbleText: "Invite users, assign roles, and manage domains.",
   },
   {
     id: "buying-proposal",
@@ -95,7 +91,6 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
     icon: FileText, // Updated icon
     roles: ["customer"],
     ariaLabel: "Navigate to Proposal page",
-    bubbleText:
-      "This is the Proposal page. Review and respond to proposals from specialists.",
+    bubbleText: "Review your proposal and accept or reject items.",
   },
 ];

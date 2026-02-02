@@ -18,8 +18,17 @@ export const Sidebar = () => {
   const { user, refreshUser, logout, stats } = useAuth();
   const location = useLocation(); // Get the current route
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { currentStep, isTourActive, previousStep, nextStep, skipTour } =
-    useWelcomeTour(); // Hook to start the onboarding guide
+  const {
+    currentStep,
+    isTourActive,
+    previousStep,
+    nextStep,
+    skipTour,
+    isFirstStep,
+    isLastStep,
+    stepIndex,
+    totalSteps,
+  } = useWelcomeTour(); // Hook to start the onboarding guide
   const navigate = useNavigate();
   const [bubblePosition, setBubblePosition] = useState<number | null>(null);
 
@@ -160,24 +169,30 @@ export const Sidebar = () => {
                   <p className="text-sm">
                     {link.id === currentStep ? link.bubbleText : ""}
                   </p>
+                  {totalSteps > 0 && stepIndex >= 0 && (
+                    <p className="mt-2 text-xs text-blue-100">
+                      Step {stepIndex + 1} of {totalSteps}
+                    </p>
+                  )}
 
                   <div className="flex justify-between mt-6">
-                    {/* Back Button */}
-                    <button
-                      onClick={previousStep}
-                      className="text-sm text-gray-200 hover:text-gray-100"
-                      disabled={currentStep === filteredLinks[0].id} // Disable "Back" on the first step
-                    >
-                      Back
-                    </button>
+                    {!isFirstStep && (
+                      <button
+                        onClick={previousStep}
+                        className="text-sm text-gray-200 hover:text-gray-100"
+                      >
+                        Back
+                      </button>
+                    )}
 
-                    {/* Next Button */}
-                    <button
-                      onClick={nextStep}
-                      className="text-sm text-yellow-300 hover:text-yellow-200"
-                    >
-                      Next
-                    </button>
+                    {!isLastStep && (
+                      <button
+                        onClick={nextStep}
+                        className="text-sm text-yellow-300 hover:text-yellow-200"
+                      >
+                        Next
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

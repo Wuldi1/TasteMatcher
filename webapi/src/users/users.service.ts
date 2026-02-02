@@ -1,25 +1,23 @@
 import {
-  Injectable,
-  NotFoundException,
-  Logger,
   BadRequestException,
   ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
 } from "@nestjs/common";
 import {
-  User,
-  CosmosService,
-  VectorizationService,
   BlobService,
-  getTemporaryBlobPath,
-  getTemporaryBlobFolder,
+  CosmosService,
+  User,
+  VectorizationService,
 } from "@tastematcher/common";
-import { InviteUserDto } from "./dto/invite-user.dto";
-import { UpdateUserDto } from "./dto/update-user.dto";
-import { UpdateQuestionnaireDto } from "./dto/update-questionnaire.dto";
 import { v4 as uuidv4 } from "uuid";
-import { EmailService } from "../email/email.service";
 import { ArtworksService } from "../artworks/artworks.service";
 import { AuthenticatedUser } from "../auth/types/authenticated-request.interface";
+import { EmailService } from "../email/email.service";
+import { InviteUserDto } from "./dto/invite-user.dto";
+import { UpdateQuestionnaireDto } from "./dto/update-questionnaire.dto";
+import { UpdateUserDto } from "./dto/update-user.dto";
 
 // Helper interface until common package is updated
 interface ExtendedPersonalQuestionnaire {
@@ -410,6 +408,9 @@ export class UsersService {
         throw new NotFoundException(`User ${userId} not found`);
       }
 
+      const questionnaireStatus =
+        user.onboardingStatus == "completed" ? "completed" : "in_progress";
+
       // Update questionnaire data
       const updatedUser: User = {
         ...user,
@@ -417,7 +418,7 @@ export class UsersService {
           ...user.personalQuestionnaire,
           ...questionnaireDto.personalQuestionnaire,
         },
-        onboardingStatus: "in_progress",
+        onboardingStatus: questionnaireStatus,
         updatedAt: Date.now(),
       };
 
