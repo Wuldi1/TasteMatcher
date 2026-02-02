@@ -1,4 +1,10 @@
-import { Domain, DomainRequest, Role, User } from "@tastematcher/common";
+import {
+  CustomerRequest,
+  Domain,
+  DomainRequest,
+  Role,
+  User,
+} from "@tastematcher/common";
 import { Edit, Mail, Trash2 } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
@@ -6,7 +12,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { apiClient, ApiError } from "../../utils/api";
 import "./Management.css";
 
-type TabType = "users" | "domains" | "domain-requests";
+type TabType = "users" | "domains" | "domain-requests" | "customer-requests";
 
 /**
  * Management page for domain owners and global admins
@@ -22,6 +28,9 @@ export function Management() {
   const [users, setUsers] = useState<User[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [domainRequests, setDomainRequests] = useState<DomainRequest[]>([]);
+  const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>(
+    []
+  );
   const [selectedDomainId, setSelectedDomainId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +62,17 @@ export function Management() {
   const [requestSortOrder, setRequestSortOrder] = useState<"asc" | "desc">(
     "desc"
   );
+  const [customerRequestSearchQuery, setCustomerRequestSearchQuery] =
+    useState("");
+  const [customerRequestSortBy, setCustomerRequestSortBy] = useState<
+    "name" | "email" | "createdAt"
+  >("createdAt");
+  const [customerRequestSortOrder, setCustomerRequestSortOrder] = useState<
+    "asc" | "desc"
+  >("desc");
+  const [customerRequestDomains, setCustomerRequestDomains] = useState<
+    Record<string, string>
+  >({});
 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -135,11 +155,29 @@ export function Management() {
     }
   }, []);
 
+  const loadCustomerRequests = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const fetchedRequests = await apiClient.getAllCustomerRequests();
+      setCustomerRequests(fetchedRequests);
+    } catch (err) {
+      console.error("Failed to load customer requests:", err);
+      setError(
+        err instanceof ApiError ? err.message : "Failed to load customer requests"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (isGlobalAdmin && activeTab === "domains") {
       loadDomains();
     } else if (isGlobalAdmin && activeTab === "domain-requests") {
       loadDomainRequests();
+    } else if (isGlobalAdmin && activeTab === "customer-requests") {
+      loadCustomerRequests();
     } else if (activeTab === "users") {
       if (isGlobalAdmin) {
         if (selectedDomainId) {
@@ -156,6 +194,7 @@ export function Management() {
     loadUsers,
     loadDomains,
     loadDomainRequests,
+    loadCustomerRequests,
   ]);
 
   const handleInvite = useCallback(
@@ -200,6 +239,30 @@ export function Management() {
       selectedDomainId,
       loadUsers,
     ]
+  );
+
+  const handleCustomerInvite = useCallback(
+    async (requestId: string) => {
+      const selectedDomain = customerRequestDomains[requestId] || selectedDomainId;
+      if (!selectedDomain) {
+        setError("Please select a domain before inviting.");
+        return;
+      }
+      try {
+        setIsInviting(true);
+        setError(null);
+        await apiClient.inviteCustomerRequest(requestId, selectedDomain);
+        await loadCustomerRequests();
+      } catch (err) {
+        console.error("Failed to invite customer:", err);
+        setError(
+          err instanceof ApiError ? err.message : "Failed to invite customer"
+        );
+      } finally {
+        setIsInviting(false);
+      }
+    },
+    [customerRequestDomains, selectedDomainId, loadCustomerRequests]
   );
 
   const handleCreateDomain = useCallback(
@@ -544,6 +607,43 @@ export function Management() {
     return filtered;
   }, [domainRequests, requestSearchQuery, requestSortBy, requestSortOrder]);
 
+  const filteredAndSortedCustomerRequests = React.useMemo(() => {
+    let filtered = [...customerRequests];
+
+    if (customerRequestSearchQuery.trim()) {
+      const query = customerRequestSearchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (r) =>
+          r.name.toLowerCase().includes(query) ||
+          r.email.toLowerCase().includes(query) ||
+          (r.message || "").toLowerCase().includes(query)
+      );
+    }
+
+    filtered.sort((a, b) => {
+      let aValue: string | number = a[customerRequestSortBy];
+      let bValue: string | number = b[customerRequestSortBy];
+
+      if (typeof aValue === "string") {
+        aValue = aValue.toLowerCase();
+        bValue = (bValue as string).toLowerCase();
+      }
+
+      if (customerRequestSortOrder === "asc") {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+
+    return filtered;
+  }, [
+    customerRequests,
+    customerRequestSearchQuery,
+    customerRequestSortBy,
+    customerRequestSortOrder,
+  ]);
+
   // Check authorization - AFTER all hooks
   if (!user || user.role === "customer") {
     return <Navigate to="/home" replace />;
@@ -643,6 +743,16 @@ export function Management() {
                   }`}
                 >
                   Domain Requests
+                </button>
+                <button
+                  onClick={() => setActiveTab("customer-requests")}
+                  className={`px-4 sm:px-6 py-3 sm:py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === "customer-requests"
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  Customer Requests
                 </button>
               </nav>
             </div>
@@ -1475,6 +1585,274 @@ export function Management() {
                       ))}
 
                       {filteredAndSortedRequests.length === 0 && (
+                        <div className="text-center py-12">
+                          <p className="text-gray-500">
+                            No requests found matching your filters
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Customer Requests Tab (Global Admin Only) */}
+            {activeTab === "customer-requests" && isGlobalAdmin && (
+              <>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                    Customer Requests
+                  </h1>
+                </div>
+
+                <div className="management-filters">
+                  <div className="management-filter-group">
+                    <label
+                      htmlFor="customer-request-search"
+                      className="management-filter-label"
+                    >
+                      Search
+                    </label>
+                    <input
+                      id="customer-request-search"
+                      type="text"
+                      placeholder="Search by name or email..."
+                      value={customerRequestSearchQuery}
+                      onChange={(e) =>
+                        setCustomerRequestSearchQuery(e.target.value)
+                      }
+                      className="management-filter-input"
+                    />
+                  </div>
+
+                  <div className="management-filter-group">
+                    <label
+                      htmlFor="customer-request-sort"
+                      className="management-filter-label"
+                    >
+                      Sort By
+                    </label>
+                    <div className="management-sort-controls">
+                      <select
+                        id="customer-request-sort"
+                        value={customerRequestSortBy}
+                        onChange={(e) =>
+                          setCustomerRequestSortBy(e.target.value as any)
+                        }
+                        className="management-filter-select management-sort-select"
+                      >
+                        <option value="name">Name</option>
+                        <option value="email">Email</option>
+                        <option value="createdAt">Date</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCustomerRequestSortOrder(
+                            customerRequestSortOrder === "asc" ? "desc" : "asc"
+                          )
+                        }
+                        className="management-sort-button"
+                        title={
+                          customerRequestSortOrder === "asc"
+                            ? "Ascending"
+                            : "Descending"
+                        }
+                        aria-label={
+                          customerRequestSortOrder === "asc"
+                            ? "Sort ascending"
+                            : "Sort descending"
+                        }
+                      >
+                        {customerRequestSortOrder === "asc" ? "↑" : "↓"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                    <p className="text-sm text-red-600">{error}</p>
+                  </div>
+                )}
+
+                {isLoading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Desktop Table */}
+                    <div className="hidden sm:block overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Name
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Email
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Message
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Submitted
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Assign Domain
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Action
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {filteredAndSortedCustomerRequests.map((req) => (
+                            <tr key={req.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {req.name}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {req.status}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-500">
+                                  {req.email}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div
+                                  className="text-sm text-gray-500 max-w-xs truncate"
+                                  title={req.message}
+                                >
+                                  {req.message || "—"}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {formatDate(req.createdAt)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <select
+                                  value={
+                                    customerRequestDomains[req.id] ||
+                                    req.assignedDomainId ||
+                                    selectedDomainId
+                                  }
+                                  onChange={(e) =>
+                                    setCustomerRequestDomains((prev) => ({
+                                      ...prev,
+                                      [req.id]: e.target.value,
+                                    }))
+                                  }
+                                  className="w-full px-2 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                  {domains.map((domain) => (
+                                    <option key={domain.id} value={domain.id}>
+                                      {domain.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <button
+                                  onClick={() => handleCustomerInvite(req.id)}
+                                  disabled={req.status === "invited" || isInviting}
+                                  className={`px-3 py-2 text-sm rounded-lg border ${
+                                    req.status === "invited"
+                                      ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                                      : "border-blue-300 text-blue-600 hover:text-blue-900"
+                                  }`}
+                                >
+                                  {req.status === "invited" ? "Invited" : "Send Invite"}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+
+                      {filteredAndSortedCustomerRequests.length === 0 && (
+                        <div className="text-center py-12">
+                          <p className="text-gray-500">
+                            No requests found matching your filters
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Mobile Cards */}
+                    <div className="sm:hidden space-y-4">
+                      {filteredAndSortedCustomerRequests.map((req) => (
+                        <div
+                          key={req.id}
+                          className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-3"
+                        >
+                          <div>
+                            <h3 className="text-base font-semibold text-gray-900">
+                              {req.name}
+                            </h3>
+                            <p className="text-sm text-gray-500">{req.email}</p>
+                            <p className="text-xs text-gray-400">
+                              {formatDate(req.createdAt)}
+                            </p>
+                          </div>
+
+                          {req.message && (
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <p className="text-xs font-medium text-gray-500 mb-1">
+                                Message
+                              </p>
+                              <p className="text-sm text-gray-700">
+                                {req.message}
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="space-y-2">
+                            <label className="text-xs font-medium text-gray-500">
+                              Assign Domain
+                            </label>
+                            <select
+                              value={
+                                customerRequestDomains[req.id] ||
+                                req.assignedDomainId ||
+                                selectedDomainId
+                              }
+                              onChange={(e) =>
+                                setCustomerRequestDomains((prev) => ({
+                                  ...prev,
+                                  [req.id]: e.target.value,
+                                }))
+                              }
+                              className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                              {domains.map((domain) => (
+                                <option key={domain.id} value={domain.id}>
+                                  {domain.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <button
+                            onClick={() => handleCustomerInvite(req.id)}
+                            disabled={req.status === "invited" || isInviting}
+                            className={`w-full py-2 text-sm rounded-lg border ${
+                              req.status === "invited"
+                                ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                                : "border-blue-300 text-blue-600 hover:text-blue-900"
+                            }`}
+                          >
+                            {req.status === "invited" ? "Invited" : "Send Invite"}
+                          </button>
+                        </div>
+                      ))}
+
+                      {filteredAndSortedCustomerRequests.length === 0 && (
                         <div className="text-center py-12">
                           <p className="text-gray-500">
                             No requests found matching your filters

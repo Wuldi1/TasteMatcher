@@ -3,17 +3,21 @@ import { AuthService } from "./auth.service";
 import { LoginRequestDto } from "./dto/login-request.dto";
 import { LoginVerifyDto } from "./dto/login-verify.dto";
 import { CreateDomainRequestDto } from "../domains/dto/create-domain-request.dto";
+import { CreateCustomerRequestDto } from "../users/dto/create-customer-request.dto";
 import {
   DomainVerificationResultResponse,
   DomainRequest,
+  CustomerRequest,
 } from "@tastematcher/common";
 import { DomainsService } from "../domains/domains.service";
+import { UsersService } from "../users/users.service";
 
 @Controller("auth")
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly domainsService: DomainsService,
+    private readonly usersService: UsersService,
   ) {}
 
   /**
@@ -50,6 +54,17 @@ export class AuthController {
     @Body() requestDto: CreateDomainRequestDto,
   ): Promise<DomainRequest> {
     return this.domainsService.createDomainRequest(requestDto);
+  }
+
+  /**
+   * Create a customer request (public)
+   */
+  @Post("customer-request")
+  @HttpCode(HttpStatus.CREATED)
+  async createCustomerRequest(
+    @Body() requestDto: CreateCustomerRequestDto,
+  ): Promise<CustomerRequest> {
+    return this.usersService.createCustomerRequest(requestDto);
   }
 
   /**

@@ -23,6 +23,61 @@ export type UserOnboardingStatus =
   | "skipped";
 
 /**
+ * Status of a customer access request
+ */
+export type CustomerRequestStatus = "pending" | "invited" | "rejected";
+
+/**
+ * Represents a request from a customer to join a domain
+ */
+export interface CustomerRequest {
+  /**
+   * Unique identifier for the request (UUID)
+   */
+  id: string;
+  /**
+   * Marker for polymorphic storage in shared container
+   */
+  type: "customerRequest";
+  /**
+   * Partition key placeholder for shared Proposals container
+   */
+  domainId?: string;
+  /**
+   * Email of the requester
+   */
+  email: string;
+  /**
+   * Full name of the requester
+   */
+  name: string;
+  /**
+   * Additional details or message from the requester
+   */
+  message?: string;
+  /**
+   * Current status of the request
+   */
+  status: CustomerRequestStatus;
+  /**
+   * Domain chosen by admin (if processed)
+   */
+  assignedDomainId?: string;
+  /**
+   * Timestamp of when the request was created
+   */
+  createdAt: number;
+  /**
+   * Timestamp of when the request was last updated
+   */
+  updatedAt: number;
+  /**
+   * ID of the admin who processed this request (if any)
+   */
+  processedBy?: string;
+}
+
+/**
  * Aesthetic admiration section
  */
 export interface AestheticAdmiration {

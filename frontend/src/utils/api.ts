@@ -14,6 +14,7 @@ import {
   Artwork,
   ArtworkFeedback,
   ArtworkStats,
+  CustomerRequest,
   Domain,
   DomainRequest,
   DomainVerificationResultResponse,
@@ -401,12 +402,51 @@ class ApiClient extends BaseApiClient {
   }
 
   /**
+   * Create customer request (public)
+   */
+  async createCustomerRequest(data: {
+    name: string;
+    email: string;
+    message?: string;
+  }): Promise<CustomerRequest> {
+    return this.request<CustomerRequest>("/auth/customer-request", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
    * Get all domain requests (global admin only)
    */
   async getAllDomainRequests(): Promise<DomainRequest[]> {
     return this.request<DomainRequest[]>("/domains/requests/all", {
       method: "GET",
     });
+  }
+
+  /**
+   * Get all customer requests (global admin only)
+   */
+  async getAllCustomerRequests(): Promise<CustomerRequest[]> {
+    return this.request<CustomerRequest[]>("/users/customer-requests/all", {
+      method: "GET",
+    });
+  }
+
+  /**
+   * Invite a customer from a request (global admin only)
+   */
+  async inviteCustomerRequest(
+    requestId: string,
+    domainId: string
+  ): Promise<CustomerRequest> {
+    return this.request<CustomerRequest>(
+      `/users/customer-requests/${requestId}/invite`,
+      {
+        method: "POST",
+        body: JSON.stringify({ domainId }),
+      }
+    );
   }
 
   // ========== User Management Endpoints ==========

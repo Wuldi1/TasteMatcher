@@ -7,7 +7,8 @@ type Phase =
   | "email"
   | "code-entry"
   | "user-not-found"
-  | "buyer-info"
+  | "buyer-form"
+  | "buyer-success"
   | "seller-form"
   | "seller-success";
 type UserIntent = "buy" | "sell" | null;
@@ -34,6 +35,8 @@ export function Login() {
   const [sellerName, setSellerName] = useState("");
   const [sellerDomainName, setSellerDomainName] = useState("");
   const [sellerMessage, setSellerMessage] = useState("");
+  const [buyerName, setBuyerName] = useState("");
+  const [buyerMessage, setBuyerMessage] = useState("");
   const logoSrc = `${process.env.PUBLIC_URL}/tastematcher_icon_icon_128.png`;
 
   const handleEmailSubmit = useCallback(
@@ -173,7 +176,8 @@ export function Login() {
             {phase === "email" && "Sign in to your account"}
             {phase === "code-entry" && "Enter verification code"}
             {phase === "user-not-found" && "Welcome to TasteMatcher"}
-            {phase === "buyer-info" && "Connect with Galleries"}
+            {phase === "buyer-form" && "Request Customer Access"}
+            {phase === "buyer-success" && "Request Submitted!"}
             {phase === "seller-form" && "Request Your Gallery Account"}
             {phase === "seller-success" && "Request Submitted!"}
           </p>
@@ -296,7 +300,7 @@ export function Login() {
 
             <div className="space-y-3">
               <button
-                onClick={() => setPhase("buyer-info")}
+                onClick={() => setPhase("buyer-form")}
                 className="w-full py-3 px-4 rounded-lg font-medium transition-colors bg-blue-600 hover:bg-blue-700 text-white"
               >
                 I want to buy art
@@ -322,35 +326,149 @@ export function Login() {
           </div>
         )}
 
-        {/* Buyer Info Phase */}
-        {phase === "buyer-info" && (
+        {/* Buyer Form Phase */}
+        {phase === "buyer-form" && (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!buyerName.trim()) {
+                setError("Name is required");
+                return;
+              }
+              setIsLoading(true);
+              setError(null);
+              try {
+                await apiClient.createCustomerRequest({
+                  name: buyerName.trim(),
+                  email: email.trim().toLowerCase(),
+                  message: buyerMessage.trim(),
+                });
+                setPhase("buyer-success");
+              } catch (err) {
+                console.error("Failed to submit customer request:", err);
+                setError(
+                  err instanceof ApiError ? err.message : "Failed to submit request"
+                );
+              } finally {
+                setIsLoading(false);
+              }
+            }}
+            className="space-y-4"
+          >
+            <p className="text-sm text-gray-600 mb-4">
+              Share a few details and we’ll connect you with the right gallery.
+            </p>
+
+            <div>
+              <label
+                htmlFor="buyerName"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Your Name
+              </label>
+              <input
+                id="buyerName"
+                type="text"
+                value={buyerName}
+                onChange={(e) => setBuyerName(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Jane Doe"
+                disabled={isLoading}
+                required
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="buyerMessage"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Comments (Optional)
+              </label>
+              <textarea
+                id="buyerMessage"
+                value={buyerMessage}
+                onChange={(e) => setBuyerMessage(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="What kind of art are you interested in?"
+                rows={4}
+                disabled={isLoading}
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 px-4 rounded-lg font-medium transition-colors bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400"
+              >
+                {isLoading ? "Submitting..." : "Submit Request"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPhase("user-not-found");
+                  setBuyerName("");
+                  setBuyerMessage("");
+                  setError(null);
+                }}
+                disabled={isLoading}
+                className="w-full text-gray-600 hover:text-gray-800 text-sm"
+              >
+                ← Back
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Buyer Success Phase */}
+        {phase === "buyer-success" && (
           <div className="space-y-6">
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                Connect with Art Galleries
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6">
+              <div className="flex items-center justify-center mb-4">
+                <div className="bg-green-100 rounded-full p-3">
+                  <svg
+                    className="w-8 h-8 text-green-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                </div>
+              </div>
+
+              <h3 className="text-xl font-semibold text-gray-900 text-center mb-3">
+                Request Submitted!
               </h3>
-              <p className="text-sm text-gray-700 mb-4">
-                TasteMatcher helps art buyers discover pieces that match their
-                taste through our network of galleries.
+
+              <p className="text-sm text-gray-700 text-center mb-4">
+                Thank you. We’ll review your request and get back to you soon.
               </p>
-              <p className="text-sm text-gray-700 mb-4">
-                To get started, please send us an email with:
-              </p>
-              <ul className="text-sm text-gray-700 mb-4 list-disc list-inside space-y-1">
-                <li>Your name and location</li>
-                <li>The type of art you're interested in</li>
-                <li>Your budget range</li>
-              </ul>
-              <div className="bg-white rounded-lg p-4 border border-blue-300">
-                <p className="text-sm font-medium text-gray-700 mb-2">
-                  Contact us at:
+
+              <div className="bg-white rounded-lg p-4 border border-green-200 space-y-2">
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">What’s next?</span>
                 </p>
-                <a
-                  href="mailto:admin@tastematcher.com"
-                  className="text-lg font-semibold text-blue-600 hover:text-blue-800"
-                >
-                  admin@tastematcher.com
-                </a>
+                <ul className="text-sm text-gray-600 space-y-1 ml-4 list-disc">
+                  <li>We’ll review your request within 1-2 business days</li>
+                  <li>
+                    You’ll receive an email at{" "}
+                    <strong className="text-gray-900">{email}</strong>
+                  </li>
+                  <li>Once approved, you can log in and start exploring</li>
+                </ul>
               </div>
             </div>
 
@@ -358,7 +476,8 @@ export function Login() {
               onClick={() => {
                 setPhase("email");
                 setEmail("");
-                setUserIntent(null);
+                setBuyerName("");
+                setBuyerMessage("");
                 setError(null);
               }}
               className="w-full text-gray-600 hover:text-gray-800 text-sm"

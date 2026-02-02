@@ -8,6 +8,7 @@ import {
 import {
   BlobService,
   CosmosService,
+  CustomerRequest,
   User,
   VectorizationService,
 } from "@tastematcher/common";
@@ -16,6 +17,7 @@ import { ArtworksService } from "../artworks/artworks.service";
 import { AuthenticatedUser } from "../auth/types/authenticated-request.interface";
 import { EmailService } from "../email/email.service";
 import { InviteUserDto } from "./dto/invite-user.dto";
+import { CreateCustomerRequestDto } from "./dto/create-customer-request.dto";
 import { UpdateQuestionnaireDto } from "./dto/update-questionnaire.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 
@@ -386,6 +388,133 @@ export class UsersService {
       this.logger.error(`Failed to invite user to domain ${domainId}`, error);
       throw error;
     }
+  }
+
+  /**
+   * Create a customer request (public)
+   */
+  async createCustomerRequest(
+    requestDto: CreateCustomerRequestDto,
+  ): Promise<CustomerRequest> {
+    const container = await this.cosmosService.getContainer("Proposals");
+    const normalizedEmail = requestDto.email.toLowerCase().trim();
+
+    const existingQuery = {
+      query:
+        "SELECT * FROM c WHERE c.type = @type AND c.email = @email AND c.status = @status",
+      parameters: [
+        { name: "@type", value: "customerRequest" },
+        { name: "@email", value: normalizedEmail },
+        { name: "@status", value: "pending" },
+      ],
+    };
+
+    const { resources: existing } = await container.items
+      .query(existingQuery)
+      .fetchAll();
+
+    if (existing.length > 0) {
+      throw new BadRequestException(
+        "You already have a pending request. Please wait for a response.",
+      );
+    }
+
+    const usersContainer = await this.cosmosService.getContainer("Core");
+    const userQuery = {
+      query: "SELECT * FROM c WHERE c.email = @email",
+      parameters: [{ name: "@email", value: normalizedEmail }],
+    };
+
+    const { resources: users } = await usersContainer.items
+      .query(userQuery)
+      .fetchAll();
+
+    if (users.length > 0) {
+      throw new BadRequestException(
+        "An account with this email already exists. Please use the login page.",
+      );
+    }
+
+    const newRequest: CustomerRequest = {
+      id: uuidv4(),
+      type: "customerRequest",
+      domainId: "customer-requests",
+      email: normalizedEmail,
+      name: requestDto.name,
+      message: requestDto.message,
+      status: "pending",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    const { resource } = await container.items.create(newRequest);
+
+    this.logger.log(
+      `Created customer request ${newRequest.id} for ${normalizedEmail}`,
+    );
+
+    return resource as CustomerRequest;
+  }
+
+  /**
+   * Get all customer requests (global_admin only)
+   */
+  async getAllCustomerRequests(): Promise<CustomerRequest[]> {
+    const container = await this.cosmosService.getContainer("Proposals");
+    const query = {
+      query: "SELECT * FROM c WHERE c.type = @type ORDER BY c.createdAt DESC",
+      parameters: [{ name: "@type", value: "customerRequest" }],
+    };
+    const { resources } = await container.items
+      .query<CustomerRequest>(query)
+      .fetchAll();
+    this.logger.log(`Fetched ${resources.length} customer requests`);
+    return resources;
+  }
+
+  /**
+   * Invite a customer from a request and assign a domain (global_admin only)
+   */
+  async inviteCustomerRequest(
+    requestId: string,
+    domainId: string,
+    processedBy: string,
+  ): Promise<CustomerRequest> {
+    const container = await this.cosmosService.getContainer("Proposals");
+
+    const { resource } = await container
+      .item(requestId, "customer-requests")
+      .read<CustomerRequest>();
+    if (!resource) {
+      throw new NotFoundException(`Customer request ${requestId} not found`);
+    }
+
+    if (resource.status === "invited") {
+      return resource;
+    }
+
+    await this.inviteUser(
+      domainId,
+      {
+        name: resource.name,
+        email: resource.email,
+        role: "customer",
+        domainId,
+      },
+      processedBy,
+    );
+
+    const { resource: updated } = await container
+      .item(requestId, "customer-requests")
+      .patch([
+        { op: "set", path: "/status", value: "invited" },
+        { op: "set", path: "/assignedDomainId", value: domainId },
+        { op: "set", path: "/processedBy", value: processedBy },
+        { op: "replace", path: "/updatedAt", value: Date.now() },
+      ]);
+
+    this.logger.log(`Invited customer request ${requestId}`);
+    return updated as CustomerRequest;
   }
 
   /**
