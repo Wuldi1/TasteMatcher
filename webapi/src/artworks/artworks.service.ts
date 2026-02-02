@@ -521,7 +521,7 @@ export class ArtworksService {
       const visible = untastedArtworks.filter(
         (art) =>
           this.canViewerSeeArtwork(art, viewer) &&
-          !(art.isAuction === true && isAuctionEnded(art.endDate)),
+          !(art.isAuction === true && isAuctionEnded(art)),
       );
 
       // Shuffle for better randomness and then cap to the requested limit.
