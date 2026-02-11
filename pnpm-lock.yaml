@@ -200,6 +200,9 @@ importers:
       '@azure-rest/ai-vision-image-analysis':
         specifier: ^1.0.0-beta.3
         version: 1.0.0-beta.3
+      '@azure/communication-email':
+        specifier: ^1.1.0
+        version: 1.1.0
       '@azure/core-auth':
         specifier: ^1.9.0
         version: 1.10.1

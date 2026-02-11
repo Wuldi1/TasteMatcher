@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import {
+  ArtworkPreference,
   BlobService,
   CosmosService,
   CustomerRequest,
@@ -16,8 +17,8 @@ import { v4 as uuidv4 } from "uuid";
 import { ArtworksService } from "../artworks/artworks.service";
 import { AuthenticatedUser } from "../auth/types/authenticated-request.interface";
 import { EmailService } from "../email/email.service";
-import { InviteUserDto } from "./dto/invite-user.dto";
 import { CreateCustomerRequestDto } from "./dto/create-customer-request.dto";
+import { InviteUserDto } from "./dto/invite-user.dto";
 import { UpdateQuestionnaireDto } from "./dto/update-questionnaire.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 
@@ -255,7 +256,7 @@ export class UsersService {
 
       // Delete preferences in parallel
       await Promise.all(
-        preferences.map((pref) =>
+        preferences.map((pref: ArtworkPreference) =>
           preferencesContainer.item(pref.id, domainId).delete(),
         ),
       );
@@ -306,7 +307,7 @@ export class UsersService {
         .fetchAll();
 
       const matchInAnotherDomain = crossDomainMatch.find(
-        (user) => user.domainId !== domainId,
+        (user: User) => user.domainId !== domainId,
       );
       if (matchInAnotherDomain) {
         throw new BadRequestException(
