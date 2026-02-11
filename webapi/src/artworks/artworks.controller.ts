@@ -59,13 +59,20 @@ export class ArtworksController {
   async getStats(
     @Request() req: AuthenticatedRequest,
     @Param("domainId") domainId: string,
+    @Query("userId") userId?: string,
   ): Promise<ArtworkStats> {
     if (req.user.domainId !== domainId && req.user.role !== "global_admin") {
       throw new ForbiddenException(
         "You are not authorized to access this domain.",
       );
     }
-    return this.artworksService.getStats(domainId, req.user.id);
+    if (req.user.role === "customer" && userId && userId !== req.user.id) {
+      throw new ForbiddenException(
+        "You are not authorized to access other users' stats.",
+      );
+    }
+    const effectiveUserId = userId || req.user.id;
+    return this.artworksService.getStats(domainId, effectiveUserId);
   }
 
   @Get("recommendations")

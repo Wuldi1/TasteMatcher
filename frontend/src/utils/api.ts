@@ -576,9 +576,18 @@ class ApiClient extends BaseApiClient {
   /**
    * Get artwork statistics for a domain
    */
-  async getArtworkStats(domainId: string): Promise<ArtworkStats> {
+  async getArtworkStats(
+    domainId: string,
+    options?: { userId?: string }
+  ): Promise<ArtworkStats> {
     this.validateRequired(domainId, "Domain ID");
-    return this.request<ArtworkStats>(`/domains/${domainId}/artworks/stats`, {
+    const params = new URLSearchParams();
+    if (options?.userId) params.append("userId", options.userId);
+    const queryString = params.toString();
+    const endpoint = `/domains/${domainId}/artworks/stats${
+      queryString ? `?${queryString}` : ""
+    }`;
+    return this.request<ArtworkStats>(endpoint, {
       method: "GET",
     });
   }

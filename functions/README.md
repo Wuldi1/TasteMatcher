@@ -63,6 +63,7 @@ Edit `local.settings.json` with your values:
     "AZURE_AI_VISION_ENDPOINT": "https://YOUR-VISION.cognitiveservices.azure.com/",
     "AZURE_AI_VISION_KEY": "YOUR-VISION-KEY",
     "IMAGE_PROCESSING_QUEUE_NAME": "image-processing",
+    "NEW_ARTWORK_QUEUE_NAME": "new-artwork-notifications",
     "LOG_LEVEL": "debug"
   }
 }
@@ -165,6 +166,7 @@ await queueClient.sendMessage(
 | `AZURE_AI_VISION_ENDPOINT`        | Yes      | AI Vision endpoint                       | `https://myvision.cognitiveservices.azure.com/` |
 | `AZURE_AI_VISION_KEY`             | Yes      | Vision API key                           | From Azure Portal                               |
 | `IMAGE_PROCESSING_QUEUE_NAME`     | No       | Queue name (default: `image-processing`) | `image-processing`                              |
+| `NEW_ARTWORK_QUEUE_NAME`          | No       | Queue name for new artwork notifications | `new-artwork-notifications`                     |
 | `LOG_LEVEL`                       | No       | Logging level (default: `info`)          | `debug`, `info`, `warn`, `error`                |
 
 ## Deployment

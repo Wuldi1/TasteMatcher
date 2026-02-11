@@ -43,8 +43,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { EditArtworkModal } from "../../components/EditArtworkModal/EditArtworkModal";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiClient } from "../../utils/api";
-import { isAuctionEnded } from "../../utils/general";
+import { isArtworkNew, isAuctionEnded } from "../../utils/general";
 import "./CatalogPage.css";
+
+const getViewedStorageKey = (domainId: string, userId?: string) =>
+  `tm.viewedArtworks.${userId || "anon"}.${domainId}`;
 
 /**
  * Catalog page displaying all uploaded artworks in a responsive grid.
@@ -74,6 +77,9 @@ export function CatalogPage() {
   const [deletingArtworks, setDeletingArtworks] = useState<Set<string>>(
     new Set(),
   ); // For animation
+  const [viewedArtworks, setViewedArtworks] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [showEndedAuctions, setShowEndedAuctions] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -98,6 +104,46 @@ export function CatalogPage() {
   }, [location.search]);
 
   const effectiveDomainId = isGlobalAdmin ? selectedDomainId : user?.domainId;
+  const viewedStorageKey =
+    effectiveDomainId && user?.id
+      ? getViewedStorageKey(effectiveDomainId, user.id)
+      : undefined;
+
+  useEffect(() => {
+    if (!viewedStorageKey) {
+      setViewedArtworks(new Set());
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(viewedStorageKey);
+      if (!raw) {
+        setViewedArtworks(new Set());
+        return;
+      }
+      const parsed = JSON.parse(raw) as string[];
+      setViewedArtworks(new Set(parsed));
+    } catch {
+      setViewedArtworks(new Set());
+    }
+  }, [viewedStorageKey]);
+
+  const markViewed = useCallback(
+    (artworkId: string) => {
+      if (!viewedStorageKey) return;
+      setViewedArtworks((prev) => {
+        if (prev.has(artworkId)) return prev;
+        const next = new Set(prev);
+        next.add(artworkId);
+        try {
+          localStorage.setItem(viewedStorageKey, JSON.stringify([...next]));
+        } catch {
+          // ignore storage errors
+        }
+        return next;
+      });
+    },
+    [viewedStorageKey],
+  );
   const canViewFeedback =
     user?.role === "global_admin" ||
     user?.role === "domain_owner" ||
@@ -609,6 +655,7 @@ export function CatalogPage() {
   };
 
   const handleArtworkClick = (artwork: Artwork) => {
+    markViewed(artwork.id);
     setSelectedArtwork(artwork);
   };
 
@@ -786,6 +833,7 @@ export function CatalogPage() {
     e?.stopPropagation();
     if (!user || user.role !== "customer") return;
 
+    markViewed(artworkId);
     savePreferenceMutation.mutate({ artworkId, liked });
   };
 
@@ -1137,6 +1185,12 @@ export function CatalogPage() {
                 const isSelected = selectedArtworks.has(artwork.id);
                 const isDeleting = deletingArtworks.has(artwork.id);
                 const auctionEnded = isAuctionEnded(artwork);
+                const isRecent = isArtworkNew(artwork);
+                const hasUserAction =
+                  artwork.likedStatus === "Liked" ||
+                  artwork.likedStatus === "Disliked";
+                const isViewed = viewedArtworks.has(artwork.id);
+                const showNewTag = isRecent && !hasUserAction && !isViewed;
 
                 return (
                   <article
@@ -1185,7 +1239,7 @@ export function CatalogPage() {
                         )}
                       </button>
 
-                      {/* Price Badge */}
+                      {/* Price + New badge */}
                       <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
                         {auctionEnded && (
                           <span className="inline-flex items-center gap-1.5 bg-gray-800/80 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
@@ -1202,6 +1256,11 @@ export function CatalogPage() {
                                 : ""}
                             </div>
                           )}
+                        {showNewTag && (
+                          <div className="bg-sky-200/90 backdrop-blur-sm text-sky-900 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                            New
+                          </div>
+                        )}
                       </div>
 
                       {(artwork.isAuction || artwork.useForTaster) && (

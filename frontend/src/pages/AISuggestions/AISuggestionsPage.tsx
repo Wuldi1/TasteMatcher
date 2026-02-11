@@ -16,6 +16,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { Artwork, User } from "@tastematcher/common";
 import {
   getAIRecommendationsEligibility,
+  isArtworkNew,
   isAuctionEnded,
 } from "../../utils/general";
 import {
@@ -346,6 +347,7 @@ export const AISuggestionsPage = ({
               const isInProposal = proposalItems?.includes(item.id);
               const auctionEnded = isAuctionEnded(item);
               const proposalActionDisabled = auctionEnded && !isInProposal;
+              const showNewTag = isArtworkNew(item);
 
               const commentValue = getDraftComment(item);
               return (
@@ -418,6 +420,11 @@ export const AISuggestionsPage = ({
                     {isInProposal && (
                       <div className="absolute top-2 left-2 bg-blue-500/90 backdrop-blur-sm text-white text-xs font-medium px-2 py-0.5 rounded-full shadow-sm">
                         In Proposal
+                      </div>
+                    )}
+                    {showNewTag && (
+                      <div className="absolute top-2 right-2 bg-sky-200/90 backdrop-blur-sm text-sky-900 text-xs font-semibold px-2 py-0.5 rounded-full shadow-sm">
+                        New
                       </div>
                     )}
                   </div>

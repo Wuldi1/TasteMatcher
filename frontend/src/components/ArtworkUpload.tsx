@@ -407,9 +407,15 @@ export function ArtworkUpload() {
         };
         // The API client now sends the token, and the backend infers the domain.
         // We no longer pass the domainId from the frontend.
-        await apiClient.uploadArtwork(currentDomain!.id, file, uploadPayload);
+        const createdArtwork = await apiClient.uploadArtwork(
+          currentDomain!.id,
+          file,
+          uploadPayload
+        );
         setStatus("success");
-        setMessage("Artwork uploaded successfully!");
+        setMessage(
+          `Artwork "${createdArtwork.title || "Untitled"}" uploaded successfully!`
+        );
         setShowSuccessToast(true);
         resetForm({ preserveFeedback: true });
       } catch (error) {

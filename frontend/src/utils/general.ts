@@ -25,6 +25,19 @@ export function getAIRecommendationsEligibility(user: Partial<User>): {
   return { isEligible, reasons };
 }
 
+export const NEW_TAG_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const isArtworkNew = (
+  artwork: Pick<Artwork, "createdAt">,
+  nowMs: number = Date.now(),
+  windowMs: number = NEW_TAG_WINDOW_MS,
+): boolean => {
+  if (typeof artwork?.createdAt !== "number") {
+    return false;
+  }
+  return nowMs - artwork.createdAt < windowMs;
+};
+
 export const isAuctionEnded = (
   artwork: Pick<Artwork, "isAuction" | "endDate">,
   nowMs: number = Date.now()

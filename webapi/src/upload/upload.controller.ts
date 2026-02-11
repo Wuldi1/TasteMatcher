@@ -1,31 +1,31 @@
 // webapi/src/upload/upload.controller.ts
 import {
-  Controller,
-  Post,
-  Param,
-  Body,
-  UploadedFile,
-  UseInterceptors,
   BadRequestException,
+  Body,
+  Controller,
   Logger,
-  Request,
-  UseGuards,
   NotFoundException,
+  Param,
+  Post,
+  Request,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import {
   Artwork,
   BlobService,
   CosmosService,
-  getOriginalBlobPath,
   ImageProcessingQueueMessage,
-  ProcessingStatus,
+  VectorizationService,
   cleanupArtworkBeforeResponseToClient,
+  getOriginalBlobPath,
 } from "@tastematcher/common";
-import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
 import { v4 as uuidv4 } from "uuid";
-import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
+import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
+import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
 
 @Controller("domains/:domainId/uploads")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -33,10 +33,12 @@ export class UploadController {
   private readonly logger = new Logger(UploadController.name);
   private readonly blobService: BlobService;
   private readonly cosmosService: CosmosService;
+  private readonly vectorizationService: VectorizationService;
 
   constructor() {
     this.blobService = new BlobService();
     this.cosmosService = new CosmosService();
+    this.vectorizationService = new VectorizationService();
   }
 
   @Post()
@@ -47,7 +49,7 @@ export class UploadController {
     // eslint-disable-next-line
     @UploadedFile() file: Express.Multer.File,
     @Body() body: Record<string, unknown>,
-  ): Promise<ProcessingStatus> {
+  ): Promise<Artwork> {
     const start = Date.now();
     this.logger.debug({
       route: "/domains/:domainId/uploads",
@@ -95,11 +97,29 @@ export class UploadController {
       artworkMetadata.isPrivate = artworkMetadata.isPrivate ?? false;
       artworkMetadata.uploadedBy = req.user.id;
 
+      try {
+        const vectorEmbedding =
+          await this.vectorizationService.generateEmbedding(
+            artworkUrl,
+            artworkMetadata.id,
+          );
+        artworkMetadata.vector = vectorEmbedding.vector;
+        artworkMetadata.vectorModel = vectorEmbedding.model;
+      } catch (vectorError) {
+        this.logger.warn({
+          action: "uploadArtwork.vectorize.failed",
+          artworkId: artworkMetadata.id,
+          domainId,
+          errMessage: (vectorError as Error).message,
+        });
+      }
+
       // write artwork record to database
       artworkMetadata.createdAt = Date.now();
 
       const artworksContainer = await this.cosmosService.getArtworksContainer();
-      await artworksContainer.items.create(artworkMetadata);
+      const { resource: createdArtwork } =
+        await artworksContainer.items.create(artworkMetadata);
 
       this.logger.log({
         action: "createArtworkRecord.success",
@@ -115,7 +135,11 @@ export class UploadController {
         fileUrl: artworkMetadata.filename,
         uploadedAt: Date.now(),
       };
-      await this.blobService.sendMessageToQueue(imageProcessingQueueMessage);
+      console.log(
+        "image-processing operation via AZ-Func is disabled - " +
+          imageProcessingQueueMessage.messageId,
+      );
+      // await this.blobService.sendMessageToQueue(imageProcessingQueueMessage);
 
       this.logger.log({
         route: "/domains/:domainId/uploads",
@@ -124,12 +148,10 @@ export class UploadController {
         durationMs: Date.now() - start,
       });
 
-      // TODO : this is a stupid response, fix it
-      return {
-        artworkId: artworkMetadata.id,
-        status: "enqueued",
-        progress: 0,
-      };
+      return cleanupArtworkBeforeResponseToClient(
+        createdArtwork as Artwork,
+        req.user.role,
+      ) as Artwork;
     } catch (error) {
       this.logger.error({
         route: "/domains/:domainId/uploads",

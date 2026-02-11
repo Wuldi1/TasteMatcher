@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
 import { ThumbsUp, ThumbsDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiClient } from "../../utils/api";
+import { isArtworkNew } from "../../utils/general";
 import "./TasterPage.css";
 
 type SwipeDirection = "left" | "right" | null;
@@ -248,6 +249,7 @@ export function TasterPage() {
 
   const rotation = dragOffset.x * 0.05;
   const opacity = 1 - Math.abs(dragOffset.x) / 300;
+  const showNewTag = currentArtwork ? isArtworkNew(currentArtwork) : false;
 
   return (
     <div className="taster-page">
@@ -321,6 +323,9 @@ export function TasterPage() {
                   className="taster-card__image"
                   draggable="false"
                 />
+                {showNewTag && (
+                  <div className="taster-card__new-badge">New</div>
+                )}
 
                 {/* Swipe indicators moved inside image container */}
                 <div className="taster-card__indicator taster-card__indicator--like">

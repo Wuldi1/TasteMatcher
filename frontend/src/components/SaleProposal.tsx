@@ -20,6 +20,7 @@ import {
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import React, { useEffect, useState } from "react";
 import { apiClient } from "../utils/api";
+import { isArtworkNew } from "../utils/general";
 
 // Helper component for price input with comma formatting
 const FormattedPriceInput = ({
@@ -1102,6 +1103,7 @@ export default function SaleProposal({
 
             const { color, text, icon, borderColor } =
               statusConfig[item.status] ?? statusConfig.pending;
+            const showNewTag = artwork ? isArtworkNew(artwork) : false;
 
             return (
               <article
@@ -1121,6 +1123,11 @@ export default function SaleProposal({
                   ) : (
                     <div className="w-full h-64 lg:h-full bg-gray-100 flex items-center justify-center text-sm text-gray-400">
                       No image
+                    </div>
+                  )}
+                  {showNewTag && (
+                    <div className="absolute top-3 right-3 bg-sky-200/90 backdrop-blur-sm text-sky-900 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                      New
                     </div>
                   )}
                 </div>

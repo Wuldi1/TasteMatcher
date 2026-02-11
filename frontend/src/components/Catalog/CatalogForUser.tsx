@@ -11,9 +11,12 @@ import {
   Lock,
   Gavel,
 } from "lucide-react";
-import { isAuctionEnded } from "../../utils/general";
+import { isArtworkNew, isAuctionEnded } from "../../utils/general";
 
 const PAGE_SIZE = 30;
+
+const getViewedStorageKey = (domainId: string, userId?: string) =>
+  `tm.viewedArtworks.${userId || "anon"}.${domainId}`;
 
 export type CatalogForUserProps = {
   domainId: string;
@@ -59,7 +62,43 @@ export default function CatalogForUser({
     null,
   );
   const [hasMore, setHasMore] = useState<boolean>(false);
+  const [viewedArtworks, setViewedArtworks] = useState<Set<string>>(
+    () => new Set(),
+  );
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  const viewedStorageKey = getViewedStorageKey(domainId, userId);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(viewedStorageKey);
+      if (!raw) {
+        setViewedArtworks(new Set());
+        return;
+      }
+      const parsed = JSON.parse(raw) as string[];
+      setViewedArtworks(new Set(parsed));
+    } catch {
+      setViewedArtworks(new Set());
+    }
+  }, [viewedStorageKey]);
+
+  const markViewed = useCallback(
+    (artworkId: string) => {
+      setViewedArtworks((prev) => {
+        if (prev.has(artworkId)) return prev;
+        const next = new Set(prev);
+        next.add(artworkId);
+        try {
+          localStorage.setItem(viewedStorageKey, JSON.stringify([...next]));
+        } catch {
+          // ignore storage errors
+        }
+        return next;
+      });
+    },
+    [viewedStorageKey],
+  );
 
   const mergeFeedback = useCallback((items: Artwork[]) => {
     if (!items?.length) return;
@@ -207,6 +246,10 @@ export default function CatalogForUser({
           const inProposal = isInProposal?.(artwork.id) ?? false;
           const auctionEnded = isAuctionEnded(artwork);
           const proposalActionDisabled = auctionEnded && !inProposal;
+          const isRecent = isArtworkNew(artwork);
+          const hasUserAction = likedStatus !== "NotTasted";
+          const isViewed = viewedArtworks.has(artwork.id);
+          const showNewTag = isRecent && !hasUserAction && !isViewed;
 
           return (
             <article
@@ -218,7 +261,10 @@ export default function CatalogForUser({
                 <button
                   type="button"
                   className="absolute inset-0 z-0 w-full h-full cursor-pointer focus:outline-none flex items-center justify-center"
-                  onClick={() => onArtworkClick?.(artwork)}
+                  onClick={() => {
+                    markViewed(artwork.id);
+                    onArtworkClick?.(artwork);
+                  }}
                   aria-label={`View details for ${artwork.title}`}
                 >
                   {artwork.filename ? (
@@ -235,7 +281,7 @@ export default function CatalogForUser({
                   )}
                 </button>
 
-                {/* Price Badge */}
+                {/* Price + New badge */}
                 <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
                   {artwork.price !== undefined &&
                     (artwork.shouldDisplayPrice ?? true) && (
@@ -246,12 +292,21 @@ export default function CatalogForUser({
                           : ""}
                       </div>
                     )}
+                  {showNewTag && (
+                    <div className="bg-sky-200/90 backdrop-blur-sm text-sky-900 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                      New
+                    </div>
+                  )}
                 </div>
 
-                {/* Proposal Badge */}
+                {/* Left badges */}
                 {inProposal && (
-                  <div className="absolute top-3 left-3 z-10 bg-blue-500/90 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full shadow-sm">
-                    In Proposal
+                  <div className="absolute top-3 left-3 z-10 flex flex-col items-start gap-2">
+                    {inProposal && (
+                      <div className="bg-blue-500/90 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full shadow-sm">
+                        In Proposal
+                      </div>
+                    )}
                   </div>
                 )}
                 {(auctionEnded || artwork.isAuction || artwork.useForTaster) && (
@@ -320,6 +375,7 @@ export default function CatalogForUser({
                           disabled={showReadOnly}
                           onClick={(e) => {
                             e.stopPropagation();
+                            markViewed(artwork.id);
                             !showReadOnly &&
                               onPreferenceClick?.(artwork.id, true, e);
                           }}
@@ -338,6 +394,7 @@ export default function CatalogForUser({
                           disabled={showReadOnly}
                           onClick={(e) => {
                             e.stopPropagation();
+                            markViewed(artwork.id);
                             !showReadOnly &&
                               onPreferenceClick?.(artwork.id, false, e);
                           }}

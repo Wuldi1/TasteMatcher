@@ -11,6 +11,7 @@
     "AZURE_STORAGE_ACCOUNT_KEY": "PWFCgHPa4ZFOLeFd652B/YcOWrkRRMddSisWd0H2oS78Ckmen82z8R2WP+Z8erEvrQA7vBRru+6Z+ASta6YVrw==",
     "AZURE_KEYVAULT_URI": "https://tastematcher-dev-kv.vault.azure.net/",
     "IMAGE_PROCESSING_QUEUE_NAME": "tastematcher-dev-indexing-jobs",
+    "NEW_ARTWORK_QUEUE_NAME": "tastematcher-dev-new-artwork-jobs",
     "AZURE_BLOB_CONTAINER_ORIGINALS": "originals",
     "AZURE_BLOB_CONTAINER_DERIVATIVES": "derivatives",
     "AZURE_SEARCH_ENDPOINT": "https://tastematcher-dev-search.search.windows.net",

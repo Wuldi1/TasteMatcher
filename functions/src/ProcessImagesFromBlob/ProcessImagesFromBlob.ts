@@ -12,7 +12,10 @@
 // -----------------------------------------------------------
 
 import { app, InvocationContext } from "@azure/functions";
-import type { ImageProcessingQueueMessage } from "@tastematcher/common";
+import type {
+  ImageProcessingQueueMessage,
+  NewArtworkNotificationQueueMessage,
+} from "@tastematcher/common";
 import {
   BlobService,
   ThumbnailService,
@@ -23,6 +26,7 @@ import {
   loadConfig,
   CosmosService,
 } from "@tastematcher/common";
+import { v4 as uuidv4 } from "uuid";
 
 const logger = createLogger("ProcessImagesFromBlob");
 
@@ -186,6 +190,29 @@ export async function processImagesFromBlob(
     metrics.increment("image_processing.artwork_updated", {
       domainId: message.domainId,
     });
+
+    const notificationsQueueName = process.env.NEW_ARTWORK_QUEUE_NAME;
+    if (notificationsQueueName) {
+      const notificationMessage: NewArtworkNotificationQueueMessage = {
+        messageId: uuidv4(),
+        artworkId: message.artworkId,
+        domainId: message.domainId,
+        uploadedAt: message.uploadedAt,
+      };
+      await blobService.sendMessageToQueue(
+        notificationMessage,
+        notificationsQueueName,
+      );
+      metrics.increment("new_artwork_notification.enqueued", {
+        domainId: message.domainId,
+      });
+    } else {
+      logger.warn({
+        msg: "NEW_ARTWORK_QUEUE_NAME not set; skipping notification enqueue",
+        artworkId: message.artworkId,
+        domainId: message.domainId,
+      });
+    }
 
     const durationMs = Date.now() - start;
 

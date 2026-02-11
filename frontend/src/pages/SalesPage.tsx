@@ -18,7 +18,6 @@ import {
 } from "@tastematcher/common";
 import {
   Activity,
-  ChevronDown,
   Database,
   FileText,
   Layers,
@@ -30,10 +29,14 @@ import {
   Shield,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import CatalogForUser from "../components/Catalog/CatalogForUser";
 import SaleProposal from "../components/SaleProposal";
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "../components/inputs/SearchableSelect";
 import { useAuth } from "../contexts/AuthContext";
 import { apiClient } from "../utils/api";
 import { AISuggestionsPage } from "./AISuggestions/AISuggestionsPage";
@@ -96,6 +99,22 @@ export default function SalesPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | undefined>(
     undefined
   );
+  const domainOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      domains.map((domain) => ({
+        value: domain.id,
+        label: domain.name ?? domain.adminEmail ?? domain.id,
+      })),
+    [domains],
+  );
+  const userOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      users.map((account) => ({
+        value: account.id,
+        label: account.name ?? account.id,
+      })),
+    [users],
+  );
   const [activeTab, setActiveTab] = useState<
     "details" | "catalog" | "ai" | "proposal"
   >("details");
@@ -128,6 +147,34 @@ export default function SalesPage() {
   const [proposalDetails, setProposalDetails] = useState<Proposal | null>(null); // Store proposal metadata
   const queryDomainId = searchParams.get("domainId") || undefined;
   const queryUserId = searchParams.get("userId") || undefined;
+
+  const totalArtworks =
+    (stats as { totalArtworks?: number; total?: number } | null)?.totalArtworks ??
+    (stats as { totalArtworks?: number; total?: number } | null)?.total ??
+    0;
+  const totalSwiped = stats?.totalSwiped ?? 0;
+  const totalLikes = stats?.totalLikes ?? 0;
+  const totalDislikes = stats?.totalDislikes ?? 0;
+  const likeRate = totalSwiped > 0 ? totalLikes / totalSwiped : null;
+  const dislikeRate = totalSwiped > 0 ? totalDislikes / totalSwiped : null;
+  const swipeCoverage =
+    totalArtworks > 0 ? totalSwiped / totalArtworks : null;
+  const aestheticImages =
+    userDetails?.personalQuestionnaire?.aestheticAdmiration?.imageUrls
+      ?.length ?? 0;
+  const collectionImages =
+    userDetails?.personalQuestionnaire?.personalCollection?.imageUrls?.length ??
+    0;
+  const sharedImages = userDetails?.sharedCollectionUploads?.length ?? 0;
+  const preferenceImages = aestheticImages + collectionImages + sharedImages;
+  const preferenceVectorReady =
+    Array.isArray(userDetails?.preferenceVector) &&
+    userDetails.preferenceVector.some((value) => value !== 0);
+  const feedbackCount = userDetails?.comments?.length ?? 0;
+  const lastCommentAt =
+    userDetails?.comments && userDetails.comments.length > 0
+      ? Math.max(...userDetails.comments.map((c) => c.createdAt))
+      : null;
 
   const syncQueryParams = useCallback(
     (nextDomainId?: string, nextUserId?: string) => {
@@ -390,8 +437,10 @@ export default function SalesPage() {
       setStatsLoading(true);
       setStatsError(null);
       try {
-        const statsResponse =
-          await apiClient.getArtworkStats(effectiveDomainId);
+        const statsResponse = await apiClient.getArtworkStats(
+          effectiveDomainId,
+          { userId: selectedUserId }
+        );
         setStats(statsResponse);
       } catch (err) {
         console.error("Failed to load artwork stats", err);
@@ -401,7 +450,7 @@ export default function SalesPage() {
         setStatsLoading(false);
       }
     })();
-  }, [effectiveDomainId]);
+  }, [effectiveDomainId, selectedUserId]);
 
   // Helper: render onboarding answers in readable form
   function renderQuestionnaire(q: Record<string, unknown>) {
@@ -497,6 +546,11 @@ export default function SalesPage() {
     return String(v);
   }
 
+  function formatPercent(value: number | null) {
+    if (value == null || Number.isNaN(value)) return "—";
+    return `${(value * 100).toFixed(1)}%`;
+  }
+
   // Proposal items as artwork IDs for easy lookup
   const proposalArtworkIds = proposalItem.map((item) => item.artworkId);
 
@@ -571,31 +625,16 @@ export default function SalesPage() {
             >
               Domain
             </label>
-            <div className="relative">
-              <select
-                id="sales-domain"
-                aria-label="Select domain"
-                value={selectedDomainId ?? ""}
-                onChange={(e) =>
-                  setSelectedDomainId(e.target.value || undefined)
-                }
-                className="w-full appearance-none bg-white border border-gray-200 text-gray-900 py-3 px-4 pr-10 rounded-xl leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
-              >
-                <option value="">Select a domain...</option>
-                {domainsLoading ? (
-                  <option>Loading...</option>
-                ) : (
-                  domains.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name ?? d.adminEmail ?? d.id}
-                    </option>
-                  ))
-                )}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
-                <ChevronDown className="h-4 w-4" />
-              </div>
-            </div>
+            <SearchableSelect
+              id="sales-domain"
+              ariaLabel="Select domain"
+              value={selectedDomainId}
+              onChange={setSelectedDomainId}
+              options={domainOptions}
+              placeholder={domainsLoading ? "Loading..." : "Select a domain..."}
+              disabled={domainsLoading}
+              className="w-full bg-white border border-gray-200 text-gray-900 py-3 px-4 rounded-xl leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            />
           </div>
         )}
 
@@ -606,26 +645,16 @@ export default function SalesPage() {
           >
             Customer
           </label>
-          <div className="relative">
-            <select
-              id="sales-user"
-              aria-label="Select user"
-              disabled={selectedDomainId === undefined}
-              value={selectedUserId ?? ""}
-              onChange={(e) => setSelectedUserId(e.target.value || undefined)}
-              className="w-full appearance-none bg-white border border-gray-200 text-gray-900 py-3 px-4 pr-10 rounded-xl leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
-            >
-              <option value="">Select a customer...</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name ?? u.id}
-                </option>
-              ))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
-              <ChevronDown className="h-4 w-4" />
-            </div>
-          </div>
+          <SearchableSelect
+            id="sales-user"
+            ariaLabel="Select user"
+            disabled={selectedDomainId === undefined}
+            value={selectedUserId}
+            onChange={setSelectedUserId}
+            options={userOptions}
+            placeholder="Select a customer..."
+            className="w-full bg-white border border-gray-200 text-gray-900 py-3 px-4 rounded-xl leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+          />
         </div>
       </div>
 
@@ -747,7 +776,7 @@ export default function SalesPage() {
                 )}
 
                 {stats && !statsLoading && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                     <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
                       <div className="p-3 bg-purple-50 rounded-lg text-purple-600">
                         <Layers className="w-6 h-6" />
@@ -757,9 +786,7 @@ export default function SalesPage() {
                           Total Artworks
                         </div>
                         <div className="text-xl font-bold text-gray-900">
-                          {(stats as any).totalArtworks ??
-                            (stats as any).total ??
-                            "—"}
+                          {totalArtworks || "—"}
                         </div>
                       </div>
                     </div>
@@ -769,10 +796,10 @@ export default function SalesPage() {
                       </div>
                       <div>
                         <div className="text-xs text-gray-500 font-medium uppercase">
-                          Vectorized
+                          Total Swipes
                         </div>
                         <div className="text-xl font-bold text-gray-900">
-                          {(stats as any).vectorized ?? "—"}
+                          {totalSwiped || "—"}
                         </div>
                       </div>
                     </div>
@@ -782,10 +809,10 @@ export default function SalesPage() {
                       </div>
                       <div>
                         <div className="text-xs text-gray-500 font-medium uppercase">
-                          Indexed
+                          Like Rate
                         </div>
                         <div className="text-xl font-bold text-gray-900">
-                          {(stats as any).indexed ?? "—"}
+                          {formatPercent(likeRate)}
                         </div>
                       </div>
                     </div>
@@ -798,7 +825,33 @@ export default function SalesPage() {
                           Feedback
                         </div>
                         <div className="text-xl font-bold text-gray-900">
-                          {(stats as any).withFeedback ?? "—"}
+                          {feedbackCount || "—"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
+                      <div className="p-3 bg-cyan-50 rounded-lg text-cyan-600">
+                        <Paperclip className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 font-medium uppercase">
+                          Preference Images
+                        </div>
+                        <div className="text-xl font-bold text-gray-900">
+                          {preferenceImages || "—"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
+                      <div className="p-3 bg-emerald-50 rounded-lg text-emerald-600">
+                        <Database className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 font-medium uppercase">
+                          Taste Vector
+                        </div>
+                        <div className="text-xl font-bold text-gray-900">
+                          {preferenceVectorReady ? "Ready" : "Not Ready"}
                         </div>
                       </div>
                     </div>
@@ -836,31 +889,94 @@ export default function SalesPage() {
                       System Data
                     </h3>
                     <div className="space-y-3">
-                      {Object.entries(stats || {}).map(([k, v]) => {
-                        const value = v as unknown;
-                        const isPrimitive =
-                          value === null ||
-                          ["string", "number", "boolean"].includes(
-                            typeof value
-                          );
-
-                        if (isPrimitive) {
-                          return (
-                            <div
-                              key={k}
-                              className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0"
-                            >
-                              <span className="text-xs text-gray-500 font-medium">
-                                {humanize(k)}
-                              </span>
-                              <span className="text-sm font-mono text-gray-700">
-                                {String(value ?? "—")}
-                              </span>
-                            </div>
-                          );
-                        }
-                        return null; // Skip complex objects in summary view
-                      })}
+                      {[
+                        { label: "User ID", value: userDetails?.id },
+                        { label: "Domain ID", value: userDetails?.domainId },
+                        { label: "Role", value: userDetails?.role },
+                        { label: "Status", value: userDetails?.status },
+                        {
+                          label: "Onboarding Status",
+                          value: userDetails?.onboardingStatus,
+                        },
+                        {
+                          label: "User Created",
+                          value: userDetails?.createdAt
+                            ? new Date(userDetails.createdAt).toLocaleString()
+                            : "—",
+                        },
+                        {
+                          label: "User Updated",
+                          value: userDetails?.updatedAt
+                            ? new Date(userDetails.updatedAt).toLocaleString()
+                            : "—",
+                        },
+                        {
+                          label: "Questionnaire Completed",
+                          value: userDetails?.personalQuestionnaire?.completedAt
+                            ? new Date(
+                                userDetails.personalQuestionnaire.completedAt
+                              ).toLocaleString()
+                            : "—",
+                        },
+                        {
+                          label: "Total Artworks",
+                          value: totalArtworks,
+                        },
+                        {
+                          label: "Total Swiped",
+                          value: totalSwiped,
+                        },
+                        {
+                          label: "Total Likes",
+                          value: totalLikes,
+                        },
+                        {
+                          label: "Total Dislikes",
+                          value: totalDislikes,
+                        },
+                        {
+                          label: "Like Rate",
+                          value: formatPercent(likeRate),
+                        },
+                        {
+                          label: "Dislike Rate",
+                          value: formatPercent(dislikeRate),
+                        },
+                        {
+                          label: "Swipe Coverage",
+                          value: formatPercent(swipeCoverage),
+                        },
+                        {
+                          label: "Preference Images",
+                          value: preferenceImages,
+                        },
+                        {
+                          label: "Feedback Comments",
+                          value: feedbackCount,
+                        },
+                        {
+                          label: "Last Comment",
+                          value: lastCommentAt
+                            ? new Date(lastCommentAt).toLocaleString()
+                            : "—",
+                        },
+                        {
+                          label: "Taste Vector",
+                          value: preferenceVectorReady ? "Ready" : "Not Ready",
+                        },
+                      ].map(({ label, value }) => (
+                        <div
+                          key={label}
+                          className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0"
+                        >
+                          <span className="text-xs text-gray-500 font-medium">
+                            {label}
+                          </span>
+                          <span className="text-sm font-mono text-gray-700">
+                            {formatValue(value)}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>

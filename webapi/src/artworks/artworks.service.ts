@@ -747,8 +747,6 @@ export class ArtworksService {
         ? targetUserId
         : requester.id;
 
-    // Fetch more candidates to account for filtering
-    const fetchCount = (offset + limit) * 3;
     const start = Date.now();
     this.logger.debug({
       msg: "Fetching AI suggestions",
@@ -802,26 +800,16 @@ export class ArtworksService {
         msg: "Generating AI suggestions using preference vector",
         domainId,
         targetUserId: resolvedUserId,
-        preferenceVector: preferenceVector,
-      });
-
-      const matches = await this.searchIndexService.searchSimilarArtworks(
-        domainId,
-        preferenceVector,
-        fetchCount,
-      );
-
-      this.logger.log({
-        msg: "Number of matches",
-        targetUserId: resolvedUserId,
-        domainId,
-        matchesCount: matches.length,
+        user: userRecord.name,
       });
 
       const artworksContainer = await this.cosmosService.getArtworksContainer();
       const preferencesContainer =
         await this.cosmosService.getArtworkPreferencesContainer();
       const recommendedArtworks: Artwork[] = [];
+
+      const normalizedPreference =
+        this.searchIndexService.normalizeVector(preferenceVector);
 
       // Fetch preferences for the user
       const preferencesQuery = {
@@ -849,67 +837,223 @@ export class ArtworksService {
         string,
         { liked?: boolean; comment?: string }
       >();
+      const reactedArtworkIds = new Set<string>();
       preferences.forEach((pref) => {
         preferencesMap.set(pref.artworkId, {
           liked: typeof pref.liked === "boolean" ? pref.liked : undefined,
           comment: pref.comment,
         });
+        reactedArtworkIds.add(pref.artworkId);
       });
 
-      for (const match of matches) {
-        const prefEntry = preferencesMap.get(match.artworkId);
-        const liked = prefEntry?.liked;
-        const comment = prefEntry?.comment;
-        let shouldInclude = true;
+      type CandidateScore = {
+        artworkId: string;
+        score: number;
+      };
 
-        if (requester.role === "customer") {
-          // Customer: filter out all artworks with either liked status (liked and disliked)
-          if (typeof liked === "boolean") {
-            shouldInclude = false;
+      class MinScoreHeap {
+        private readonly items: CandidateScore[] = [];
+
+        size(): number {
+          return this.items.length;
+        }
+
+        peek(): CandidateScore | undefined {
+          return this.items[0];
+        }
+
+        push(item: CandidateScore): void {
+          this.items.push(item);
+          this.bubbleUp(this.items.length - 1);
+        }
+
+        pop(): CandidateScore | undefined {
+          if (this.items.length === 0) return undefined;
+          const min = this.items[0];
+          const last = this.items.pop();
+          if (this.items.length > 0 && last) {
+            this.items[0] = last;
+            this.bubbleDown(0);
           }
-        } else {
-          // Others: retrieve all artworks except disliked
-          if (liked === false) {
-            shouldInclude = false;
+          return min;
+        }
+
+        toArray(): CandidateScore[] {
+          return [...this.items];
+        }
+
+        private bubbleUp(index: number): void {
+          while (index > 0) {
+            const parent = Math.floor((index - 1) / 2);
+            if (this.items[parent].score <= this.items[index].score) {
+              break;
+            }
+            [this.items[parent], this.items[index]] = [
+              this.items[index],
+              this.items[parent],
+            ];
+            index = parent;
           }
         }
 
-        if (!shouldInclude) {
+        private bubbleDown(index: number): void {
+          const length = this.items.length;
+          while (true) {
+            let smallest = index;
+            const left = index * 2 + 1;
+            const right = index * 2 + 2;
+
+            if (
+              left < length &&
+              this.items[left].score < this.items[smallest].score
+            ) {
+              smallest = left;
+            }
+            if (
+              right < length &&
+              this.items[right].score < this.items[smallest].score
+            ) {
+              smallest = right;
+            }
+            if (smallest === index) break;
+            [this.items[smallest], this.items[index]] = [
+              this.items[index],
+              this.items[smallest],
+            ];
+            index = smallest;
+          }
+        }
+      }
+
+      const requestedCount = offset + limit;
+      const candidateLimit = requestedCount + 20;
+      const topCandidates = new MinScoreHeap();
+      let scannedCount = 0;
+
+      const candidateQuery = {
+        query: `
+          SELECT c.id, c.vector, c.isPrivate, c.uploadedBy, c.isAuction, c.endDate
+          FROM c
+          WHERE c.type = @type
+            AND c.domainId = @domainId
+            AND IS_DEFINED(c.vector)
+        `,
+        parameters: [
+          { name: "@type", value: "artwork" },
+          { name: "@domainId", value: domainId },
+        ],
+      };
+
+      const candidateIterator = artworksContainer.items.query(candidateQuery, {
+        partitionKey: domainId,
+        maxItemCount: 200,
+      });
+
+      while (candidateIterator.hasMoreResults()) {
+        const { resources } = await candidateIterator.fetchNext();
+        for (const candidate of resources ?? []) {
+          scannedCount += 1;
+
+          if (reactedArtworkIds.has(candidate.id)) {
+            continue;
+          }
+
+          const candidateArtwork = candidate as Artwork;
+          if (!this.canViewerSeeArtwork(candidateArtwork, requester)) {
+            continue;
+          }
+
+          const vector = Array.isArray(candidateArtwork.vector)
+            ? candidateArtwork.vector
+            : [];
+          if (vector.length !== normalizedPreference.length) {
+            continue;
+          }
+
+          const normalizedVector =
+            this.searchIndexService.normalizeVector(vector);
+          const score = normalizedPreference.reduce(
+            (sum, val, i) => sum + val * normalizedVector[i],
+            0,
+          );
+
+          if (topCandidates.size() < candidateLimit) {
+            topCandidates.push({ artworkId: candidateArtwork.id, score });
+            continue;
+          }
+
+          const minEntry = topCandidates.peek();
+          if (minEntry && score > minEntry.score) {
+            topCandidates.pop();
+            topCandidates.push({ artworkId: candidateArtwork.id, score });
+          }
+        }
+      }
+
+      const rankedCandidates = topCandidates
+        .toArray()
+        .sort((a, b) => b.score - a.score);
+
+      this.logger.log({
+        msg: "Number of scored candidates",
+        targetUserId: resolvedUserId,
+        domainId,
+        candidatesCount: rankedCandidates.length,
+        scannedCount,
+      });
+
+      const pageCandidates = rankedCandidates.slice(offset, offset + limit);
+      if (pageCandidates.length === 0) {
+        return [];
+      }
+
+      const pageIds = pageCandidates.map((candidate) => candidate.artworkId);
+      const pageQuery = {
+        query:
+          "SELECT * FROM c WHERE c.domainId = @domainId AND ARRAY_CONTAINS(@ids, c.id)",
+        parameters: [
+          { name: "@domainId", value: domainId },
+          { name: "@ids", value: pageIds },
+        ],
+      };
+      const { resources: pageResources } = await artworksContainer.items
+        .query(pageQuery, { partitionKey: domainId })
+        .fetchAll();
+      const artworkById = new Map<string, Artwork>();
+      (pageResources ?? []).forEach((artwork) => {
+        artworkById.set(artwork.id, artwork);
+      });
+
+      for (const candidate of pageCandidates) {
+        const artwork = artworkById.get(candidate.artworkId);
+        if (!artwork) {
+          continue;
+        }
+        if (!this.canViewerSeeArtwork(artwork, requester)) {
           continue;
         }
 
-        try {
-          const { resource: artwork } = await artworksContainer
-            .item(match.artworkId, domainId)
-            .read();
+        const prefEntry = preferencesMap.get(artwork.id);
+        const liked = prefEntry?.liked;
+        const comment = prefEntry?.comment;
 
-          if (artwork) {
-            artwork.probabilityMatch = match.score;
+        artwork.probabilityMatch = candidate.score;
 
-            // Attach liked status/comment to the artwork
-            if (liked === undefined) {
-              artwork.likedStatus = LikedStatus.NotTasted;
-            } else if (liked) {
-              artwork.likedStatus = LikedStatus.Liked;
-            } else {
-              artwork.likedStatus = LikedStatus.Disliked;
-            }
-            if (comment) {
-              artwork.preferenceComment = comment;
-            } else {
-              delete artwork.preferenceComment;
-            }
-
-            recommendedArtworks.push(artwork);
-          }
-        } catch (lookupError) {
-          this.logger.warn({
-            msg: "Failed to fetch artwork during AI suggestions",
-            domainId,
-            artworkId: match.artworkId,
-            error: (lookupError as Error).message,
-          });
+        // Attach liked status/comment to the artwork
+        if (liked === undefined) {
+          artwork.likedStatus = LikedStatus.NotTasted;
+        } else if (liked) {
+          artwork.likedStatus = LikedStatus.Liked;
+        } else {
+          artwork.likedStatus = LikedStatus.Disliked;
         }
+        if (comment) {
+          artwork.preferenceComment = comment;
+        } else {
+          delete artwork.preferenceComment;
+        }
+
+        recommendedArtworks.push(artwork);
       }
 
       this.logger.log({

@@ -16,6 +16,10 @@
 
 // Import function registrations (this triggers app.storageQueue() calls)
 import "./ProcessImagesFromBlob/ProcessImagesFromBlob";
+import "./NotifyUsersNewArtwork/NotifyUsersNewArtwork";
+import "./DailyDomainOwnerSummary/DailyDomainOwnerSummary";
 
 // Export for testing if needed
 export * from "./ProcessImagesFromBlob/ProcessImagesFromBlob";
+export * from "./NotifyUsersNewArtwork/NotifyUsersNewArtwork";
+export * from "./DailyDomainOwnerSummary/DailyDomainOwnerSummary";

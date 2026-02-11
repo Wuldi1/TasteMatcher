@@ -40,6 +40,7 @@ echo "Using Computer Vision location: $COMPUTER_VISION_LOCATION"
 RG_NAME="tastematcher-${ENV}-rg"
 STORAGE_DISPLAY="tastematcher-${ENV}-storage"     # display/label
 QUEUE_NAME="tastematcher-${ENV}-indexing-jobs"     # queue name
+NEW_ARTWORK_QUEUE_NAME="tastematcher-${ENV}-new-artwork-jobs"
 SEARCH_NAME="tastematcher-${ENV}-search"           # cognitive search name (must be globally unique under subscription)
 COSMOS_NAME="tastematcher-${ENV}-cosmos"           # cosmos db account name (must be globally unique)
 KV_NAME="tastematcher-${ENV}-kv"                   # key vault name (lowercase, unique)
@@ -103,6 +104,8 @@ az storage container create --name derivatives --account-name "$STORAGE_ACCOUNT_
 # Create Queue for indexing jobs
 echo "Creating queue $QUEUE_NAME..."
 az storage queue create --name "$QUEUE_NAME" --account-name "$STORAGE_ACCOUNT_NAME" --account-key "$STORAGE_KEY" -o none
+echo "Creating queue $NEW_ARTWORK_QUEUE_NAME..."
+az storage queue create --name "$NEW_ARTWORK_QUEUE_NAME" --account-name "$STORAGE_ACCOUNT_NAME" --account-key "$STORAGE_KEY" -o none
 
 # Create Key Vault
 echo "registering Microsoft.KeyVault provider..."
@@ -144,6 +147,8 @@ az provider register --namespace Microsoft.DocumentDB -o none
 # Create Azure Cosmos DB account
 echo "Creating Azure Cosmos DB account: $COSMOS_NAME ..."
 COSMOS_DATABASE="tastematcher"
+VECTOR_DIMENSIONS=1024
+VECTOR_DISTANCE_FUNCTION="cosine"
 
 if az cosmosdb show --name "$COSMOS_NAME" --resource-group "$RG_NAME" >/dev/null 2>&1; then
   echo "Cosmos DB account $COSMOS_NAME already exists. Skipping creation."
@@ -180,6 +185,37 @@ else
       -o none || echo "Core container already exists or creation failed - continuing..."
 
     # Artworks container - partition by /domainId for multi-tenant isolation
+    # Configure vector index for /vector (1024 floats) to support similarity search
+    ARTWORKS_INDEXING_POLICY_PATH="/tmp/${COSMOS_NAME}-artworks-indexing-policy.json"
+    cat > "$ARTWORKS_INDEXING_POLICY_PATH" <<EOF
+{
+  "indexingMode": "consistent",
+  "automatic": true,
+  "includedPaths": [
+    { "path": "/*" }
+  ],
+  "excludedPaths": [
+    { "path": "/\\"_etag\\"/?" }
+  ],
+  "vectorIndexes": [
+    {
+      "path": "/vector",
+      "type": "quantizedFlat"
+    }
+  ],
+  "vectorEmbeddingPolicy": {
+    "vectorEmbeddings": [
+      {
+        "path": "/vector",
+        "dataType": "Float32",
+        "distanceFunction": "${VECTOR_DISTANCE_FUNCTION}",
+        "dimensions": ${VECTOR_DIMENSIONS}
+      }
+    ]
+  }
+}
+EOF
+
     az cosmosdb sql container create \
       --account-name "$COSMOS_NAME" \
       --resource-group "$RG_NAME" \
@@ -187,7 +223,17 @@ else
       --name "Artworks" \
       --partition-key-path "/domainId" \
       --throughput 400 \
+      --indexing-policy "$ARTWORKS_INDEXING_POLICY_PATH" \
       -o none || echo "Artworks container already exists or creation failed - continuing..."
+
+    # Ensure vector indexing policy is applied for existing containers
+    az cosmosdb sql container update \
+      --account-name "$COSMOS_NAME" \
+      --resource-group "$RG_NAME" \
+      --database-name "$COSMOS_DATABASE" \
+      --name "Artworks" \
+      --indexing-policy "$ARTWORKS_INDEXING_POLICY_PATH" \
+      -o none || echo "Artworks container indexing policy update failed - continuing..."
 
     # Proposals container - holds proposals and domain requests, partition by /domainId
     az cosmosdb sql container create \
@@ -416,6 +462,7 @@ az functionapp config appsettings set \
     AZURE_STORAGE_ACCOUNT_KEY="$STORAGE_KEY" \
     AZURE_KEYVAULT_URI="https://${KV_NAME}.vault.azure.net/" \
     IMAGE_PROCESSING_QUEUE_NAME="$QUEUE_NAME" \
+    NEW_ARTWORK_QUEUE_NAME="$NEW_ARTWORK_QUEUE_NAME" \
     AZURE_BLOB_CONTAINER_ORIGINALS="originals" \
     AZURE_BLOB_CONTAINER_DERIVATIVES="derivatives" \
     AZURE_SEARCH_ENDPOINT="https://${SEARCH_NAME}.search.windows.net" \
@@ -423,9 +470,12 @@ az functionapp config appsettings set \
     AZURE_SEARCH_ADMIN_KEY="$SEARCH_KEY" \
     AZURE_AI_VISION_ENDPOINT="$VISION_ENDPOINT" \
     AZURE_AI_VISION_KEY="$VISION_KEY" \
+    AZURE_COMMUNICATION_CONNECTION_STRING="$COMMUNICATION_CONNECTION_STRING" \
+    AZURE_EMAIL_SENDER="$AZURE_EMAIL_SENDER_ADDRESS" \
     COSMOS_DB_ENDPOINT="$COSMOS_DB_ENDPOINT" \
     COSMOS_DB_KEY="$COSMOS_PRIMARY_KEY" \
     COSMOS_DB_DATABASE="$COSMOS_DATABASE" \
+    FRONTEND_URL="https://${WEBAPP_FRONTEND_NAME}.azurewebsites.net" \
     NODE_ENV="$ENV" \
   -o none
 
@@ -580,6 +630,7 @@ az webapp config appsettings set \
     AZURE_BLOB_CONTAINER_ORIGINALS="originals" \
     AZURE_BLOB_CONTAINER_DERIVATIVES="derivatives" \
     IMAGE_PROCESSING_QUEUE_NAME="$QUEUE_NAME" \
+    NEW_ARTWORK_QUEUE_NAME="$NEW_ARTWORK_QUEUE_NAME" \
     AZURE_KEYVAULT_URI="https://${KV_NAME}.vault.azure.net/" \
     AZURE_KEYVAULT_NAME="$KV_NAME" \
     COSMOS_DB_ENDPOINT="$COSMOS_DB_ENDPOINT" \
@@ -684,6 +735,7 @@ az webapp config appsettings set \
     AZURE_BLOB_CONTAINER_ORIGINALS="originals" \
     AZURE_BLOB_CONTAINER_DERIVATIVES="derivatives" \
     IMAGE_PROCESSING_QUEUE_NAME="$QUEUE_NAME" \
+    NEW_ARTWORK_QUEUE_NAME="$NEW_ARTWORK_QUEUE_NAME" \
     AZURE_KEYVAULT_URI="https://${KV_NAME}.vault.azure.net/" \
     AZURE_KEYVAULT_NAME="$KV_NAME" \
     COSMOS_DB_ENDPOINT="$COSMOS_DB_ENDPOINT" \
@@ -827,6 +879,7 @@ AZURE_STORAGE_ACCOUNT_KEY=${STORAGE_KEY}
 AZURE_BLOB_CONTAINER_ORIGINALS=originals
 AZURE_BLOB_CONTAINER_DERIVATIVES=derivatives
 IMAGE_PROCESSING_QUEUE_NAME=${QUEUE_NAME}
+NEW_ARTWORK_QUEUE_NAME=${NEW_ARTWORK_QUEUE_NAME}
 
 # Search
 AZURE_SEARCH_ENDPOINT=https://${SEARCH_NAME}.search.windows.net
@@ -887,6 +940,7 @@ cat > "$FUNCTIONS_SETTINGS" <<EOF
     "AZURE_STORAGE_ACCOUNT_KEY": "${STORAGE_KEY}",
     "AZURE_KEYVAULT_URI": "https://${KV_NAME}.vault.azure.net/",
     "IMAGE_PROCESSING_QUEUE_NAME": "${QUEUE_NAME}",
+    "NEW_ARTWORK_QUEUE_NAME": "${NEW_ARTWORK_QUEUE_NAME}",
     "AZURE_BLOB_CONTAINER_ORIGINALS": "originals",
     "AZURE_BLOB_CONTAINER_DERIVATIVES": "derivatives",
     "AZURE_SEARCH_ENDPOINT": "https://${SEARCH_NAME}.search.windows.net",
@@ -909,6 +963,7 @@ echo " - Resource group: $RG_NAME"
 echo " - Storage account: $STORAGE_ACCOUNT_NAME"
 echo " - Blob endpoint: $STORAGE_BLOB_ENDPOINT"
 echo " - Queue name: $QUEUE_NAME"
+echo " - New artwork queue name: $NEW_ARTWORK_QUEUE_NAME"
 echo " - Cognitive Search name: $SEARCH_NAME"
 echo " - Computer Vision name: $VISION_NAME"
 echo " - Computer Vision endpoint: $VISION_ENDPOINT"

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { apiClient } from "../../utils/api";
+import { isArtworkNew } from "../../utils/general";
 
 export default function ProposalView({
   proposal,
@@ -383,6 +384,7 @@ export default function ProposalView({
                 ? "Bidding Advice"
                 : "Bidding Start"
               : "Price";
+            const showNewTag = artwork ? isArtworkNew(artwork) : false;
 
             return (
               <article
@@ -412,6 +414,11 @@ export default function ProposalView({
                   ) : (
                     <div className="w-full h-64 lg:h-full bg-gray-100 flex items-center justify-center text-sm text-gray-400">
                       No image
+                    </div>
+                  )}
+                  {showNewTag && (
+                    <div className="absolute top-3 right-3 bg-sky-200/90 backdrop-blur-sm text-sky-900 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                      New
                     </div>
                   )}
                 </div>

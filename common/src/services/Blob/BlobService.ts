@@ -6,7 +6,10 @@ import {
 import { createLogger } from "../../lib/logger";
 import { loadConfig, type AppConfig } from "../../lib/config";
 import { retryWithBackoff } from "../../utils/retry";
-import { ImageProcessingQueueMessage } from "../../types/queue.types";
+import {
+  ImageProcessingQueueMessage,
+  NewArtworkNotificationQueueMessage,
+} from "../../types/queue.types";
 import { BadRequestException } from "@nestjs/common";
 
 const logger = createLogger("BlobService");
@@ -336,11 +339,12 @@ export class BlobService {
   }
 
   async sendMessageToQueue(
-    message: ImageProcessingQueueMessage,
+    message: ImageProcessingQueueMessage | NewArtworkNotificationQueueMessage,
+    queueName?: string,
   ): Promise<void> {
-    const queueClient = this.queueServiceClient.getQueueClient(
-      this.appConfig.queue.name,
-    );
+    const targetQueue = queueName || this.appConfig.queue.name;
+    const queueClient =
+      this.queueServiceClient.getQueueClient(targetQueue);
     await queueClient.createIfNotExists();
 
     const messageText = Buffer.from(JSON.stringify(message)).toString("base64");
@@ -348,7 +352,7 @@ export class BlobService {
 
     logger.debug({
       msg: "Sent message to queue",
-      queueName: this.appConfig.queue.name,
+      queueName: targetQueue,
     });
   }
 

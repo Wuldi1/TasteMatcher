@@ -1,5 +1,3 @@
-import { Artwork, ThumbnailInfo } from "./artwork.types";
-
 export type UploadStatus =
   | "pending"
   | "enqueued"
@@ -22,12 +20,15 @@ export interface ImageProcessingQueueMessage {
   uploadedAt: number;
 }
 
-export interface ProcessingStatus {
+export interface NewArtworkNotificationQueueMessage {
+  /** Unique message identifier for idempotency */
+  messageId: string;
+  /** Artwork database ID */
   artworkId: string;
-  status: UploadStatus;
-  progress: number; // 0-100 percentage
-  thumbnails?: Array<ThumbnailInfo>;
-  error?: string; // error message if failed
+  /** Domain this artwork belongs to */
+  domainId: string;
+  /** Timestamp when uploaded */
+  uploadedAt: number;
 }
 
 // ---------- CODEGEN CHECKLIST (must be satisfied) ----------

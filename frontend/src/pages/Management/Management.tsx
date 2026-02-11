@@ -6,8 +6,12 @@ import {
   User,
 } from "@tastematcher/common";
 import { Edit, Mail, Trash2 } from "lucide-react";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "../../components/inputs/SearchableSelect";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiClient, ApiError } from "../../utils/api";
 import "./Management.css";
@@ -34,6 +38,14 @@ export function Management() {
   const [selectedDomainId, setSelectedDomainId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const domainOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      domains.map((domain) => ({
+        value: domain.id,
+        label: domain.name ?? domain.adminEmail ?? domain.id,
+      })),
+    [domains],
+  );
 
   // Filter and sort state for users
   const [userSearchQuery, setUserSearchQuery] = useState("");
@@ -782,18 +794,15 @@ export function Management() {
                       >
                         Select Domain
                       </label>
-                      <select
+                      <SearchableSelect
                         id="domain-select"
-                        value={selectedDomainId}
-                        onChange={(e) => setSelectedDomainId(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:bg-gray-100 transition-colors cursor-pointer"
-                      >
-                        {domains.map((domain) => (
-                          <option key={domain.id} value={domain.id}>
-                            {domain.name} ({domain.adminEmail})
-                          </option>
-                        ))}
-                      </select>
+                        ariaLabel="Select domain"
+                        value={selectedDomainId || undefined}
+                        onChange={(value) => setSelectedDomainId(value ?? "")}
+                        options={domainOptions}
+                        placeholder="Select a domain..."
+                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:bg-gray-100 transition-colors"
+                      />
                     </div>
                   )}
 
@@ -1736,26 +1745,25 @@ export function Management() {
                                 {formatDate(req.createdAt)}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <select
+                                <SearchableSelect
+                                  id={`customer-domain-${req.id}`}
+                                  ariaLabel="Assign domain"
                                   value={
                                     customerRequestDomains[req.id] ||
                                     req.assignedDomainId ||
-                                    selectedDomainId
+                                    selectedDomainId ||
+                                    undefined
                                   }
-                                  onChange={(e) =>
+                                  onChange={(value) =>
                                     setCustomerRequestDomains((prev) => ({
                                       ...prev,
-                                      [req.id]: e.target.value,
+                                      [req.id]: value ?? "",
                                     }))
                                   }
+                                  options={domainOptions}
+                                  placeholder="Select a domain..."
                                   className="w-full px-2 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                >
-                                  {domains.map((domain) => (
-                                    <option key={domain.id} value={domain.id}>
-                                      {domain.name}
-                                    </option>
-                                  ))}
-                                </select>
+                                />
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <button
@@ -1816,26 +1824,25 @@ export function Management() {
                             <label className="text-xs font-medium text-gray-500">
                               Assign Domain
                             </label>
-                            <select
+                            <SearchableSelect
+                              id={`customer-domain-mobile-${req.id}`}
+                              ariaLabel="Assign domain"
                               value={
                                 customerRequestDomains[req.id] ||
                                 req.assignedDomainId ||
-                                selectedDomainId
+                                selectedDomainId ||
+                                undefined
                               }
-                              onChange={(e) =>
+                              onChange={(value) =>
                                 setCustomerRequestDomains((prev) => ({
                                   ...prev,
-                                  [req.id]: e.target.value,
+                                  [req.id]: value ?? "",
                                 }))
                               }
+                              options={domainOptions}
+                              placeholder="Select a domain..."
                               className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                              {domains.map((domain) => (
-                                <option key={domain.id} value={domain.id}>
-                                  {domain.name}
-                                </option>
-                              ))}
-                            </select>
+                            />
                           </div>
 
                           <button
