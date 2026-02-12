@@ -41,7 +41,9 @@ import { useAuth } from "../contexts/AuthContext";
 import { apiClient } from "../utils/api";
 import { AISuggestionsPage } from "./AISuggestions/AISuggestionsPage";
 
-type UserItem = { id: string; name?: string };
+type UserItem = { id: string; name?: string; email?: string };
+const compareByLabel = (left: string, right: string) =>
+  left.localeCompare(right, undefined, { sensitivity: "base", numeric: true });
 
 // Helper component for image slideshow
 const ImageSlideshow = ({
@@ -86,7 +88,7 @@ export default function SalesPage() {
     { id: string; name?: string; adminEmail?: string }[]
   >([]);
   const [selectedDomainId, setSelectedDomainId] = useState<string | undefined>(
-    isGlobalAdmin ? undefined : domainId
+    isGlobalAdmin ? undefined : domainId,
   );
   const [domainsLoading, setDomainsLoading] = useState<boolean>(false);
 
@@ -97,22 +99,28 @@ export default function SalesPage() {
 
   const [users, setUsers] = useState<UserItem[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | undefined>(
-    undefined
+    undefined,
   );
   const domainOptions = useMemo<SearchableSelectOption[]>(
     () =>
-      domains.map((domain) => ({
-        value: domain.id,
-        label: domain.name ?? domain.adminEmail ?? domain.id,
-      })),
+      domains
+        .map((domain) => ({
+          value: domain.id,
+          label: domain.name ?? domain.adminEmail ?? domain.id,
+        }))
+        .sort((a, b) => compareByLabel(a.label, b.label)),
     [domains],
   );
   const userOptions = useMemo<SearchableSelectOption[]>(
     () =>
-      users.map((account) => ({
-        value: account.id,
-        label: account.name ?? account.id,
-      })),
+      users
+        .map((account) => ({
+          value: account.id,
+          label: account.email
+            ? `${account.name ?? account.email} (${account.email})`
+            : account.name ?? account.id,
+        }))
+        .sort((a, b) => compareByLabel(a.label, b.label)),
     [users],
   );
   const [activeTab, setActiveTab] = useState<
@@ -149,7 +157,8 @@ export default function SalesPage() {
   const queryUserId = searchParams.get("userId") || undefined;
 
   const totalArtworks =
-    (stats as { totalArtworks?: number; total?: number } | null)?.totalArtworks ??
+    (stats as { totalArtworks?: number; total?: number } | null)
+      ?.totalArtworks ??
     (stats as { totalArtworks?: number; total?: number } | null)?.total ??
     0;
   const totalSwiped = stats?.totalSwiped ?? 0;
@@ -157,8 +166,7 @@ export default function SalesPage() {
   const totalDislikes = stats?.totalDislikes ?? 0;
   const likeRate = totalSwiped > 0 ? totalLikes / totalSwiped : null;
   const dislikeRate = totalSwiped > 0 ? totalDislikes / totalSwiped : null;
-  const swipeCoverage =
-    totalArtworks > 0 ? totalSwiped / totalArtworks : null;
+  const swipeCoverage = totalArtworks > 0 ? totalSwiped / totalArtworks : null;
   const aestheticImages =
     userDetails?.personalQuestionnaire?.aestheticAdmiration?.imageUrls
       ?.length ?? 0;
@@ -189,7 +197,7 @@ export default function SalesPage() {
         setSearchParams(nextParams);
       }
     },
-    [isGlobalAdmin, searchParams, setSearchParams]
+    [isGlobalAdmin, searchParams, setSearchParams],
   );
 
   // Load the correct proposal for the selected user
@@ -204,7 +212,7 @@ export default function SalesPage() {
       try {
         const proposals = await apiClient.listProposals(
           effectiveDomainId,
-          selectedUserId
+          selectedUserId,
         );
         if (proposals.length > 0) {
           const proposal = proposals.find((p) => p.userId === selectedUserId);
@@ -218,7 +226,7 @@ export default function SalesPage() {
                 status: item.status ?? "pending",
                 askedPrice: item.askedPrice ?? 0,
                 askedMaxPrice: item.askedMaxPrice,
-              }))
+              })),
             );
           } else {
             setProposalDetails(null);
@@ -242,16 +250,22 @@ export default function SalesPage() {
     (async () => {
       try {
         const domainsResponse = await apiClient.getAllDomains();
-        setDomains(
-          domainsResponse.map((domain) => ({
+        const sortedDomains = domainsResponse
+          .map((domain) => ({
             id: domain.id,
             name: domain.name,
             adminEmail: domain.adminEmail,
           }))
-        );
+          .sort((a, b) =>
+            compareByLabel(
+              a.name ?? a.adminEmail ?? a.id,
+              b.name ?? b.adminEmail ?? b.id,
+            ),
+          );
+        setDomains(sortedDomains);
         // if none selected, default to first
-        if (!selectedDomainId && domainsResponse.length > 0) {
-          setSelectedDomainId(domainsResponse[0].id);
+        if (!selectedDomainId && sortedDomains.length > 0) {
+          setSelectedDomainId(sortedDomains[0].id);
         }
       } catch (err) {
         console.error("Failed to load domains for sales page", err);
@@ -274,25 +288,27 @@ export default function SalesPage() {
             return;
           }
           const usersResponse = await apiClient.getAllUsers(selectedDomainId);
-          setUsers(
-            usersResponse
-              .filter((userItem) => userItem.role === "customer") // Filter only customers
-              .map((userItem) => ({
-                id: userItem.id,
-                name: userItem.name ?? userItem.email,
-              }))
-          );
+          const sortedCustomers = usersResponse
+            .filter((userItem) => userItem.role === "customer")
+            .map((userItem) => ({
+              id: userItem.id,
+              name: userItem.name ?? userItem.email,
+              email: userItem.email,
+            }))
+            .sort((a, b) => compareByLabel(a.name ?? a.id, b.name ?? b.id));
+          setUsers(sortedCustomers);
         } else {
           // domain_owner / dealer: call without domainId so backend uses caller's domain
           const usersResponse = await apiClient.getAllUsers();
-          setUsers(
-            usersResponse
-              .filter((userItem) => userItem.role === "customer") // Filter only customers
-              .map((userItem) => ({
-                id: userItem.id,
-                name: userItem.name ?? userItem.email,
-              }))
-          );
+          const sortedCustomers = usersResponse
+            .filter((userItem) => userItem.role === "customer")
+            .map((userItem) => ({
+              id: userItem.id,
+              name: userItem.name ?? userItem.email,
+              email: userItem.email,
+            }))
+            .sort((a, b) => compareByLabel(a.name ?? a.id, b.name ?? b.id));
+          setUsers(sortedCustomers);
         }
       } catch (err) {
         console.error("Failed to load users for sales page", err);
@@ -329,7 +345,7 @@ export default function SalesPage() {
       const domainToRequest = isGlobalAdmin ? selectedDomainId : undefined;
       const userResponse = await apiClient.getUser(
         selectedUserId,
-        domainToRequest
+        domainToRequest,
       );
       setUserDetails(userResponse);
       setUserDetailsError(null);
@@ -439,7 +455,7 @@ export default function SalesPage() {
       try {
         const statsResponse = await apiClient.getArtworkStats(
           effectiveDomainId,
-          { userId: selectedUserId }
+          { userId: selectedUserId },
         );
         setStats(statsResponse);
       } catch (err) {
@@ -558,12 +574,12 @@ export default function SalesPage() {
   const handleProposalToggle = (artwork: Artwork) => {
     setProposalItem((currentDraft) => {
       const isAlreadyInProposal = currentDraft.some(
-        (draftItem) => draftItem.artworkId === artwork.id
+        (draftItem) => draftItem.artworkId === artwork.id,
       );
       if (isAlreadyInProposal) {
         // Remove from proposal
         return currentDraft.filter(
-          (draftItem) => draftItem.artworkId !== artwork.id
+          (draftItem) => draftItem.artworkId !== artwork.id,
         );
       } else {
         // Add to proposal
@@ -873,7 +889,7 @@ export default function SalesPage() {
                           (userDetails as any).personalQuestionnaire as Record<
                             string,
                             unknown
-                          >
+                          >,
                         )
                       ) : (
                         <div className="text-gray-500 italic">
@@ -914,7 +930,7 @@ export default function SalesPage() {
                           label: "Questionnaire Completed",
                           value: userDetails?.personalQuestionnaire?.completedAt
                             ? new Date(
-                                userDetails.personalQuestionnaire.completedAt
+                                userDetails.personalQuestionnaire.completedAt,
                               ).toLocaleString()
                             : "—",
                         },
@@ -1007,7 +1023,7 @@ export default function SalesPage() {
                           comment.author === userDetails.email;
                         const trimmedText = comment.text?.trim() || "";
                         const isImageMessage = /^https?:\/\//i.test(
-                          trimmedText
+                          trimmedText,
                         );
 
                         return (
@@ -1027,7 +1043,7 @@ export default function SalesPage() {
                               >
                                 {!isCustomer ? "You" : comment.author} •{" "}
                                 {new Date(
-                                  comment.createdAt
+                                  comment.createdAt,
                                 ).toLocaleDateString()}
                               </div>
                               {isImageMessage ? (
@@ -1169,13 +1185,13 @@ export default function SalesPage() {
                   onAddToDraft={(artwork) => {
                     setProposalItem((currentDraft) => {
                       const isAlreadyInProposal = currentDraft.some(
-                        (draftItem) => draftItem.artworkId === artwork.id
+                        (draftItem) => draftItem.artworkId === artwork.id,
                       );
 
                       if (isAlreadyInProposal) {
                         // Remove from proposal
                         return currentDraft.filter(
-                          (draftItem) => draftItem.artworkId !== artwork.id
+                          (draftItem) => draftItem.artworkId !== artwork.id,
                         );
                       } else {
                         // Add to proposal
@@ -1199,7 +1215,7 @@ export default function SalesPage() {
                   ownersExperience={true}
                   isInProposal={(artworkId) =>
                     proposalItem.some(
-                      (draftItem) => draftItem.artworkId === artworkId
+                      (draftItem) => draftItem.artworkId === artworkId,
                     )
                   }
                 />

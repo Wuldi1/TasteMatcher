@@ -83,7 +83,7 @@ async function uploadArtwork(folderPath, token, domainId, apiBaseUrl) {
   var result = await res.json();
 
   console.log(
-    `✅ Artwork ${metadata.title} [${result.artworkId}] uploaded successfuly`,
+    `✅ Artwork ${metadata.title} by ${metadata.artist} uploaded successfuly`,
   );
 
   return true;
@@ -181,7 +181,7 @@ async function main() {
     } else {
       CONTENT_DIR = path.resolve(
         "inventory",
-        "TasterMatcherPhilipAuction_NY030126",
+        "TasterMatcherPhilipAuction_NY010126",
       );
     }
 

@@ -17,6 +17,8 @@ import { apiClient, ApiError } from "../../utils/api";
 import "./Management.css";
 
 type TabType = "users" | "domains" | "domain-requests" | "customer-requests";
+const compareByLabel = (left: string, right: string) =>
+  left.localeCompare(right, undefined, { sensitivity: "base", numeric: true });
 
 /**
  * Management page for domain owners and global admins
@@ -40,10 +42,12 @@ export function Management() {
   const [error, setError] = useState<string | null>(null);
   const domainOptions = useMemo<SearchableSelectOption[]>(
     () =>
-      domains.map((domain) => ({
-        value: domain.id,
-        label: domain.name ?? domain.adminEmail ?? domain.id,
-      })),
+      domains
+        .map((domain) => ({
+          value: domain.id,
+          label: domain.name ?? domain.adminEmail ?? domain.id,
+        }))
+        .sort((a, b) => compareByLabel(a.label, b.label)),
     [domains],
   );
 
@@ -137,9 +141,15 @@ export function Management() {
       setIsLoading(true);
       setError(null);
       const fetchedDomains = await apiClient.getAllDomains();
-      setDomains(fetchedDomains);
-      if (fetchedDomains.length > 0 && !selectedDomainId) {
-        setSelectedDomainId(fetchedDomains[0].id);
+      const sortedDomains = [...fetchedDomains].sort((a, b) =>
+        compareByLabel(
+          a.name ?? a.adminEmail ?? a.id,
+          b.name ?? b.adminEmail ?? b.id
+        )
+      );
+      setDomains(sortedDomains);
+      if (sortedDomains.length > 0 && !selectedDomainId) {
+        setSelectedDomainId(sortedDomains[0].id);
       }
     } catch (err) {
       console.error("Failed to load domains:", err);

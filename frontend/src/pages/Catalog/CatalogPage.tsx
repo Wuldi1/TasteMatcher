@@ -48,6 +48,8 @@ import "./CatalogPage.css";
 
 const getViewedStorageKey = (domainId: string, userId?: string) =>
   `tm.viewedArtworks.${userId || "anon"}.${domainId}`;
+const compareByLabel = (left: string, right: string) =>
+  left.localeCompare(right, undefined, { sensitivity: "base", numeric: true });
 
 /**
  * Catalog page displaying all uploaded artworks in a responsive grid.
@@ -104,6 +106,13 @@ export function CatalogPage() {
   }, [location.search]);
 
   const effectiveDomainId = isGlobalAdmin ? selectedDomainId : user?.domainId;
+  const sortedDomains = useMemo(
+    () =>
+      [...domains].sort((a, b) =>
+        compareByLabel(a.name ?? a.id, b.name ?? b.id),
+      ),
+    [domains],
+  );
   const viewedStorageKey =
     effectiveDomainId && user?.id
       ? getViewedStorageKey(effectiveDomainId, user.id)
@@ -158,14 +167,15 @@ export function CatalogPage() {
     (async () => {
       try {
         const domainsResponse = await apiClient.getAllDomains();
-        setDomains(
-          domainsResponse.map((domain) => ({
+        const nextDomains = domainsResponse
+          .map((domain) => ({
             id: domain.id,
             name: domain.name,
-          })),
-        );
-        if (!selectedDomainId && domainsResponse.length > 0) {
-          setSelectedDomainId(domainsResponse[0].id);
+          }))
+          .sort((a, b) => compareByLabel(a.name ?? a.id, b.name ?? b.id));
+        setDomains(nextDomains);
+        if (!selectedDomainId && nextDomains.length > 0) {
+          setSelectedDomainId(nextDomains[0].id);
         }
       } catch (err) {
         console.error("Failed to load domains for catalog", err);
@@ -896,12 +906,12 @@ export function CatalogPage() {
                     onChange={(e) =>
                       setSelectedDomainId(e.target.value || undefined)
                     }
-                    disabled={domainsLoading || domains.length === 0}
+                    disabled={domainsLoading || sortedDomains.length === 0}
                   >
                     <option value="" disabled>
                       {domainsLoading ? "Loading domains..." : "Select domain"}
                     </option>
-                    {domains.map((domain) => (
+                    {sortedDomains.map((domain) => (
                       <option key={domain.id} value={domain.id}>
                         {domain.name
                           ? `${domain.name} (${domain.id})`

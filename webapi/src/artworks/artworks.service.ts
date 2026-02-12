@@ -1290,11 +1290,13 @@ export class ArtworksService {
     if (viewer.role === "dealer") {
       return artwork.uploadedBy === viewer.id;
     }
-    // if (viewer.role === "customer") {
-    //   return Boolean(
-    //     viewer.invitedBy && artwork.uploadedBy === viewer.invitedBy,
-    //   );
-    // }
+    if (viewer.role === "customer") {
+      return Boolean(
+        artwork.isPrivate &&
+          viewer.invitedBy &&
+          artwork.uploadedBy === viewer.invitedBy,
+      );
+    }
     return false;
   }
 }

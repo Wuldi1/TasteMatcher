@@ -19,12 +19,12 @@ const __dirname = path.dirname(new URL(import.meta.url).pathname);
 const INPUT_HTML = path.join(
   __dirname,
   "inventory",
-  "phillops_auction_NY030126.html",
+  "philips_auction_ NY010126.html",
 );
 const OUTPUT_ROOT = path.join(
   __dirname,
   "inventory",
-  "TasterMatcherPhilipAuction_NY030126",
+  "TasterMatcherPhilipAuction_NY010126",
 );
 
 const EUR_TO_USD = 1.1; // static FX
