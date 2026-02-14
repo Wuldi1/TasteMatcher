@@ -1,27 +1,27 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
   Body,
-  Param,
-  Logger,
-  UseGuards,
-  Request,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
-  ForbiddenException,
+  Logger,
+  Param,
+  Patch,
+  Post,
+  Request,
+  UseGuards,
 } from "@nestjs/common";
-import { ApiTags, ApiBearerAuth } from "@nestjs/swagger";
-import { DomainsService } from "./domains.service";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Domain, DomainRequest } from "@tastematcher/common";
+import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
+import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
+import { Roles } from "../auth/utils/roles.decorator";
+import { RolesGuard } from "../auth/utils/roles.guard";
+import { DomainsService } from "./domains.service";
 import { CreateDomainRequestDto } from "./dto/create-domain-request.dto";
 import { UpdateDomainDto } from "./dto/update-domain.dto";
-import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
-import { RolesGuard } from "../auth/utils/roles.guard";
-import { Roles } from "../auth/utils/roles.decorator";
-import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
 
 @ApiTags("domains")
 @Controller("domains")
@@ -42,7 +42,7 @@ export class DomainsController {
       domainId,
       userId: req.user.id,
     });
-    if (req.user.domainId !== domainId) {
+    if (req.user.domainId !== domainId && req.user.role !== "global_admin") {
       throw new ForbiddenException(
         "You are not authorized to access this domain.",
       );
