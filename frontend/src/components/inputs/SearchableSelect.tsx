@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { X } from "lucide-react";
 
 export type SearchableSelectOption = {
   value: string;
@@ -73,6 +74,7 @@ export function SearchableSelect({
   };
 
   const listboxId = `${id}-listbox`;
+  const showClearButton = !disabled && (query.length > 0 || !!value);
 
   return (
     <div ref={containerRef} className="relative">
@@ -94,8 +96,23 @@ export function SearchableSelect({
             onChange(undefined);
           }
         }}
-        className={className}
+        className={`${className ?? ""} ${showClearButton ? "pr-9" : ""}`}
       />
+      {showClearButton && (
+        <button
+          type="button"
+          aria-label="Clear selection"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            setQuery("");
+            setOpen(false);
+            onChange(undefined);
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
       {open && !disabled && (
         <div
           id={listboxId}

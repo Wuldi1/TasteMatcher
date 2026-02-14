@@ -53,14 +53,20 @@ export class SalesService {
       status: (proposal as any).status ?? "draft",
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      submittedAt:
+        ((proposal as any).status ?? "draft") === "submitted"
+          ? Date.now()
+          : undefined,
     };
 
     const { resource } = await container.items.create(newProposal);
-    await this.notifyProposalUpdate(
-      resource as Proposal,
-      requestingUser,
-      "created",
-    );
+    if ((resource as Proposal)?.status !== "draft") {
+      await this.notifyProposalUpdate(
+        resource as Proposal,
+        requestingUser,
+        "created",
+      );
+    }
 
     this.logger.log(
       `Created proposal ${resource?.id} for user ${resource?.userId}`,
@@ -92,6 +98,7 @@ export class SalesService {
     domainId: string,
     userId?: string,
     dealerUserId?: string,
+    includeDrafts = true,
   ): Promise<Proposal[]> {
     const container = await this.getContainer();
     let questProperties;
@@ -108,12 +115,16 @@ export class SalesService {
       };
     } else if (userId) {
       questProperties = {
-        query:
-          "SELECT * FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId ORDER BY c.createdAt DESC",
+        query: includeDrafts
+          ? "SELECT * FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId ORDER BY c.createdAt DESC"
+          : "SELECT * FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId AND (NOT IS_DEFINED(c.status) OR c.status != @draftStatus) ORDER BY c.createdAt DESC",
         parameters: [
           { name: "@type", value: "proposal" },
           { name: "@domainId", value: domainId },
           { name: "@userId", value: userId },
+          ...(includeDrafts
+            ? []
+            : [{ name: "@draftStatus", value: "draft" }]),
         ],
       };
     } else {
@@ -155,16 +166,22 @@ export class SalesService {
       dealerId: update.dealerId ?? existing.dealerId,
       status: (update as any).status ?? existing.status,
       updatedAt: Date.now(),
+      submittedAt:
+        ((update as any).status ?? existing.status) === "submitted"
+          ? existing.submittedAt ?? Date.now()
+          : existing.submittedAt,
     };
 
     const { resource } = await container
       .item(proposalId, domainId)
       .replace(updated as any);
-    await this.notifyProposalUpdate(
-      resource as Proposal,
-      requestingUser,
-      "updated",
-    );
+    if ((resource as Proposal)?.status !== "draft") {
+      await this.notifyProposalUpdate(
+        resource as Proposal,
+        requestingUser,
+        "updated",
+      );
+    }
 
     this.logger.log(`Updated proposal ${proposalId}`);
     return resource as Proposal;
@@ -208,6 +225,9 @@ export class SalesService {
     requestingUser: AuthenticatedUser,
   ): Promise<void> {
     const proposal = await this.getProposal(domainId, proposalId);
+    if (proposal.status === "draft") {
+      throw new BadRequestException("Cannot ping customer for a draft proposal");
+    }
     const customer = await this.usersService.findOne(domainId, proposal.userId);
     await this.emailService.sendProposalNotification?.(
       customer.email,

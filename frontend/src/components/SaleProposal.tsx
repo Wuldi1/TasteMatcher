@@ -126,6 +126,7 @@ export default function SaleProposal({
   >({});
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [saveMode, setSaveMode] = useState<"draft" | "publish">("draft");
   const [newGeneralComment, setNewGeneralComment] = useState("");
   const [artworkDataById, setArtworkDataById] = useState<
     Record<string, Artwork>
@@ -355,24 +356,16 @@ export default function SaleProposal({
     }
   };
 
-  function handleSaveClick() {
-    if (isReadOnly) {
-      showAlert(
-        "Proposal Locked",
-        "This proposal has already been accepted or rejected and is now read-only."
-      );
-      return;
-    }
+  function validateProposalForPublish(): boolean {
     if (!userId) {
       showAlert("Missing User", "Select a user first");
-      return;
+      return false;
     }
     if (items.length === 0) {
-      showAlert("Empty Proposal", "Tag at least one artwork before submitting");
-      return;
+      showAlert("Empty Proposal", "Tag at least one artwork before publishing");
+      return false;
     }
 
-    // Validation
     const errors: Record<string, string> = {};
     let hasError = false;
     items.forEach((item) => {
@@ -396,9 +389,43 @@ export default function SaleProposal({
     if (hasError) {
       setValidationErrors(errors);
       showAlert("Validation Error", "Please fill in all required fields.");
-      return;
+      return false;
     }
 
+    return true;
+  }
+
+  function handleSaveDraftClick() {
+    if (isReadOnly) {
+      showAlert(
+        "Proposal Locked",
+        "This proposal has already been accepted or rejected and is now read-only."
+      );
+      return;
+    }
+    if (!userId) {
+      showAlert("Missing User", "Select a user first");
+      return;
+    }
+    if (items.length === 0) {
+      showAlert("Empty Proposal", "Tag at least one artwork before saving");
+      return;
+    }
+    setSaveMode("draft");
+    setNewGeneralComment("");
+    setIsSaveModalOpen(true);
+  }
+
+  function handlePublishClick() {
+    if (isReadOnly) {
+      showAlert(
+        "Proposal Locked",
+        "This proposal has already been accepted or rejected and is now read-only."
+      );
+      return;
+    }
+    if (!validateProposalForPublish()) return;
+    setSaveMode("publish");
     setNewGeneralComment("");
     setIsSaveModalOpen(true);
   }
@@ -428,7 +455,7 @@ export default function SaleProposal({
           askedMaxPrice: item.askedMaxPrice,
         })) as any,
         generalComments: updatedGeneralComments,
-        status: "submitted", // Ensure the proposal is submitted with the correct status
+        status: saveMode === "publish" ? "submitted" : "draft",
       };
 
       let data;
@@ -454,7 +481,13 @@ export default function SaleProposal({
       }
 
       showProposalSummaryAlert(
-        proposalId ? "Proposal updated" : "Proposal created",
+        saveMode === "publish"
+          ? proposalId
+            ? "Proposal published"
+            : "Proposal created and published"
+          : proposalId
+            ? "Draft updated"
+            : "Draft created",
         data
       );
     } catch (err) {
@@ -1392,13 +1425,26 @@ export default function SaleProposal({
           <button
             onClick={handlePingProposal}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-yellow-200 text-yellow-700 rounded-xl font-medium hover:bg-yellow-50 transition-colors disabled:opacity-50"
-            disabled={!proposalId || isReadOnly}
+            disabled={!proposalId || isReadOnly || proposalStatus === "draft"}
           >
             <Bell className="w-4 h-4" />
             Ping
           </button>
           <button
-            onClick={handleSaveClick}
+            onClick={handleSaveDraftClick}
+            className="flex items-center gap-2 px-6 py-2 bg-gray-700 text-white rounded-xl font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-800"
+            title="In Draft mode, this proposal is not visible to the customer."
+            disabled={
+              saving ||
+              isReadOnly ||
+              (proposalId ? !isDirty : items.length === 0)
+            }
+          >
+            <Save className="w-4 h-4" />
+            {proposalStatus === "submitted" ? "Change to Draft" : "Save Draft"}
+          </button>
+          <button
+            onClick={handlePublishClick}
             className={`flex items-center gap-2 px-6 py-2 text-white rounded-xl font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               proposalId
                 ? "bg-blue-600 hover:bg-blue-700"
@@ -1407,7 +1453,7 @@ export default function SaleProposal({
             disabled={
               saving ||
               isReadOnly ||
-              (proposalId ? !isDirty : items.length === 0)
+              items.length === 0
             }
           >
             {proposalId ? (
@@ -1415,7 +1461,7 @@ export default function SaleProposal({
             ) : (
               <CheckCircle className="w-4 h-4" />
             )}
-            {proposalId ? "Update" : "Create"}
+            {proposalId ? "Publish Changes" : "Create & Publish"}
           </button>
         </div>
       </div>
@@ -1425,7 +1471,13 @@ export default function SaleProposal({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white rounded-lg shadow-lg p-6 w-[32rem] max-h-[90vh] flex flex-col">
             <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              {proposalId ? "Update Proposal" : "Create Proposal"}
+              {saveMode === "publish"
+                ? proposalId
+                  ? "Publish Proposal Changes"
+                  : "Create and Publish Proposal"
+                : proposalId
+                  ? "Save Draft Changes"
+                  : "Create Draft"}
             </h2>
 
             <div className="flex-1 overflow-y-auto mb-4">
@@ -1471,12 +1523,20 @@ export default function SaleProposal({
               <button
                 onClick={confirmSaveProposal}
                 className={`px-4 py-2 text-white rounded-lg font-medium shadow-sm transition-colors ${
-                  proposalId
-                    ? "bg-blue-600 hover:bg-blue-700"
-                    : "bg-green-600 hover:bg-green-700"
+                  saveMode === "publish"
+                    ? proposalId
+                      ? "bg-blue-600 hover:bg-blue-700"
+                      : "bg-green-600 hover:bg-green-700"
+                    : "bg-gray-700 hover:bg-gray-800"
                 }`}
               >
-                {proposalId ? "Update Proposal" : "Create Proposal"}
+                {saveMode === "publish"
+                  ? proposalId
+                    ? "Publish Changes"
+                    : "Create & Publish"
+                  : proposalId
+                    ? "Save Draft"
+                    : "Create Draft"}
               </button>
             </div>
           </div>

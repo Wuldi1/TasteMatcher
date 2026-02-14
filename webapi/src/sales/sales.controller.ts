@@ -76,6 +76,7 @@ export class SalesController {
       requestedDomainId,
       requestedUserId,
       requestedDealerUserId,
+      req.user.role !== "customer",
     );
   }
 
@@ -96,6 +97,9 @@ export class SalesController {
       throw new ForbiddenException(
         "Customers can only access their own proposals.",
       );
+    }
+    if (req.user.role === "customer" && proposal.status === "draft") {
+      throw new ForbiddenException("Draft proposals are not visible to customers.");
     }
     return proposal;
   }
@@ -137,6 +141,9 @@ export class SalesController {
       throw new ForbiddenException(
         "Customers can only access their own proposals.",
       );
+    }
+    if (req.user.role === "customer" && proposal.status === "draft") {
+      throw new ForbiddenException("Draft proposals cannot be updated by customers.");
     }
 
     return this.salesService.updateProposal(
