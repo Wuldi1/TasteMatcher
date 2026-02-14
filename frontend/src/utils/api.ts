@@ -487,10 +487,17 @@ class ApiClient extends BaseApiClient {
   /**
    * Add a comment to a user
    */
-  async addUserComment(userId: string, text: string): Promise<User> {
+  async addUserComment(
+    userId: string,
+    text: string,
+    domainId?: string
+  ): Promise<User> {
     this.validateRequired(userId, "User ID");
     this.validateRequired(text, "Comment text");
-    return this.request<User>(`/users/${userId}/comments`, {
+    const url = domainId
+      ? `/users/${userId}/comments?domainId=${encodeURIComponent(domainId)}`
+      : `/users/${userId}/comments`;
+    return this.request<User>(url, {
       method: "POST",
       body: JSON.stringify({ text }),
     });

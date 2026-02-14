@@ -156,9 +156,20 @@ export class UsersController {
     @Request() req: AuthenticatedRequest,
     @Param("id") userId: string,
     @Body("text") text: string,
+    @Query("domainId") domainId?: string,
   ): Promise<User> {
     if (!text) {
       throw new BadRequestException("Comment text is required");
+    }
+
+    if (
+      domainId &&
+      req.user.domainId !== domainId &&
+      req.user.role !== "global_admin"
+    ) {
+      throw new ForbiddenException(
+        "You are not authorized to access this domain.",
+      );
     }
 
     // Allow user to comment on themselves, or dealers/admins to comment on users in their domain
@@ -172,7 +183,7 @@ export class UsersController {
     }
 
     return this.usersService.addComment(
-      req.user.domainId,
+      domainId ?? req.user.domainId,
       userId,
       text,
       req.user,

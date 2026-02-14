@@ -37,12 +37,14 @@ interface DomainUserOption {
 }
 
 export const AISuggestionsPage = ({
+  domainId,
   userId,
   proposalItems,
   onAddToProposal,
   onArtworkClick,
   readonlyThumbs = false,
 }: {
+  domainId?: string;
   userId?: string;
   proposalItems?: string[]; // List of artwork IDs already in the proposal
   onAddToProposal?: (artwork: Artwork) => void; // Callback to add artwork to the proposal
@@ -50,6 +52,7 @@ export const AISuggestionsPage = ({
   readonlyThumbs?: boolean;
 } = {}) => {
   const { user } = useAuth();
+  const effectiveDomainId = domainId ?? user?.domainId;
   const [recommendations, setRecommendations] = useState<Artwork[]>([]);
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [selectedUser] = useState<string | undefined>(undefined);
@@ -100,7 +103,7 @@ export const AISuggestionsPage = ({
 
     const fetchUsers = async () => {
       try {
-        const domainUsers = await apiClient.getAllUsers(user?.domainId);
+        const domainUsers = await apiClient.getAllUsers(effectiveDomainId);
         setUsers(
           domainUsers.map((domainUser) => ({
             id: domainUser.id,
@@ -116,10 +119,10 @@ export const AISuggestionsPage = ({
     };
 
     void fetchUsers();
-  }, [isDomainOwner, user?.domainId, userId]);
+  }, [isDomainOwner, effectiveDomainId, userId]);
 
   useEffect(() => {
-    if (!targetUserId || !user?.domainId) {
+    if (!targetUserId || !effectiveDomainId) {
       setRecommendations([]);
       return;
     }
@@ -137,7 +140,7 @@ export const AISuggestionsPage = ({
       try {
         // @ts-ignore - apiClient might not be typed for extra args yet
         const newRecommendations = await apiClient.getRecommendations(
-          user.domainId!,
+          effectiveDomainId,
           targetUserId !== user?.id ? targetUserId : undefined,
           LIMIT,
           0, // Initial offset
@@ -158,10 +161,16 @@ export const AISuggestionsPage = ({
     };
 
     void fetchRecommendations();
-  }, [targetUserId, user?.domainId, user?.id, eligibility.isEligible, userId]);
+  }, [
+    targetUserId,
+    effectiveDomainId,
+    user?.id,
+    eligibility.isEligible,
+    userId,
+  ]);
 
   const loadMore = useCallback(async () => {
-    if (!targetUserId || !user?.domainId || loading || !hasMore) return;
+    if (!targetUserId || !effectiveDomainId || loading || !hasMore) return;
 
     const nextOffset = offset + LIMIT;
     setLoading(true);
@@ -169,7 +178,7 @@ export const AISuggestionsPage = ({
     try {
       // @ts-ignore
       const newRecommendations = await apiClient.getRecommendations(
-        user.domainId!,
+        effectiveDomainId,
         targetUserId !== user?.id ? targetUserId : undefined,
         LIMIT,
         nextOffset,
@@ -186,7 +195,7 @@ export const AISuggestionsPage = ({
     } finally {
       setLoading(false);
     }
-  }, [targetUserId, user?.domainId, user?.id, loading, hasMore, offset]);
+  }, [targetUserId, effectiveDomainId, user?.id, loading, hasMore, offset]);
 
   // Infinite scroll observer
   useEffect(() => {
@@ -212,7 +221,7 @@ export const AISuggestionsPage = ({
   }, [loadMore, hasMore, loading]);
 
   const savePreferenceMutation = useSavePreference({
-    domainId: user?.domainId!,
+    domainId: effectiveDomainId!,
     userId: user?.id!,
     onOptimisticUpdate: (artworkId, updates) => {
       setRecommendations((prev) =>
@@ -277,6 +286,7 @@ export const AISuggestionsPage = ({
     commentDrafts[artwork.id] ?? artwork.preferenceComment ?? "";
 
   const handlePreferenceClick = (artwork: Artwork, liked: boolean) => {
+    if (!effectiveDomainId) return;
     const commentValue = commentDrafts[artwork.id];
     const normalizedComment =
       commentValue !== undefined
@@ -284,7 +294,7 @@ export const AISuggestionsPage = ({
         : artwork.preferenceComment;
     savePreferenceMutation.mutate({
       artworkId: artwork.id,
-      domainId: user?.domainId!,
+      domainId: effectiveDomainId,
       liked,
       comment: normalizedComment,
     });
@@ -301,7 +311,7 @@ export const AISuggestionsPage = ({
   };
 
   const handleCommentSave = async (artwork: Artwork) => {
-    if (!user?.domainId) return;
+    if (!effectiveDomainId) return;
     const commentValue = getDraftComment(artwork);
     const normalizedComment = commentValue.trim();
     const previous = (artwork.preferenceComment ?? "").trim();
@@ -312,7 +322,7 @@ export const AISuggestionsPage = ({
     try {
       await savePreferenceMutation.mutateAsync({
         artworkId: artwork.id,
-        domainId: user.domainId,
+        domainId: effectiveDomainId,
         comment: normalizedComment,
       });
       setCommentDrafts((prev) => ({

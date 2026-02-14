@@ -263,9 +263,9 @@ export default function SalesPage() {
             ),
           );
         setDomains(sortedDomains);
-        // if none selected, default to first
-        if (!selectedDomainId && sortedDomains.length > 0) {
-          setSelectedDomainId(sortedDomains[0].id);
+        // If none selected, default to first (functional update avoids stale closure overriding explicit selection)
+        if (sortedDomains.length > 0) {
+          setSelectedDomainId((current) => current ?? sortedDomains[0].id);
         }
       } catch (err) {
         console.error("Failed to load domains for sales page", err);
@@ -274,7 +274,7 @@ export default function SalesPage() {
         setDomainsLoading(false);
       }
     })();
-  }, [isGlobalAdmin, selectedDomainId]);
+  }, [isGlobalAdmin]);
 
   // Load users:
   // - global_admin: require selectedDomainId and call /users/domain/:domainId
@@ -341,6 +341,7 @@ export default function SalesPage() {
 
   const refreshSelectedUserDetails = useCallback(async () => {
     if (!selectedUserId) return null;
+    if (isGlobalAdmin && !selectedDomainId) return null;
     try {
       const domainToRequest = isGlobalAdmin ? selectedDomainId : undefined;
       const userResponse = await apiClient.getUser(
@@ -391,7 +392,12 @@ export default function SalesPage() {
 
     setIsSendingChat(true);
     try {
-      await apiClient.addUserComment(selectedUserId, newChatComment);
+      const domainToRequest = isGlobalAdmin ? selectedDomainId : undefined;
+      await apiClient.addUserComment(
+        selectedUserId,
+        newChatComment,
+        domainToRequest,
+      );
       setNewChatComment("");
       await refreshSelectedUserDetails();
     } catch (error) {
@@ -416,7 +422,12 @@ export default function SalesPage() {
         newUrls[newUrls.length - 1];
 
       if (attachmentUrl) {
-        await apiClient.addUserComment(selectedUserId, attachmentUrl);
+        const domainToRequest = isGlobalAdmin ? selectedDomainId : undefined;
+        await apiClient.addUserComment(
+          selectedUserId,
+          attachmentUrl,
+          domainToRequest,
+        );
         await refreshSelectedUserDetails();
       }
     } catch (error) {
@@ -1235,6 +1246,7 @@ export default function SalesPage() {
             )}
             {selectedUserId && (
               <AISuggestionsPage
+                domainId={effectiveDomainId}
                 userId={selectedUserId}
                 proposalItems={proposalArtworkIds}
                 onAddToProposal={handleProposalToggle}
