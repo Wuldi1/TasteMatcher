@@ -591,13 +591,52 @@ export default function SaleProposal({
     return new Uint8Array(arrayBuffer);
   };
 
+  const fontEncodableCache = new WeakMap<object, Map<string, boolean>>();
+  const sanitizeForPdfText = (text: string, font: any, fontSize: number) => {
+    const normalized = text.normalize("NFC");
+    const fontObj = font as object;
+    let charCache = fontEncodableCache.get(fontObj);
+    if (!charCache) {
+      charCache = new Map<string, boolean>();
+      fontEncodableCache.set(fontObj, charCache);
+    }
+
+    let result = "";
+    for (const char of Array.from(normalized)) {
+      if (char === "\n" || char === "\r" || char === "\t") {
+        result += " ";
+        continue;
+      }
+
+      const cached = charCache.get(char);
+      if (cached !== undefined) {
+        result += cached ? char : "?";
+        continue;
+      }
+
+      let canEncode = true;
+      try {
+        font.widthOfTextAtSize(char, fontSize);
+      } catch {
+        canEncode = false;
+      }
+      charCache.set(char, canEncode);
+      result += canEncode ? char : "?";
+    }
+
+    return result;
+  };
+
   const wrapText = (
     text: string,
     maxWidth: number,
     font: any,
     fontSize: number
   ) => {
-    const words = text.split(/\s+/).filter(Boolean);
+    const normalized = sanitizeForPdfText(text, font, fontSize)
+      .replace(/\s+/g, " ")
+      .trim();
+    const words = normalized.split(/\s+/).filter(Boolean);
     const lines: string[] = [];
     let current = "";
     for (const word of words) {
@@ -858,7 +897,7 @@ export default function SaleProposal({
         titleY -= titleSize + 4;
       }
       if (artwork?.artist) {
-        page.drawText(artwork.artist, {
+        page.drawText(sanitizeForPdfText(artwork.artist, font, artistSize), {
           x: margin,
           y: titleY - artistSize,
           size: artistSize,

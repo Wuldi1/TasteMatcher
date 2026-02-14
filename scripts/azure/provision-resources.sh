@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Usage: ./provision-resources.sh <env> <location>
 # Example: ./provision-resources.sh dev israelcentral
+# Example: ./provision-resources.sh prd
 
 ENV=${1:-dev}
 LOCATION=${2:-israelcentral}
@@ -137,8 +138,11 @@ COMMUNICATION_CONNECTION_STRING=$(az communication list-key \
   --resource-group "$RG_NAME" \
   --query primaryConnectionString -o tsv)
 
-# TODO - need to create custom domain
-AZURE_EMAIL_SENDER_ADDRESS=${AZURE_EMAIL_SENDER_ADDRESS:-"donotreply@2fd3f94e-2fdf-4c93-80bd-b396997b5bdd.azurecomm.net"}
+if [ "$ENV" = "dev" ]; then
+  AZURE_EMAIL_SENDER_ADDRESS=${AZURE_EMAIL_SENDER_ADDRESS:-"donotreply@2fd3f94e-2fdf-4c93-80bd-b396997b5bdd.azurecomm.net"}
+else
+  AZURE_EMAIL_SENDER_ADDRESS=${AZURE_EMAIL_SENDER_ADDRESS:-"donotreply@tastematcher.art"}
+fi
 
 # Register Microsoft.DocumentDB provider
 echo "registering Microsoft.DocumentDB provider..."
