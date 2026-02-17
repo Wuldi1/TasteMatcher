@@ -12,6 +12,12 @@ import {
   Gavel,
 } from "lucide-react";
 import { isArtworkNew, isAuctionEnded } from "../../utils/general";
+import { useViewerPreferences } from "../../contexts/ViewerPreferencesContext";
+import { useAuth } from "../../contexts/AuthContext";
+import {
+  formatDimensionsForViewer,
+  formatPriceRangeForViewer,
+} from "../../utils/viewFormatting";
 
 const PAGE_SIZE = 30;
 
@@ -51,6 +57,8 @@ export default function CatalogForUser({
   ownersExperience = false,
   isInProposal,
 }: CatalogForUserProps) {
+  const { user } = useAuth();
+  const { currency, dimensionUnit } = useViewerPreferences();
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [initialLoading, setInitialLoading] = useState<boolean>(false);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
@@ -284,12 +292,14 @@ export default function CatalogForUser({
                 {/* Price + New badge */}
                 <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
                   {artwork.price !== undefined &&
-                    (artwork.shouldDisplayPrice ?? true) && (
+                    (user?.role !== "customer" ||
+                      (artwork.shouldDisplayPrice ?? true)) && (
                       <div className="bg-white/90 backdrop-blur-sm text-gray-900 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
-                        ${artwork.price.toLocaleString()}
-                        {artwork.isAuction && artwork.maxPrice !== undefined
-                          ? ` → $${artwork.maxPrice.toLocaleString()}`
-                          : ""}
+                        {formatPriceRangeForViewer(
+                          artwork.price,
+                          artwork.isAuction ? artwork.maxPrice : undefined,
+                          currency,
+                        )}
                       </div>
                     )}
                   {showNewTag && (
@@ -355,11 +365,12 @@ export default function CatalogForUser({
                   </p>
                   {(artwork.width || artwork.height || artwork.depth) && (
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {artwork.width ?? "-"} × {artwork.height ?? "-"}
-                      {artwork.depth !== undefined
-                        ? ` × ${artwork.depth}`
-                        : ""}{" "}
-                      in
+                      {formatDimensionsForViewer(
+                        artwork.width,
+                        artwork.height,
+                        artwork.depth,
+                        dimensionUnit,
+                      )}
                     </p>
                   )}
                 </div>

@@ -31,8 +31,14 @@ import React, {
   useRef,
   useState,
 } from "react";
+import type { Currency } from "../contexts/ViewerPreferencesContext";
+import { InfoTooltip } from "./common/InfoTooltip";
 import { useDomain } from "../contexts/DomainContext";
 import { apiClient, ApiError } from "../utils/api";
+import {
+  convertPriceFromCurrencyToUsd,
+  getCurrencySymbol,
+} from "../utils/viewFormatting";
 
 type UploadStatus = "idle" | "uploading" | "success" | "error";
 
@@ -62,6 +68,7 @@ export function ArtworkUpload() {
   const [heightInput, setHeightInput] = useState<string>("");
   const [depthInput, setDepthInput] = useState<string>("");
   const [dimensionUnit, setDimensionUnit] = useState<"in" | "cm">("in");
+  const [priceCurrency, setPriceCurrency] = useState<Currency>("USD");
   const [maxPriceInput, setMaxPriceInput] = useState<string>("");
   const [endDateInput, setEndDateInput] = useState<string>("");
 
@@ -71,9 +78,21 @@ export function ArtworkUpload() {
     () => Boolean(currentDomain && file),
     [currentDomain, file]
   );
-  const priceValue = metadata.price ?? 0;
+  const parsePriceInput = useCallback((value: string) => {
+    const raw = value.replace(/,/g, "").trim();
+    if (!raw) return undefined;
+    const numeric = Number(raw);
+    return Number.isNaN(numeric) ? undefined : numeric;
+  }, []);
+  const enteredPrice = parsePriceInput(priceInput);
+  const enteredMaxPrice = parsePriceInput(maxPriceInput);
+  const priceValue =
+    enteredPrice === undefined
+      ? 0
+      : convertPriceFromCurrencyToUsd(enteredPrice, priceCurrency);
   const auctionMaxInvalid = metadata.isAuction
-    ? metadata.maxPrice === undefined || metadata.maxPrice < priceValue
+    ? enteredMaxPrice === undefined ||
+      convertPriceFromCurrencyToUsd(enteredMaxPrice, priceCurrency) < priceValue
     : false;
   const auctionEndInvalid = metadata.isAuction
     ? !metadata.endDate || new Date(metadata.endDate).getTime() <= Date.now()
@@ -132,6 +151,7 @@ export function ArtworkUpload() {
       setDepthInput("");
       setMaxPriceInput("");
       setEndDateInput("");
+      setPriceCurrency("USD");
       setIsDragActive(false);
       if (!options?.preserveFeedback) {
         setStatus("idle");
@@ -279,9 +299,12 @@ export function ArtworkUpload() {
         return;
       }
       setPriceInput(formatPrice(raw));
-      setMetadata((prev) => ({ ...prev, price: Number(raw) }));
+      setMetadata((prev) => ({
+        ...prev,
+        price: convertPriceFromCurrencyToUsd(Number(raw), priceCurrency),
+      }));
     },
-    []
+    [priceCurrency]
   );
 
   const handleMaxPriceChange = useCallback(
@@ -293,9 +316,12 @@ export function ArtworkUpload() {
         return;
       }
       setMaxPriceInput(formatPrice(raw));
-      setMetadata((prev) => ({ ...prev, maxPrice: Number(raw) }));
+      setMetadata((prev) => ({
+        ...prev,
+        maxPrice: convertPriceFromCurrencyToUsd(Number(raw), priceCurrency),
+      }));
     },
-    []
+    [priceCurrency]
   );
 
   // Numeric metadata input handler (width, height) — allow digits and a single dot (.) as decimal separator.
@@ -396,6 +422,8 @@ export function ArtworkUpload() {
         const widthValue = parseNumberOrUndefined(widthInput);
         const heightValue = parseNumberOrUndefined(heightInput);
         const depthValue = parseNumberOrUndefined(depthInput);
+        const enteredUploadPrice = parsePriceInput(priceInput);
+        const enteredUploadMaxPrice = parsePriceInput(maxPriceInput);
         const uploadPayload: Partial<Artwork> = {
           ...metadata,
           width:
@@ -404,6 +432,17 @@ export function ArtworkUpload() {
             dimensionUnit === "cm" ? toInches(heightValue) : heightValue,
           depth:
             dimensionUnit === "cm" ? toInches(depthValue) : depthValue,
+          price:
+            enteredUploadPrice === undefined
+              ? undefined
+              : convertPriceFromCurrencyToUsd(enteredUploadPrice, priceCurrency),
+          maxPrice:
+            enteredUploadMaxPrice === undefined
+              ? undefined
+              : convertPriceFromCurrencyToUsd(
+                  enteredUploadMaxPrice,
+                  priceCurrency,
+                ),
         };
         // The API client now sends the token, and the backend infers the domain.
         // We no longer pass the domainId from the frontend.
@@ -442,6 +481,10 @@ export function ArtworkUpload() {
       heightInput,
       depthInput,
       dimensionUnit,
+      priceInput,
+      maxPriceInput,
+      priceCurrency,
+      parsePriceInput,
     ]
   );
 
@@ -708,12 +751,10 @@ export function ArtworkUpload() {
                 >
                   cm
                 </button>
-                <span
-                  className="text-xs text-gray-400"
-                  title="We store dimensions in inches. If you enter cm, we will convert to inches before saving."
-                >
-                  ⓘ
-                </span>
+                <InfoTooltip
+                  ariaLabel="Dimensions conversion info"
+                  message="We store dimensions in inches. If you enter cm, we convert to inches before saving."
+                />
               </div>
             </div>
             <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] gap-2 items-center">
@@ -791,13 +832,36 @@ export function ArtworkUpload() {
           </div>
           {/* Price */}
           <div className="space-y-1">
-            <label
-              htmlFor="metadata-price"
-              className="text-sm font-medium text-gray-700 flex items-center gap-2"
-            >
-              <DollarSign className="w-4 h-4 text-green-600" />
-              Price
-            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <label
+                htmlFor="metadata-price"
+                className="text-sm font-medium text-gray-700 flex items-center gap-2"
+              >
+                <DollarSign className="w-4 h-4 text-green-600" />
+                Price ({priceCurrency})
+              </label>
+              <div className="flex items-center gap-1">
+                {(["USD", "EUR", "GBP"] as const).map((currency) => (
+                  <button
+                    key={currency}
+                    type="button"
+                    className={`px-2 py-0.5 text-xs rounded-full border ${
+                      priceCurrency === currency
+                        ? "bg-gray-900 text-white border-gray-900"
+                        : "bg-white text-gray-600 border-gray-300"
+                    }`}
+                    onClick={() => setPriceCurrency(currency)}
+                    disabled={status === "uploading"}
+                  >
+                    {currency}
+                  </button>
+                ))}
+                <InfoTooltip
+                  ariaLabel="Currency conversion info"
+                  message="We store prices in USD. If you enter EUR or GBP, we convert to USD before saving."
+                />
+              </div>
+            </div>
             <input
               id="metadata-price"
               type="text"
@@ -827,8 +891,15 @@ export function ArtworkUpload() {
               </label>
             </div>
             <p className="text-xs text-gray-500">
-              Set a price in USD ($). Commas are automatically added.
+              Set a price in {priceCurrency} ({getCurrencySymbol(priceCurrency)}
+              ). Commas are automatically added.
             </p>
+            {priceCurrency !== "USD" &&
+              (priceInput.trim() || maxPriceInput.trim()) && (
+                <p className="text-xs text-gray-500">
+                  Values will be converted to USD before saving.
+                </p>
+              )}
           </div>
 
           {/* Settings */}
@@ -875,7 +946,8 @@ export function ArtworkUpload() {
                         disabled={status === "uploading"}
                       />
                       <p className="text-xs text-gray-500">
-                        Must be greater than or equal to price.
+                        Must be greater than or equal to price (
+                        {priceCurrency}).
                       </p>
                       {auctionMaxInvalid && (
                         <p className="text-xs text-red-600 mt-1">

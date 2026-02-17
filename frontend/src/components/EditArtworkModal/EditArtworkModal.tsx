@@ -19,7 +19,13 @@ import ReactCrop, { type Crop, type PixelCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import type { Artwork } from "@tastematcher/common";
 import { useAuth } from "../../contexts/AuthContext";
+import type { Currency } from "../../contexts/ViewerPreferencesContext";
+import { InfoTooltip } from "../common/InfoTooltip";
 import { apiClient } from "../../utils/api";
+import {
+  convertPriceFromCurrencyToUsd,
+  getCurrencySymbol,
+} from "../../utils/viewFormatting";
 
 interface EditArtworkModalProps {
   artwork: Artwork;
@@ -48,6 +54,7 @@ export function EditArtworkModal({
     artwork.depth !== undefined ? String(artwork.depth) : "",
   );
   const [dimensionUnit, setDimensionUnit] = useState<"in" | "cm">("in");
+  const [priceCurrency, setPriceCurrency] = useState<Currency>("USD");
   const [priceInput, setPriceInput] = useState<string>(
     artwork.price !== undefined ? String(artwork.price) : "",
   );
@@ -104,16 +111,24 @@ export function EditArtworkModal({
     };
   }, [imagePreviewUrl]);
 
-  const parseNumberInput = (value: string) => {
-    const cleaned = value.replace(/[^0-9.]/g, "");
+  const parseCurrencyInput = (value: string) => {
+    const cleaned = value.replace(/,/g, "").replace(/[^0-9.]/g, "");
+    if (!cleaned) return undefined;
     const numeric = Number(cleaned);
     return Number.isNaN(numeric) ? undefined : numeric;
   };
 
-  const priceValue = parseNumberInput(priceInput) ?? 0;
-  const maxPriceValue = parseNumberInput(maxPriceInput);
+  const enteredPriceValue = parseCurrencyInput(priceInput);
+  const enteredMaxPriceValue = parseCurrencyInput(maxPriceInput);
+  const priceValue =
+    enteredPriceValue === undefined
+      ? 0
+      : convertPriceFromCurrencyToUsd(enteredPriceValue, priceCurrency);
   const isMaxPriceInvalid =
-    isAuction && (maxPriceValue === undefined || maxPriceValue < priceValue);
+    isAuction &&
+    (enteredMaxPriceValue === undefined ||
+      convertPriceFromCurrencyToUsd(enteredMaxPriceValue, priceCurrency) <
+        priceValue);
   const isEndDateInvalid = isAuction && false;
   // (!!endDateInput ? new Date(endDateInput).getTime() <= Date.now() : true);
 
@@ -167,8 +182,17 @@ export function EditArtworkModal({
       width: dimensionUnit === "cm" ? toInches(widthValue) : widthValue,
       height: dimensionUnit === "cm" ? toInches(heightValue) : heightValue,
       depth: dimensionUnit === "cm" ? toInches(depthValue) : depthValue,
-      price: parseNumberOrUndefined(priceInput),
-      maxPrice: parseNumberOrUndefined(maxPriceInput),
+      price:
+        enteredPriceValue === undefined
+          ? undefined
+          : convertPriceFromCurrencyToUsd(enteredPriceValue, priceCurrency),
+      maxPrice:
+        enteredMaxPriceValue === undefined
+          ? undefined
+          : convertPriceFromCurrencyToUsd(
+              enteredMaxPriceValue,
+              priceCurrency,
+            ),
       endDate: endDateInput || undefined,
       isAuction,
       isPrivate: isPrivate,
@@ -490,13 +514,36 @@ export function EditArtworkModal({
 
               {/* Price Section */}
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                  Price (USD)
-                </label>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Price ({priceCurrency})
+                  </label>
+                  <div className="flex items-center gap-1">
+                    {(["USD", "EUR", "GBP"] as const).map((currency) => (
+                      <button
+                        key={currency}
+                        type="button"
+                        className={`px-2 py-0.5 text-[10px] rounded-full border ${
+                          priceCurrency === currency
+                            ? "bg-gray-900 text-white border-gray-900"
+                            : "bg-white text-gray-500 border-gray-300"
+                        }`}
+                        onClick={() => setPriceCurrency(currency)}
+                      >
+                        {currency}
+                      </button>
+                    ))}
+                    <InfoTooltip
+                      ariaLabel="Currency conversion info"
+                      message="We store prices in USD. If you enter EUR or GBP, we convert to USD before saving."
+                      buttonClassName="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 text-[10px] font-semibold text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                    />
+                  </div>
+                </div>
                 <div className="flex items-center gap-4">
                   <div className="relative flex-1">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                      $
+                      {getCurrencySymbol(priceCurrency)}
                     </span>
                     <input
                       type="text"
@@ -519,6 +566,12 @@ export function EditArtworkModal({
                     Publicly Visible
                   </label>
                 </div>
+                {priceCurrency !== "USD" &&
+                  (priceInput.trim() || maxPriceInput.trim()) && (
+                    <p className="mt-2 text-[11px] text-gray-500">
+                      Values will be converted to USD before saving.
+                    </p>
+                  )}
                 <div className="mt-4 space-y-3 rounded-lg border border-purple-100 bg-white/80 p-3">
                   <div className="flex items-center gap-2 text-sm font-semibold text-purple-700">
                     <Sparkles className="w-4 h-4" />
@@ -545,7 +598,7 @@ export function EditArtworkModal({
                           value={maxPriceInput}
                           onChange={(e) =>
                             setMaxPriceInput(
-                              e.target.value.replace(/[^0-9.]/g, ""),
+                              e.target.value.replace(/[^0-9.,]/g, ""),
                             )
                           }
                           className="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
@@ -553,7 +606,7 @@ export function EditArtworkModal({
                         />
                         {isMaxPriceInvalid && (
                           <p className="text-xs text-red-600 mt-1">
-                            Max price must be ≥ price.
+                            Max price must be ≥ price ({priceCurrency}).
                           </p>
                         )}
                       </div>
@@ -697,12 +750,11 @@ export function EditArtworkModal({
                       >
                         cm
                       </button>
-                      <span
-                        className="text-[10px] text-gray-400"
-                        title="We store dimensions in inches. If you enter cm, we will convert to inches before saving."
-                      >
-                        ⓘ
-                      </span>
+                      <InfoTooltip
+                        ariaLabel="Dimensions conversion info"
+                        message="We store dimensions in inches. If you enter cm, we convert to inches before saving."
+                        buttonClassName="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 text-[10px] font-semibold text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                      />
                     </div>
                   </div>
                   <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] gap-2 items-center">

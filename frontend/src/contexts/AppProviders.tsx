@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { AuthProvider } from "./AuthContext";
 import { DomainProvider } from "./DomainContext"; // Assuming you have this
+import { ViewerPreferencesProvider } from "./ViewerPreferencesContext";
 
 interface AppProvidersProps {
   children: ReactNode;
@@ -15,8 +16,7 @@ export function AppProviders({ children }: AppProvidersProps) {
   return (
     <AuthProvider>
       <DomainProvider>
-        {/* Add other global providers here */}
-        {children}
+        <ViewerPreferencesProvider>{children}</ViewerPreferencesProvider>
       </DomainProvider>
     </AuthProvider>
   );

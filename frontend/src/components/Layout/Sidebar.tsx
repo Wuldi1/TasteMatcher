@@ -13,6 +13,7 @@ import { useWelcomeTour } from "../../hooks/useWelcomeTour";
 import { NAVIGATION_LINKS } from "../../constants/navigation";
 import { getAIRecommendationsEligibility } from "../../utils/general";
 import { useProposalData } from "../../hooks/useProposalData";
+import { ViewerPreferencesControls } from "./ViewerPreferencesControls";
 
 export const Sidebar = () => {
   const { user, refreshUser, logout, stats } = useAuth();
@@ -202,6 +203,11 @@ export const Sidebar = () => {
       </nav>
 
       <div className="p-4 border-t border-gray-200 flex-shrink-0">
+        {!isCollapsed && (
+          <div className="mb-4">
+            <ViewerPreferencesControls />
+          </div>
+        )}
         <div
           className={`relative flex items-center mb-4 ${isCollapsed ? "justify-center" : ""} ${
             user && user.role === "customer" ? "cursor-pointer" : ""

@@ -21,6 +21,12 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import React, { useEffect, useState } from "react";
 import { apiClient } from "../utils/api";
 import { isArtworkNew } from "../utils/general";
+import { useViewerPreferences } from "../contexts/ViewerPreferencesContext";
+import {
+  formatDimensionsForViewer,
+  formatPriceForViewer,
+  formatPriceRangeForViewer,
+} from "../utils/viewFormatting";
 
 // Helper component for price input with comma formatting
 const FormattedPriceInput = ({
@@ -112,6 +118,7 @@ export default function SaleProposal({
   onProposalSave?: (proposal: Proposal) => void;
   onProposalDelete?: () => void;
 }) {
+  const { currency, dimensionUnit } = useViewerPreferences();
   // Use the passed draftItems as the source of truth; keep local copy for editing convenience
   const [items, setItems] = useState<ProposalItem[]>(draftItems ?? []);
   const [generalComments, setGeneralComments] = useState<Comment[]>([]);
@@ -597,8 +604,7 @@ export default function SaleProposal({
   }
 
   const formatCurrency = (value?: number) => {
-    if (value === undefined || Number.isNaN(value)) return "—";
-    return `$${value.toLocaleString()}`;
+    return formatPriceForViewer(value, currency);
   };
 
   const nonEmptyComments = (comments: Comment[]) =>
@@ -813,11 +819,9 @@ export default function SaleProposal({
 
       const metaLines: string[] = [];
       if (artwork?.medium) metaLines.push(`Medium: ${artwork.medium}`);
-      if (artwork?.width && artwork?.height) {
-        metaLines.push(
-          `Size: ${artwork.width} × ${artwork.height}${artwork.depth ? ` × ${artwork.depth}` : ""}`
-        );
-      }
+      metaLines.push(
+        `Size: ${formatDimensionsForViewer(artwork?.width, artwork?.height, artwork?.depth, dimensionUnit)}`
+      );
       if (artwork?.date) metaLines.push(`Date: ${artwork.date}`);
 
       const detailSections: Array<{
@@ -1242,18 +1246,19 @@ export default function SaleProposal({
                       <span className="text-gray-400 text-xs uppercase mr-2">
                         Size:
                       </span>{" "}
-                      {artwork?.width && artwork?.height
-                        ? `${artwork.width} × ${artwork.height} cm`
-                        : "—"}
+                      {formatDimensionsForViewer(
+                        artwork?.width,
+                        artwork?.height,
+                        artwork?.depth,
+                        dimensionUnit,
+                      )}
                     </div>
                     {!artwork?.isAuction && (
                       <div>
                         <span className="text-gray-400 text-xs uppercase mr-2">
                           List Price:
                         </span>{" "}
-                        {artwork?.price !== undefined
-                          ? `$${artwork.price.toLocaleString()}`
-                          : "—"}
+                        {formatPriceForViewer(artwork?.price, currency)}
                       </div>
                     )}
                     {artwork?.isAuction && (
@@ -1261,13 +1266,11 @@ export default function SaleProposal({
                         <span className="text-gray-400 text-xs uppercase mr-2">
                           Price Range:
                         </span>{" "}
-                        {artwork?.price !== undefined
-                          ? `$${artwork.price.toLocaleString()}`
-                          : "—"}
-                        -
-                        {artwork?.maxPrice !== undefined
-                          ? `$${artwork.maxPrice.toLocaleString()}`
-                          : "—"}
+                        {formatPriceRangeForViewer(
+                          artwork?.price,
+                          artwork?.maxPrice,
+                          currency,
+                        )}
                       </div>
                     )}
 
@@ -1292,8 +1295,8 @@ export default function SaleProposal({
                           item.askedPrice < artwork.price && (
                             <p className="text-xs text-yellow-600 mt-1 flex items-center gap-1">
                               <AlertTriangle className="w-3 h-3" />
-                              Asked price is lower than list price ($
-                              {artwork.price.toLocaleString()})
+                              Asked price is lower than list price (
+                              {formatPriceForViewer(artwork.price, currency)})
                             </p>
                           )}
                       </div>

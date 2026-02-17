@@ -18,6 +18,12 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { apiClient } from "../../utils/api";
 import { isArtworkNew } from "../../utils/general";
+import { useViewerPreferences } from "../../contexts/ViewerPreferencesContext";
+import {
+  formatDimensionsForViewer,
+  formatPriceForViewer,
+  formatPriceRangeForViewer,
+} from "../../utils/viewFormatting";
 
 export default function ProposalView({
   proposal,
@@ -26,6 +32,7 @@ export default function ProposalView({
   proposal: Proposal;
   onStatusChange?: (status: "accepted" | "rejected" | "submitted") => void;
 }) {
+  const { currency, dimensionUnit } = useViewerPreferences();
   const {
     items = [],
     userId,
@@ -368,13 +375,13 @@ export default function ProposalView({
               item.askedPrice === undefined
                 ? "—"
                 : item.askedPrice > 0
-                  ? `$${item.askedPrice.toLocaleString()}`
+                  ? formatPriceForViewer(item.askedPrice, currency)
                   : "N/A";
             const askedMaxDisplay =
               item.askedMaxPrice === undefined
                 ? undefined
                 : item.askedMaxPrice > 0
-                  ? `$${item.askedMaxPrice.toLocaleString()}`
+                  ? formatPriceForViewer(item.askedMaxPrice, currency)
                   : "N/A";
             const priceDisplay = artwork?.isAuction
               ? `${askedPriceDisplay}${askedMaxDisplay ? ` → ${askedMaxDisplay}` : ""}`
@@ -461,9 +468,12 @@ export default function ProposalView({
                       <span className="block text-xs text-gray-400 uppercase tracking-wider">
                         Dimensions
                       </span>
-                      {artwork?.width && artwork?.height
-                        ? `${artwork.width} × ${artwork.height} cm`
-                        : "—"}
+                      {formatDimensionsForViewer(
+                        artwork?.width,
+                        artwork?.height,
+                        artwork?.depth,
+                        dimensionUnit,
+                      )}
                     </div>
                     <div>
                       <span className="block text-xs text-gray-400 uppercase tracking-wider">
@@ -476,6 +486,11 @@ export default function ProposalView({
                         {priceTitleDisplay}
                       </span>
                       {priceDisplay}
+                      {artwork?.isAuction && (
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          List {formatPriceRangeForViewer(artwork.price, artwork.maxPrice, currency)}
+                        </div>
+                      )}
                       {artwork?.isAuction && artwork.endDate && (
                         <div className="text-xs text-gray-500 mt-0.5">
                           Ends {new Date(artwork.endDate).toLocaleString()}

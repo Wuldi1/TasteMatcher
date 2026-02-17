@@ -46,7 +46,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Main content area */}
-      <main className="flex-1 overflow-y-auto bg-gray-50 pb-16 md:pb-0 p-4 sm:p-6 md:p-8">
+      <main className="flex-1 overflow-y-auto bg-gray-50 pb-20 md:pb-0 p-4 sm:p-6 md:p-8">
         {children}
       </main>
 

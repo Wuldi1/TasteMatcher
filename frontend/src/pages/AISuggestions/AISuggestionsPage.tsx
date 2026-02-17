@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { apiClient } from "../../utils/api";
 import { useAuth } from "../../contexts/AuthContext";
+import { useViewerPreferences } from "../../contexts/ViewerPreferencesContext";
 import { Artwork, User } from "@tastematcher/common";
 import {
   getAIRecommendationsEligibility,
@@ -28,6 +29,10 @@ import {
   Gavel,
 } from "lucide-react";
 import { useSavePreference } from "../../utils/savePreference";
+import {
+  formatDimensionsForViewer,
+  formatPriceRangeForViewer,
+} from "../../utils/viewFormatting";
 
 interface DomainUserOption {
   id: string;
@@ -52,6 +57,7 @@ export const AISuggestionsPage = ({
   readonlyThumbs?: boolean;
 } = {}) => {
   const { user } = useAuth();
+  const { currency, dimensionUnit } = useViewerPreferences();
   const effectiveDomainId = domainId ?? user?.domainId;
   const [recommendations, setRecommendations] = useState<Artwork[]>([]);
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
@@ -390,12 +396,14 @@ export const AISuggestionsPage = ({
                         </span>
                       )}
                       {item.price !== undefined &&
-                        (item.shouldDisplayPrice ?? true) && (
+                        (user?.role !== "customer" ||
+                          (item.shouldDisplayPrice ?? true)) && (
                           <span className="text-xs font-semibold text-gray-900">
-                            ${item.price.toLocaleString()}
-                            {item.isAuction && item.maxPrice !== undefined
-                              ? ` → $${item.maxPrice.toLocaleString()}`
-                              : ""}
+                            {formatPriceRangeForViewer(
+                              item.price,
+                              item.isAuction ? item.maxPrice : undefined,
+                              currency,
+                            )}
                           </span>
                         )}
                     </div>
@@ -635,9 +643,16 @@ export const AISuggestionsPage = ({
                 </div>
 
                 {selectedArtwork.price !== undefined &&
-                  (selectedArtwork.shouldDisplayPrice ?? true) && (
+                  (user?.role !== "customer" ||
+                    (selectedArtwork.shouldDisplayPrice ?? true)) && (
                     <div className="text-2xl text-green-700 font-semibold mb-4">
-                      ${selectedArtwork.price.toLocaleString()}
+                      {formatPriceRangeForViewer(
+                        selectedArtwork.price,
+                        selectedArtwork.isAuction
+                          ? selectedArtwork.maxPrice
+                          : undefined,
+                        currency,
+                      )}
                     </div>
                   )}
 
@@ -655,11 +670,12 @@ export const AISuggestionsPage = ({
                       Dimensions
                     </span>
                     <span className="text-gray-900 font-medium">
-                      {selectedArtwork.width ||
-                      selectedArtwork.height ||
-                      selectedArtwork.depth
-                        ? `${selectedArtwork.width ?? "-"} × ${selectedArtwork.height ?? "-"}${selectedArtwork.depth !== undefined ? ` × ${selectedArtwork.depth}` : ""} in`
-                        : "—"}
+                      {formatDimensionsForViewer(
+                        selectedArtwork.width,
+                        selectedArtwork.height,
+                        selectedArtwork.depth,
+                        dimensionUnit,
+                      )}
                     </span>
                   </div>
                   <div>

@@ -42,8 +42,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { EditArtworkModal } from "../../components/EditArtworkModal/EditArtworkModal";
 import { useAuth } from "../../contexts/AuthContext";
+import { useViewerPreferences } from "../../contexts/ViewerPreferencesContext";
 import { apiClient } from "../../utils/api";
 import { isArtworkNew, isAuctionEnded } from "../../utils/general";
+import {
+  formatDimensionsForViewer,
+  formatPriceRangeForViewer,
+} from "../../utils/viewFormatting";
 import "./CatalogPage.css";
 
 const getViewedStorageKey = (domainId: string, userId?: string) =>
@@ -57,6 +62,7 @@ const compareByLabel = (left: string, right: string) =>
  */
 export function CatalogPage() {
   const { user, isInitializing: authLoading } = useAuth();
+  const { currency, dimensionUnit } = useViewerPreferences();
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -1260,11 +1266,13 @@ export function CatalogPage() {
                           (user?.role !== "customer" ||
                             (artwork.shouldDisplayPrice ?? true)) && (
                             <div className="bg-white/90 backdrop-blur-sm text-gray-900 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
-                              ${artwork.price.toLocaleString()}
-                              {artwork.isAuction &&
-                              artwork.maxPrice !== undefined
-                                ? ` → $${artwork.maxPrice.toLocaleString()}`
-                                : ""}
+                              {formatPriceRangeForViewer(
+                                artwork.price,
+                                artwork.isAuction
+                                  ? artwork.maxPrice
+                                  : undefined,
+                                currency,
+                              )}
                             </div>
                           )}
                         {showNewTag && (
@@ -1485,11 +1493,13 @@ export function CatalogPage() {
                       (user?.role !== "customer" ||
                         (selectedArtwork.shouldDisplayPrice ?? true)) && (
                         <div className="text-2xl text-green-700 font-semibold">
-                          ${selectedArtwork.price.toLocaleString()}
-                          {selectedArtwork.isAuction &&
-                          selectedArtwork.maxPrice !== undefined
-                            ? ` → $${selectedArtwork.maxPrice.toLocaleString()}`
-                            : ""}
+                          {formatPriceRangeForViewer(
+                            selectedArtwork.price,
+                            selectedArtwork.isAuction
+                              ? selectedArtwork.maxPrice
+                              : undefined,
+                            currency,
+                          )}
                         </div>
                       )}
                   </div>
@@ -1521,11 +1531,12 @@ export function CatalogPage() {
                         Dimensions
                       </span>
                       <span className="text-gray-900 font-medium">
-                        {selectedArtwork.width ||
-                        selectedArtwork.height ||
-                        selectedArtwork.depth
-                          ? `${selectedArtwork.width ?? "-"} × ${selectedArtwork.height ?? "-"}${selectedArtwork.depth !== undefined ? ` × ${selectedArtwork.depth}` : ""} in`
-                          : "—"}
+                        {formatDimensionsForViewer(
+                          selectedArtwork.width,
+                          selectedArtwork.height,
+                          selectedArtwork.depth,
+                          dimensionUnit,
+                        )}
                       </span>
                     </div>
                     <div>
