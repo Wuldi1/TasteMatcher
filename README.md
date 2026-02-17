@@ -60,6 +60,17 @@ To get started with the TasteMatcher application, follow these steps:
 3. **Set Up Environment Variables**: Copy `.env.example` to `.env` and configure your environment variables as needed.
 4. **Run the Application**: Use the provided `scripts/dev.sh` to start both the backend and frontend applications concurrently.
 
+## Sub-Agent Workflow
+
+Use the following files to run multi-agent development flows:
+
+1. `AGENTS.md` - Roles, handoff contract, and done criteria
+2. `docs/context/project-context.md` - System and architecture context
+3. `docs/context/sub-agent-flows.md` - Default execution flows
+4. `docs/context/task-brief-template.md` - Reusable kickoff template
+5. `docs/context/active-workstreams.md` - Team priorities and status
+6. `docs/context/agents/html-parser-agent.md` - HTML to artworks parsing workflow
+
 ## New: Sales page (dealer flow)
 
 We added a new Sales page (frontend/src/pages/SalesPage.tsx) that provides:

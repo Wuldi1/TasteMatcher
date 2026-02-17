@@ -181,7 +181,7 @@ async function main() {
     } else {
       CONTENT_DIR = path.resolve(
         "inventory",
-        "TasterMatcherPhilipAuction_NY010126",
+        "TasterMatcherChristiesPostWarToPresent_31032",
       );
     }
 

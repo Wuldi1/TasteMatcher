@@ -1257,7 +1257,8 @@ export function CatalogPage() {
                           </span>
                         )}
                         {artwork.price !== undefined &&
-                          (artwork.shouldDisplayPrice ?? true) && (
+                          (user?.role !== "customer" ||
+                            (artwork.shouldDisplayPrice ?? true)) && (
                             <div className="bg-white/90 backdrop-blur-sm text-gray-900 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
                               ${artwork.price.toLocaleString()}
                               {artwork.isAuction &&
@@ -1481,7 +1482,8 @@ export function CatalogPage() {
                       </span>
                     )}
                     {selectedArtwork.price !== undefined &&
-                      (selectedArtwork.shouldDisplayPrice ?? true) && (
+                      (user?.role !== "customer" ||
+                        (selectedArtwork.shouldDisplayPrice ?? true)) && (
                         <div className="text-2xl text-green-700 font-semibold">
                           ${selectedArtwork.price.toLocaleString()}
                           {selectedArtwork.isAuction &&
