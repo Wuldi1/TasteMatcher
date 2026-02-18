@@ -1,6 +1,6 @@
 import fetch from "node-fetch";
 import readline from "node:readline/promises";
-
+// login hash - // 381666bb40c9ea7bcc2ad2113466bff3142996d7b21f7512d1527b180d72ca3b
 /**
  * login(apiBaseUrl, email, verificationCode)
  * - apiBaseUrl: base API url, e.g. http://localhost:8080 or https:/.tastematcher.art
@@ -30,7 +30,8 @@ export async function login(
     input: process.stdin,
     output: process.stdout,
   });
-  const defaultCode = "000000";
+  // 381666bb40c9ea7bcc2ad2113466bff3142996d7b21f7512d1527b180d72ca3b
+  const defaultCode = "578888";
   const inputCode = await rl.question(
     `Enter verification code (default ${defaultCode}): `,
   );

@@ -168,6 +168,8 @@ async function main() {
       ownerChoice = "gal";
     }
 
+    rl.close();
+
     const emailMap = {
       gal: process.env.TM_EMAIL_GAL || "galrubin15@gmail.com",
       jaclyn: process.env.TM_EMAIL_JACLYN || "jaclynlavy@gmail.com",
@@ -175,26 +177,24 @@ async function main() {
     };
     const email = emailMap[ownerChoice];
 
+    // Login first (login helper accepts apiBaseUrl, email)
+    const token = await login(apiBaseUrl, email);
+
     // compute content directory based on mode + owner (use requested folder names)
     if (mode === "learning") {
       CONTENT_DIR = path.resolve("learning", "TasteMatcherTestContent");
     } else {
       CONTENT_DIR = path.resolve(
         "inventory",
-        "TasterMatcherChristiesPostWarToPresent_31032",
+        "TasterMatcherSothebysContemporaryCurated_2026",
       );
     }
-
-    rl.close();
 
     console.log(`Using environment: ${env}`);
     console.log(`API base URL: ${apiBaseUrl}`);
     console.log(`Mode: ${mode}`);
     console.log(`Owner: ${ownerChoice} (${email})`);
     console.log(`Content directory: ${CONTENT_DIR}`);
-
-    // Login first (login helper accepts apiBaseUrl, email)
-    const token = await login(apiBaseUrl, email);
 
     // Determine domainId
     let domainId;

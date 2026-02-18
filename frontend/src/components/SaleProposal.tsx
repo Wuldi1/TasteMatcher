@@ -19,9 +19,9 @@ import {
 } from "lucide-react";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import React, { useEffect, useState } from "react";
+import { useViewerPreferences } from "../contexts/ViewerPreferencesContext";
 import { apiClient } from "../utils/api";
 import { isArtworkNew } from "../utils/general";
-import { useViewerPreferences } from "../contexts/ViewerPreferencesContext";
 import {
   formatDimensionsForViewer,
   formatPriceForViewer,
@@ -41,7 +41,7 @@ const FormattedPriceInput = ({
   disabled?: boolean;
 }) => {
   const [displayValue, setDisplayValue] = useState(
-    value?.toLocaleString() ?? ""
+    value?.toLocaleString() ?? "",
   );
 
   useEffect(() => {
@@ -123,7 +123,7 @@ export default function SaleProposal({
   const [items, setItems] = useState<ProposalItem[]>(draftItems ?? []);
   const [generalComments, setGeneralComments] = useState<Comment[]>([]);
   const [proposalStatus, setProposalStatus] = useState<string | undefined>(
-    undefined
+    undefined,
   );
   const [isDirty, setIsDirty] = useState(false);
   const isLocalChangeRef = React.useRef<boolean>(false);
@@ -260,7 +260,7 @@ export default function SaleProposal({
             filename: item.filename,
             askedPrice: item.askedPrice ?? 0,
             askedMaxPrice: item.askedMaxPrice,
-          })
+          }),
         );
         setItems(normalized);
         setGeneralComments(fetched.generalComments || []);
@@ -306,10 +306,10 @@ export default function SaleProposal({
           } catch (err) {
             console.error(
               `Failed to fetch artwork data for ID: ${artworkId}`,
-              err
+              err,
             );
           }
-        })
+        }),
       );
 
       setArtworkDataById(fetchedData);
@@ -326,8 +326,8 @@ export default function SaleProposal({
       prev.map((item) =>
         item.artworkId === artworkId
           ? { ...item, askedPrice: price ?? 0 }
-          : item
-      )
+          : item,
+      ),
     );
     isLocalChangeRef.current = true;
     setIsDirty(true);
@@ -348,8 +348,8 @@ export default function SaleProposal({
       prev.map((item) =>
         item.artworkId === artworkId
           ? { ...item, askedMaxPrice: price ?? undefined }
-          : item
-      )
+          : item,
+      ),
     );
     isLocalChangeRef.current = true;
     setIsDirty(true);
@@ -406,7 +406,7 @@ export default function SaleProposal({
     if (isReadOnly) {
       showAlert(
         "Proposal Locked",
-        "This proposal has already been accepted or rejected and is now read-only."
+        "This proposal has already been accepted or rejected and is now read-only.",
       );
       return;
     }
@@ -427,7 +427,7 @@ export default function SaleProposal({
     if (isReadOnly) {
       showAlert(
         "Proposal Locked",
-        "This proposal has already been accepted or rejected and is now read-only."
+        "This proposal has already been accepted or rejected and is now read-only.",
       );
       return;
     }
@@ -495,7 +495,7 @@ export default function SaleProposal({
           : proposalId
             ? "Draft updated"
             : "Draft created",
-        data
+        data,
       );
     } catch (err) {
       console.error("Failed to save proposal", err);
@@ -530,7 +530,7 @@ export default function SaleProposal({
           console.error("Failed to delete proposal", err);
           showAlert("Error", "Failed to delete proposal");
         }
-      }
+      },
     );
   }
 
@@ -578,8 +578,8 @@ export default function SaleProposal({
                 },
               ],
             }
-          : item
-      )
+          : item,
+      ),
     );
     setNewComments((prev) => ({ ...prev, [artworkId]: "" }));
   }
@@ -589,7 +589,7 @@ export default function SaleProposal({
     if (isReadOnly) {
       showAlert(
         "Proposal Locked",
-        "Accepted or rejected proposals are read-only."
+        "Accepted or rejected proposals are read-only.",
       );
       return;
     }
@@ -670,7 +670,7 @@ export default function SaleProposal({
     text: string,
     maxWidth: number,
     font: any,
-    fontSize: number
+    fontSize: number,
   ) => {
     const normalized = sanitizeForPdfText(text, font, fontSize)
       .replace(/\s+/g, " ")
@@ -719,7 +719,7 @@ export default function SaleProposal({
       options: {
         bold?: boolean;
         color?: { r: number; g: number; b: number };
-      } = {}
+      } = {},
     ) => {
       const usedFont = options.bold ? fontBold : font;
       const color = options.color
@@ -762,8 +762,8 @@ export default function SaleProposal({
         .map(
           (comment) =>
             `${getPdfAuthor(comment.author)} • ${new Date(
-              comment.createdAt
-            ).toLocaleDateString()} — ${comment.text.trim()}`
+              comment.createdAt,
+            ).toLocaleDateString()} — ${comment.text.trim()}`,
         );
       if (generalText.length > 0) {
         drawText("General Comments", 12, { bold: true });
@@ -796,7 +796,7 @@ export default function SaleProposal({
         artwork?.title ?? "Untitled",
         contentWidth,
         fontBold,
-        titleSize
+        titleSize,
       );
       const titleHeight = titleLines.length * (titleSize + 4);
       const artistHeight = artwork?.artist ? artistSize + 6 : 0;
@@ -820,7 +820,7 @@ export default function SaleProposal({
       const metaLines: string[] = [];
       if (artwork?.medium) metaLines.push(`Medium: ${artwork.medium}`);
       metaLines.push(
-        `Size: ${formatDimensionsForViewer(artwork?.width, artwork?.height, artwork?.depth, dimensionUnit)}`
+        `Size: ${formatDimensionsForViewer(artwork?.width, artwork?.height, artwork?.depth, dimensionUnit)}`,
       );
       if (artwork?.date) metaLines.push(`Date: ${artwork.date}`);
 
@@ -846,7 +846,7 @@ export default function SaleProposal({
       ) {
         detailSections.push({
           text: `Asked Price Range: ${formatCurrency(item.askedPrice)} – ${formatCurrency(
-            item.askedMaxPrice
+            item.askedMaxPrice,
           )}`,
           size: 11,
           bold: true,
@@ -865,7 +865,7 @@ export default function SaleProposal({
         }
       }
       metaLines.forEach((line) =>
-        detailSections.push({ text: line, size: 10 })
+        detailSections.push({ text: line, size: 10 }),
       );
 
       const detailLineHeights = detailSections.map((section) => {
@@ -874,7 +874,7 @@ export default function SaleProposal({
           section.text,
           detailsWidthBase,
           usedFont,
-          section.size
+          section.size,
         );
         return lines.length * (section.size + 6);
       });
@@ -885,7 +885,7 @@ export default function SaleProposal({
       if (embeddedImage) {
         const scale = Math.min(
           maxImageWidth / embeddedImage.width,
-          maxImageHeight / embeddedImage.height
+          maxImageHeight / embeddedImage.height,
         );
         imageRenderWidth = embeddedImage.width * scale;
         imageHeight = embeddedImage.height * scale;
@@ -897,7 +897,7 @@ export default function SaleProposal({
       const itemComments = nonEmptyComments(item.comments);
       const commentLines = itemComments.flatMap((comment) => {
         const summary = `${getPdfAuthor(comment.author)} • ${new Date(
-          comment.createdAt
+          comment.createdAt,
         ).toLocaleDateString()} — ${comment.text.trim()}`;
         return wrapText(summary, contentWidth - blockPadding * 2, font, 10);
       });
@@ -975,7 +975,7 @@ export default function SaleProposal({
           section.text,
           detailsWidth,
           usedFont,
-          section.size
+          section.size,
         );
         for (const line of lines) {
           page.drawText(line, {
@@ -1278,9 +1278,7 @@ export default function SaleProposal({
                     <div className="col-span-2 mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                          {artwork?.isAuction
-                            ? "Minimum Asked Price"
-                            : "Asked Price"}
+                          "Asking Price"
                         </label>
                         <FormattedPriceInput
                           value={item.askedPrice}
@@ -1302,7 +1300,7 @@ export default function SaleProposal({
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                          Maximum Asked Price
+                          Maximum Bid
                         </label>
                         <FormattedPriceInput
                           value={item.askedMaxPrice}
@@ -1453,11 +1451,7 @@ export default function SaleProposal({
                 ? "bg-blue-600 hover:bg-blue-700"
                 : "bg-green-600 hover:bg-green-700"
             }`}
-            disabled={
-              saving ||
-              isReadOnly ||
-              items.length === 0
-            }
+            disabled={saving || isReadOnly || items.length === 0}
           >
             {proposalId ? (
               <Save className="w-4 h-4" />
