@@ -1,22 +1,22 @@
-# TasteMatcher Backend
+# TasteMatcher Web API
 
 ## Overview
 
-The backend of the TasteMatcher application is built using NestJS, a progressive Node.js framework for building efficient and scalable server-side applications. This backend serves as the API layer for the application, handling requests and responses, and interacting with the database.
+The API service for TasteMatcher is built with NestJS. It provides authentication, domain/user management, artwork/catalog endpoints, upload flows, sales/proposal endpoints, and health checks.
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js (20.x LTS)
-- pnpm (latest version)
+- Node.js 22+
+- pnpm 10+
 
 ### Installation
 
-1. Navigate to the backend directory:
+1. Navigate to the API directory:
 
    ```
-   cd backend
+   cd webapi
    ```
 
 2. Install dependencies:
@@ -29,7 +29,8 @@ The backend of the TasteMatcher application is built using NestJS, a progressive
 To start the backend server, run the following command:
 
 ```
-pnpm run start
+pnpm run build
+pnpm run start:dev
 ```
 
 The server will be available at `http://localhost:8080`.
@@ -37,11 +38,14 @@ The server will be available at `http://localhost:8080`.
 ### API Endpoints
 
 - **GET /health**: Returns the health status of the application.
-- **GET /test**: Returns a sample payload from the common package.
 
-### Database Configuration
+### Data/Service Configuration
 
-The backend uses Prisma as an ORM to interact with the database. The database connection is configured in the `prisma/schema.prisma` file. By default, it uses SQLite for local development.
+This service uses Azure-backed services through shared `common` services (for example Cosmos DB and Blob Storage). Configure environment values via the files currently present in this package:
+
+- `.env.local`
+- `.env.dev`
+- `.env.prd`
 
 ### Running Tests
 
@@ -57,8 +61,7 @@ pnpm run test
   - `main.ts`: Entry point for the application.
   - `app.module.ts`: Main application module.
   - `health/`: Contains the health check controller.
-  - `test/`: Contains the test controller.
-- `prisma/`: Contains the Prisma schema and migration files.
+- `build/`: Compiled JavaScript output.
 - `README.md`: Documentation for the backend package.
 
 ## Contributing
