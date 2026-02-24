@@ -78,7 +78,12 @@ function calculateAnsweredQuestions(
     hasText(questionnaire.primaryResidence);
   if (hasBasicInfo) count++;
 
-  if (questionnaire.unlimitedBudgetPurchase) count++;
+  if (
+    questionnaire.mostInterestedInBuying ||
+    questionnaire.unlimitedBudgetPurchase
+  ) {
+    count++;
+  }
 
   if (questionnaire.collectingStatus) count++;
 

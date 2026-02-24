@@ -97,6 +97,19 @@ export interface PersonalQuestionnaire {
   primaryResidence?: string;
 
   // About You
+  mostInterestedInBuying?:
+    | "Paintings"
+    | "Prints"
+    | "Sculptures"
+    | "Photographs";
+
+  // Relationship with art
+  collectingStatus?: "collector" | "not_yet";
+
+  // Aesthetic References
+  aestheticAdmiration?: AestheticAdmiration;
+
+  // Legacy fields (kept for backward compatibility)
   unlimitedBudgetPurchase?:
     | "Paintings"
     | "Dinosaurs / Fossils"
@@ -106,14 +119,6 @@ export interface PersonalQuestionnaire {
     | "Trading Cards"
     | "Wine"
     | "Sports Memorabilia";
-
-  // Relationship with art
-  collectingStatus?: "collector" | "not_yet";
-
-  // Aesthetic References
-  aestheticAdmiration?: AestheticAdmiration;
-
-  // Legacy fields (kept for backward compatibility)
   collectionType?: "individual" | "group";
   decisionMakersDescription?: string;
   aboutYourself?: string;

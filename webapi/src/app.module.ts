@@ -9,6 +9,7 @@ import { AuthModule } from "./auth/auth.module";
 import { UsersModule } from "./users/users.module";
 import { EmailModule } from "./email/email.module";
 import { SalesModule } from "./sales/sales.module";
+import { ActivityModule } from "./activity/activity.module";
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { SalesModule } from "./sales/sales.module";
     UsersModule,
     EmailModule,
     SalesModule,
+    ActivityModule,
   ],
   controllers: [],
   providers: [],

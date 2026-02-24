@@ -27,21 +27,24 @@ import {
 } from "@tastematcher/common";
 import { SavePreferenceDto } from "./dto/save-preference.dto";
 import { UpdateArtworkDto } from "./dto/update-artwork.dto";
+import { DomainActivityService } from "../activity/domain-activity.service";
 
 @Injectable()
 export class ArtworksService {
   private readonly logger = new Logger(ArtworksService.name);
   private readonly cosmosService: CosmosService;
   private readonly searchIndexService: SearchIndexService;
+  private readonly domainActivityService: DomainActivityService;
   private readonly userCache = new Map<
     string,
     { name?: string; email?: string; cachedAt: number }
   >();
   private readonly userCacheTtlMs = 10 * 60 * 1000;
 
-  constructor() {
+  constructor(domainActivityService: DomainActivityService) {
     this.cosmosService = new CosmosService();
     this.searchIndexService = new SearchIndexService();
+    this.domainActivityService = domainActivityService;
   }
 
   /**
@@ -630,6 +633,16 @@ export class ArtworksService {
         typeof existingPreference?.liked === "boolean"
           ? existingPreference.liked
           : undefined;
+      const existingComment =
+        typeof existingPreference?.comment === "string"
+          ? existingPreference.comment.trim()
+          : "";
+      const incomingComment =
+        typeof saveDto.comment === "string" ? saveDto.comment.trim() : undefined;
+      const commentAddedOrUpdated =
+        typeof incomingComment === "string" &&
+        incomingComment.length > 0 &&
+        incomingComment !== existingComment;
 
       const artworkResource = await this.findOne(saveDto.domainId, artworkId);
       if (!artworkResource) {
@@ -663,6 +676,13 @@ export class ArtworksService {
         userRecord.totalDislikes =
           totalDislikes + (incomingLiked === false ? 1 : 0);
         userRecordUpdated = true;
+        await this.domainActivityService.recordActivity({
+          domainId,
+          activityType: "user_swipe",
+          userId,
+          userEmail: userRecord.email,
+          metadata: { artworkId, liked: incomingLiked },
+        });
       } else if (likedChanged) {
         let likeDelta = 0;
         let dislikeDelta = 0;
@@ -681,6 +701,26 @@ export class ArtworksService {
         userRecord.totalLikes = Math.max(0, totalLikes + likeDelta);
         userRecord.totalDislikes = Math.max(0, totalDislikes + dislikeDelta);
         userRecordUpdated = true;
+      }
+
+      if (typeof incomingLiked === "boolean" && (isNewSwipe || likedChanged)) {
+        await this.domainActivityService.recordActivity({
+          domainId,
+          activityType: incomingLiked ? "artwork_liked" : "artwork_disliked",
+          userId,
+          userEmail: userRecord.email,
+          metadata: { artworkId },
+        });
+      }
+
+      if (commentAddedOrUpdated) {
+        await this.domainActivityService.recordActivity({
+          domainId,
+          activityType: "artwork_comment",
+          userId,
+          userEmail: userRecord.email,
+          metadata: { artworkId },
+        });
       }
 
       // if preferenceVector exists and is valid, update it using the new preference

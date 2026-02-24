@@ -14,11 +14,16 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { Domain, DomainRequest } from "@tastematcher/common";
+import {
+  Domain,
+  DomainActivitySummaryResponse,
+  DomainRequest,
+} from "@tastematcher/common";
 import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
 import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
 import { Roles } from "../auth/utils/roles.decorator";
 import { RolesGuard } from "../auth/utils/roles.guard";
+import { DomainActivityService } from "../activity/domain-activity.service";
 import { DomainsService } from "./domains.service";
 import { CreateDomainRequestDto } from "./dto/create-domain-request.dto";
 import { UpdateDomainDto } from "./dto/update-domain.dto";
@@ -28,7 +33,26 @@ import { UpdateDomainDto } from "./dto/update-domain.dto";
 export class DomainsController {
   private readonly logger = new Logger(DomainsController.name);
 
-  constructor(private readonly domainsService: DomainsService) {}
+  constructor(
+    private readonly domainsService: DomainsService,
+    private readonly domainActivityService: DomainActivityService,
+  ) {}
+
+  @Get(":domainId/activity-summary")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("domain_owner", "global_admin")
+  @ApiBearerAuth()
+  async getActivitySummary(
+    @Request() req: AuthenticatedRequest,
+    @Param("domainId") domainId: string,
+  ): Promise<DomainActivitySummaryResponse> {
+    if (req.user.domainId !== domainId && req.user.role !== "global_admin") {
+      throw new ForbiddenException(
+        "You are not authorized to access this domain.",
+      );
+    }
+    return this.domainActivityService.getSummary(domainId, 7);
+  }
 
   @Get(":domainId")
   @UseGuards(JwtAuthGuard)

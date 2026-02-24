@@ -177,7 +177,7 @@ else
     # Create Cosmos DB containers with appropriate partition keys
     echo "Creating Cosmos DB containers..."
 
-    # Core container - Merged Domains and Users (and potentially Artworks/Proposals)
+    # Core container - Merged Domains and Users
     # Partition by /domainId for multi-tenant isolation
     az cosmosdb sql container create \
       --account-name "$COSMOS_NAME" \
@@ -246,8 +246,18 @@ EOF
       --database-name "$COSMOS_DATABASE" \
       --name "Proposals" \
       --partition-key-path "/domainId" \
+      --ttl -1 \
       --throughput 400 \
       -o none || echo "Proposals container already exists or creation failed - continuing..."
+
+    # Ensure TTL is enabled for Proposals so per-item TTL (e.g. domainActivity) can be applied
+    az cosmosdb sql container update \
+      --account-name "$COSMOS_NAME" \
+      --resource-group "$RG_NAME" \
+      --database-name "$COSMOS_DATABASE" \
+      --name "Proposals" \
+      --ttl -1 \
+      -o none || echo "Proposals container TTL update failed - continuing..."
   fi
 
 # Get Cosmos DB connection string and keys

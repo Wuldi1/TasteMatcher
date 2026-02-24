@@ -13,14 +13,16 @@ import { apiClient } from "../../utils/api";
 
 const BUDGET_CHOICES = [
   "Paintings",
-  "Dinosaurs / Fossils",
-  "Watches",
-  "Handbags",
-  "Design",
-  "Trading Cards",
-  "Wine",
-  "Sports Memorabilia",
+  "Prints",
+  "Sculptures",
+  "Photographs",
 ] as const;
+
+type InterestChoice = (typeof BUDGET_CHOICES)[number];
+
+function isInterestChoice(value: string): value is InterestChoice {
+  return (BUDGET_CHOICES as readonly string[]).includes(value);
+}
 
 export function OnboardingPage() {
   const { user, refreshUser } = useAuth();
@@ -36,18 +38,21 @@ export function OnboardingPage() {
   }, [location.search]);
   const [step, setStep] = useState(derivedInitialStep);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadingTarget, setUploadingTarget] = useState<"aesthetic" | null>(
-    null,
-  );
+  const [uploadingTarget, setUploadingTarget] = useState<
+    "aesthetic" | "collection" | null
+  >(null);
 
   const [formData, setFormData] = useState<PersonalQuestionnaire>({
     fullName: user?.name || "",
     emailAddress: user?.email || "",
     primaryResidence: "",
     collectingStatus: undefined,
-    unlimitedBudgetPurchase: undefined,
+    mostInterestedInBuying: undefined,
     aestheticAdmiration: {
       description: "",
+      imageUrls: [],
+    },
+    personalCollection: {
       imageUrls: [],
     },
   });
@@ -73,11 +78,24 @@ export function OnboardingPage() {
           user.personalQuestionnaire?.primaryResidence ||
           user.personalQuestionnaire?.currentLocation ||
           "",
+        mostInterestedInBuying:
+          user.personalQuestionnaire?.mostInterestedInBuying ||
+          (() => {
+            const legacyValue = user.personalQuestionnaire
+              ?.unlimitedBudgetPurchase as string | undefined;
+            return legacyValue && isInterestChoice(legacyValue)
+              ? legacyValue
+              : undefined;
+          })(),
         aestheticAdmiration: {
           description:
             user.personalQuestionnaire?.aestheticAdmiration?.description || "",
           imageUrls:
             user.personalQuestionnaire?.aestheticAdmiration?.imageUrls || [],
+        },
+        personalCollection: {
+          imageUrls:
+            user.personalQuestionnaire?.personalCollection?.imageUrls || [],
         },
       }));
     }
@@ -138,7 +156,7 @@ export function OnboardingPage() {
 
   const handleImageUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
-    target: "aesthetic",
+    target: "aesthetic" | "collection",
   ) => {
     if (!e.target.files?.length) return;
 
@@ -147,15 +165,26 @@ export function OnboardingPage() {
 
     try {
       await apiClient.vectorizePreferenceImage(file, {
-        section: "aesthetic",
+        section: target,
       });
       // Refresh user to get the new image URL from backend
       const updatedUser = await refreshUser();
 
-      const images =
-        updatedUser?.personalQuestionnaire?.aestheticAdmiration?.imageUrls ||
-        [];
-      updateAesthetic({ imageUrls: images });
+      if (target === "aesthetic") {
+        const images =
+          updatedUser?.personalQuestionnaire?.aestheticAdmiration?.imageUrls ||
+          [];
+        updateAesthetic({ imageUrls: images });
+      } else {
+        const images =
+          updatedUser?.personalQuestionnaire?.personalCollection?.imageUrls ||
+          [];
+        updateFormData({
+          personalCollection: {
+            imageUrls: images,
+          },
+        });
+      }
     } catch (error) {
       console.error("Failed to upload image", error);
     } finally {
@@ -221,19 +250,16 @@ export function OnboardingPage() {
             <h2 className="text-2xl font-bold text-gray-900">About You</h2>
             <div className="space-y-4">
               <label className="block text-sm font-medium text-gray-700">
-                If you were given an unlimited budget, what would you be most
-                excited to purchase first?
+                What are you most interested in buying?
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {BUDGET_CHOICES.map((choice) => (
                   <button
                     key={choice}
                     type="button"
-                    onClick={() =>
-                      updateFormData({ unlimitedBudgetPurchase: choice })
-                    }
+                    onClick={() => updateFormData({ mostInterestedInBuying: choice })}
                     className={`p-4 border rounded-lg text-left transition-all ${
-                      formData.unlimitedBudgetPurchase === choice
+                      formData.mostInterestedInBuying === choice
                         ? "border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200"
                         : "border-gray-200 hover:border-indigo-200 hover:bg-indigo-50"
                     }`}
@@ -286,6 +312,59 @@ export function OnboardingPage() {
                   Not yet
                 </button>
               </div>
+              {formData.collectingStatus === "collector" && (
+                <div className="pt-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    If yes, upload photos of the works (optional)
+                  </label>
+                  <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 transition-colors relative">
+                    <div className="space-y-1 text-center">
+                      {uploadingTarget === "collection" ? (
+                        <Loader2 className="mx-auto h-12 w-12 text-gray-400 animate-spin" />
+                      ) : (
+                        <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                      )}
+                      <div className="flex text-sm text-gray-600">
+                        <label className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                          <span>Upload a file</span>
+                          <input
+                            type="file"
+                            className="sr-only"
+                            accept="image/*"
+                            onChange={(event) =>
+                              handleImageUpload(event, "collection")
+                            }
+                            disabled={uploadingTarget !== null}
+                          />
+                        </label>
+                        <p className="pl-1">or drag and drop</p>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        PNG, JPG, GIF up to 10MB
+                      </p>
+                    </div>
+                  </div>
+                  {formData.personalCollection?.imageUrls &&
+                    formData.personalCollection.imageUrls.length > 0 && (
+                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {formData.personalCollection.imageUrls.map(
+                          (url, idx) => (
+                            <div
+                              key={idx}
+                              className="relative aspect-square rounded-lg overflow-hidden bg-gray-100"
+                            >
+                              <img
+                                src={url}
+                                alt={`Collection upload ${idx + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    )}
+                </div>
+              )}
             </div>
           </div>
         );
@@ -298,8 +377,8 @@ export function OnboardingPage() {
             </h2>
             <div className="space-y-4">
               <label className="block text-sm font-medium text-gray-700">
-                Are there any artists you admire? Upload screenshots or photos
-                if helpful.
+                Are there any artists or designers you admire? Upload
+                screenshots or photos if helpful.
               </label>
               <textarea
                 value={formData.aestheticAdmiration?.description || ""}

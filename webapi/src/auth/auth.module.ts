@@ -8,11 +8,13 @@ import { AuthService } from "./auth.service";
 import { EmailModule } from "../email/email.module";
 import { DomainsModule } from "../domains/domains.module";
 import { UsersModule } from "../users/users.module";
+import { ActivityModule } from "../activity/activity.module";
 
 @Module({
   imports: [
     PassportModule,
     EmailModule,
+    ActivityModule,
     forwardRef(() => DomainsModule),
     forwardRef(() => UsersModule),
     JwtModule.registerAsync({

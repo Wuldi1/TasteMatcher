@@ -11,6 +11,7 @@ import { EmailService } from "../email/email.service";
 import { UsersService } from "../users/users.service";
 import { AuthenticatedUser } from "../auth/types/authenticated-request.interface";
 import { DomainsService } from "../domains/domains.service";
+import { DomainActivityService } from "../activity/domain-activity.service";
 
 @Injectable()
 export class SalesService {
@@ -21,6 +22,7 @@ export class SalesService {
     private readonly emailService: EmailService,
     private readonly usersService: UsersService,
     private readonly domainsService: DomainsService,
+    private readonly domainActivityService: DomainActivityService,
   ) {
     this.cosmosService = new CosmosService();
   }
@@ -182,6 +184,13 @@ export class SalesService {
         "updated",
       );
     }
+    await this.domainActivityService.recordActivity({
+      domainId,
+      activityType: "proposal_updated",
+      userId: requestingUser.id,
+      userEmail: requestingUser.email,
+      metadata: { proposalId },
+    });
 
     this.logger.log(`Updated proposal ${proposalId}`);
     return resource as Proposal;

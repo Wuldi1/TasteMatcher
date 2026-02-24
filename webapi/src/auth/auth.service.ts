@@ -14,6 +14,7 @@ import {
 import { LoginRequestDto } from "./dto/login-request.dto";
 import { LoginVerifyDto } from "./dto/login-verify.dto";
 import { EmailService } from "../email/email.service";
+import { DomainActivityService } from "../activity/domain-activity.service";
 
 const VERIFICATION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -24,7 +25,10 @@ export class AuthService {
   private readonly isPrd?: boolean;
   private readonly jwtSecret: string;
 
-  constructor(private readonly emailService: EmailService) {
+  constructor(
+    private readonly emailService: EmailService,
+    private readonly domainActivityService: DomainActivityService,
+  ) {
     this.cosmosService = new CosmosService();
     this.jwtSecret = process.env.JWT_SECRET ?? "";
     this.isPrd = process.env.NODE_ENV === "prd";
@@ -181,6 +185,12 @@ export class AuthService {
     }
 
     const token = this.generateUserToken(updatedUser);
+    await this.domainActivityService.recordActivity({
+      domainId: updatedUser.domainId,
+      activityType: "user_login",
+      userId: updatedUser.id,
+      userEmail: updatedUser.email,
+    });
 
     this.logger.log(`User ${user.id} logged in successfully`);
 

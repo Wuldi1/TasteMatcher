@@ -16,6 +16,7 @@ import {
   ArtworkStats,
   CustomerRequest,
   Domain,
+  DomainActivitySummaryResponse,
   DomainRequest,
   DomainVerificationResultResponse,
   PaginatedResponse,
@@ -347,6 +348,19 @@ class ApiClient extends BaseApiClient {
    */
   async getAllDomains(): Promise<Domain[]> {
     return this.request<Domain[]>("/domains", { method: "GET" });
+  }
+
+  /**
+   * Get 7-day activity summary for a domain (domain_owner/global_admin)
+   */
+  async getDomainActivitySummary(
+    domainId: string,
+  ): Promise<DomainActivitySummaryResponse> {
+    this.validateRequired(domainId, "Domain ID");
+    return this.request<DomainActivitySummaryResponse>(
+      `/domains/${domainId}/activity-summary`,
+      { method: "GET" },
+    );
   }
 
   /**
