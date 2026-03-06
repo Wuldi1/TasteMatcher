@@ -1,46 +1,46 @@
 import {
-  Controller,
-  Get,
-  Patch,
-  Delete,
-  Post,
-  Param,
+  BadRequestException,
   Body,
-  Query,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Request,
+  UseGuards,
   UsePipes,
   ValidationPipe,
-  UseGuards,
-  Request,
-  ForbiddenException,
-  BadRequestException,
 } from "@nestjs/common";
 import {
-  ApiTags,
+  ApiBearerAuth,
   ApiOperation,
   ApiResponse,
-  ApiBearerAuth,
+  ApiTags,
 } from "@nestjs/swagger";
-import { ArtworksService } from "./artworks.service";
-import { UpdateArtworkDto } from "./dto/update-artwork.dto";
-import { SavePreferenceDto } from "./dto/save-preference.dto";
 import {
   Artwork,
-  ArtworkPreference,
   ArtworkFeedback,
-  PaginatedResponse,
+  ArtworkPreference,
   ArtworkStats,
-  UntastedArtworksResponse,
-  QueryParams,
-  GlobalArtworksDomainId,
   cleanupArtworkBeforeResponseToClient,
+  GlobalArtworksDomainId,
+  PaginatedResponse,
+  QueryParams,
   Role,
+  UntastedArtworksResponse,
 } from "@tastematcher/common";
+import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
 import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
 import { Roles } from "../auth/utils/roles.decorator";
 import { RolesGuard } from "../auth/utils/roles.guard";
-import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
+import { ArtworksService } from "./artworks.service";
+import { SavePreferenceDto } from "./dto/save-preference.dto";
+import { UpdateArtworkDto } from "./dto/update-artwork.dto";
 
 @ApiTags("artworks")
 @Controller("domains/:domainId/artworks")
@@ -363,8 +363,6 @@ export class ArtworksController {
         "You are not authorized to perform this action.",
       );
     }
-    const includeDomainId =
-      domainId !== GlobalArtworksDomainId ? domainId : undefined;
     const viewerContext = {
       id: req.user.id,
       role: req.user.role as Role,
@@ -374,7 +372,7 @@ export class ArtworksController {
       GlobalArtworksDomainId,
       userId,
       limit || 20,
-      includeDomainId,
+      domainId,
       viewerContext,
     );
     return {

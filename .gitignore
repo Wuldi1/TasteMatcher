@@ -9,8 +9,8 @@ build/
 build/
 *.tsbuildinfo
 
-# Testing
 coverage/
+# Content
 TasteMatcherTestContent
 PRD_TasteMatcherTestContent
 TasterMatcherPhilipAuction
@@ -21,6 +21,9 @@ TasterMatcherWright20Auction_20260204
 TasterMatcherChristiesPostWarToPresent_31032
 TasterMatcherRagoArtsPrintsMultiples_2026
 TasterMatcherSothebysContemporaryCurated_2026
+TasterMatcherPhilipAuction_NY010226
+TasterMatcherPhilipAuction_UK010326
+scripts/scapper/inventory/parsed_*
 
 # IDE
 .vscode/

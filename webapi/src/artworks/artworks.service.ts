@@ -25,9 +25,9 @@ import {
   SearchIndexService,
   UntastedArtworksResponse,
 } from "@tastematcher/common";
+import { DomainActivityService } from "../activity/domain-activity.service";
 import { SavePreferenceDto } from "./dto/save-preference.dto";
 import { UpdateArtworkDto } from "./dto/update-artwork.dto";
-import { DomainActivityService } from "../activity/domain-activity.service";
 
 @Injectable()
 export class ArtworksService {
@@ -433,7 +433,7 @@ export class ArtworksService {
 
   /**
    * Get artworks that user hasn't tasted yet
-   * Uses efficient anti-join pattern with Cosmos DB
+   * Uses candidate-batch scanning to avoid large NOT IN lists
    */
   async getUntastedArtworks(
     primaryDomainId: string,
@@ -447,94 +447,114 @@ export class ArtworksService {
       await this.cosmosService.getArtworkPreferencesContainer();
 
     try {
-      // Step 1: Get all artwork IDs the user has already tasted
-      const tastedQuery = {
-        query:
-          "SELECT VALUE c.artworkId FROM c WHERE c.type = @type AND c.domainId = @domainId AND c.userId = @userId",
-        parameters: [
-          { name: "@type", value: "artworkPreference" },
-          { name: "@domainId", value: GlobalArtworksDomainId },
-          { name: "@userId", value: userId },
-        ],
-      };
-
-      const { resources: tastedArtworkIds } = await preferencesContainer.items
-        .query(tastedQuery, { partitionKey: GlobalArtworksDomainId })
-        .fetchAll();
-
-      this.logger.log(
-        `User ${userId} has tasted ${tastedArtworkIds.length} artworks`,
-      );
-
-      // Step 2: Query artworks NOT in the tasted list
-      let artworksQuery: string;
-      const fetchLimit = Math.min(Math.max(limit * 3, limit), 200);
-      const parameters: Array<{ name: string; value: any }> = [
-        { name: "@primaryDomainId", value: primaryDomainId },
-        { name: "@fetchLimit", value: fetchLimit },
-      ];
       const secondaryDomainId =
         includeDomainId && includeDomainId !== primaryDomainId
           ? includeDomainId
           : undefined;
+      const requestedLimit = Number.isFinite(limit) ? Math.floor(limit) : 20;
+      const boundedLimit = Math.min(Math.max(requestedLimit, 1), 100);
+      const fetchBatchSize = Math.min(Math.max(boundedLimit * 4, 80), 200);
+      const maxScanned = Math.max(boundedLimit * 40, 400);
+      const parameters: Array<{ name: string; value: any }> = [
+        { name: "@artworkType", value: "artwork" },
+        { name: "@primaryDomainId", value: primaryDomainId },
+      ];
       if (secondaryDomainId) {
         parameters.push({
           name: "@secondaryDomainId",
           value: secondaryDomainId,
         });
       }
-
       const domainFilterClause = secondaryDomainId
         ? "(c.domainId = @primaryDomainId OR (c.domainId = @secondaryDomainId AND c.useForTaster = true))"
         : "c.domainId = @primaryDomainId";
-      const typeClause = "c.type = @artworkType";
-      const orderByCandidates = ["id", "price", "updatedAt", "_etag"] as const;
+      const orderByCandidates = ["id", "price", "updatedAt"] as const;
       const orderByField =
         orderByCandidates[Math.floor(Math.random() * orderByCandidates.length)];
       const orderByDirection = Math.random() < 0.5 ? "ASC" : "DESC";
-      const orderByClause =
-        orderByField === "_etag"
-          ? `ORDER BY c._etag ${orderByDirection}`
-          : `ORDER BY c.${orderByField} ${orderByDirection}`;
-
-      if (tastedArtworkIds.length === 0) {
-        // User hasn't tasted anything yet - return first N artworks
-        artworksQuery = `
-          SELECT TOP @fetchLimit * 
-          FROM c 
-          WHERE ${typeClause} AND ${domainFilterClause}
-          ${orderByClause}
-        `;
-      } else {
-        // Exclude already tasted artworks using NOT IN
-        // Note: For large lists, consider pagination or alternative patterns
-        artworksQuery = `
-          SELECT TOP @fetchLimit * 
-          FROM c 
-          WHERE ${typeClause} AND ${domainFilterClause}
-            AND NOT ARRAY_CONTAINS(@tastedIds, c.id)
-          ${orderByClause}
-        `;
-        parameters.push({ name: "@tastedIds", value: tastedArtworkIds });
-      }
-
-      parameters.push({ name: "@artworkType", value: "artwork" });
-
-      const { resources: untastedArtworks } = await artworksContainer.items
-        .query({ query: artworksQuery, parameters })
-        .fetchAll();
+      const orderByClause = `ORDER BY c.${orderByField} ${orderByDirection}`;
+      const preferenceDomainIds = [
+        ...new Set(
+          [GlobalArtworksDomainId, primaryDomainId, secondaryDomainId].filter(
+            Boolean,
+          ),
+        ),
+      ] as string[];
 
       this.logger.log(
-        `Found ${untastedArtworks.length} untasted artworks for user ${userId} in domains ${primaryDomainId}${
-          secondaryDomainId ? ` and ${secondaryDomainId}` : ""
-        }`,
+        `Fetching untasted artworks for user ${userId}; artwork domains: ${primaryDomainId}${secondaryDomainId ? `, ${secondaryDomainId}` : ""}; preference domains: ${preferenceDomainIds.join(", ")}`,
       );
 
-      const limited = untastedArtworks.slice(0, limit);
+      const artworksQuery = `
+        SELECT *
+        FROM c
+        WHERE c.type = @artworkType AND ${domainFilterClause}
+        ${orderByClause}
+      `;
+      const iterator = artworksContainer.items.query(
+        { query: artworksQuery, parameters },
+        { maxItemCount: fetchBatchSize },
+      );
+
+      const untasted: Artwork[] = [];
+      const selectedIds = new Set<string>();
+      let scannedCount = 0;
+      let fetchedBatches = 0;
+      let matchedTastedIds = 0;
+
+      while (
+        iterator.hasMoreResults() &&
+        untasted.length < boundedLimit &&
+        scannedCount < maxScanned
+      ) {
+        const { resources } = await iterator.fetchNext();
+        fetchedBatches += 1;
+
+        const batchArtworks = (resources ?? []) as Artwork[];
+        if (batchArtworks.length === 0) {
+          break;
+        }
+
+        scannedCount += batchArtworks.length;
+        const visibleCandidates = batchArtworks.filter((artwork) => {
+          if (!artwork?.id || selectedIds.has(artwork.id)) return false;
+          return this.canViewerSeeArtwork(artwork, viewer);
+        });
+
+        if (visibleCandidates.length === 0) {
+          continue;
+        }
+
+        const candidateIds = [
+          ...new Set(visibleCandidates.map((artwork) => artwork.id)),
+        ];
+        const tastedInBatch = await this.getTastedArtworkIdsForCandidates(
+          preferencesContainer,
+          userId,
+          preferenceDomainIds,
+          candidateIds,
+        );
+        matchedTastedIds += tastedInBatch.size;
+
+        for (const artwork of visibleCandidates) {
+          if (tastedInBatch.has(artwork.id)) {
+            continue;
+          }
+          untasted.push(artwork);
+          selectedIds.add(artwork.id);
+          if (untasted.length >= boundedLimit) {
+            break;
+          }
+        }
+      }
+
+      this.logger.log(
+        `Untasted selection complete for user ${userId}: returned=${untasted.length}, scanned=${scannedCount}, batches=${fetchedBatches}, matchedTastedInCandidates=${matchedTastedIds}, limit=${boundedLimit}`,
+      );
 
       return {
-        artworks: limited,
-        total: limited.length,
+        artworks: untasted,
+        total: untasted.length,
       };
     } catch (error) {
       this.logger.error(
@@ -543,6 +563,51 @@ export class ArtworksService {
       );
       throw error;
     }
+  }
+
+  private async getTastedArtworkIdsForCandidates(
+    preferencesContainer: any,
+    userId: string,
+    preferenceDomainIds: string[],
+    candidateArtworkIds: string[],
+  ): Promise<Set<string>> {
+    if (candidateArtworkIds.length === 0 || preferenceDomainIds.length === 0) {
+      return new Set<string>();
+    }
+
+    const queries = preferenceDomainIds.map(async (domainId) => {
+      const tastedQuery = {
+        query: `
+          SELECT VALUE c.artworkId
+          FROM c
+          WHERE c.type = @type
+            AND c.domainId = @domainId
+            AND c.userId = @userId
+            AND ARRAY_CONTAINS(@candidateArtworkIds, c.artworkId)
+        `,
+        parameters: [
+          { name: "@type", value: "artworkPreference" },
+          { name: "@domainId", value: domainId },
+          { name: "@userId", value: userId },
+          { name: "@candidateArtworkIds", value: candidateArtworkIds },
+        ],
+      };
+
+      const { resources } = await preferencesContainer.items
+        .query(tastedQuery, { partitionKey: domainId })
+        .fetchAll();
+      return (resources ?? []) as string[];
+    });
+
+    const perDomainMatches = await Promise.all(queries);
+    const tastedIds = new Set<string>();
+    for (const matches of perDomainMatches) {
+      for (const artworkId of matches) {
+        tastedIds.add(artworkId);
+      }
+    }
+
+    return tastedIds;
   }
 
   /**
@@ -638,7 +703,9 @@ export class ArtworksService {
           ? existingPreference.comment.trim()
           : "";
       const incomingComment =
-        typeof saveDto.comment === "string" ? saveDto.comment.trim() : undefined;
+        typeof saveDto.comment === "string"
+          ? saveDto.comment.trim()
+          : undefined;
       const commentAddedOrUpdated =
         typeof incomingComment === "string" &&
         incomingComment.length > 0 &&
