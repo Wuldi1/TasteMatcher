@@ -14,9 +14,10 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
+import { Artwork } from "@tastematcher/common";
 import { ThumbsUp, ThumbsDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiClient } from "../../utils/api";
-import { isArtworkNew } from "../../utils/general";
+import { getAIRecommendationsEligibility, isArtworkNew } from "../../utils/general";
 import "./TasterPage.css";
 
 type SwipeDirection = "left" | "right" | null;
@@ -39,6 +40,9 @@ export function TasterPage() {
   const [showAiUnlockModal, setShowAiUnlockModal] = useState(false);
   const hasShownUnlockRef = useRef(false);
   const previousTotalSwipedRef = useRef<number | null>(null);
+  const loadedImageUrlsRef = useRef<Set<string>>(new Set());
+  const imagePreloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
+  const [isCurrentImageReady, setIsCurrentImageReady] = useState(true);
 
   // Fetch untasted artworks for the user
   const { data: untastedData, isLoading } = useQuery({
@@ -56,6 +60,52 @@ export function TasterPage() {
   const artworks = useMemo(() => untastedData?.artworks || [], [untastedData]);
   const currentArtwork = artworks[currentIndex];
   const hasMore = currentIndex < artworks.length - 1;
+  const tasterEligibility = useMemo(() => {
+    const effectiveUser = user
+      ? { ...user, swipeCount: stats?.totalSwiped ?? user.swipeCount }
+      : null;
+    if (!effectiveUser) {
+      return { isEligible: false, reasons: [] as string[] };
+    }
+    return getAIRecommendationsEligibility(effectiveUser);
+  }, [user, stats?.totalSwiped]);
+
+  const getArtworkImageUrl = useCallback((artwork?: Artwork): string => {
+    if (!artwork) return "";
+    return artwork.thumbnails?.[1]?.url || artwork.filename || "";
+  }, []);
+
+  const preloadImage = useCallback((src: string): Promise<void> => {
+    if (!src) return Promise.resolve();
+    if (loadedImageUrlsRef.current.has(src)) {
+      return Promise.resolve();
+    }
+
+    const inFlight = imagePreloadPromisesRef.current.get(src);
+    if (inFlight) return inFlight;
+
+    const promise = new Promise<void>((resolve) => {
+      const img = new Image();
+
+      const done = () => {
+        loadedImageUrlsRef.current.add(src);
+        imagePreloadPromisesRef.current.delete(src);
+        resolve();
+      };
+
+      img.onload = done;
+      img.onerror = done;
+      img.src = src;
+    });
+
+    imagePreloadPromisesRef.current.set(src, promise);
+    return promise;
+  }, []);
+
+  const currentImageUrl = useMemo(
+    () => getArtworkImageUrl(currentArtwork),
+    [currentArtwork, getArtworkImageUrl],
+  );
 
   // Save preference mutation
   const savePreference = useMutation({
@@ -110,10 +160,46 @@ export function TasterPage() {
     previousTotalSwipedRef.current = stats.totalSwiped;
   }, [stats?.totalSwiped]);
 
+  useEffect(() => {
+    if (!currentImageUrl) {
+      setIsCurrentImageReady(true);
+      return;
+    }
+
+    if (loadedImageUrlsRef.current.has(currentImageUrl)) {
+      setIsCurrentImageReady(true);
+      return;
+    }
+
+    let isActive = true;
+    setIsCurrentImageReady(false);
+    void preloadImage(currentImageUrl).then(() => {
+      if (isActive) {
+        setIsCurrentImageReady(true);
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentImageUrl, preloadImage]);
+
+  useEffect(() => {
+    const upcoming = [currentIndex + 1, currentIndex + 2, currentIndex + 3]
+      .map((index) => artworks[index])
+      .filter(Boolean)
+      .map((artwork) => getArtworkImageUrl(artwork))
+      .filter(Boolean);
+
+    for (const src of upcoming) {
+      void preloadImage(src);
+    }
+  }, [artworks, currentIndex, getArtworkImageUrl, preloadImage]);
+
   // Handle swipe decision
   const handleSwipe = useCallback(
     (direction: "left" | "right") => {
-      if (!currentArtwork || swipeDirection) return;
+      if (!currentArtwork || swipeDirection || !isCurrentImageReady) return;
 
       setSwipeDirection(direction);
       savePreference.mutate({
@@ -128,7 +214,7 @@ export function TasterPage() {
         setDragOffset({ x: 0, y: 0 });
       }, 300);
     },
-    [currentArtwork, swipeDirection, savePreference],
+    [currentArtwork, swipeDirection, savePreference, isCurrentImageReady],
   );
 
   // Mouse/touch drag handlers
@@ -250,6 +336,8 @@ export function TasterPage() {
   const rotation = dragOffset.x * 0.05;
   const opacity = 1 - Math.abs(dragOffset.x) / 300;
   const showNewTag = currentArtwork ? isArtworkNew(currentArtwork) : false;
+  const nextArtwork = hasMore ? artworks[currentIndex + 1] : undefined;
+  const nextImageUrl = getArtworkImageUrl(nextArtwork);
 
   return (
     <div className="taster-page">
@@ -260,8 +348,9 @@ export function TasterPage() {
               Congratulations!
             </h2>
             <p className="text-gray-600 mb-4">
-              You’ve completed 20 swipes and unlocked the AI Suggestions
-              section. Head over to explore personalized recommendations.
+              {tasterEligibility.isEligible
+                ? "You’ve completed 20 swipes and unlocked the AI Suggestions section. Head over to explore personalized recommendations."
+                : "You’ve completed 20 swipes. To unlock AI Suggestions, complete onboarding first."}
             </p>
             <button
               type="button"
@@ -315,14 +404,27 @@ export function TasterPage() {
 
               <div className="taster-card__media">
                 <img
-                  src={
-                    currentArtwork.thumbnails?.[1]?.url ||
-                    currentArtwork.filename
-                  }
+                  key={`${currentArtwork.id}:${currentImageUrl}`}
+                  src={currentImageUrl}
                   alt={currentArtwork.title}
                   className="taster-card__image"
                   draggable="false"
+                  onLoad={() => {
+                    if (currentImageUrl) {
+                      loadedImageUrlsRef.current.add(currentImageUrl);
+                    }
+                    setIsCurrentImageReady(true);
+                  }}
+                  onError={() => {
+                    setIsCurrentImageReady(true);
+                  }}
+                  style={{ opacity: isCurrentImageReady ? 1 : 0 }}
                 />
+                {!isCurrentImageReady && (
+                  <div className="taster-card__image-loading" aria-live="polite">
+                    Loading image...
+                  </div>
+                )}
                 {showNewTag && (
                   <div className="taster-card__new-badge">New</div>
                 )}
@@ -343,13 +445,10 @@ export function TasterPage() {
           )}
 
           {/* Next card preview */}
-          {hasMore && artworks[currentIndex + 1] && (
+          {hasMore && nextArtwork && (
             <div className="taster-card taster-card--next">
               <img
-                src={
-                  artworks[currentIndex + 1].thumbnails?.[1]?.url ||
-                  artworks[currentIndex + 1].filename
-                }
+                src={nextImageUrl}
                 alt=""
                 className="taster-card__image"
                 aria-hidden="true"
@@ -368,7 +467,7 @@ export function TasterPage() {
             type="button"
             className="taster-action taster-action--dislike"
             onClick={() => handleSwipe("left")}
-            disabled={!currentArtwork || !!swipeDirection}
+            disabled={!currentArtwork || !!swipeDirection || !isCurrentImageReady}
             aria-label="Dislike this artwork (left arrow key)"
           >
             <ThumbsDown aria-hidden="true" />
@@ -378,7 +477,7 @@ export function TasterPage() {
             type="button"
             className="taster-action taster-action--like"
             onClick={() => handleSwipe("right")}
-            disabled={!currentArtwork || !!swipeDirection}
+            disabled={!currentArtwork || !!swipeDirection || !isCurrentImageReady}
             aria-label="Like this artwork (right arrow key)"
           >
             <ThumbsUp aria-hidden="true" />

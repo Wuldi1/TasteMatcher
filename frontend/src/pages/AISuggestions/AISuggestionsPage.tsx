@@ -37,7 +37,7 @@ import {
 interface DomainUserOption {
   id: string;
   label: string;
-  onboardingStatus?: string;
+  onboardingStatus?: User["onboardingStatus"];
   swipeCount?: number;
 }
 
@@ -56,7 +56,7 @@ export const AISuggestionsPage = ({
   onArtworkClick?: (artwork: Artwork) => void; // Callback to open artwork details
   readonlyThumbs?: boolean;
 } = {}) => {
-  const { user } = useAuth();
+  const { user, stats } = useAuth();
   const { currency, dimensionUnit } = useViewerPreferences();
   const effectiveDomainId = domainId ?? user?.domainId;
   const [recommendations, setRecommendations] = useState<Artwork[]>([]);
@@ -99,8 +99,22 @@ export const AISuggestionsPage = ({
     if (userId) {
       return { isEligible: true, reasons: [] as string[] };
     }
-    return getAIRecommendationsEligibility(targetUser as User);
-  }, [userId, targetUser]);
+    if (!targetUser) {
+      return {
+        isEligible: false,
+        reasons: ["Unable to evaluate eligibility for AI suggestions."],
+      };
+    }
+
+    const effectiveSwipeCount = isDomainOwner
+      ? targetUser.swipeCount
+      : (stats?.totalSwiped ?? targetUser.swipeCount ?? user?.swipeCount);
+
+    return getAIRecommendationsEligibility({
+      swipeCount: effectiveSwipeCount,
+      onboardingStatus: targetUser.onboardingStatus,
+    });
+  }, [userId, targetUser, isDomainOwner, stats?.totalSwiped, user?.swipeCount]);
 
   useEffect(() => {
     if (!isDomainOwner || userId) {

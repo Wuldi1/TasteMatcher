@@ -8,7 +8,7 @@ import { useProposalData } from "../../hooks/useProposalData";
 import { ViewerPreferencesControls } from "./ViewerPreferencesControls";
 
 export const MobileSidebar = () => {
-  const { user, refreshUser } = useAuth();
+  const { user, stats, refreshUser } = useAuth();
   const location = useLocation(); // Get the current route
   const [isModalOpen, setIsModalOpen] = useState(false); // State to manage modal visibility
   const [isDisplayModalOpen, setIsDisplayModalOpen] = useState(false);
@@ -104,7 +104,10 @@ export const MobileSidebar = () => {
               const isLocked =
                 link.id === "ai-suggestions" &&
                 user?.role === "customer" &&
-                !getAIRecommendationsEligibility(user!).isEligible;
+                !getAIRecommendationsEligibility({
+                  ...user!,
+                  swipeCount: stats?.totalSwiped ?? user?.swipeCount,
+                }).isEligible;
               const isActive =
                 location.pathname === link.href ||
                 location.pathname.startsWith(`${link.href}/`);
@@ -176,7 +179,10 @@ export const MobileSidebar = () => {
               Access Denied
             </h2>
             <p className="text-sm text-gray-600">
-              {getAIRecommendationsEligibility(user!).reasons.join(". ")}
+              {getAIRecommendationsEligibility({
+                ...user!,
+                swipeCount: stats?.totalSwiped ?? user?.swipeCount,
+              }).reasons.join(". ")}
             </p>
             <div className="mt-6 flex justify-end">
               <button
