@@ -25,6 +25,7 @@ import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
 import { Roles } from "../auth/utils/roles.decorator";
 import { RolesGuard } from "../auth/utils/roles.guard";
 import { InviteUserDto } from "./dto/invite-user.dto";
+import { SendBulkEmailDto } from "./dto/send-bulk-email.dto";
 import { UpdateQuestionnaireDto } from "./dto/update-questionnaire.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { UsersService } from "./users.service";
@@ -239,6 +240,24 @@ export class UsersController {
       inviteDto,
       currentUser.id,
     );
+  }
+
+  /**
+   * Send a custom bulk email to selected customer users
+   */
+  @Post("emails/bulk")
+  @Roles("domain_owner", "global_admin", "dealer")
+  async sendBulkEmail(
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: SendBulkEmailDto,
+  ): Promise<{
+    domainId: string;
+    requestedRecipients: number;
+    sent: number;
+    failed: number;
+    failedRecipients: string[];
+  }> {
+    return this.usersService.sendBulkCustomerEmail(req.user, dto);
   }
 
   /**

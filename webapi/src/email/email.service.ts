@@ -454,6 +454,114 @@ export class EmailService {
     }
   }
 
+  async sendBulkCustomEmail(params: {
+    recipients: string[];
+    subject: string;
+    htmlBody: string;
+    textBody?: string;
+    category?: string;
+  }): Promise<{
+    requested: number;
+    sent: number;
+    failed: number;
+    failedRecipients: string[];
+  }> {
+    const start = Date.now();
+    const safeRecipients = Array.from(
+      new Set(
+        (params.recipients || []).filter(
+          (email) => typeof email === "string" && email.includes("@"),
+        ),
+      ),
+    );
+
+    const subject = (params.subject || "").trim();
+    const htmlBody = params.htmlBody || "";
+    const textBody = (params.textBody || "").trim();
+
+    if (!subject || !htmlBody || safeRecipients.length === 0) {
+      this.logger.warn({
+        action: "sendBulkCustomEmail",
+        reason: "invalid_input",
+        recipientCount: safeRecipients.length,
+      });
+      return {
+        requested: safeRecipients.length,
+        sent: 0,
+        failed: safeRecipients.length,
+        failedRecipients: safeRecipients,
+      };
+    }
+
+    this.logger.debug({
+      action: "sendBulkCustomEmail",
+      recipientCount: safeRecipients.length,
+      category: params.category ?? "custom",
+    });
+
+    if (!this.emailClient || !this.senderAddress) {
+      this.logger.log({
+        action: "sendBulkCustomEmail",
+        mode: "log-only",
+        recipients: safeRecipients,
+        subject,
+        category: params.category ?? "custom",
+        durationMs: Date.now() - start,
+      });
+      return {
+        requested: safeRecipients.length,
+        sent: safeRecipients.length,
+        failed: 0,
+        failedRecipients: [],
+      };
+    }
+
+    let sent = 0;
+    const failedRecipients: string[] = [];
+
+    for (const recipient of safeRecipients) {
+      const message: EmailMessage = {
+        senderAddress: this.senderAddress,
+        content: {
+          subject,
+          plainText: textBody || undefined,
+          html: htmlBody,
+        },
+        recipients: {
+          to: [{ address: recipient }],
+        },
+      };
+
+      try {
+        await this.sendEmail(message);
+        sent += 1;
+      } catch (error) {
+        failedRecipients.push(recipient);
+        this.logger.error({
+          action: "sendBulkCustomEmail",
+          recipient,
+          errMessage: (error as Error).message,
+        });
+      }
+    }
+
+    this.logger.log({
+      action: "sendBulkCustomEmail",
+      requested: safeRecipients.length,
+      sent,
+      failed: failedRecipients.length,
+      category: params.category ?? "custom",
+      durationMs: Date.now() - start,
+    });
+
+    return {
+      requested: safeRecipients.length,
+      sent,
+      failed: failedRecipients.length,
+      failedRecipients,
+    };
+  }
+
   async sendEmail(message: EmailMessage): Promise<void> {
     // Placeholder for future email sending functionality
     if (this.isPrd && this.emailClient) {

@@ -19,6 +19,7 @@ import { AuthenticatedUser } from "../auth/types/authenticated-request.interface
 import { EmailService } from "../email/email.service";
 import { CreateCustomerRequestDto } from "./dto/create-customer-request.dto";
 import { InviteUserDto } from "./dto/invite-user.dto";
+import { SendBulkEmailDto } from "./dto/send-bulk-email.dto";
 import { UpdateQuestionnaireDto } from "./dto/update-questionnaire.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 
@@ -94,6 +95,130 @@ export class UsersService {
       this.logger.error(`Failed to fetch users for domain ${domainId}`, error);
       throw error;
     }
+  }
+
+  async sendBulkCustomerEmail(
+    askingUser: AuthenticatedUser,
+    dto: SendBulkEmailDto,
+  ): Promise<{
+    domainId: string;
+    requestedRecipients: number;
+    sent: number;
+    failed: number;
+    failedRecipients: string[];
+  }> {
+    const targetDomainId = dto.domainId || askingUser.domainId;
+    if (
+      askingUser.role !== "global_admin" &&
+      targetDomainId !== askingUser.domainId
+    ) {
+      throw new ForbiddenException(
+        "You are not authorized to send emails for this domain.",
+      );
+    }
+
+    const requestedRecipientIds = Array.from(
+      new Set(
+        (dto.recipientUserIds || [])
+          .map((id) => (typeof id === "string" ? id.trim() : ""))
+          .filter((id) => id.length > 0),
+      ),
+    );
+
+    if (requestedRecipientIds.length === 0) {
+      throw new BadRequestException(
+        "No valid recipient IDs were provided.",
+      );
+    }
+
+    const container = await this.cosmosService.getContainer("Core");
+    const queryParameters: { name: string; value: string | string[] }[] = [
+      { name: "@domainId", value: targetDomainId },
+      { name: "@recipientIds", value: requestedRecipientIds },
+      { name: "@customerRole", value: "customer" },
+      { name: "@activeStatus", value: "active" },
+    ];
+
+    let queryText = `
+      SELECT c.id, c.email, c.role, c.status, c.invitedBy
+      FROM c
+      WHERE c.type = 'user'
+        AND c.domainId = @domainId
+        AND ARRAY_CONTAINS(@recipientIds, c.id)
+        AND c.role = @customerRole
+        AND c.status = @activeStatus
+    `;
+
+    if (askingUser.role === "dealer") {
+      queryText += " AND c.invitedBy = @invitedBy";
+      queryParameters.push({ name: "@invitedBy", value: askingUser.id });
+    }
+
+    const { resources: matchedUsers } = await container.items
+      .query<Pick<User, "id" | "email" | "role" | "status" | "invitedBy">>({
+        query: queryText,
+        parameters: queryParameters,
+      })
+      .fetchAll();
+
+    const matchedById = new Map(matchedUsers.map((user) => [user.id, user]));
+    const selectedEmails: string[] = [];
+    const invalidRecipientIds: string[] = [];
+
+    for (const recipientId of requestedRecipientIds) {
+      const matchedUser = matchedById.get(recipientId);
+      if (!matchedUser) {
+        invalidRecipientIds.push(recipientId);
+        continue;
+      }
+
+      const email =
+        typeof matchedUser.email === "string"
+          ? matchedUser.email.trim().toLowerCase()
+          : "";
+      if (!email || !email.includes("@")) {
+        invalidRecipientIds.push(recipientId);
+        continue;
+      }
+
+      selectedEmails.push(email);
+    }
+
+    if (invalidRecipientIds.length > 0) {
+      this.logger.warn(
+        `Bulk email denied for ${invalidRecipientIds.length} invalid recipients in domain ${targetDomainId}. sender=${askingUser.id}`,
+      );
+      throw new BadRequestException(
+        `${invalidRecipientIds.length} selected recipients are invalid, unauthorized, inactive, or missing an email.`,
+      );
+    }
+
+    const uniqueEmails = Array.from(new Set(selectedEmails));
+    if (uniqueEmails.length === 0) {
+      throw new BadRequestException(
+        "No valid active customer recipients with email were found in this domain.",
+      );
+    }
+
+    const result = await this.emailService.sendBulkCustomEmail({
+      recipients: uniqueEmails,
+      subject: dto.subject,
+      htmlBody: dto.htmlBody,
+      textBody: dto.textBody,
+      category: dto.templateId || "management_custom",
+    });
+
+    this.logger.log(
+      `Sent management email in domain ${targetDomainId} by ${askingUser.id}: requestedIds=${requestedRecipientIds.length}, recipients=${uniqueEmails.length}, sent=${result.sent}, failed=${result.failed}`,
+    );
+
+    return {
+      domainId: targetDomainId,
+      requestedRecipients: result.requested,
+      sent: result.sent,
+      failed: result.failed,
+      failedRecipients: result.failedRecipients,
+    };
   }
 
   /**

@@ -14,6 +14,7 @@ import {
 } from "../../components/inputs/SearchableSelect";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiClient, ApiError } from "../../utils/api";
+import { ManagementEmailWizard } from "./ManagementEmailWizard";
 import "./Management.css";
 
 type TabType = "users" | "domains" | "domain-requests" | "customer-requests";
@@ -91,6 +92,7 @@ export function Management() {
   >({});
 
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showEmailWizard, setShowEmailWizard] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingDomain, setEditingDomain] = useState<Domain | null>(null);
 
@@ -789,12 +791,20 @@ export function Management() {
                     <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                       User Management
                     </h1>
-                    <button
-                      onClick={() => setShowInviteModal(true)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors w-full sm:w-auto"
-                    >
-                      + Invite User
-                    </button>
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                      <button
+                        onClick={() => setShowEmailWizard(true)}
+                        className="w-full rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 font-medium text-blue-700 transition-colors hover:bg-blue-100 sm:w-auto"
+                      >
+                        Send Customer Email
+                      </button>
+                      <button
+                        onClick={() => setShowInviteModal(true)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors w-full sm:w-auto"
+                      >
+                        + Invite User
+                      </button>
+                    </div>
                   </div>
                   {isGlobalAdmin && domains.length > 0 && (
                     <div className="mt-4">
@@ -1981,6 +1991,13 @@ export function Management() {
           </div>
         </div>
       )}
+
+      <ManagementEmailWizard
+        open={showEmailWizard}
+        onClose={() => setShowEmailWizard(false)}
+        users={users}
+        domainId={isGlobalAdmin ? selectedDomainId : undefined}
+      />
 
       {/* Invite User Modal */}
       {showInviteModal && (

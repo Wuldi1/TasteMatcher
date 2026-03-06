@@ -543,6 +543,40 @@ class ApiClient extends BaseApiClient {
   }
 
   /**
+   * Send a custom bulk email to selected customer users
+   */
+  async sendBulkCustomerEmail(data: {
+    domainId?: string;
+    recipientUserIds: string[];
+    subject: string;
+    htmlBody: string;
+    textBody?: string;
+    templateId?: string;
+  }): Promise<{
+    domainId: string;
+    requestedRecipients: number;
+    sent: number;
+    failed: number;
+    failedRecipients: string[];
+  }> {
+    if (!Array.isArray(data.recipientUserIds) || data.recipientUserIds.length < 1) {
+      throw new ApiError("At least one recipient must be selected", 400);
+    }
+    this.validateRequired(data.subject, "Email subject");
+    this.validateRequired(data.htmlBody, "Email HTML body");
+    return this.request<{
+      domainId: string;
+      requestedRecipients: number;
+      sent: number;
+      failed: number;
+      failedRecipients: string[];
+    }>("/users/emails/bulk", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
    * Refresh current user and get new token
    */
   async refreshCurrentUser(): Promise<{ user: User; token: string }> {
