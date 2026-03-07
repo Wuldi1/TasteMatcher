@@ -359,9 +359,9 @@ export function ManagementEmailWizard({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 p-4">
-      <div className="mx-auto flex h-full max-w-6xl items-center justify-center">
-        <div className="w-full max-h-[94vh] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-2 sm:p-4">
+      <div className="mx-auto flex min-h-[100dvh] max-w-6xl items-start justify-center py-2 sm:items-center sm:py-4">
+        <div className="w-full max-h-[calc(100dvh-1rem)] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl sm:max-h-[94dvh]">
           <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
             <div>
               <h2 className="text-xl font-semibold text-gray-900">
@@ -378,7 +378,7 @@ export function ManagementEmailWizard({
             </button>
           </div>
 
-          <div className="max-h-[calc(94vh-150px)] overflow-y-auto px-6 py-5">
+          <div className="max-h-[calc(100dvh-9.75rem)] overflow-y-auto px-4 py-4 sm:max-h-[calc(94dvh-150px)] sm:px-6 sm:py-5">
             {step === 1 && (
               <div className="grid gap-5 lg:grid-cols-2">
                 <div className="space-y-4">
@@ -727,7 +727,10 @@ export function ManagementEmailWizard({
             )}
           </div>
 
-          <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4">
+          <div
+            className="flex items-center justify-between border-t border-gray-200 px-4 py-3 sm:px-6 sm:py-4"
+            style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+          >
             <button
               type="button"
               onClick={() => {

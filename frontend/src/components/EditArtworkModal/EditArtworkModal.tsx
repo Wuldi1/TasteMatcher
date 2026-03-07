@@ -398,7 +398,7 @@ export function EditArtworkModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg md:max-w-5xl max-h-[calc(100vh-1.5rem)] sm:max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[90dvh] md:max-w-5xl">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 border-b border-gray-100">
           <h2 className="text-xl font-bold text-gray-900">Edit Artwork</h2>
@@ -835,7 +835,10 @@ export function EditArtworkModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-4 py-3 md:px-6 md:py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 sticky bottom-0 z-10">
+        <div
+          className="sticky bottom-0 z-10 flex justify-end gap-3 border-t border-gray-100 bg-gray-50 px-4 py-3 md:px-6 md:py-4"
+          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        >
           <button
             type="button"
             onClick={onClose}
@@ -862,8 +865,8 @@ export function EditArtworkModal({
         </div>
       </div>
       {isEditingImage && editingSource && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4">
-          <div className="relative w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/70 p-3 sm:items-center sm:p-4">
+          <div className="relative w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[90dvh]">
             <button
               type="button"
               onClick={handleCancelImageEditing}
@@ -875,14 +878,14 @@ export function EditArtworkModal({
             <h3 className="text-lg font-semibold text-gray-900 mb-4 pr-8">
               Adjust Artwork Image
             </h3>
-            <div className="relative w-full max-h-[60vh] min-h-[45vh] bg-gray-900 rounded-xl overflow-hidden flex items-center justify-center">
+            <div className="relative flex w-full min-h-[40dvh] max-h-[60dvh] items-center justify-center overflow-hidden rounded-xl bg-gray-900 sm:min-h-[45dvh]">
               <ReactCrop
                 crop={crop}
                 onChange={(nextCrop: any) => setCrop(nextCrop)}
                 onComplete={(c: any) => setCompletedCrop(c as PixelCrop)}
                 keepSelection
                 className="w-full h-full flex items-center justify-center"
-                style={{ maxHeight: "60vh" }}
+                style={{ maxHeight: "60dvh" }}
               >
                 <img
                   ref={imageRef}
@@ -908,7 +911,7 @@ export function EditArtworkModal({
                     });
                   }}
                   className="w-full h-full object-contain"
-                  style={{ maxHeight: "60vh", maxWidth: "100%" }}
+                  style={{ maxHeight: "60dvh", maxWidth: "100%" }}
                 />
               </ReactCrop>
             </div>

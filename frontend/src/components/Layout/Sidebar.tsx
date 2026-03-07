@@ -105,13 +105,16 @@ export const Sidebar = () => {
           // Lock AI Suggestions for customers that are NOT yet eligible
           // Create a temporary user object with the latest stats to ensure immediate UI update
           const effectiveUser = user
-            ? { ...user, swipeCount: stats?.totalSwiped ?? user.swipeCount }
+            ? {
+                swipeCount: stats?.totalSwiped ?? user.swipeCount,
+                onboardingStatus: user.onboardingStatus,
+              }
             : null;
           const isLocked =
             link.id === "ai-suggestions" &&
             user?.role === "customer" &&
             effectiveUser &&
-            !getAIRecommendationsEligibility(effectiveUser as any).isEligible;
+            !getAIRecommendationsEligibility(effectiveUser).isEligible;
 
           const isActive =
             location.pathname === link.href ||

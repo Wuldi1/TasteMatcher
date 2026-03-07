@@ -35,7 +35,14 @@ import { apiClient } from "../../utils/api";
  * Redesigned Home Page as a dashboard.
  */
 export function CustomerHomePage() {
-  const { user, refreshUser, stats, answeredQuestions, totalQuestions } =
+  const {
+    user,
+    refreshUser,
+    refreshStats,
+    stats,
+    answeredQuestions,
+    totalQuestions,
+  } =
     useAuth();
   const [newComment, setNewComment] = useState("");
   const [isSendingComment, setIsSendingComment] = useState(false);
@@ -50,6 +57,12 @@ export function CustomerHomePage() {
   );
 
   const navigate = useNavigate();
+
+  // Always refresh stats when entering Home so widgets reflect latest backend state
+  useEffect(() => {
+    if (!user?.id) return;
+    void refreshStats();
+  }, [user?.id, refreshStats]);
 
   // Load existing questionnaire data if user has already completed or is editing
   useEffect(() => {

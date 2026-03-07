@@ -1897,8 +1897,8 @@ export function Management() {
 
       {/* Create Domain Modal */}
       {showCreateDomainModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:items-center sm:p-4">
+          <div className="w-full max-w-md overflow-y-auto rounded-lg bg-white p-6 shadow-xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[90dvh]">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
               Create New Domain
             </h2>
@@ -2001,8 +2001,8 @@ export function Management() {
 
       {/* Invite User Modal */}
       {showInviteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:items-center sm:p-4">
+          <div className="w-full max-w-md overflow-y-auto rounded-lg bg-white p-6 shadow-xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[90dvh]">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
               Invite New User
             </h2>
@@ -2104,8 +2104,8 @@ export function Management() {
 
       {/* Edit User Modal */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:items-center sm:p-4">
+          <div className="w-full max-w-md overflow-y-auto rounded-lg bg-white p-6 shadow-xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[90dvh]">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Edit User</h2>
 
             <form onSubmit={handleEditUser} className="space-y-4">
@@ -2177,8 +2177,8 @@ export function Management() {
 
       {/* Edit Domain Modal */}
       {editingDomain && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:items-center sm:p-4">
+          <div className="w-full max-w-md overflow-y-auto rounded-lg bg-white p-6 shadow-xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[90dvh]">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
               Edit Domain
             </h2>

@@ -49,6 +49,7 @@ export class ApiError extends Error {
 class BaseApiClient {
   protected baseURL: string;
   protected authToken: string | null = null;
+  private readonly inFlightReadRequests = new Map<string, Promise<unknown>>();
 
   constructor() {
     console.log("BaseApiClient initialized", window.location.hostname);
@@ -143,30 +144,54 @@ class BaseApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
+    const method = (options.method || "GET").toUpperCase();
+    const shouldDedupe = method === "GET" || method === "HEAD";
+    const requestKey = `${method}:${url}`;
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          ...this.getHeaders(),
-          ...options.headers,
-        },
-      });
-
-      if (!response.ok) {
-        await this.handleErrorResponse(response, url);
+    if (shouldDedupe) {
+      const inFlight = this.inFlightReadRequests.get(requestKey);
+      if (inFlight) {
+        return inFlight as Promise<T>;
       }
-
-      const text = await response.text();
-      return text ? JSON.parse(text) : ({} as T);
-    } catch (error) {
-      console.log(error);
-      if (error instanceof ApiError) {
-        throw error;
-      }
-      console.error("Network Error:", { url, error });
-      throw new ApiError("Network error", 0);
     }
+
+    const performRequest = async (): Promise<T> => {
+      try {
+        const response = await fetch(url, {
+          ...options,
+          headers: {
+            ...this.getHeaders(),
+            ...options.headers,
+          },
+        });
+
+        if (!response.ok) {
+          await this.handleErrorResponse(response, url);
+        }
+
+        const text = await response.text();
+        return text ? JSON.parse(text) : ({} as T);
+      } catch (error) {
+        console.log(error);
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        console.error("Network Error:", { url, error });
+        throw new ApiError("Network error", 0);
+      } finally {
+        if (shouldDedupe) {
+          this.inFlightReadRequests.delete(requestKey);
+        }
+      }
+    };
+
+    if (shouldDedupe) {
+      const inFlightPromise = performRequest();
+      this.inFlightReadRequests.set(requestKey, inFlightPromise);
+      return inFlightPromise;
+    }
+
+    return performRequest();
   }
 
   /**

@@ -42,6 +42,7 @@ export function TasterPage() {
   const previousTotalSwipedRef = useRef<number | null>(null);
   const loadedImageUrlsRef = useRef<Set<string>>(new Set());
   const imagePreloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
+  const isFetchingNextBatchRef = useRef(false);
   const [isCurrentImageReady, setIsCurrentImageReady] = useState(true);
 
   // Fetch untasted artworks for the user
@@ -53,7 +54,10 @@ export function TasterPage() {
       return apiClient.fetchUntastedArtworks(user.domainId, user.id, 20);
     },
     enabled: !!user?.domainId && !!user?.id,
-    staleTime: 60000, // Cache for 1 minute
+    // Always refresh when entering Taster to avoid replaying previously swiped cards
+    staleTime: 0,
+    refetchOnMount: "always",
+    gcTime: 0,
   });
 
   // Extract artworks array from response with fallback to empty array
@@ -62,7 +66,10 @@ export function TasterPage() {
   const hasMore = currentIndex < artworks.length - 1;
   const tasterEligibility = useMemo(() => {
     const effectiveUser = user
-      ? { ...user, swipeCount: stats?.totalSwiped ?? user.swipeCount }
+      ? {
+          swipeCount: stats?.totalSwiped ?? user.swipeCount,
+          onboardingStatus: user.onboardingStatus,
+        }
       : null;
     if (!effectiveUser) {
       return { isEligible: false, reasons: [] as string[] };
@@ -258,13 +265,16 @@ export function TasterPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleSwipe]);
 
-  // Prefetch next batch when reaching last 3 artworks
+  // Fetch next batch only after current batch is fully consumed
   useEffect(() => {
     if (
       artworks.length > 0 &&
-      currentIndex >= artworks.length - 3 &&
-      !isLoading
+      currentIndex >= artworks.length &&
+      !isLoading &&
+      !isFetchingNextBatchRef.current
     ) {
+      isFetchingNextBatchRef.current = true;
+
       // Fetch next batch and append to artworks
       (async () => {
         try {
@@ -286,6 +296,8 @@ export function TasterPage() {
           }
         } catch (err) {
           // Silently ignore errors
+        } finally {
+          isFetchingNextBatchRef.current = false;
         }
       })();
     }
@@ -342,7 +354,7 @@ export function TasterPage() {
   return (
     <div className="taster-page">
       {showAiUnlockModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-3 sm:items-center sm:p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               Congratulations!

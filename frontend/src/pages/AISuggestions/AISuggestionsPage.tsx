@@ -11,11 +11,13 @@
 // 10. Frontend-specific: UI changes must be responsive (mobile + desktop) and smooth (no visual regressions). Include accessibility considerations (semantic markup, aria attributes, keyboard navigation, focus management) and automated accessibility checks (axe, Playwright/accessibility audit) where applicable.
 // -----------------------------------------------------------
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
-import { apiClient } from "../../utils/api";
+import { Link } from "react-router-dom";
+import { ApiError, apiClient } from "../../utils/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { useViewerPreferences } from "../../contexts/ViewerPreferencesContext";
 import { Artwork, User } from "@tastematcher/common";
 import {
+  AI_RECOMMENDATIONS_MIN_SWIPES,
   getAIRecommendationsEligibility,
   isArtworkNew,
   isAuctionEnded,
@@ -61,7 +63,6 @@ export const AISuggestionsPage = ({
   const effectiveDomainId = domainId ?? user?.domainId;
   const [recommendations, setRecommendations] = useState<Artwork[]>([]);
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
-  const [selectedUser] = useState<string | undefined>(undefined);
   const [users, setUsers] = useState<DomainUserOption[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,49 +76,60 @@ export const AISuggestionsPage = ({
   const LIMIT = 20;
 
   const isDomainOwner =
-    user?.role === "domain_owner" || user?.role === "global_admin";
+    user?.role === "dealer" ||
+    user?.role === "domain_owner" ||
+    user?.role === "global_admin";
 
   const targetUserId = useMemo(() => {
-    if (userId) return userId;
-    if (isDomainOwner) {
-      return selectedUser || user?.id;
-    }
-    return user?.id;
-  }, [userId, isDomainOwner, selectedUser, user?.id]);
+    return userId ?? user?.id;
+  }, [userId, user?.id]);
 
   const targetUser = useMemo(() => {
     if (userId) {
-      return users.find((u) => u.id === (selectedUser || user?.id));
+      return users.find((candidate) => candidate.id === userId);
     }
-    if (isDomainOwner) {
-      return users.find((u) => u.id === (selectedUser || user?.id));
+    if (user?.id && users.length > 0) {
+      return users.find((candidate) => candidate.id === user.id) ?? user;
     }
     return user;
-  }, [isDomainOwner, selectedUser, user, users, userId]);
+  }, [user, users, userId]);
+
+  const targetSwipeCount = useMemo(() => {
+    if (!targetUser) return undefined;
+    if (targetUser.id === user?.id) {
+      return stats?.totalSwiped ?? targetUser.swipeCount ?? user?.swipeCount;
+    }
+    return targetUser.swipeCount;
+  }, [targetUser, user?.id, user?.swipeCount, stats?.totalSwiped]);
+
+  const targetOnboardingStatus = useMemo(() => {
+    if (targetUser?.onboardingStatus) return targetUser.onboardingStatus;
+    if (targetUserId && targetUserId === user?.id) {
+      return user?.onboardingStatus;
+    }
+    return undefined;
+  }, [targetUser, targetUserId, user?.id, user?.onboardingStatus]);
+
+  const canEvaluateEligibility = Boolean(targetOnboardingStatus);
 
   const eligibility = useMemo(() => {
-    if (userId) {
+    if (!canEvaluateEligibility) {
       return { isEligible: true, reasons: [] as string[] };
     }
-    if (!targetUser) {
-      return {
-        isEligible: false,
-        reasons: ["Unable to evaluate eligibility for AI suggestions."],
-      };
-    }
-
-    const effectiveSwipeCount = isDomainOwner
-      ? targetUser.swipeCount
-      : (stats?.totalSwiped ?? targetUser.swipeCount ?? user?.swipeCount);
-
     return getAIRecommendationsEligibility({
-      swipeCount: effectiveSwipeCount,
-      onboardingStatus: targetUser.onboardingStatus,
+      swipeCount: targetSwipeCount,
+      onboardingStatus: targetOnboardingStatus,
     });
-  }, [userId, targetUser, isDomainOwner, stats?.totalSwiped, user?.swipeCount]);
+  }, [canEvaluateEligibility, targetSwipeCount, targetOnboardingStatus]);
+
+  const localEligibilityNeedsOnboarding =
+    canEvaluateEligibility && targetOnboardingStatus !== "completed";
+  const localEligibilityNeedsMoreSwipes =
+    canEvaluateEligibility &&
+    (targetSwipeCount || 0) < AI_RECOMMENDATIONS_MIN_SWIPES;
 
   useEffect(() => {
-    if (!isDomainOwner || userId) {
+    if (!isDomainOwner || !effectiveDomainId) {
       return;
     }
 
@@ -128,8 +140,8 @@ export const AISuggestionsPage = ({
           domainUsers.map((domainUser) => ({
             id: domainUser.id,
             label: domainUser.name ?? domainUser.email ?? domainUser.id,
-            onboardingStatus: (domainUser as any).onboardingStatus,
-            swipeCount: (domainUser as any).swipeCount,
+            onboardingStatus: domainUser.onboardingStatus,
+            swipeCount: domainUser.swipeCount,
           })),
         );
       } catch (err) {
@@ -139,11 +151,20 @@ export const AISuggestionsPage = ({
     };
 
     void fetchUsers();
-  }, [isDomainOwner, effectiveDomainId, userId]);
+  }, [isDomainOwner, effectiveDomainId]);
 
   useEffect(() => {
     if (!targetUserId || !effectiveDomainId) {
       setRecommendations([]);
+      setLoading(false);
+      return;
+    }
+
+    if (canEvaluateEligibility && !eligibility.isEligible) {
+      setRecommendations([]);
+      setHasMore(false);
+      setLoading(false);
+      setError(null);
       return;
     }
 
@@ -158,7 +179,6 @@ export const AISuggestionsPage = ({
       setError(null);
 
       try {
-        // @ts-ignore - apiClient might not be typed for extra args yet
         const newRecommendations = await apiClient.getRecommendations(
           effectiveDomainId,
           targetUserId !== user?.id ? targetUserId : undefined,
@@ -171,9 +191,11 @@ export const AISuggestionsPage = ({
         }
       } catch (err) {
         console.error("Failed to load AI suggestions", err);
-        if (!userId && eligibility.isEligible) {
-          setError("Unable to load AI suggestions. Please try again.");
-        }
+        const errorMessage =
+          err instanceof ApiError
+            ? err.message
+            : "Unable to load AI suggestions. Please try again.";
+        setError(errorMessage);
         setRecommendations([]);
       } finally {
         setLoading(false);
@@ -185,8 +207,8 @@ export const AISuggestionsPage = ({
     targetUserId,
     effectiveDomainId,
     user?.id,
+    canEvaluateEligibility,
     eligibility.isEligible,
-    userId,
   ]);
 
   const loadMore = useCallback(async () => {
@@ -196,7 +218,6 @@ export const AISuggestionsPage = ({
     setLoading(true);
 
     try {
-      // @ts-ignore
       const newRecommendations = await apiClient.getRecommendations(
         effectiveDomainId,
         targetUserId !== user?.id ? targetUserId : undefined,
@@ -354,6 +375,28 @@ export const AISuggestionsPage = ({
     }
   };
 
+  const errorText = (error || "").toLowerCase();
+  const eligibilityNeedsOnboarding =
+    localEligibilityNeedsOnboarding || errorText.includes("onboarding");
+  const eligibilityNeedsMoreSwipes =
+    localEligibilityNeedsMoreSwipes ||
+    errorText.includes("swipe") ||
+    errorText.includes(String(AI_RECOMMENDATIONS_MIN_SWIPES));
+
+  const shouldShowEligibilityCta =
+    recommendations.length === 0 &&
+    !loading &&
+    (eligibilityNeedsOnboarding || eligibilityNeedsMoreSwipes);
+
+  const primaryCta =
+    user?.role === "customer"
+      ? eligibilityNeedsOnboarding
+        ? { to: "/onboarding", label: "Go To Onboarding" }
+        : eligibilityNeedsMoreSwipes
+          ? { to: "/taster", label: "Go To Taster" }
+          : null
+      : null;
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
       <header className="mb-6 sm:mb-8">
@@ -365,7 +408,51 @@ export const AISuggestionsPage = ({
         </p>
       </header>
 
-      {error && <div className="text-red-600 mb-4">{error}</div>}
+      {shouldShowEligibilityCta && (
+        <section className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
+          <h2 className="text-lg font-semibold text-amber-900">
+            AI Suggestions Are Locked For Now
+          </h2>
+          {eligibilityNeedsOnboarding && (
+            <p className="mt-2 text-sm text-amber-800">
+              Complete onboarding to unlock personalized recommendations.
+            </p>
+          )}
+          {!eligibilityNeedsOnboarding && eligibilityNeedsMoreSwipes && (
+            <p className="mt-2 text-sm text-amber-800">
+              You need at least {AI_RECOMMENDATIONS_MIN_SWIPES} swipes in Taster
+              before AI Suggestions can load.
+            </p>
+          )}
+          {eligibilityNeedsOnboarding && eligibilityNeedsMoreSwipes && (
+            <p className="mt-1 text-xs text-amber-700">
+              After onboarding, continue swiping in Taster to reach{" "}
+              {AI_RECOMMENDATIONS_MIN_SWIPES} swipes.
+            </p>
+          )}
+          {primaryCta ? (
+            <div className="mt-4">
+              <Link
+                to={primaryCta.to}
+                className="inline-flex items-center rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+              >
+                {primaryCta.label}
+              </Link>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-amber-800">
+              This customer must complete onboarding and/or Taster swipes before
+              recommendations can be generated.
+            </p>
+          )}
+        </section>
+      )}
+
+      {error && !shouldShowEligibilityCta && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-red-700">
+          {error}
+        </div>
+      )}
 
       {eligibility.isEligible && recommendations.length > 0 && (
         <>
@@ -599,7 +686,10 @@ export const AISuggestionsPage = ({
         </>
       )}
 
-      {eligibility.isEligible && recommendations.length === 0 && !loading && (
+      {eligibility.isEligible &&
+        recommendations.length === 0 &&
+        !loading &&
+        !shouldShowEligibilityCta && (
         <p className="py-12 text-center text-gray-600">
           No AI suggestions yet. Encourage additional tasting activity to enrich
           personalization.
@@ -609,14 +699,14 @@ export const AISuggestionsPage = ({
       {/* Modal for artwork details */}
       {selectedArtwork && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="modal-title"
           onClick={handleCloseModal}
         >
           <div
-            className="relative bg-white rounded-lg shadow-lg w-full max-w-4xl p-6"
+            className="relative w-full max-w-4xl overflow-y-auto rounded-lg bg-white p-4 shadow-lg max-h-[calc(100dvh-1.5rem)] sm:max-h-[90dvh] sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <button

@@ -623,8 +623,8 @@ export default function ProposalView({
 
       {/* Alert Modal */}
       {alertState && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-96">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:items-center sm:p-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
             <h2 className="text-lg font-semibold text-gray-800 mb-2">
               {alertState.title}
             </h2>

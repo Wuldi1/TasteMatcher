@@ -1405,13 +1405,14 @@ export function CatalogPage() {
         {selectedArtwork && (
           <div
             className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:p-4"
+            style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
             onClick={handleCloseModal}
           >
             <div
-              className="relative bg-white rounded-lg shadow-lg w-full max-w-4xl p-5 sm:p-6 md:p-8 max-h-[90vh] overflow-y-auto"
+              className="relative bg-white rounded-lg shadow-lg w-full max-w-4xl p-5 sm:p-6 md:p-8 max-h-[90dvh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Close Button */}

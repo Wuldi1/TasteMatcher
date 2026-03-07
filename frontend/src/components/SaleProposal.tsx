@@ -1465,8 +1465,8 @@ export default function SaleProposal({
 
       {/* Save Proposal Modal */}
       {isSaveModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-[32rem] max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:items-center sm:p-4">
+          <div className="flex w-full max-w-lg flex-col rounded-lg bg-white p-6 shadow-lg max-h-[calc(100dvh-1.5rem)] sm:max-w-[32rem] sm:max-h-[90dvh]">
             <h2 className="text-lg font-semibold text-gray-800 mb-4">
               {saveMode === "publish"
                 ? proposalId
@@ -1510,7 +1510,10 @@ export default function SaleProposal({
               />
             </div>
 
-            <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+            <div
+              className="flex justify-end gap-3 border-t border-gray-100 pt-2"
+              style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+            >
               <button
                 onClick={() => setIsSaveModalOpen(false)}
                 className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition-colors"
@@ -1542,8 +1545,8 @@ export default function SaleProposal({
 
       {/* Alert Modal */}
       {alertState && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-96">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:items-center sm:p-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
             <h2 className="text-lg font-semibold text-gray-800 mb-2">
               {alertState.title}
             </h2>
@@ -1564,8 +1567,8 @@ export default function SaleProposal({
 
       {/* Confirm Modal */}
       {confirmState && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-96">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:items-center sm:p-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
             <h2 className="text-lg font-semibold text-gray-800 mb-2">
               {confirmState.title}
             </h2>

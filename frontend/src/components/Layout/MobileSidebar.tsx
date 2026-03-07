@@ -105,8 +105,8 @@ export const MobileSidebar = () => {
                 link.id === "ai-suggestions" &&
                 user?.role === "customer" &&
                 !getAIRecommendationsEligibility({
-                  ...user!,
                   swipeCount: stats?.totalSwiped ?? user?.swipeCount,
+                  onboardingStatus: user?.onboardingStatus,
                 }).isEligible;
               const isActive =
                 location.pathname === link.href ||
@@ -173,15 +173,15 @@ export const MobileSidebar = () => {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-80">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:items-center sm:p-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
             <h2 className="text-lg font-semibold text-gray-800 mb-4">
               Access Denied
             </h2>
             <p className="text-sm text-gray-600">
               {getAIRecommendationsEligibility({
-                ...user!,
                 swipeCount: stats?.totalSwiped ?? user?.swipeCount,
+                onboardingStatus: user?.onboardingStatus,
               }).reasons.join(". ")}
             </p>
             <div className="mt-6 flex justify-end">
@@ -197,8 +197,8 @@ export const MobileSidebar = () => {
       )}
 
       {isDisplayModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
-          <div className="bg-white rounded-lg shadow-lg p-5 w-full max-w-sm">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:items-center sm:p-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-lg">
             <h2 className="text-lg font-semibold text-gray-800 mb-3">
               Display Settings
             </h2>

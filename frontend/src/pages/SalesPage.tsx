@@ -617,7 +617,7 @@ export default function SalesPage() {
       {/* Lightbox Modal */}
       {lightboxImage && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 transition-opacity duration-300"
+          className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/90 p-3 backdrop-blur-sm transition-opacity duration-300 sm:items-center sm:p-4"
           onClick={() => setLightboxImage(null)}
         >
           <button
@@ -629,7 +629,7 @@ export default function SalesPage() {
           <img
             src={lightboxImage}
             alt="Full size reference"
-            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            className="max-w-full max-h-[90dvh] object-contain rounded-lg shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
         </div>

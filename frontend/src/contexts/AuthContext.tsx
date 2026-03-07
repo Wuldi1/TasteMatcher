@@ -239,23 +239,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const fetchedStats = await apiClient.getUserStats();
       setStats(fetchedStats);
-
-      if (user.personalQuestionnaire) {
-        setAnsweredQuestions(
-          calculateAnsweredQuestions(
-            user.personalQuestionnaire as PersonalQuestionnaire,
-          ),
-        );
-      } else {
-        setAnsweredQuestions(0);
-      }
-      setTotalQuestions(calculateTotalQuestions());
     } catch (err) {
       console.error("Failed to fetch user stats:", err);
     } finally {
       setIsStatsLoading(false);
     }
-  }, [user]);
+  }, [user?.id, user?.domainId]);
 
   const incrementSwipeCount = useCallback(() => {
     setStats((prev) => {

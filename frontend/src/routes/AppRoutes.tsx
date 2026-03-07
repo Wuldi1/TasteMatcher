@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthPage } from "../pages/Auth/AuthPage";
 import { HomePage } from "../pages/Home/HomePage";
@@ -38,22 +38,29 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
  * Layout wrapper for protected routes with responsive navigation
  */
 function AppLayout({ children }: { children: React.ReactNode }) {
+  const [isDesktop, setIsDesktop] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia("(min-width: 768px)").matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const query = window.matchMedia("(min-width: 768px)");
+    const onChange = () => setIsDesktop(query.matches);
+    onChange();
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Desktop Sidebar - hidden on mobile */}
-      <div className="hidden md:block">
-        <Sidebar />
-      </div>
+      {/* Render only one nav shell to avoid duplicate effects/network requests */}
+      {isDesktop ? <Sidebar /> : <MobileSidebar />}
 
       {/* Main content area */}
       <main className="flex-1 overflow-y-auto bg-gray-50 pb-20 md:pb-0 p-4 sm:p-6 md:p-8">
         {children}
       </main>
-
-      {/* Mobile Bottom Navigation - hidden on desktop */}
-      <div className="md:hidden">
-        <MobileSidebar />
-      </div>
     </div>
   );
 }
