@@ -433,13 +433,11 @@ export class ArtworksService {
 
   /**
    * Get artworks that user hasn't tasted yet
-   * Uses candidate-batch scanning to avoid large NOT IN lists
    */
   async getUntastedArtworks(
-    primaryDomainId: string,
+    domainId: string,
     userId: string,
     limit: number = 20,
-    includeDomainId?: string,
     viewer?: { id: string; role: Role; invitedBy?: string | null },
   ): Promise<UntastedArtworksResponse> {
     const artworksContainer = await this.cosmosService.getArtworksContainer();
@@ -447,109 +445,137 @@ export class ArtworksService {
       await this.cosmosService.getArtworkPreferencesContainer();
 
     try {
-      const secondaryDomainId =
-        includeDomainId && includeDomainId !== primaryDomainId
-          ? includeDomainId
-          : undefined;
-      const requestedLimit = Number.isFinite(limit) ? Math.floor(limit) : 20;
-      const boundedLimit = Math.min(Math.max(requestedLimit, 1), 100);
-      const fetchBatchSize = Math.min(Math.max(boundedLimit * 4, 80), 200);
-      const maxScanned = Math.max(boundedLimit * 40, 400);
-      const parameters: Array<{ name: string; value: any }> = [
-        { name: "@artworkType", value: "artwork" },
-        { name: "@primaryDomainId", value: primaryDomainId },
-      ];
-      if (secondaryDomainId) {
-        parameters.push({
-          name: "@secondaryDomainId",
-          value: secondaryDomainId,
-        });
-      }
-      const domainFilterClause = secondaryDomainId
-        ? "(c.domainId = @primaryDomainId OR (c.domainId = @secondaryDomainId AND c.useForTaster = true))"
-        : "c.domainId = @primaryDomainId";
-      const orderByCandidates = ["id", "price", "updatedAt"] as const;
-      const orderByField =
-        orderByCandidates[Math.floor(Math.random() * orderByCandidates.length)];
-      const orderByDirection = Math.random() < 0.5 ? "ASC" : "DESC";
-      const orderByClause = `ORDER BY c.${orderByField} ${orderByDirection}`;
-      const preferenceDomainIds = [
-        ...new Set(
-          [GlobalArtworksDomainId, primaryDomainId, secondaryDomainId].filter(
-            Boolean,
-          ),
-        ),
+      const pageSize = Math.min(Math.max(limit, 1), 100);
+      const artworkDomainIds = [
+        ...new Set([domainId, GlobalArtworksDomainId].filter(Boolean)),
       ] as string[];
 
-      this.logger.log(
-        `Fetching untasted artworks for user ${userId}; artwork domains: ${primaryDomainId}${secondaryDomainId ? `, ${secondaryDomainId}` : ""}; preference domains: ${preferenceDomainIds.join(", ")}`,
+      const tastedArtworkIds = new Set<string>();
+      await Promise.all(
+        artworkDomainIds.map(async (domainId) => {
+          const preferencesQuery = {
+            query: `
+              SELECT VALUE c.artworkId
+              FROM c
+              WHERE c.type = @type
+                AND c.domainId = @domainId
+                AND c.userId = @userId
+            `,
+            parameters: [
+              { name: "@type", value: "artworkPreference" },
+              { name: "@domainId", value: domainId },
+              { name: "@userId", value: userId },
+            ],
+          };
+
+          const { resources } = await preferencesContainer.items
+            .query(preferencesQuery, { partitionKey: domainId })
+            .fetchAll();
+          for (const artworkId of resources ?? []) {
+            if (typeof artworkId === "string" && artworkId) {
+              tastedArtworkIds.add(artworkId);
+            }
+          }
+        }),
       );
 
-      const artworksQuery = `
-        SELECT *
-        FROM c
-        WHERE c.type = @artworkType AND ${domainFilterClause}
-        ${orderByClause}
-      `;
-      const iterator = artworksContainer.items.query(
-        { query: artworksQuery, parameters },
-        { maxItemCount: fetchBatchSize },
-      );
+      const fetchDomainPage = async (
+        domainId: string,
+        continuationToken?: string,
+      ): Promise<{ artworks: Artwork[]; continuationToken?: string }> => {
+        const query = {
+          query: `
+              SELECT *
+              FROM c
+              WHERE c.type = @artworkType
+                AND c.domainId = @domainId
+                AND c.useForTaster = true
+            `,
+          parameters: [
+            { name: "@artworkType", value: "artwork" },
+            { name: "@domainId", value: domainId },
+          ],
+        };
+        const { resources, continuationToken: nextToken } =
+          await artworksContainer.items
+            .query(query, {
+              partitionKey: domainId,
+              maxItemCount: pageSize,
+              continuationToken,
+            })
+            .fetchNext();
+
+        return {
+          artworks: (resources ?? []) as Artwork[],
+          continuationToken: nextToken ?? undefined,
+        };
+      };
 
       const untasted: Artwork[] = [];
-      const selectedIds = new Set<string>();
-      let scannedCount = 0;
-      let fetchedBatches = 0;
-      let matchedTastedIds = 0;
+      const selectedArtworkIds = new Set<string>();
+      let userDomainContinuationToken: string | undefined = undefined;
+      let globalContinuationToken: string | undefined = undefined;
+      let primaryHasMore = true;
+      let secondaryHasMore = true;
+      let primaryPagesFetched = 0;
+      let secondaryPagesFetched = 0;
 
       while (
-        iterator.hasMoreResults() &&
-        untasted.length < boundedLimit &&
-        scannedCount < maxScanned
+        untasted.length < pageSize &&
+        (primaryHasMore || secondaryHasMore)
       ) {
-        const { resources } = await iterator.fetchNext();
-        fetchedBatches += 1;
+        const fetchedArtworks: Artwork[] = [];
 
-        const batchArtworks = (resources ?? []) as Artwork[];
-        if (batchArtworks.length === 0) {
+        if (primaryHasMore) {
+          const primaryPage = await fetchDomainPage(
+            domainId,
+            userDomainContinuationToken,
+          );
+          primaryPagesFetched += 1;
+          userDomainContinuationToken = primaryPage.continuationToken;
+          primaryHasMore = Boolean(userDomainContinuationToken);
+          fetchedArtworks.push(...primaryPage.artworks);
+        }
+
+        if (secondaryHasMore) {
+          const secondaryPage = await fetchDomainPage(
+            GlobalArtworksDomainId,
+            globalContinuationToken,
+          );
+          secondaryPagesFetched += 1;
+          globalContinuationToken = secondaryPage.continuationToken;
+          secondaryHasMore = Boolean(globalContinuationToken);
+          fetchedArtworks.push(...secondaryPage.artworks);
+        }
+
+        if (fetchedArtworks.length === 0) {
           break;
         }
 
-        scannedCount += batchArtworks.length;
-        const visibleCandidates = batchArtworks.filter((artwork) => {
-          if (!artwork?.id || selectedIds.has(artwork.id)) return false;
-          return this.canViewerSeeArtwork(artwork, viewer);
-        });
-
-        if (visibleCandidates.length === 0) {
-          continue;
-        }
-
-        const candidateIds = [
-          ...new Set(visibleCandidates.map((artwork) => artwork.id)),
-        ];
-        const tastedInBatch = await this.getTastedArtworkIdsForCandidates(
-          preferencesContainer,
-          userId,
-          preferenceDomainIds,
-          candidateIds,
-        );
-        matchedTastedIds += tastedInBatch.size;
-
-        for (const artwork of visibleCandidates) {
-          if (tastedInBatch.has(artwork.id)) {
+        for (const artwork of fetchedArtworks) {
+          if (!artwork?.id) {
             continue;
           }
+          if (selectedArtworkIds.has(artwork.id)) {
+            continue;
+          }
+          if (tastedArtworkIds.has(artwork.id)) {
+            continue;
+          }
+          if (!this.canViewerSeeArtwork(artwork, viewer, true)) {
+            continue;
+          }
+
+          selectedArtworkIds.add(artwork.id);
           untasted.push(artwork);
-          selectedIds.add(artwork.id);
-          if (untasted.length >= boundedLimit) {
+          if (untasted.length >= pageSize) {
             break;
           }
         }
       }
 
       this.logger.log(
-        `Untasted selection complete for user ${userId}: returned=${untasted.length}, scanned=${scannedCount}, batches=${fetchedBatches}, matchedTastedInCandidates=${matchedTastedIds}, limit=${boundedLimit}`,
+        `Untasted selection complete for user ${userId}: returned=${untasted.length}, limit=${pageSize}, preferences=${tastedArtworkIds.size}, primaryPages=${primaryPagesFetched}, secondaryPages=${secondaryPagesFetched}`,
       );
 
       return {
@@ -558,56 +584,11 @@ export class ArtworksService {
       };
     } catch (error) {
       this.logger.error(
-        `Failed to get untasted artworks for user ${userId} in domains ${primaryDomainId}${includeDomainId ? ` and ${includeDomainId}` : ""}`,
+        `Failed to get untasted artworks for user ${userId} in domains ${domainId} and ${GlobalArtworksDomainId}`,
         error,
       );
       throw error;
     }
-  }
-
-  private async getTastedArtworkIdsForCandidates(
-    preferencesContainer: any,
-    userId: string,
-    preferenceDomainIds: string[],
-    candidateArtworkIds: string[],
-  ): Promise<Set<string>> {
-    if (candidateArtworkIds.length === 0 || preferenceDomainIds.length === 0) {
-      return new Set<string>();
-    }
-
-    const queries = preferenceDomainIds.map(async (domainId) => {
-      const tastedQuery = {
-        query: `
-          SELECT VALUE c.artworkId
-          FROM c
-          WHERE c.type = @type
-            AND c.domainId = @domainId
-            AND c.userId = @userId
-            AND ARRAY_CONTAINS(@candidateArtworkIds, c.artworkId)
-        `,
-        parameters: [
-          { name: "@type", value: "artworkPreference" },
-          { name: "@domainId", value: domainId },
-          { name: "@userId", value: userId },
-          { name: "@candidateArtworkIds", value: candidateArtworkIds },
-        ],
-      };
-
-      const { resources } = await preferencesContainer.items
-        .query(tastedQuery, { partitionKey: domainId })
-        .fetchAll();
-      return (resources ?? []) as string[];
-    });
-
-    const perDomainMatches = await Promise.all(queries);
-    const tastedIds = new Set<string>();
-    for (const matches of perDomainMatches) {
-      for (const artworkId of matches) {
-        tastedIds.add(artworkId);
-      }
-    }
-
-    return tastedIds;
   }
 
   /**
@@ -1381,8 +1362,9 @@ export class ArtworksService {
   private canViewerSeeArtwork(
     artwork: Artwork,
     viewer?: { id: string; role: string; invitedBy?: string | null },
+    isTaster: boolean = false,
   ): boolean {
-    if (viewer?.role === "customer" && isAuctionEnded(artwork)) {
+    if (viewer?.role === "customer" && isAuctionEnded(artwork) && !isTaster) {
       return false;
     }
     if (!artwork.isPrivate) {

@@ -363,16 +363,26 @@ export class ArtworksController {
         "You are not authorized to perform this action.",
       );
     }
+
+    if (
+      domainId != GlobalArtworksDomainId &&
+      req.user.domainId !== domainId &&
+      req.user.role === "customer"
+    ) {
+      throw new ForbiddenException(
+        "You are not authorized to perform this action.",
+      );
+    }
+
     const viewerContext = {
       id: req.user.id,
       role: req.user.role as Role,
       invitedBy: (req.user as any).invitedBy ?? null,
     };
     const untastedArtworks = await this.artworksService.getUntastedArtworks(
-      GlobalArtworksDomainId,
-      userId,
-      limit || 20,
       domainId,
+      userId,
+      limit,
       viewerContext,
     );
     return {
