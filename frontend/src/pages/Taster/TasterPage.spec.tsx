@@ -6,17 +6,20 @@ import { AuthContext } from "../../contexts/AuthContext";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createMockAuthContext } from "../../test/mocks/authContext";
 
-const mockFetchUntasted = vi.fn().mockResolvedValue({
-  artworks: [
-    {
-      id: "art-1",
-      title: "Test Artwork",
-      imageUrl: "https://example.com/image.jpg",
+const buildArtworks = (count: number, startAt: number = 1) =>
+  Array.from({ length: count }, (_, index) => {
+    const sequence = startAt + index;
+    return {
+      id: `art-${sequence}`,
+      title: `Artwork ${sequence}`,
+      artist: `Artist ${sequence}`,
+      filename: `https://example.com/image-${sequence}.jpg`,
       domainId: "domain-1",
-    },
-  ],
-  hasMore: false,
-});
+      thumbnails: [],
+    };
+  });
+
+const mockFetchUntasted = vi.fn();
 
 const mockSavePreference = vi.fn();
 
@@ -66,7 +69,14 @@ const renderWithProviders = (component: React.ReactElement) => {
 
 describe("TasterPage", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     queryClient.clear();
+    mockFetchUntasted.mockReset();
+    mockFetchUntasted.mockResolvedValue({
+      artworks: buildArtworks(1),
+      hasMore: false,
+    });
+    mockSavePreference.mockReset();
   });
 
   it("renders taster title and subtitle", async () => {
@@ -121,7 +131,7 @@ describe("TasterPage", () => {
     });
 
     // Check for artworks
-    expect(screen.getByText(/Test Artwork/i)).toBeInTheDocument();
+    expect(screen.getByText(/Artwork 1/i)).toBeInTheDocument();
   });
 
   it("calls savePreference when swiping", async () => {
@@ -147,6 +157,48 @@ describe("TasterPage", () => {
       expect(screen.queryByText(/Loading/i)).not.toBeInTheDocument();
     });
 
-    expect(screen.getByText(/No more artworks/i)).toBeInTheDocument();
+    expect(screen.getByText(/No Untasted Artworks/i)).toBeInTheDocument();
+  });
+
+  it("shows loading state before first untasted response resolves", async () => {
+    let resolveFetch:
+      | ((value: { artworks: unknown[]; hasMore: boolean }) => void)
+      | undefined;
+    const fetchPromise = new Promise<{ artworks: unknown[]; hasMore: boolean }>(
+      (resolve) => {
+        resolveFetch = resolve;
+      },
+    );
+    mockFetchUntasted.mockReturnValueOnce(fetchPromise);
+
+    renderWithProviders(<TasterPage />);
+
+    expect(screen.getByText(/Loading artworks/i)).toBeInTheDocument();
+    expect(screen.queryByText(/No Untasted Artworks/i)).not.toBeInTheDocument();
+
+    resolveFetch?.({ artworks: buildArtworks(1), hasMore: false });
+    await waitFor(() => {
+      expect(screen.getByText(/Artwork 1/i)).toBeInTheDocument();
+    });
+  });
+
+  it("prefetches next batch when 10 artworks remain", async () => {
+    vi.useFakeTimers();
+    mockFetchUntasted
+      .mockResolvedValueOnce({ artworks: buildArtworks(11), hasMore: false })
+      .mockResolvedValueOnce({ artworks: buildArtworks(5, 100), hasMore: false });
+
+    renderWithProviders(<TasterPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Artwork 1/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText(/Like this artwork/i));
+    vi.advanceTimersByTime(350);
+
+    await waitFor(() => {
+      expect(mockFetchUntasted).toHaveBeenCalledTimes(2);
+    });
   });
 });

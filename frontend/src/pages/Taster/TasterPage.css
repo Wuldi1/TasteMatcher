@@ -9,10 +9,45 @@
 .taster-page--loading,
 .taster-page--empty,
 .taster-page--complete {
+  display: flex;
   justify-content: center;
   align-items: center;
   text-align: center;
   color: var(--color-text-secondary, #6b7280);
+  padding: 1.5rem;
+}
+
+.taster-empty,
+.taster-complete {
+  width: 100%;
+  max-width: 520px;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  padding: 2rem 1.5rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 10px 24px -18px rgba(17, 24, 39, 0.45);
+}
+
+.taster-empty__icon,
+.taster-complete__icon {
+  width: 2rem;
+  height: 2rem;
+  margin: 0 auto 0.75rem;
+  color: #2563eb;
+}
+
+.taster-empty__title,
+.taster-complete__title {
+  margin: 0;
+  color: #111827;
+  font-size: 1.3rem;
+}
+
+.taster-empty__description,
+.taster-complete__description {
+  margin: 0.65rem 0 0;
+  color: #4b5563;
+  line-height: 1.45;
 }
 
 /* Header */

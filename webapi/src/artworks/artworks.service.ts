@@ -1156,8 +1156,7 @@ export class ArtworksService {
         this.canViewerSeeArtwork(art, requester),
       );
 
-      // Apply pagination
-      return visibleRecommendations.slice(offset, offset + limit);
+      return visibleRecommendations;
     } catch (error) {
       this.logger.error({
         msg: "Failed to generate AI suggestions",

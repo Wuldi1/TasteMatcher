@@ -28,6 +28,8 @@ type SwipeDirection = "left" | "right" | null;
  * Only shows artworks the user hasn't rated yet.
  */
 export function TasterPage() {
+  const BATCH_SIZE = 20;
+  const PREFETCH_THRESHOLD = 10;
   const { user, incrementSwipeCount, stats } = useAuth();
   const queryClient = useQueryClient();
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -42,7 +44,9 @@ export function TasterPage() {
   const previousTotalSwipedRef = useRef<number | null>(null);
   const loadedImageUrlsRef = useRef<Set<string>>(new Set());
   const imagePreloadPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
-  const isFetchingNextBatchRef = useRef(false);
+  const [queuedArtworks, setQueuedArtworks] = useState<Artwork[]>([]);
+  const [isFetchingNextBatch, setIsFetchingNextBatch] = useState(false);
+  const [hasMoreUntasted, setHasMoreUntasted] = useState(true);
   const [isCurrentImageReady, setIsCurrentImageReady] = useState(true);
 
   // Fetch untasted artworks for the user
@@ -51,7 +55,7 @@ export function TasterPage() {
     queryFn: async () => {
       if (!user?.domainId || !user?.id)
         throw new Error("User not authenticated");
-      return apiClient.fetchUntastedArtworks(user.domainId, user.id, 20);
+      return apiClient.fetchUntastedArtworks(user.domainId, user.id, BATCH_SIZE);
     },
     enabled: !!user?.domainId && !!user?.id,
     // Always refresh when entering Taster to avoid replaying previously swiped cards
@@ -60,10 +64,35 @@ export function TasterPage() {
     gcTime: 0,
   });
 
-  // Extract artworks array from response with fallback to empty array
-  const artworks = useMemo(() => untastedData?.artworks || [], [untastedData]);
+  useEffect(() => {
+    setCurrentIndex(0);
+    setQueuedArtworks([]);
+    setHasMoreUntasted(true);
+    setIsFetchingNextBatch(false);
+  }, [user?.id, user?.domainId]);
+
+  useEffect(() => {
+    const incomingArtworks = untastedData?.artworks ?? [];
+    setQueuedArtworks((prev) => {
+      if (prev.length === 0) {
+        return [...incomingArtworks];
+      }
+
+      const existingIds = new Set(prev.map((artwork) => artwork.id));
+      const uniqueIncoming = incomingArtworks.filter(
+        (artwork) => artwork?.id && !existingIds.has(artwork.id),
+      );
+      if (uniqueIncoming.length === 0) {
+        return prev;
+      }
+      return [...prev, ...uniqueIncoming];
+    });
+    setHasMoreUntasted(incomingArtworks.length > 0);
+  }, [untastedData]);
+
+  const artworks = useMemo(() => queuedArtworks, [queuedArtworks]);
   const currentArtwork = artworks[currentIndex];
-  const hasMore = currentIndex < artworks.length - 1;
+  const hasMoreInQueue = currentIndex < artworks.length - 1;
   const tasterEligibility = useMemo(() => {
     const effectiveUser = user
       ? {
@@ -265,52 +294,79 @@ export function TasterPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleSwipe]);
 
-  // Fetch next batch only after current batch is fully consumed
+  // Prefetch next batch before queue exhaustion so users don't see an empty gap.
   useEffect(() => {
+    const domainId = user?.domainId;
+    const userId = user?.id;
+    if (!domainId || !userId) return;
+
+    const remainingInQueue = artworks.length - currentIndex;
     if (
-      artworks.length > 0 &&
-      currentIndex >= artworks.length &&
-      !isLoading &&
-      !isFetchingNextBatchRef.current
+      artworks.length === 0 ||
+      remainingInQueue > PREFETCH_THRESHOLD ||
+      isLoading ||
+      isFetchingNextBatch ||
+      !hasMoreUntasted
     ) {
-      isFetchingNextBatchRef.current = true;
-
-      // Fetch next batch and append to artworks
-      (async () => {
-        try {
-          const nextBatch = await apiClient.fetchUntastedArtworks(
-            user!.domainId!,
-            user!.id!,
-            20,
-          );
-          // Only append if there are new artworks
-          if (nextBatch.artworks && nextBatch.artworks.length > 0) {
-            // Avoid duplicates
-            const existingIds = new Set(artworks.map((a) => a.id));
-            const newArtworks = nextBatch.artworks.filter(
-              (a) => !existingIds.has(a.id),
-            );
-            if (newArtworks.length > 0) {
-              untastedData?.artworks.push(...newArtworks);
-            }
-          }
-        } catch (err) {
-          // Silently ignore errors
-        } finally {
-          isFetchingNextBatchRef.current = false;
-        }
-      })();
+      return;
     }
-  }, [currentIndex, artworks, isLoading, user, untastedData]);
 
-  if (isLoading) {
+    setIsFetchingNextBatch(true);
+    (async () => {
+      try {
+        const nextBatch = await apiClient.fetchUntastedArtworks(
+          domainId,
+          userId,
+          BATCH_SIZE,
+        );
+        const nextBatchArtworks = nextBatch.artworks ?? [];
+
+        if (nextBatchArtworks.length === 0) {
+          setHasMoreUntasted(false);
+          return;
+        }
+
+        setQueuedArtworks((prev) => {
+          const existingIds = new Set(prev.map((artwork) => artwork.id));
+          const newArtworks = nextBatchArtworks.filter(
+            (artwork) => artwork?.id && !existingIds.has(artwork.id),
+          );
+          if (newArtworks.length === 0) {
+            setHasMoreUntasted(false);
+            return prev;
+          }
+          return [...prev, ...newArtworks];
+        });
+      } catch {
+        // Keep current queue on transient errors.
+      } finally {
+        setIsFetchingNextBatch(false);
+      }
+    })();
+  }, [
+    PREFETCH_THRESHOLD,
+    BATCH_SIZE,
+    artworks.length,
+    currentIndex,
+    hasMoreUntasted,
+    isFetchingNextBatch,
+    isLoading,
+    user?.domainId,
+    user?.id,
+  ]);
+
+  const isInitialLoading = isLoading && artworks.length === 0;
+  const isQueueExhausted = artworks.length > 0 && currentIndex >= artworks.length;
+  const isWaitingForMore = isQueueExhausted && (isFetchingNextBatch || hasMoreUntasted);
+
+  if (isInitialLoading || isWaitingForMore) {
     return (
       <div
         className="taster-page taster-page--loading"
         role="status"
         aria-live="polite"
       >
-        <p>Loading artworks...</p>
+        <p>{isInitialLoading ? "Loading artworks..." : "Loading more artworks..."}</p>
       </div>
     );
   }
@@ -330,7 +386,7 @@ export function TasterPage() {
     );
   }
 
-  if (!hasMore && currentIndex >= artworks.length) {
+  if (!hasMoreUntasted && currentIndex >= artworks.length) {
     return (
       <div className="taster-page taster-page--complete">
         <div className="taster-complete">
@@ -348,7 +404,7 @@ export function TasterPage() {
   const rotation = dragOffset.x * 0.05;
   const opacity = 1 - Math.abs(dragOffset.x) / 300;
   const showNewTag = currentArtwork ? isArtworkNew(currentArtwork) : false;
-  const nextArtwork = hasMore ? artworks[currentIndex + 1] : undefined;
+  const nextArtwork = hasMoreInQueue ? artworks[currentIndex + 1] : undefined;
   const nextImageUrl = getArtworkImageUrl(nextArtwork);
 
   return (
@@ -457,7 +513,7 @@ export function TasterPage() {
           )}
 
           {/* Next card preview */}
-          {hasMore && nextArtwork && (
+          {hasMoreInQueue && nextArtwork && (
             <div className="taster-card taster-card--next">
               <img
                 src={nextImageUrl}
