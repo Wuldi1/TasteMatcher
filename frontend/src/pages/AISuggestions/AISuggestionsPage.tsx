@@ -35,6 +35,7 @@ import {
   formatDimensionsForViewer,
   formatPriceRangeForViewer,
 } from "../../utils/viewFormatting";
+import { AppLoadingState } from "../../components/Loading/AppLoadingState";
 
 interface DomainUserOption {
   id: string;
@@ -43,6 +44,17 @@ interface DomainUserOption {
   swipeCount?: number;
 }
 
+const INCLUDE_RATED_STORAGE_KEY = "tm.aiSuggestions.includeRated";
+
+const readStoredIncludeRated = (): boolean => {
+  try {
+    const raw = localStorage.getItem(INCLUDE_RATED_STORAGE_KEY);
+    return raw === "true";
+  } catch {
+    return false;
+  }
+};
+
 export const AISuggestionsPage = ({
   domainId,
   userId,
@@ -50,6 +62,7 @@ export const AISuggestionsPage = ({
   onAddToProposal,
   onArtworkClick,
   readonlyThumbs = false,
+  showOwnerRatedFilter = false,
 }: {
   domainId?: string;
   userId?: string;
@@ -57,6 +70,7 @@ export const AISuggestionsPage = ({
   onAddToProposal?: (artwork: Artwork) => void; // Callback to add artwork to the proposal
   onArtworkClick?: (artwork: Artwork) => void; // Callback to open artwork details
   readonlyThumbs?: boolean;
+  showOwnerRatedFilter?: boolean;
 } = {}) => {
   const { user, stats } = useAuth();
   const { currency, dimensionUnit } = useViewerPreferences();
@@ -72,6 +86,8 @@ export const AISuggestionsPage = ({
     {},
   );
   const [savingCommentId, setSavingCommentId] = useState<string | null>(null);
+  const [includeRated, setIncludeRated] =
+    useState<boolean>(readStoredIncludeRated);
   const observerTarget = useRef<HTMLDivElement>(null);
   const LIMIT = 20;
 
@@ -79,6 +95,10 @@ export const AISuggestionsPage = ({
     user?.role === "dealer" ||
     user?.role === "domain_owner" ||
     user?.role === "global_admin";
+  const shouldShowOwnerRatedFilter = showOwnerRatedFilter && isDomainOwner;
+  const includeRatedForRequest = shouldShowOwnerRatedFilter
+    ? includeRated
+    : undefined;
 
   const targetUserId = useMemo(() => {
     return userId ?? user?.id;
@@ -129,6 +149,17 @@ export const AISuggestionsPage = ({
     (targetSwipeCount || 0) < AI_RECOMMENDATIONS_MIN_SWIPES;
 
   useEffect(() => {
+    if (!shouldShowOwnerRatedFilter) {
+      return;
+    }
+    try {
+      localStorage.setItem(INCLUDE_RATED_STORAGE_KEY, String(includeRated));
+    } catch {
+      // no-op: storage may be unavailable
+    }
+  }, [includeRated, shouldShowOwnerRatedFilter]);
+
+  useEffect(() => {
     if (!isDomainOwner || !effectiveDomainId) {
       return;
     }
@@ -168,7 +199,7 @@ export const AISuggestionsPage = ({
       return;
     }
 
-    // Reset state when target user changes
+    // Reset state when target user/filter changes.
     setOffset(0);
     setHasMore(true);
     setRecommendations([]);
@@ -184,6 +215,7 @@ export const AISuggestionsPage = ({
           targetUserId !== user?.id ? targetUserId : undefined,
           LIMIT,
           0, // Initial offset
+          includeRatedForRequest,
         );
         setRecommendations(newRecommendations);
         if (newRecommendations.length < LIMIT) {
@@ -209,6 +241,7 @@ export const AISuggestionsPage = ({
     user?.id,
     canEvaluateEligibility,
     eligibility.isEligible,
+    includeRatedForRequest,
   ]);
 
   const loadMore = useCallback(async () => {
@@ -223,6 +256,7 @@ export const AISuggestionsPage = ({
         targetUserId !== user?.id ? targetUserId : undefined,
         LIMIT,
         nextOffset,
+        includeRatedForRequest,
       );
 
       setRecommendations((prev) => [...prev, ...newRecommendations]);
@@ -236,7 +270,15 @@ export const AISuggestionsPage = ({
     } finally {
       setLoading(false);
     }
-  }, [targetUserId, effectiveDomainId, user?.id, loading, hasMore, offset]);
+  }, [
+    targetUserId,
+    effectiveDomainId,
+    user?.id,
+    loading,
+    hasMore,
+    offset,
+    includeRatedForRequest,
+  ]);
 
   // Infinite scroll observer
   useEffect(() => {
@@ -305,18 +347,7 @@ export const AISuggestionsPage = ({
 
   // Only show full screen loader if we have no data yet
   if (loading && recommendations.length === 0) {
-    return (
-      <div
-        className="flex items-center justify-center min-h-screen"
-        role="status"
-        aria-live="polite"
-      >
-        <div
-          className="h-12 w-12 animate-spin rounded-full border-b-2 border-primary"
-          aria-label="Loading AI suggestions"
-        />
-      </div>
-    );
+    return <AppLoadingState message="Loading AI suggestions..." fullScreen />;
   }
 
   const handleCloseModal = () => {
@@ -406,6 +437,24 @@ export const AISuggestionsPage = ({
         <p className="text-sm text-gray-600 sm:text-base">
           Discover artworks closely aligned with personal taste profiles.
         </p>
+        {shouldShowOwnerRatedFilter && (
+          <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
+            <input
+              id="include-rated-toggle"
+              type="checkbox"
+              checked={includeRated}
+              onChange={(event) => setIncludeRated(event.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              aria-label="Include rated artworks"
+            />
+            <label
+              htmlFor="include-rated-toggle"
+              className="text-sm font-medium text-gray-700"
+            >
+              Include rated artworks
+            </label>
+          </div>
+        )}
       </header>
 
       {shouldShowEligibilityCta && (
@@ -680,7 +729,11 @@ export const AISuggestionsPage = ({
             className="h-10 mt-8 flex justify-center items-center"
           >
             {loading && hasMore && (
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <AppLoadingState
+                message="Loading more suggestions..."
+                compact
+                iconSize="sm"
+              />
             )}
           </div>
         </>

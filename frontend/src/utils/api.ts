@@ -809,7 +809,8 @@ class ApiClient extends BaseApiClient {
     domainId: string,
     userId?: string,
     limit?: number,
-    offset?: number
+    offset?: number,
+    includeRated?: boolean
   ): Promise<Array<Artwork>> {
     this.validateRequired(domainId, "Domain ID");
     let params = "";
@@ -825,6 +826,11 @@ class ApiClient extends BaseApiClient {
       params += params
         ? `&userId=${encodeURIComponent(userId)}`
         : `?userId=${encodeURIComponent(userId)}`;
+    }
+    if (includeRated !== undefined) {
+      params += params
+        ? `&includeRated=${encodeURIComponent(includeRated)}`
+        : `?includeRated=${encodeURIComponent(includeRated)}`;
     }
     return this.request<Array<Artwork>>(
       `/domains/${domainId}/artworks/recommendations${params}`,

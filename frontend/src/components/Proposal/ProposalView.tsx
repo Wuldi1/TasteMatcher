@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import { apiClient } from "../../utils/api";
 import { isArtworkNew } from "../../utils/general";
 import { useViewerPreferences } from "../../contexts/ViewerPreferencesContext";
+import { AppInlineLoader } from "../Loading/AppLoadingState";
 import {
   formatDimensionsForViewer,
   formatPriceForViewer,
@@ -614,7 +615,11 @@ export default function ProposalView({
               className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={saving || !isDirty}
             >
-              <Save className={`w-4 h-4 ${saving ? "animate-spin" : ""}`} />
+              {saving ? (
+                <AppInlineLoader size="xs" theme="light" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
               Update Proposal
             </button>
           )}

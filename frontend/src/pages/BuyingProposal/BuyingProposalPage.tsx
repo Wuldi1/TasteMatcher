@@ -3,6 +3,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { apiClient } from "../../utils/api";
 import ProposalView from "../../components/Proposal/ProposalView";
 import type { Proposal } from "@tastematcher/common";
+import { AppLoadingState } from "../../components/Loading/AppLoadingState";
 
 export function BuyingProposalPage() {
   const { user } = useAuth();
@@ -54,7 +55,7 @@ export function BuyingProposalPage() {
   };
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <AppLoadingState message="Loading your proposal..." />;
   }
 
   if (!proposal) {

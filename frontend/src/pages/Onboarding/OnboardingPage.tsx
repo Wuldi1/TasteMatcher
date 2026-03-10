@@ -3,13 +3,13 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle,
-  Loader2,
   Upload,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiClient } from "../../utils/api";
+import { AppInlineLoader } from "../../components/Loading/AppLoadingState";
 
 const BUDGET_CHOICES = [
   "Paintings",
@@ -320,7 +320,9 @@ export function OnboardingPage() {
                   <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 transition-colors relative">
                     <div className="space-y-1 text-center">
                       {uploadingTarget === "collection" ? (
-                        <Loader2 className="mx-auto h-12 w-12 text-gray-400 animate-spin" />
+                        <span className="mx-auto inline-flex">
+                          <AppInlineLoader size="lg" />
+                        </span>
                       ) : (
                         <Upload className="mx-auto h-12 w-12 text-gray-400" />
                       )}
@@ -397,7 +399,9 @@ export function OnboardingPage() {
               <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 transition-colors relative">
                 <div className="space-y-1 text-center">
                   {uploadingTarget === "aesthetic" ? (
-                    <Loader2 className="mx-auto h-12 w-12 text-gray-400 animate-spin" />
+                    <span className="mx-auto inline-flex">
+                      <AppInlineLoader size="lg" />
+                    </span>
                   ) : (
                     <Upload className="mx-auto h-12 w-12 text-gray-400" />
                   )}
@@ -485,7 +489,7 @@ export function OnboardingPage() {
                 className="flex items-center px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <AppInlineLoader size="xs" theme="light" />
                 ) : step === 4 ? (
                   <>
                     Complete

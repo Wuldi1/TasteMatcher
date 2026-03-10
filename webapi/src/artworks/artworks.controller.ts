@@ -87,6 +87,7 @@ export class ArtworksController {
     @Query("userId") targetUserId?: string,
     @Query("limit") limit?: string,
     @Query("offset") offset?: string,
+    @Query("includeRated") includeRated?: string,
   ): Promise<Array<Artwork>> {
     if (req.user.domainId !== domainId && req.user.role !== "global_admin") {
       throw new ForbiddenException(
@@ -107,6 +108,11 @@ export class ArtworksController {
 
     const limitNum = limit ? parseInt(limit, 10) : 20;
     const offsetNum = offset ? parseInt(offset, 10) : 0;
+    const includeRatedRequested = (() => {
+      const normalized = includeRated?.trim().toLowerCase();
+      return normalized === "true" || normalized === "1";
+    })();
+    const effectiveIncludeRated = isDomainOwner ? includeRatedRequested : false;
 
     const recommendedArtworks =
       await this.artworksService.getRecommendationsForUser(
@@ -115,6 +121,7 @@ export class ArtworksController {
         targetUserId,
         limitNum,
         offsetNum,
+        effectiveIncludeRated,
       );
     return recommendedArtworks.map(
       (artwork) =>

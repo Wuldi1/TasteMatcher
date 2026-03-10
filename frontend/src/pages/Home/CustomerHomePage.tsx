@@ -23,13 +23,16 @@ import {
   MessageSquare,
   Send,
   Paperclip,
-  Loader2,
   Image as ImageIcon,
   Upload,
 } from "lucide-react";
 import "./HomePage.css";
 import { useEffect, useState, useRef } from "react";
 import { apiClient } from "../../utils/api";
+import {
+  AppInlineLoader,
+  AppLoadingState,
+} from "../../components/Loading/AppLoadingState";
 
 /**
  * Redesigned Home Page as a dashboard.
@@ -163,11 +166,7 @@ export function CustomerHomePage() {
   const totalSwiped = stats?.totalSwiped ?? 0;
 
   if (!user || loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <AppLoadingState message="Loading your dashboard..." />;
   }
 
   return (
@@ -486,14 +485,14 @@ export function CustomerHomePage() {
                 className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSendingComment ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <AppInlineLoader size="sm" theme="light" />
                 ) : (
                   <Send className="w-5 h-5" />
                 )}
               </button>
               {isUploadingAttachment && (
                 <span className="text-xs text-gray-500 flex items-center gap-1">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Uploading…
+                  <AppInlineLoader size="xs" label="Uploading..." />
                 </span>
               )}
             </form>

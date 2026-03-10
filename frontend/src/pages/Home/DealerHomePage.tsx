@@ -14,6 +14,7 @@ import {
 import "./HomePage.css";
 import { useEffect, useState } from "react";
 import { apiClient } from "../../utils/api";
+import { AppLoadingState } from "../../components/Loading/AppLoadingState";
 
 export function DealerHomePage() {
   const { user } = useAuth();
@@ -99,11 +100,7 @@ export function DealerHomePage() {
     proposals?.filter((p) => p.status === "accepted").length || 0;
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <AppLoadingState message="Loading your dashboard..." />;
   }
 
   return (

@@ -41,6 +41,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { EditArtworkModal } from "../../components/EditArtworkModal/EditArtworkModal";
+import { AppLoadingState } from "../../components/Loading/AppLoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import { useViewerPreferences } from "../../contexts/ViewerPreferencesContext";
 import { apiClient } from "../../utils/api";
@@ -1170,9 +1171,9 @@ export function CatalogPage() {
 
         {/* Gallery grid */}
         {authLoading || queryLoading ? (
-          <div className="catalog-loading" role="status" aria-live="polite">
-            <p>{authLoading ? "Authenticating..." : "Loading artworks..."}</p>
-          </div>
+          <AppLoadingState
+            message={authLoading ? "Authenticating..." : "Loading artworks..."}
+          />
         ) : error ? (
           <div className="catalog-error" role="alert">
             <p>Error loading artworks: {error.message}</p>

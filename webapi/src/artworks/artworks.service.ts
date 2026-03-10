@@ -826,6 +826,7 @@ export class ArtworksService {
     targetUserId?: string,
     limit: number = 20,
     offset: number = 0,
+    includeRated: boolean = false,
   ): Promise<Array<Artwork>> {
     const resolvedUserId =
       (requester.role === "dealer" ||
@@ -843,6 +844,7 @@ export class ArtworksService {
       targetUserId: resolvedUserId,
       limit,
       offset,
+      includeRated,
     });
 
     try {
@@ -1042,7 +1044,7 @@ export class ArtworksService {
         for (const candidate of resources ?? []) {
           scannedCount += 1;
 
-          if (reactedArtworkIds.has(candidate.id)) {
+          if (!includeRated && reactedArtworkIds.has(candidate.id)) {
             continue;
           }
 
@@ -1149,6 +1151,7 @@ export class ArtworksService {
         domainId,
         targetUserId: resolvedUserId,
         recommendationCount: recommendedArtworks.length,
+        includeRated,
         durationMs: Date.now() - start,
       });
 

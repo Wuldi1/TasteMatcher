@@ -18,6 +18,7 @@ import { Artwork } from "@tastematcher/common";
 import { ThumbsUp, ThumbsDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiClient } from "../../utils/api";
 import { getAIRecommendationsEligibility, isArtworkNew } from "../../utils/general";
+import { AppLoadingState } from "../../components/Loading/AppLoadingState";
 import "./TasterPage.css";
 
 type SwipeDirection = "left" | "right" | null;
@@ -363,10 +364,13 @@ export function TasterPage() {
     return (
       <div
         className="taster-page taster-page--loading"
-        role="status"
-        aria-live="polite"
       >
-        <p>{isInitialLoading ? "Loading artworks..." : "Loading more artworks..."}</p>
+        <AppLoadingState
+          message={
+            isInitialLoading ? "Loading artworks..." : "Loading more artworks..."
+          }
+          compact
+        />
       </div>
     );
   }

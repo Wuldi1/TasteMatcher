@@ -1,0 +1,259 @@
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { AISuggestionsPage } from "./AISuggestionsPage";
+import { AuthContext } from "../../contexts/AuthContext";
+import { ViewerPreferencesProvider } from "../../contexts/ViewerPreferencesContext";
+import { createMockAuthContext } from "../../test/mocks/authContext";
+import type { Artwork } from "@tastematcher/common";
+
+const mockGetRecommendations = vi.fn();
+const mockGetAllUsers = vi.fn();
+const mockSaveArtworkPreference = vi.fn();
+
+vi.mock("../../utils/api", () => {
+  class MockApiError extends Error {
+    constructor(message: string, public readonly status: number = 500) {
+      super(message);
+    }
+  }
+
+  return {
+    ApiError: MockApiError,
+    apiClient: {
+      getRecommendations: (...args: unknown[]) => mockGetRecommendations(...args),
+      getAllUsers: (...args: unknown[]) => mockGetAllUsers(...args),
+      saveArtworkPreference: (...args: unknown[]) =>
+        mockSaveArtworkPreference(...args),
+    },
+  };
+});
+
+const STORAGE_KEY = "tm.aiSuggestions.includeRated";
+
+const buildArtwork = (id: number): Artwork => ({
+  id: `art-${id}`,
+  domainId: "domain-1",
+  type: "artwork",
+  title: `Artwork ${id}`,
+  description: `Description ${id}`,
+  artist: `Artist ${id}`,
+  date: "2024",
+  filename: `https://example.com/art-${id}.jpg`,
+  vector: Array.from({ length: 1024 }, () => 1),
+  vectorModel: "test-model",
+});
+
+const buildArtworks = (count: number, startAt: number = 1): Artwork[] =>
+  Array.from({ length: count }, (_, index) => buildArtwork(startAt + index));
+
+let latestIntersectionCallback:
+  | ((entries: Array<{ isIntersecting: boolean }>) => void)
+  | null = null;
+
+class MockIntersectionObserver {
+  private readonly callback: IntersectionObserverCallback;
+
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback;
+    latestIntersectionCallback = (
+      entries: Array<{ isIntersecting: boolean }>,
+    ) => {
+      this.callback(entries as IntersectionObserverEntry[], this);
+    };
+  }
+
+  observe() {
+    // no-op
+  }
+
+  unobserve() {
+    // no-op
+  }
+
+  disconnect() {
+    // no-op
+  }
+
+  takeRecords(): IntersectionObserverEntry[] {
+    return [];
+  }
+
+  readonly root = null;
+  readonly rootMargin = "";
+  readonly thresholds = [];
+}
+
+const renderPage = ({
+  role,
+  showOwnerRatedFilter = true,
+  selectedUserId = "customer-1",
+}: {
+  role: "customer" | "dealer" | "domain_owner" | "global_admin";
+  showOwnerRatedFilter?: boolean;
+  selectedUserId?: string;
+}) => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+
+  const authContext = createMockAuthContext({
+    user: {
+      id: role === "customer" ? "customer-1" : "owner-1",
+      email: "test@example.com",
+      domainId: "domain-1",
+      role,
+      onboardingStatus: "completed",
+      swipeCount: 40,
+    },
+    isAuthenticated: true,
+    stats: {
+      totalArtworks: 0,
+      totalLikes: 0,
+      totalDislikes: 0,
+      totalSwiped: 40,
+      recentlyAdded: 0,
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AuthContext.Provider value={authContext}>
+        <ViewerPreferencesProvider>
+          <AISuggestionsPage
+            domainId="domain-1"
+            userId={selectedUserId}
+            showOwnerRatedFilter={showOwnerRatedFilter}
+          />
+        </ViewerPreferencesProvider>
+      </AuthContext.Provider>
+    </QueryClientProvider>,
+  );
+};
+
+describe("AISuggestionsPage owner includeRated filter", () => {
+  beforeEach(() => {
+    latestIntersectionCallback = null;
+    localStorage.clear();
+    mockGetRecommendations.mockReset();
+    mockGetAllUsers.mockReset();
+    mockSaveArtworkPreference.mockReset();
+    mockGetAllUsers.mockResolvedValue([]);
+    mockGetRecommendations.mockResolvedValue([]);
+    vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the include-rated toggle for owner in Sales context", async () => {
+    renderPage({ role: "domain_owner", showOwnerRatedFilter: true });
+
+    await waitFor(() => {
+      expect(mockGetRecommendations).toHaveBeenCalled();
+    });
+
+    expect(screen.getByLabelText("Include rated artworks")).toBeInTheDocument();
+    expect(mockGetRecommendations).toHaveBeenCalledWith(
+      "domain-1",
+      "customer-1",
+      20,
+      0,
+      false,
+    );
+  });
+
+  it("hides the include-rated toggle for customers", async () => {
+    renderPage({
+      role: "customer",
+      showOwnerRatedFilter: true,
+      selectedUserId: "customer-1",
+    });
+
+    await waitFor(() => {
+      expect(mockGetRecommendations).toHaveBeenCalled();
+    });
+
+    expect(
+      screen.queryByLabelText("Include rated artworks"),
+    ).not.toBeInTheDocument();
+    expect(mockGetRecommendations).toHaveBeenCalledWith(
+      "domain-1",
+      undefined,
+      20,
+      0,
+      undefined,
+    );
+  });
+
+  it("uses stored include-rated preference on mount", async () => {
+    localStorage.setItem(STORAGE_KEY, "true");
+
+    renderPage({ role: "domain_owner", showOwnerRatedFilter: true });
+
+    await waitFor(() => {
+      expect(mockGetRecommendations).toHaveBeenCalledWith(
+        "domain-1",
+        "customer-1",
+        20,
+        0,
+        true,
+      );
+    });
+
+    const toggle = screen.getByLabelText(
+      "Include rated artworks",
+    ) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+  });
+
+  it("refetches from first page when include-rated is toggled after pagination", async () => {
+    mockGetRecommendations
+      .mockResolvedValueOnce(buildArtworks(20, 1))
+      .mockResolvedValueOnce(buildArtworks(20, 21))
+      .mockResolvedValueOnce(buildArtworks(20, 200));
+
+    renderPage({ role: "domain_owner", showOwnerRatedFilter: true });
+
+    await waitFor(() => {
+      expect(mockGetRecommendations).toHaveBeenNthCalledWith(
+        1,
+        "domain-1",
+        "customer-1",
+        20,
+        0,
+        false,
+      );
+    });
+
+    latestIntersectionCallback?.([{ isIntersecting: true }]);
+
+    await waitFor(() => {
+      expect(mockGetRecommendations).toHaveBeenNthCalledWith(
+        2,
+        "domain-1",
+        "customer-1",
+        20,
+        20,
+        false,
+      );
+    });
+
+    fireEvent.click(screen.getByLabelText("Include rated artworks"));
+
+    await waitFor(() => {
+      expect(mockGetRecommendations).toHaveBeenNthCalledWith(
+        3,
+        "domain-1",
+        "customer-1",
+        20,
+        0,
+        true,
+      );
+    });
+  });
+});

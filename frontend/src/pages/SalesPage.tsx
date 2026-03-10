@@ -21,7 +21,6 @@ import {
   Database,
   FileText,
   Layers,
-  Loader2,
   Mail,
   MessageSquare,
   Paperclip,
@@ -37,6 +36,10 @@ import {
   SearchableSelect,
   type SearchableSelectOption,
 } from "../components/inputs/SearchableSelect";
+import {
+  AppInlineLoader,
+  AppLoadingState,
+} from "../components/Loading/AppLoadingState";
 import { useAuth } from "../contexts/AuthContext";
 import { apiClient } from "../utils/api";
 import { AISuggestionsPage } from "./AISuggestions/AISuggestionsPage";
@@ -737,9 +740,10 @@ export default function SalesPage() {
             )}
 
             {selectedUserId && userDetailsLoading && (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
+              <AppLoadingState
+                message="Loading customer details..."
+                iconSize="sm"
+              />
             )}
 
             {selectedUserId && userDetailsError && (
@@ -1131,15 +1135,14 @@ export default function SalesPage() {
                         className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {isSendingChat ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <AppInlineLoader size="sm" theme="light" />
                         ) : (
                           <Send className="w-5 h-5" />
                         )}
                       </button>
                       {isUploadingChatAttachment && (
                         <span className="text-xs text-gray-500 flex items-center gap-1">
-                          <Loader2 className="w-4 h-4 animate-spin" />{" "}
-                          Uploading…
+                          <AppInlineLoader size="xs" label="Uploading..." />
                         </span>
                       )}
                     </form>
@@ -1251,6 +1254,7 @@ export default function SalesPage() {
                 proposalItems={proposalArtworkIds}
                 onAddToProposal={handleProposalToggle}
                 readonlyThumbs={true}
+                showOwnerRatedFilter={true}
               />
             )}
           </div>

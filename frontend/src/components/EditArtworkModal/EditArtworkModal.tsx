@@ -12,7 +12,6 @@ import {
   Save,
   Sparkles,
   Upload as UploadIcon,
-  Loader2,
   Lock,
 } from "lucide-react";
 import ReactCrop, { type Crop, type PixelCrop } from "react-image-crop";
@@ -26,6 +25,7 @@ import {
   convertPriceFromCurrencyToUsd,
   getCurrencySymbol,
 } from "../../utils/viewFormatting";
+import { AppInlineLoader } from "../Loading/AppLoadingState";
 
 interface EditArtworkModalProps {
   artwork: Artwork;
@@ -421,7 +421,7 @@ export function EditArtworkModal({
               <div className="aspect-[3/4] w-full bg-gray-100 rounded-lg overflow-hidden border border-gray-200 md:sticky md:top-0 relative">
                 {isPreparingEdit && (
                   <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70 backdrop-blur-sm">
-                    <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
+                    <AppInlineLoader size="md" />
                   </div>
                 )}
                 {artwork.filename ? (
@@ -930,10 +930,11 @@ export function EditArtworkModal({
                 className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
               >
                 {isApplyingEdits ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Applying...
-                  </>
+                  <AppInlineLoader
+                    size="xs"
+                    label="Applying..."
+                    theme="light"
+                  />
                 ) : (
                   "Apply edits"
                 )}

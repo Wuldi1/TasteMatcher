@@ -18,6 +18,7 @@ import {
   formatDimensionsForViewer,
   formatPriceRangeForViewer,
 } from "../../utils/viewFormatting";
+import { AppLoadingState } from "../Loading/AppLoadingState";
 
 const PAGE_SIZE = 30;
 
@@ -231,7 +232,9 @@ export default function CatalogForUser({
 
   const visible = artworks;
 
-  if (initialLoading) return <div>Loading catalog...</div>;
+  if (initialLoading) {
+    return <AppLoadingState message="Loading catalog..." iconSize="sm" />;
+  }
   if (error && visible.length === 0)
     return <div className="text-red-600">{error}</div>;
   if (!initialLoading && visible.length === 0) return <div>No artworks</div>;
@@ -513,9 +516,11 @@ export default function CatalogForUser({
         })}
       </div>
       {isLoadingMore && hasMore && (
-        <div className="py-4 text-center text-sm text-gray-500">
-          Loading more artworks...
-        </div>
+        <AppLoadingState
+          message="Loading more artworks..."
+          compact
+          iconSize="sm"
+        />
       )}
       {hasMore && <div ref={loadMoreRef} className="h-4" />}
     </>
