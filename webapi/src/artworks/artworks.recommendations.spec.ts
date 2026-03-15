@@ -22,14 +22,12 @@ const setupService = () => {
   const candidateResources = [
     {
       id: "rated-art",
-      vector: buildVector(),
       isPrivate: false,
       uploadedBy: "owner-1",
       isAuction: false,
     },
     {
       id: "fresh-art",
-      vector: buildVector(),
       isPrivate: false,
       uploadedBy: "owner-1",
       isAuction: false,
@@ -87,11 +85,6 @@ const setupService = () => {
       .mockResolvedValue(preferencesContainer),
   };
 
-  (service as unknown as { searchIndexService: Record<string, jest.Mock> })
-    .searchIndexService = {
-    normalizeVector: jest.fn((vector: number[]) => vector),
-  };
-
   jest.spyOn(service, "getStats").mockResolvedValue({
     totalArtworks: 0,
     totalLikes: 0,
@@ -117,6 +110,24 @@ describe("ArtworksService includeRated behavior", () => {
     );
 
     expect(results.map((artwork) => artwork.id)).toEqual(["fresh-art"]);
+    expect(results[0]?.probabilityMatch).toBeCloseTo(1);
+
+    const cosmosService = (
+      service as unknown as { cosmosService: { getArtworksContainer: jest.Mock } }
+    ).cosmosService;
+    const artworksContainer = await cosmosService.getArtworksContainer.mock
+      .results[0].value;
+    const firstQueryArg = artworksContainer.items.query.mock.calls[0][0];
+
+    expect(firstQueryArg.query).toContain("ORDER BY VectorDistance");
+    expect(firstQueryArg.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "@excludedArtworkIds",
+          value: ["rated-art"],
+        }),
+      ]),
+    );
   });
 
   it("includes rated artworks when includeRated=true", async () => {
@@ -133,6 +144,21 @@ describe("ArtworksService includeRated behavior", () => {
 
     expect(results.map((artwork) => artwork.id)).toEqual(
       expect.arrayContaining(["rated-art", "fresh-art"]),
+    );
+    expect(results[0]?.probabilityMatch).toBeCloseTo(1);
+
+    const cosmosService = (
+      service as unknown as { cosmosService: { getArtworksContainer: jest.Mock } }
+    ).cosmosService;
+    const artworksContainer = await cosmosService.getArtworksContainer.mock
+      .results[0].value;
+    const firstQueryArg = artworksContainer.items.query.mock.calls[0][0];
+
+    expect(firstQueryArg.query).toContain("ORDER BY VectorDistance");
+    expect(firstQueryArg.parameters).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "@excludedArtworkIds" }),
+      ]),
     );
   });
 });

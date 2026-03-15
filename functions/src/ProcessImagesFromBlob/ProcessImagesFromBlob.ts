@@ -20,7 +20,6 @@ import {
   BlobService,
   ThumbnailService,
   VectorizationService,
-  SearchIndexService,
   createLogger,
   metrics,
   loadConfig,
@@ -62,8 +61,8 @@ function validateMessage(
  * Processes images by:
  * 1. Downloading from blob storage
  * 2. Generating multiple thumbnail sizes
- * 3. Creating vector embeddings for search
- * 4. Indexing in Azure Cognitive Search
+ * 3. Creating vector embeddings
+ * 4. Storing vectors in Cosmos DB
  *
  * Includes automatic retries, idempotency checks, and comprehensive logging.
  */
@@ -97,7 +96,6 @@ export async function processImagesFromBlob(
     const blobService = new BlobService();
     const thumbnailService = new ThumbnailService();
     const vectorizationService = new VectorizationService();
-    const searchIndexService = new SearchIndexService();
     const cosmosService = new CosmosService();
 
     // Step 1: Download blob
@@ -159,27 +157,17 @@ export async function processImagesFromBlob(
       invocationContextId: context.invocationId,
     });
 
-    // Step 4: Index in cognitive search
+    // Step 4: Persist vector embedding in Cosmos DB
     logger.debug({
-      msg: "Indexing in cognitive search",
+      msg: "Storing vector embedding in Cosmos DB",
       artworkId: message.artworkId,
       messageId: message.messageId,
       invocationContextId: context.invocationId,
     });
 
-    await searchIndexService.indexArtwork({
-      artworkId: message.artworkId,
-      domainId: message.domainId,
-      vectorEmbedding,
-    });
-
-    metrics.increment("image_processing.indexed", {
-      domainId: message.domainId,
-    });
-
     // store vector embedding in cosmos db aswell
     // TODO : use Patch operation instead of read + replace
-    const artworksContainer = await cosmosService.getContainer("Artworks");
+    const artworksContainer = await cosmosService.getArtworksContainer();
 
     await artworksContainer.item(message.artworkId, message.domainId).patch([
       { op: "set", path: "/vector", value: vectorEmbedding.vector },

@@ -42,7 +42,6 @@ RG_NAME="tastematcher-${ENV}-rg"
 STORAGE_DISPLAY="tastematcher-${ENV}-storage"     # display/label
 QUEUE_NAME="tastematcher-${ENV}-indexing-jobs"     # queue name
 NEW_ARTWORK_QUEUE_NAME="tastematcher-${ENV}-new-artwork-jobs"
-SEARCH_NAME="tastematcher-${ENV}-search"           # cognitive search name (must be globally unique under subscription)
 COSMOS_NAME="tastematcher-${ENV}-cosmos"           # cosmos db account name (must be globally unique)
 KV_NAME="tastematcher-${ENV}-kv"                   # key vault name (lowercase, unique)
 FUNCAPP_NAME="tastematcher-${ENV}-func"            # function app name (must be unique)
@@ -57,7 +56,6 @@ WEB_APP_PLAN="tastematcher-${ENV}-webapp-plan"     # separate app service plan f
 echo "Environment: $ENV, Location: $LOCATION"
 echo "Resource group: $RG_NAME"
 echo "Storage account (sanitized): $STORAGE_ACCOUNT_NAME"
-echo "Cognitive Search service: $SEARCH_NAME"
 echo "Cosmos DB account: $COSMOS_NAME"
 echo "Key Vault: $KV_NAME"
 echo "Function App: $FUNCAPP_NAME"
@@ -296,92 +294,8 @@ EOF
 # Remove old PostgreSQL functions and replace with Cosmos DB setup
 setup_cosmos_admin_data
 
-# Register Microsoft.CognitiveServices provider
 echo "registering Microsoft.CognitiveServices provider..."
 az provider register --namespace Microsoft.CognitiveServices -o none
-
-# Create Azure Cognitive Search service
-# Note: vector capabilities may require a certain SKUs or regions - check availability
-echo "Creating Azure Cognitive Search service: $SEARCH_NAME (SKU: basic)..."
-az search service create \
-    --name "$SEARCH_NAME" \
-    --resource-group "$RG_NAME" \
-    --location "$LOCATION" \
-    --sku basic \
-    --partition-count 1 \
-    --replica-count 1 \
-    -o none
-
-# Get search admin key
-SEARCH_KEY=$(az search admin-key show --service-name "$SEARCH_NAME" --resource-group "$RG_NAME" --query primaryKey -o tsv)
-
-# Create Azure Cognitive Search index
-SEARCH_ENDPOINT="https://${SEARCH_NAME}.search.windows.net"
-INDEX_NAME="artworks-index"
-
-echo "Creating Azure Cognitive Search index: $INDEX_NAME..."
-INDEX_SCHEMA=$(cat <<'EOF'
-{
-  "name": "artworks-index",
-  "fields": [
-    {
-      "name": "artworkId",
-      "type": "Edm.String",
-      "key": true,
-      "searchable": false,
-      "filterable": true,
-      "sortable": false,
-      "facetable": false
-    },
-    {
-      "name": "domainId",
-      "type": "Edm.String",
-      "searchable": false,
-      "filterable": true,
-      "sortable": false,
-      "facetable": true
-    },
-    {
-      "name": "imageVector",
-      "type": "Collection(Edm.Single)",
-      "searchable": true,
-      "filterable": false,
-      "sortable": false,
-      "facetable": false,
-      "dimensions": 1024,
-      "vectorSearchProfile": "artwork-vector-profile"
-    }
-  ],
-  "vectorSearch": {
-    "algorithms": [
-      {
-        "name": "artwork-vector-algorithm",
-        "kind": "hnsw",
-        "hnswParameters": {
-          "metric": "cosine",
-          "m": 4,
-          "efConstruction": 400,
-          "efSearch": 500
-        }
-      }
-    ],
-    "profiles": [
-      {
-        "name": "artwork-vector-profile",
-        "algorithm": "artwork-vector-algorithm"
-      }
-    ]
-  }
-}
-EOF
-)
-
-curl -X PUT "${SEARCH_ENDPOINT}/indexes/${INDEX_NAME}?api-version=2023-11-01" \
-  -H "Content-Type: application/json" \
-  -H "api-key: ${SEARCH_KEY}" \
-  -d "$INDEX_SCHEMA"
-
-echo "✅ Azure Cognitive Search index created successfully!"
 
 # Create Azure Computer Vision (AI Vision) resource
 echo "Creating Azure Computer Vision resource: $VISION_NAME (SKU: S1)..."
@@ -479,9 +393,6 @@ az functionapp config appsettings set \
     NEW_ARTWORK_QUEUE_NAME="$NEW_ARTWORK_QUEUE_NAME" \
     AZURE_BLOB_CONTAINER_ORIGINALS="originals" \
     AZURE_BLOB_CONTAINER_DERIVATIVES="derivatives" \
-    AZURE_SEARCH_ENDPOINT="https://${SEARCH_NAME}.search.windows.net" \
-    AZURE_SEARCH_INDEX_NAME="artworks-index" \
-    AZURE_SEARCH_ADMIN_KEY="$SEARCH_KEY" \
     AZURE_AI_VISION_ENDPOINT="$VISION_ENDPOINT" \
     AZURE_AI_VISION_KEY="$VISION_KEY" \
     AZURE_COMMUNICATION_CONNECTION_STRING="$COMMUNICATION_CONNECTION_STRING" \
@@ -651,9 +562,6 @@ az webapp config appsettings set \
     COSMOS_DB_KEY="$COSMOS_PRIMARY_KEY" \
     COSMOS_DB_DATABASE="$COSMOS_DATABASE" \
     DATABASE_URL="$DATABASE_URL" \
-    AZURE_SEARCH_ENDPOINT="https://${SEARCH_NAME}.search.windows.net" \
-    AZURE_SEARCH_INDEX_NAME="artworks-index" \
-    AZURE_SEARCH_ADMIN_KEY="$SEARCH_KEY" \
     AZURE_AI_VISION_ENDPOINT="$VISION_ENDPOINT" \
     AZURE_AI_VISION_KEY="$VISION_KEY" \
     AZURE_COMMUNICATION_CONNECTION_STRING="$COMMUNICATION_CONNECTION_STRING" \
@@ -756,9 +664,6 @@ az webapp config appsettings set \
     COSMOS_DB_KEY="$COSMOS_PRIMARY_KEY" \
     COSMOS_DB_DATABASE="$COSMOS_DATABASE" \
     DATABASE_URL="$DATABASE_URL" \
-    AZURE_SEARCH_ENDPOINT="https://${SEARCH_NAME}.search.windows.net" \
-    AZURE_SEARCH_INDEX_NAME="artworks-index" \
-    AZURE_SEARCH_ADMIN_KEY="$SEARCH_KEY" \
     AZURE_AI_VISION_ENDPOINT="$VISION_ENDPOINT" \
     AZURE_AI_VISION_KEY="$VISION_KEY" \
     AZURE_COMMUNICATION_CONNECTION_STRING="$COMMUNICATION_CONNECTION_STRING" \
@@ -895,11 +800,6 @@ AZURE_BLOB_CONTAINER_DERIVATIVES=derivatives
 IMAGE_PROCESSING_QUEUE_NAME=${QUEUE_NAME}
 NEW_ARTWORK_QUEUE_NAME=${NEW_ARTWORK_QUEUE_NAME}
 
-# Search
-AZURE_SEARCH_ENDPOINT=https://${SEARCH_NAME}.search.windows.net
-AZURE_SEARCH_ADMIN_KEY=${SEARCH_KEY}
-AZURE_SEARCH_INDEX_NAME=artworks-index
-
 # Computer Vision (AI Vision)
 AZURE_AI_VISION_ENDPOINT=${VISION_ENDPOINT}
 AZURE_AI_VISION_KEY=${VISION_KEY}
@@ -957,9 +857,6 @@ cat > "$FUNCTIONS_SETTINGS" <<EOF
     "NEW_ARTWORK_QUEUE_NAME": "${NEW_ARTWORK_QUEUE_NAME}",
     "AZURE_BLOB_CONTAINER_ORIGINALS": "originals",
     "AZURE_BLOB_CONTAINER_DERIVATIVES": "derivatives",
-    "AZURE_SEARCH_ENDPOINT": "https://${SEARCH_NAME}.search.windows.net",
-    "AZURE_SEARCH_INDEX_NAME": "artworks-index",
-    "AZURE_SEARCH_ADMIN_KEY": "${SEARCH_KEY}",
     "AZURE_AI_VISION_ENDPOINT": "${VISION_ENDPOINT}",
     "AZURE_AI_VISION_KEY": "${VISION_KEY}",
     "COSMOS_DB_ENDPOINT": "${COSMOS_DB_ENDPOINT}",
@@ -978,7 +875,6 @@ echo " - Storage account: $STORAGE_ACCOUNT_NAME"
 echo " - Blob endpoint: $STORAGE_BLOB_ENDPOINT"
 echo " - Queue name: $QUEUE_NAME"
 echo " - New artwork queue name: $NEW_ARTWORK_QUEUE_NAME"
-echo " - Cognitive Search name: $SEARCH_NAME"
 echo " - Computer Vision name: $VISION_NAME"
 echo " - Computer Vision endpoint: $VISION_ENDPOINT"
 echo " - Cosmos DB account: $COSMOS_NAME"
@@ -1011,11 +907,10 @@ echo ""
 echo "Next steps:"
 echo " 1. Deploy backend API code to $WEBAPP_API_NAME using Azure CLI or GitHub Actions"
 echo " 2. Deploy frontend code to $WEBAPP_FRONTEND_NAME using Azure CLI or GitHub Actions"
-echo " 3. Create the Cognitive Search index using scripts/azure/create-search-index.sh"
-echo " 4. Deploy your Azure Function code to $FUNCAPP_NAME"
-echo " 5. Configure Computer Vision for image vectorization in your Functions app"
-echo " 6. Use .env.${ENV} in your backend for local testing (but prefer Key Vault in prd)"
-echo " 7. Set up GitHub Actions workflows for CI/CD deployment"
+echo " 3. Deploy your Azure Function code to $FUNCAPP_NAME"
+echo " 4. Configure Computer Vision for image vectorization in your Functions app"
+echo " 5. Use .env.${ENV} in your backend for local testing (but prefer Key Vault in prd)"
+echo " 6. Set up GitHub Actions workflows for CI/CD deployment"
 echo ""
 echo "Health check URLs:"
 echo " - Backend API: ${BACKEND_API_URL}/health"

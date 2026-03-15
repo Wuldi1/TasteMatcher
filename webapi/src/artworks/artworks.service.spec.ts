@@ -127,6 +127,21 @@ describe("ArtworksService", () => {
     });
   });
 
+  describe("remove", () => {
+    it("deletes the artwork from cosmos without search cleanup", async () => {
+      const deleteMock = jest.fn().mockResolvedValue(undefined);
+
+      mockContainer.item.mockReturnValue({
+        delete: deleteMock,
+      });
+
+      await service.remove("domain-1", "artwork-1");
+
+      expect(mockContainer.item).toHaveBeenCalledWith("artwork-1", "domain-1");
+      expect(deleteMock).toHaveBeenCalled();
+    });
+  });
+
   describe("getStats", () => {
     it("should return aggregated statistics", async () => {
       const mockStats = {

@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from "@nestjs/common";
@@ -11,6 +10,8 @@ import {
   ArtworkFeedback,
   ArtworkPreference,
   ArtworkStats,
+  calculateUpdatedPreferenceVector,
+  cosineSimilarity,
   CosmosService,
   executeCosmosQuery,
   generatePreferenceId,
@@ -18,11 +19,11 @@ import {
   GlobalArtworksDomainId,
   isAuctionEnded,
   LikedStatus,
+  normalizeVector,
   PaginatedResponse,
   Proposal,
   QueryParams,
   Role,
-  SearchIndexService,
   UntastedArtworksResponse,
 } from "@tastematcher/common";
 import { DomainActivityService } from "../activity/domain-activity.service";
@@ -33,7 +34,6 @@ import { UpdateArtworkDto } from "./dto/update-artwork.dto";
 export class ArtworksService {
   private readonly logger = new Logger(ArtworksService.name);
   private readonly cosmosService: CosmosService;
-  private readonly searchIndexService: SearchIndexService;
   private readonly domainActivityService: DomainActivityService;
   private readonly userCache = new Map<
     string,
@@ -43,7 +43,6 @@ export class ArtworksService {
 
   constructor(domainActivityService: DomainActivityService) {
     this.cosmosService = new CosmosService();
-    this.searchIndexService = new SearchIndexService();
     this.domainActivityService = domainActivityService;
   }
 
@@ -350,18 +349,6 @@ export class ArtworksService {
     } catch (error) {
       this.logger.error(`Failed to delete artwork ${artworkId}`, error);
       throw new NotFoundException(`Artwork ${artworkId} not found`);
-    }
-
-    try {
-      await this.searchIndexService.deleteArtworkDocument(artworkId);
-    } catch (error) {
-      this.logger.error(
-        `Failed to delete artwork ${artworkId} from search index`,
-        error,
-      );
-      throw new InternalServerErrorException(
-        "Artwork deleted but failed to remove from search index.",
-      );
     }
   }
 
@@ -786,13 +773,12 @@ export class ArtworksService {
         const baseLearningRate = 0.2;
         const effectiveLearningRate =
           baseLearningRate / Math.sqrt(1 + swipeCountBefore);
-        const updatedPreferenceVector =
-          this.searchIndexService.calculateUpdatedPreferenceVector(
-            userPreferenceVector,
-            imageVector,
-            incomingLiked,
-            { learningRate: effectiveLearningRate, dislikeWeight: 0.6 },
-          );
+        const updatedPreferenceVector = calculateUpdatedPreferenceVector(
+          userPreferenceVector,
+          imageVector,
+          incomingLiked,
+          { learningRate: effectiveLearningRate, dislikeWeight: 0.6 },
+        );
 
         // store updated preference vector back to user record
         userRecord.preferenceVector = updatedPreferenceVector;
@@ -876,6 +862,17 @@ export class ArtworksService {
         ? userRecord.preferenceVector
         : undefined;
 
+      this.logger.debug({
+        msg: "Recommendation user state",
+        domainId,
+        targetUserId: resolvedUserId,
+        swipeCount: userRecord.swipeCount,
+        onboardingStatus: userRecord.onboardingStatus,
+        preferenceVectorLength: Array.isArray(preferenceVector)
+          ? preferenceVector.length
+          : 0,
+      });
+
       if (!preferenceVector || preferenceVector.length !== 1024) {
         this.logger.warn({
           msg: "Missing or invalid preference vector; skipping AI suggestions",
@@ -898,8 +895,7 @@ export class ArtworksService {
         await this.cosmosService.getArtworkPreferencesContainer();
       const recommendedArtworks: Artwork[] = [];
 
-      const normalizedPreference =
-        this.searchIndexService.normalizeVector(preferenceVector);
+      const normalizedPreference = normalizeVector(preferenceVector);
 
       // Fetch preferences for the user
       const preferencesQuery = {
@@ -938,162 +934,140 @@ export class ArtworksService {
 
       type CandidateScore = {
         artworkId: string;
-        score: number;
       };
 
-      class MinScoreHeap {
-        private readonly items: CandidateScore[] = [];
-
-        size(): number {
-          return this.items.length;
-        }
-
-        peek(): CandidateScore | undefined {
-          return this.items[0];
-        }
-
-        push(item: CandidateScore): void {
-          this.items.push(item);
-          this.bubbleUp(this.items.length - 1);
-        }
-
-        pop(): CandidateScore | undefined {
-          if (this.items.length === 0) return undefined;
-          const min = this.items[0];
-          const last = this.items.pop();
-          if (this.items.length > 0 && last) {
-            this.items[0] = last;
-            this.bubbleDown(0);
-          }
-          return min;
-        }
-
-        toArray(): CandidateScore[] {
-          return [...this.items];
-        }
-
-        private bubbleUp(index: number): void {
-          while (index > 0) {
-            const parent = Math.floor((index - 1) / 2);
-            if (this.items[parent].score <= this.items[index].score) {
-              break;
-            }
-            [this.items[parent], this.items[index]] = [
-              this.items[index],
-              this.items[parent],
-            ];
-            index = parent;
-          }
-        }
-
-        private bubbleDown(index: number): void {
-          const length = this.items.length;
-          while (true) {
-            let smallest = index;
-            const left = index * 2 + 1;
-            const right = index * 2 + 2;
-
-            if (
-              left < length &&
-              this.items[left].score < this.items[smallest].score
-            ) {
-              smallest = left;
-            }
-            if (
-              right < length &&
-              this.items[right].score < this.items[smallest].score
-            ) {
-              smallest = right;
-            }
-            if (smallest === index) break;
-            [this.items[smallest], this.items[index]] = [
-              this.items[index],
-              this.items[smallest],
-            ];
-            index = smallest;
-          }
-        }
-      }
-
       const requestedCount = offset + limit;
-      const candidateLimit = requestedCount + 20;
-      const topCandidates = new MinScoreHeap();
+      const pageSize = Math.max(requestedCount + 20, 50);
+      const visibleCandidates: CandidateScore[] = [];
       let scannedCount = 0;
+      const preferenceVectorLiteral = JSON.stringify(normalizedPreference);
+
+      const includeRatedAndReactedArtworksBiggerThanZero =
+        !includeRated && reactedArtworkIds.size > 0;
+
+      const candidateQueryText = [
+        "SELECT c.id, c.isPrivate, c.uploadedBy, c.isAuction, c.endDate",
+        "FROM c",
+        "WHERE c.type = @type",
+        "AND c.domainId = @domainId",
+        "AND IS_DEFINED(c.vector)",
+        includeRatedAndReactedArtworksBiggerThanZero
+          ? "AND NOT ARRAY_CONTAINS(@excludedArtworkIds, c.id)"
+          : "",
+        `ORDER BY VectorDistance(c.vector, ${preferenceVectorLiteral}, false)`,
+      ]
+        .filter(Boolean)
+        .join("\n");
 
       const candidateQuery = {
-        query: `
-          SELECT c.id, c.vector, c.isPrivate, c.uploadedBy, c.isAuction, c.endDate
-          FROM c
-          WHERE c.type = @type
-            AND c.domainId = @domainId
-            AND IS_DEFINED(c.vector)
-        `,
+        query: candidateQueryText,
         parameters: [
           { name: "@type", value: "artwork" },
           { name: "@domainId", value: domainId },
+          ...(includeRatedAndReactedArtworksBiggerThanZero
+            ? [
+                {
+                  name: "@excludedArtworkIds",
+                  value: Array.from(reactedArtworkIds),
+                },
+              ]
+            : []),
         ],
       };
 
-      const candidateIterator = artworksContainer.items.query(candidateQuery, {
-        partitionKey: domainId,
-        maxItemCount: 200,
+      this.logger.debug({
+        msg: "Recommendation candidate query",
+        domainId,
+        targetUserId: resolvedUserId,
+        includeRated,
+        reactedArtworkIdsCount: reactedArtworkIds.size,
+        requestedCount,
+        pageSize,
+        query: candidateQuery.query,
+        parameters: candidateQuery.parameters.map((parameter) => ({
+          name: parameter.name,
+          valuePreview:
+            parameter.name === "@excludedArtworkIds"
+              ? parameter.value
+              : parameter.name === "@domainId" || parameter.name === "@type"
+                ? parameter.value
+                : parameter.name === "@preferenceVector"
+                  ? "[inlined-in-query]"
+                  : Array.isArray(parameter.value)
+                    ? `array(${parameter.value.length})`
+                    : parameter.value,
+        })),
       });
 
-      while (candidateIterator.hasMoreResults()) {
+      const candidateIterator = artworksContainer.items.query(candidateQuery, {
+        partitionKey: domainId,
+        maxItemCount: pageSize,
+      });
+
+      while (
+        candidateIterator.hasMoreResults() &&
+        visibleCandidates.length < requestedCount
+      ) {
         const { resources } = await candidateIterator.fetchNext();
+        this.logger.debug({
+          msg: "Recommendation candidate page",
+          domainId,
+          targetUserId: resolvedUserId,
+          fetchedCount: resources?.length ?? 0,
+          fetchedIds: (resources ?? []).map((candidate) => candidate.id),
+        });
         for (const candidate of resources ?? []) {
           scannedCount += 1;
 
-          if (!includeRated && reactedArtworkIds.has(candidate.id)) {
-            continue;
-          }
-
           const candidateArtwork = candidate as Artwork;
-          if (!this.canViewerSeeArtwork(candidateArtwork, requester)) {
-            continue;
-          }
-
-          const vector = Array.isArray(candidateArtwork.vector)
-            ? candidateArtwork.vector
-            : [];
-          if (vector.length !== normalizedPreference.length) {
-            continue;
-          }
-
-          const normalizedVector =
-            this.searchIndexService.normalizeVector(vector);
-          const score = normalizedPreference.reduce(
-            (sum, val, i) => sum + val * normalizedVector[i],
-            0,
+          const canSeeCandidate = this.canViewerSeeArtwork(
+            candidateArtwork,
+            requester,
           );
-
-          if (topCandidates.size() < candidateLimit) {
-            topCandidates.push({ artworkId: candidateArtwork.id, score });
+          if (!canSeeCandidate) {
+            this.logger.debug({
+              msg: "Recommendation candidate filtered by visibility",
+              domainId,
+              targetUserId: resolvedUserId,
+              artworkId: candidateArtwork.id,
+              requesterRole: requester.role,
+              isPrivate: candidateArtwork.isPrivate,
+              uploadedBy: candidateArtwork.uploadedBy,
+            });
+          }
+          if (!canSeeCandidate) {
             continue;
           }
 
-          const minEntry = topCandidates.peek();
-          if (minEntry && score > minEntry.score) {
-            topCandidates.pop();
-            topCandidates.push({ artworkId: candidateArtwork.id, score });
+          visibleCandidates.push({
+            artworkId: candidateArtwork.id,
+          });
+
+          if (visibleCandidates.length >= requestedCount) {
+            break;
           }
         }
       }
-
-      const rankedCandidates = topCandidates
-        .toArray()
-        .sort((a, b) => b.score - a.score);
 
       this.logger.log({
         msg: "Number of scored candidates",
         targetUserId: resolvedUserId,
         domainId,
-        candidatesCount: rankedCandidates.length,
+        candidatesCount: visibleCandidates.length,
         scannedCount,
+        candidateIds: visibleCandidates.map((candidate) => candidate.artworkId),
       });
 
-      const pageCandidates = rankedCandidates.slice(offset, offset + limit);
+      const pageCandidates = visibleCandidates.slice(offset, offset + limit);
       if (pageCandidates.length === 0) {
+        this.logger.warn({
+          msg: "Recommendation page candidates empty",
+          domainId,
+          targetUserId: resolvedUserId,
+          offset,
+          limit,
+          visibleCandidatesCount: visibleCandidates.length,
+        });
         return [];
       }
 
@@ -1109,6 +1083,13 @@ export class ArtworksService {
       const { resources: pageResources } = await artworksContainer.items
         .query(pageQuery, { partitionKey: domainId })
         .fetchAll();
+      this.logger.debug({
+        msg: "Recommendation page resource fetch",
+        domainId,
+        targetUserId: resolvedUserId,
+        pageIds,
+        fetchedIds: (pageResources ?? []).map((artwork) => artwork.id),
+      });
       const artworkById = new Map<string, Artwork>();
       (pageResources ?? []).forEach((artwork) => {
         artworkById.set(artwork.id, artwork);
@@ -1127,7 +1108,9 @@ export class ArtworksService {
         const liked = prefEntry?.liked;
         const comment = prefEntry?.comment;
 
-        artwork.probabilityMatch = candidate.score;
+        artwork.probabilityMatch = Array.isArray(artwork.vector)
+          ? cosineSimilarity(normalizedPreference, artwork.vector)
+          : 0;
 
         // Attach liked status/comment to the artwork
         if (liked === undefined) {
