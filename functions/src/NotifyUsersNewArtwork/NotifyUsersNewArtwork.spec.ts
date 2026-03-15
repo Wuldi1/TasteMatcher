@@ -83,6 +83,7 @@ describe("NotifyUsersNewArtwork", () => {
     jest.resetModules();
     jest.clearAllMocks();
 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     ({ notifyUsersNewArtwork } = require("./NotifyUsersNewArtwork"));
 
     mockArtworksContainer.item.mockReturnValue({
