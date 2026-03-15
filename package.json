@@ -26,7 +26,6 @@
   },
   "dependencies": {
     "@azure/functions": "^4.8.0",
-    "@azure/search-documents": "^12.2.0",
     "@azure/storage-blob": "^12.29.1",
     "functions": "^1.0.9",
     "path": "^0.12.7",

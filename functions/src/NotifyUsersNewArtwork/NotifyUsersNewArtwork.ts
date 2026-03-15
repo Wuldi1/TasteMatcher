@@ -20,10 +20,11 @@ import type {
 } from "@tastematcher/common";
 import {
   CosmosService,
+  cosineSimilarity,
   createLogger,
   getAIRecommendationsEligibility,
   metrics,
-  SearchIndexService,
+  normalizeVector,
 } from "@tastematcher/common";
 
 const logger = createLogger("NotifyUsersNewArtwork");
@@ -41,11 +42,6 @@ const MAX_RECIPIENTS = Number.parseInt(
   process.env.NEW_ARTWORK_NOTIFY_MAX_USERS || "50",
   10,
 );
-const TOP_K = Number.parseInt(
-  process.env.NEW_ARTWORK_NOTIFY_TOP_K || "20",
-  10,
-);
-
 function validateMessage(
   message: unknown,
 ): asserts message is NewArtworkNotificationQueueMessage {
@@ -184,7 +180,6 @@ export async function notifyUsersNewArtwork(
     }
 
     const cosmosService = new CosmosService();
-    const searchIndexService = new SearchIndexService();
     const artworksContainer = await cosmosService.getArtworksContainer();
     const usersContainer = await cosmosService.getContainer("Core");
 
@@ -219,6 +214,8 @@ export async function notifyUsersNewArtwork(
       return;
     }
 
+    const normalizedArtworkVector = normalizeVector(artwork.vector);
+
     const usersQuery = {
       query:
         "SELECT c.id, c.email, c.name, c.preferenceVector, c.role, c.status, c.swipeCount, c.onboardingStatus FROM c WHERE c.type = 'user' AND c.domainId = @domainId AND c.role = 'customer' AND c.status = 'active'",
@@ -241,28 +238,20 @@ export async function notifyUsersNewArtwork(
         continue;
       }
 
-      const matches = await searchIndexService.searchSimilarArtworks(
-        message.domainId,
-        user.preferenceVector,
-        TOP_K,
+      const similarity = cosineSimilarity(
+        normalizeVector(user.preferenceVector),
+        normalizedArtworkVector,
       );
-      const match = matches.find(
-        (entry) => entry.artworkId === artwork.id,
-      );
-      if (!match) continue;
-      const similarity = typeof match.score === "number" ? match.score : 0;
       if (!Number.isFinite(similarity) || similarity < MIN_SIMILARITY) {
         continue;
       }
       scoredUsers.push({ user, similarity });
-      if (scoredUsers.length >= MAX_RECIPIENTS) {
-        break;
-      }
     }
 
     scoredUsers.sort((a, b) => b.similarity - a.similarity);
+    const recipients = scoredUsers.slice(0, MAX_RECIPIENTS);
 
-    if (scoredUsers.length === 0) {
+    if (recipients.length === 0) {
       logger.info({
         msg: "No eligible users for new artwork notification",
         artworkId: artwork.id,
@@ -273,7 +262,7 @@ export async function notifyUsersNewArtwork(
 
     const emailClient = new EmailClient(EMAIL_CONNECTION_STRING);
 
-    for (const entry of scoredUsers) {
+    for (const entry of recipients) {
       const { user, similarity } = entry;
       if (!user.email) continue;
       const content = buildArtworkEmail(user.name, artwork, similarity);
@@ -288,7 +277,7 @@ export async function notifyUsersNewArtwork(
       msg: "New artwork notifications completed",
       artworkId: artwork.id,
       domainId: artwork.domainId,
-      recipients: scoredUsers.length,
+      recipients: recipients.length,
       durationMs,
       invocationContextId: context.invocationId,
     });

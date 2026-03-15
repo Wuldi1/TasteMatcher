@@ -17,6 +17,7 @@ import {
   getQueueName,
   getSearchDocId,
 } from "../naming";
+import { describe, expect, it } from "vitest";
 
 describe("naming utils", () => {
   const domainId = "11111111-1111-1111-1111-111111111111";
@@ -30,7 +31,7 @@ describe("naming utils", () => {
 
   it("returns derivative path", () => {
     expect(getDerivativeBlobPath(domainId, artworkId, "Small")).toBe(
-      `${domainId}/artworks/${artworkId}/small.webp`,
+      `${domainId}/artworks/${artworkId}/small.jpg`,
     );
   });
 
@@ -47,6 +48,6 @@ describe("naming utils", () => {
 
   it("throws for invalid ids", () => {
     expect(() => getOriginalBlobPath("", artworkId, "jpg")).toThrow();
-    expect(() => getDerivativeBlobPath(domainId, artworkId, "Small")).toThrow();
+    expect(() => getDerivativeBlobPath(domainId, artworkId, "XLarge")).toThrow();
   });
 });

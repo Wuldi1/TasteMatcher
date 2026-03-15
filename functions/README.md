@@ -13,7 +13,7 @@ Azure Functions service for asynchronous image processing workflows.
 1. Downloading original image from Blob Storage
 2. Generating multiple thumbnail sizes (150px, 400px, 800px)
 3. Creating vector embeddings using Azure AI Vision
-4. Indexing in Azure Cognitive Search for semantic similarity
+4. Storing vectors in Cosmos DB for similarity queries
 
 **Features**:
 
@@ -28,8 +28,8 @@ Azure Functions service for asynchronous image processing workflows.
 - Node.js 22+
 - Azure Functions Core Tools v4
 - Azure Storage Account (or Azurite for local dev)
-- Azure Cognitive Search instance
 - Azure AI Vision resource
+- Azure Cosmos DB with vector indexing on the `Artworks` container
 
 ## Local Development Setup
 
@@ -57,11 +57,11 @@ Edit `local.settings.json` with your values:
     "FUNCTIONS_WORKER_RUNTIME": "node",
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "AZURE_STORAGE_CONNECTION_STRING": "UseDevelopmentStorage=true",
-    "AZURE_SEARCH_ENDPOINT": "https://YOUR-SERVICE.search.windows.net",
-    "AZURE_SEARCH_ADMIN_KEY": "YOUR-SEARCH-ADMIN-KEY",
-    "AZURE_SEARCH_INDEX_NAME": "artworks",
     "AZURE_AI_VISION_ENDPOINT": "https://YOUR-VISION.cognitiveservices.azure.com/",
     "AZURE_AI_VISION_KEY": "YOUR-VISION-KEY",
+    "COSMOS_DB_ENDPOINT": "https://YOUR-COSMOS.documents.azure.com:443/",
+    "COSMOS_DB_KEY": "YOUR-COSMOS-KEY",
+    "COSMOS_DB_DATABASE": "tastematcher",
     "IMAGE_PROCESSING_QUEUE_NAME": "image-processing",
     "NEW_ARTWORK_QUEUE_NAME": "new-artwork-notifications",
     "LOG_LEVEL": "debug"
@@ -80,16 +80,6 @@ azurite --silent --location ./azurite --debug ./azurite/debug.log
 ```
 
 ### 4. Create Azure Resources (if needed)
-
-#### Create Cognitive Search Index
-
-```bash
-# Use Azure Portal or Azure CLI
-az search index create \
-  --name artworks \
-  --service-name YOUR-SEARCH-SERVICE \
-  --fields @search-index-schema.json
-```
 
 #### Create Storage Queue
 
@@ -160,11 +150,11 @@ await queueClient.sendMessage(
 | --------------------------------- | -------- | ---------------------------------------- | ----------------------------------------------- |
 | `AzureWebJobsStorage`             | Yes      | Storage connection for Functions runtime | `UseDevelopmentStorage=true`                    |
 | `AZURE_STORAGE_CONNECTION_STRING` | Yes      | Storage for blobs and queues             | Same as above for local                         |
-| `AZURE_SEARCH_ENDPOINT`           | Yes      | Cognitive Search endpoint                | `https://mysearch.search.windows.net`           |
-| `AZURE_SEARCH_ADMIN_KEY`          | Yes      | Search admin key                         | From Azure Portal                               |
-| `AZURE_SEARCH_INDEX_NAME`         | Yes      | Index name for artworks                  | `artworks`                                      |
 | `AZURE_AI_VISION_ENDPOINT`        | Yes      | AI Vision endpoint                       | `https://myvision.cognitiveservices.azure.com/` |
 | `AZURE_AI_VISION_KEY`             | Yes      | Vision API key                           | From Azure Portal                               |
+| `COSMOS_DB_ENDPOINT`              | Yes      | Cosmos DB endpoint                       | `https://mycosmos.documents.azure.com:443/`     |
+| `COSMOS_DB_KEY`                   | Yes      | Cosmos DB primary key                    | From Azure Portal                               |
+| `COSMOS_DB_DATABASE`              | Yes      | Cosmos DB database name                  | `tastematcher`                                  |
 | `IMAGE_PROCESSING_QUEUE_NAME`     | No       | Queue name (default: `image-processing`) | `image-processing`                              |
 | `NEW_ARTWORK_QUEUE_NAME`          | No       | Queue name for new artwork notifications | `new-artwork-notifications`                     |
 | `LOG_LEVEL`                       | No       | Logging level (default: `info`)          | `debug`, `info`, `warn`, `error`                |
@@ -200,10 +190,11 @@ az functionapp config appsettings set \
   --name tastematcher-functions \
   --resource-group tastematcher-rg \
   --settings \
-    AZURE_SEARCH_ENDPOINT="https://prd-search.search.windows.net" \
-    AZURE_SEARCH_ADMIN_KEY="@Microsoft.KeyVault(...)" \
     AZURE_AI_VISION_ENDPOINT="https://prd-vision.cognitiveservices.azure.com/" \
     AZURE_AI_VISION_KEY="@Microsoft.KeyVault(...)" \
+    COSMOS_DB_ENDPOINT="https://prd-cosmos.documents.azure.com:443/" \
+    COSMOS_DB_KEY="@Microsoft.KeyVault(...)" \
+    COSMOS_DB_DATABASE="tastematcher" \
     LOG_LEVEL="info"
 ```
 
@@ -223,7 +214,7 @@ func azure functionapp logstream tastematcher-functions
 The function automatically logs to Application Insights when deployed to Azure. View:
 
 - Request traces
-- Dependencies (Blob, Search, Vision API calls)
+- Dependencies (Blob, Cosmos DB, Vision API calls)
 - Exceptions
 - Custom metrics
 
@@ -249,11 +240,11 @@ The function automatically logs to Application Insights when deployed to Azure. 
 3. Ensure AI Vision resource has sufficient quota
 4. Check API version compatibility
 
-### Search Indexing Fails
+### Cosmos Vector Update Fails
 
-1. Verify index exists and schema matches
-2. Check search key has write permissions
-3. Ensure document ID is unique
-4. Review Search service quota (documents, storage)
+1. Verify the `Artworks` container exists
+2. Confirm Cosmos vector indexing is enabled on `/vector`
+3. Check Cosmos credentials and database name
+4. Review Cosmos request units and query limits
 
 ## Architecture

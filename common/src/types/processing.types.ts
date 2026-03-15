@@ -14,10 +14,10 @@
 import { ThumbnailInfo } from "./artwork.types";
 
 /**
- * Vector embedding result for cognitive search
+ * Vector embedding result for artwork similarity
  */
 export interface VectorEmbedding {
-  /** Embedding vector (1536 dimensions for OpenAI ada-002) */
+  /** Embedding vector (1024 dimensions for Azure AI Vision) */
   vector: number[];
   /** Model used for embedding */
   model: string;
@@ -43,7 +43,6 @@ export interface ProcessingError {
     | "DOWNLOAD_FAILED"
     | "THUMBNAIL_FAILED"
     | "VECTORIZE_FAILED"
-    | "SEARCH_INDEX_FAILED"
     | "UNKNOWN";
   message: string;
   retryCount: number;

@@ -20,9 +20,6 @@ export interface AppConfig {
     storageConnectionString: string;
     storageContainerOriginals: string;
     storageContainerThumbnails: string;
-    searchEndpoint: string;
-    searchKey: string;
-    searchIndexName: string;
     aiVisionEndpoint: string;
     aiVisionKey: string;
   };
@@ -108,9 +105,6 @@ export function loadConfig(): AppConfig {
       storageConnectionString: getRequiredEnv("AzureWebJobsStorage"),
       storageContainerOriginals: "originals",
       storageContainerThumbnails: "derivatives",
-      searchEndpoint: getRequiredEnv("AZURE_SEARCH_ENDPOINT"),
-      searchKey: getRequiredEnv("AZURE_SEARCH_ADMIN_KEY"),
-      searchIndexName: getRequiredEnv("AZURE_SEARCH_INDEX_NAME"),
       aiVisionEndpoint: getRequiredEnv("AZURE_AI_VISION_ENDPOINT"),
       aiVisionKey: getRequiredEnv("AZURE_AI_VISION_KEY"),
     },
