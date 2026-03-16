@@ -80,6 +80,7 @@ export class AuthController {
     // Add environment check - only allow in development
     if (process.env.NODE_ENV === "development") {
       await this.domainsService.createDomainWithAdmin(dto);
+      return;
     }
 
     throw new Error("This endpoint is disabled in production");

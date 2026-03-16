@@ -55,8 +55,8 @@ export class HealthController {
     try {
       const containerClient =
         await this.blobService.getBlobContainerClient("originals");
-      await containerClient.exists();
-      checks.storage = "ok";
+      const exists = await containerClient.exists();
+      checks.storage = exists ? "ok" : "error";
     } catch (_) {
       checks.storage = "error";
     }

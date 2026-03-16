@@ -47,7 +47,7 @@ export class ArtworksService {
   }
 
   /**
-   * Fetch artworks with generic query parameters using CosmosQueryBuilder
+   * Fetch artworks with generic query parameters using CosmosQueryBuilder.
    * If requestedUserId is provided (customer), attach likedStatus per artwork by joining user's preferences.
    */
   async findAll(
@@ -139,7 +139,9 @@ export class ArtworksService {
       }
 
       const filteredItems = (result.items || []).filter((art) => {
-        if (!this.canViewerSeeArtwork(art, viewer)) return false;
+        if (!this.canViewerSeeArtwork(art, viewer)) {
+          return false;
+        }
         if (
           hideEndedAuctions &&
           art.isAuction === true &&

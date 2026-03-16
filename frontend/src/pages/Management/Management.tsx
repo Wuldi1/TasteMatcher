@@ -15,8 +15,8 @@ import {
 import { AppLoadingState } from "../../components/Loading/AppLoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiClient, ApiError } from "../../utils/api";
-import { ManagementEmailWizard } from "./ManagementEmailWizard";
 import "./Management.css";
+import { ManagementEmailWizard } from "./ManagementEmailWizard";
 
 type TabType = "users" | "domains" | "domain-requests" | "customer-requests";
 const compareByLabel = (left: string, right: string) =>
@@ -31,13 +31,13 @@ export function Management() {
   const { user } = useAuth();
   const isGlobalAdmin = user?.role === "global_admin";
   const [activeTab, setActiveTab] = useState<TabType>(
-    isGlobalAdmin ? "domains" : "users"
+    isGlobalAdmin ? "domains" : "users",
   );
   const [users, setUsers] = useState<User[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [domainRequests, setDomainRequests] = useState<DomainRequest[]>([]);
   const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>(
-    []
+    [],
   );
   const [selectedDomainId, setSelectedDomainId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
@@ -58,7 +58,7 @@ export function Management() {
   const [userRoleFilter, setUserRoleFilter] = useState<string>("all");
   const [userStatusFilter, setUserStatusFilter] = useState<string>("all");
   const [userSortBy, setUserSortBy] = useState<"name" | "email" | "createdAt">(
-    "createdAt"
+    "createdAt",
   );
   const [userSortOrder, setUserSortOrder] = useState<"asc" | "desc">("desc");
 
@@ -69,7 +69,7 @@ export function Management() {
     "name" | "adminEmail" | "createdAt"
   >("createdAt");
   const [domainSortOrder, setDomainSortOrder] = useState<"asc" | "desc">(
-    "desc"
+    "desc",
   );
 
   // Filter and sort state for domain requests
@@ -78,7 +78,7 @@ export function Management() {
     "name" | "email" | "createdAt"
   >("createdAt");
   const [requestSortOrder, setRequestSortOrder] = useState<"asc" | "desc">(
-    "desc"
+    "desc",
   );
   const [customerRequestSearchQuery, setCustomerRequestSearchQuery] =
     useState("");
@@ -110,7 +110,7 @@ export function Management() {
   const [createDomainEmail, setCreateDomainEmail] = useState("");
   const [createDomainName, setCreateDomainName] = useState("");
   const [createDomainError, setCreateDomainError] = useState<string | null>(
-    null
+    null,
   );
   const [isCreatingDomain, setIsCreatingDomain] = useState(false);
 
@@ -147,8 +147,8 @@ export function Management() {
       const sortedDomains = [...fetchedDomains].sort((a, b) =>
         compareByLabel(
           a.name ?? a.adminEmail ?? a.id,
-          b.name ?? b.adminEmail ?? b.id
-        )
+          b.name ?? b.adminEmail ?? b.id,
+        ),
       );
       setDomains(sortedDomains);
       if (sortedDomains.length > 0 && !selectedDomainId) {
@@ -157,7 +157,7 @@ export function Management() {
     } catch (err) {
       console.error("Failed to load domains:", err);
       setError(
-        err instanceof ApiError ? err.message : "Failed to load domains"
+        err instanceof ApiError ? err.message : "Failed to load domains",
       );
     } finally {
       setIsLoading(false);
@@ -173,7 +173,9 @@ export function Management() {
     } catch (err) {
       console.error("Failed to load domain requests:", err);
       setError(
-        err instanceof ApiError ? err.message : "Failed to load domain requests"
+        err instanceof ApiError
+          ? err.message
+          : "Failed to load domain requests",
       );
     } finally {
       setIsLoading(false);
@@ -189,7 +191,9 @@ export function Management() {
     } catch (err) {
       console.error("Failed to load customer requests:", err);
       setError(
-        err instanceof ApiError ? err.message : "Failed to load customer requests"
+        err instanceof ApiError
+          ? err.message
+          : "Failed to load customer requests",
       );
     } finally {
       setIsLoading(false);
@@ -250,7 +254,7 @@ export function Management() {
       } catch (err) {
         console.error("Failed to invite user:", err);
         setInviteError(
-          err instanceof ApiError ? err.message : "Failed to invite user"
+          err instanceof ApiError ? err.message : "Failed to invite user",
         );
       } finally {
         setIsInviting(false);
@@ -263,12 +267,13 @@ export function Management() {
       isGlobalAdmin,
       selectedDomainId,
       loadUsers,
-    ]
+    ],
   );
 
   const handleCustomerInvite = useCallback(
     async (requestId: string) => {
-      const selectedDomain = customerRequestDomains[requestId] || selectedDomainId;
+      const selectedDomain =
+        customerRequestDomains[requestId] || selectedDomainId;
       if (!selectedDomain) {
         setError("Please select a domain before inviting.");
         return;
@@ -281,13 +286,13 @@ export function Management() {
       } catch (err) {
         console.error("Failed to invite customer:", err);
         setError(
-          err instanceof ApiError ? err.message : "Failed to invite customer"
+          err instanceof ApiError ? err.message : "Failed to invite customer",
         );
       } finally {
         setIsInviting(false);
       }
     },
-    [customerRequestDomains, selectedDomainId, loadCustomerRequests]
+    [customerRequestDomains, selectedDomainId, loadCustomerRequests],
   );
 
   const handleCreateDomain = useCallback(
@@ -322,13 +327,13 @@ export function Management() {
       } catch (err) {
         console.error("Failed to create domain:", err);
         setCreateDomainError(
-          err instanceof ApiError ? err.message : "Failed to create domain"
+          err instanceof ApiError ? err.message : "Failed to create domain",
         );
       } finally {
         setIsCreatingDomain(false);
       }
     },
-    [createDomainUserName, createDomainEmail, createDomainName, loadDomains]
+    [createDomainUserName, createDomainEmail, createDomainName, loadDomains],
   );
 
   const handleEditUser = useCallback(
@@ -354,7 +359,7 @@ export function Management() {
       } catch (err) {
         console.error("Failed to update user:", err);
         setEditError(
-          err instanceof ApiError ? err.message : "Failed to update user"
+          err instanceof ApiError ? err.message : "Failed to update user",
         );
       } finally {
         setIsEditing(false);
@@ -367,7 +372,7 @@ export function Management() {
       isGlobalAdmin,
       selectedDomainId,
       loadUsers,
-    ]
+    ],
   );
 
   const handleEditDomain = useCallback(
@@ -392,20 +397,20 @@ export function Management() {
       } catch (err) {
         console.error("Failed to update domain:", err);
         setEditDomainError(
-          err instanceof ApiError ? err.message : "Failed to update domain"
+          err instanceof ApiError ? err.message : "Failed to update domain",
         );
       } finally {
         setIsEditingDomain(false);
       }
     },
-    [editingDomain, editDomainName, loadDomains]
+    [editingDomain, editDomainName, loadDomains],
   );
 
   const handleDeleteUser = useCallback(
     async (userId: string, userName: string) => {
       if (
         !window.confirm(
-          `Are you sure you want to delete user "${userName}"? This will also delete all their preferences.`
+          `Are you sure you want to delete user "${userName}"? This will also delete all their preferences.`,
         )
       ) {
         return;
@@ -419,14 +424,14 @@ export function Management() {
         alert(err instanceof ApiError ? err.message : "Failed to delete user");
       }
     },
-    [isGlobalAdmin, selectedDomainId, loadUsers]
+    [isGlobalAdmin, selectedDomainId, loadUsers],
   );
 
   const handleDeleteDomain = useCallback(
     async (domainId: string, domainName: string) => {
       if (
         !window.confirm(
-          `Are you sure you want to delete domain "${domainName}"? This will delete ALL users, artworks, and data associated with this domain. This action cannot be undone.`
+          `Are you sure you want to delete domain "${domainName}"? This will delete ALL users, artworks, and data associated with this domain. This action cannot be undone.`,
         )
       ) {
         return;
@@ -438,11 +443,11 @@ export function Management() {
       } catch (err) {
         console.error("Failed to delete domain:", err);
         alert(
-          err instanceof ApiError ? err.message : "Failed to delete domain"
+          err instanceof ApiError ? err.message : "Failed to delete domain",
         );
       }
     },
-    [loadDomains]
+    [loadDomains],
   );
 
   const handleResendInvite = useCallback(
@@ -459,11 +464,11 @@ export function Management() {
       } catch (err) {
         console.error("Failed to resend invitation:", err);
         alert(
-          err instanceof ApiError ? err.message : "Failed to resend invitation"
+          err instanceof ApiError ? err.message : "Failed to resend invitation",
         );
       }
     },
-    [selectedDomainId]
+    [selectedDomainId],
   );
 
   const handleResendDomainVerification = useCallback(async (domain: Domain) => {
@@ -473,7 +478,7 @@ export function Management() {
     } catch (err) {
       console.error("Failed to resend verification:", err);
       alert(
-        err instanceof ApiError ? err.message : "Failed to resend verification"
+        err instanceof ApiError ? err.message : "Failed to resend verification",
       );
     }
   }, []);
@@ -509,7 +514,7 @@ export function Management() {
       filtered = filtered.filter(
         (u) =>
           u.name.toLowerCase().includes(query) ||
-          u.email.toLowerCase().includes(query)
+          u.email.toLowerCase().includes(query),
       );
     }
 
@@ -560,14 +565,14 @@ export function Management() {
       filtered = filtered.filter(
         (d) =>
           d.name.toLowerCase().includes(query) ||
-          d.adminEmail.toLowerCase().includes(query)
+          d.adminEmail.toLowerCase().includes(query),
       );
     }
 
     // Apply status filter
     if (domainStatusFilter !== "all") {
       filtered = filtered.filter(
-        (d) => (d.status || "active") === domainStatusFilter
+        (d) => (d.status || "active") === domainStatusFilter,
       );
     }
 
@@ -608,7 +613,7 @@ export function Management() {
         (r) =>
           r.name.toLowerCase().includes(query) ||
           r.email.toLowerCase().includes(query) ||
-          r.proposedDomainName.toLowerCase().includes(query)
+          r.proposedDomainName.toLowerCase().includes(query),
       );
     }
 
@@ -641,7 +646,7 @@ export function Management() {
         (r) =>
           r.name.toLowerCase().includes(query) ||
           r.email.toLowerCase().includes(query) ||
-          (r.message || "").toLowerCase().includes(query)
+          (r.message || "").toLowerCase().includes(query),
       );
     }
 
@@ -733,7 +738,7 @@ export function Management() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-      <div className="max-w-7xl mx-auto">
+      <div className="mx-auto">
         <div className="bg-white rounded-lg shadow-md">
           {/* Tabs for global admin */}
           {isGlobalAdmin && (
@@ -908,7 +913,7 @@ export function Management() {
                           type="button"
                           onClick={() =>
                             setUserSortOrder(
-                              userSortOrder === "asc" ? "desc" : "asc"
+                              userSortOrder === "asc" ? "desc" : "asc",
                             )
                           }
                           className="management-sort-button"
@@ -940,10 +945,10 @@ export function Management() {
                   <>
                     {/* Desktop Table */}
                     <div className="hidden sm:block overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
+                      <table className="min-w-full table-auto divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="min-w-[14rem] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Name
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -972,25 +977,25 @@ export function Management() {
                         <tbody className="bg-white divide-y divide-gray-200">
                           {filteredAndSortedUsers.map((u) => (
                             <tr key={u.id} className="hover:bg-gray-50">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900">
+                              <td className="min-w-[14rem] px-6 py-4 align-top">
+                                <div className="break-words text-sm font-medium text-gray-900">
                                   {u.name}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-500">
+                              <td className="px-6 py-4 align-top">
+                                <div className="break-words text-sm text-gray-500">
                                   {u.email}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-500">
+                              <td className="px-6 py-4 align-top">
+                                <div className="break-words text-sm text-gray-500">
                                   {u.invitedBy
                                     ? (inviterEmailLookup.get(u.invitedBy) ??
                                       u.invitedBy)
                                     : "—"}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
+                              <td className="px-6 py-4 whitespace-nowrap align-top">
                                 <span
                                   className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleBadge(u.role)}`}
                                 >
@@ -998,20 +1003,20 @@ export function Management() {
                                   {getRoleDisplayText(u.role)}
                                 </span>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
+                              <td className="px-6 py-4 whitespace-nowrap align-top">
                                 <span
                                   className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadge(u.status)}`}
                                 >
                                   {getStatusDisplayText(u.status)}
                                 </span>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              <td className="px-6 py-4 whitespace-nowrap align-top text-sm text-gray-500">
                                 {formatDate(u.createdAt)}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              <td className="px-6 py-4 whitespace-nowrap align-top text-sm text-gray-500">
                                 {formatDate(u.updatedAt)}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              <td className="px-6 py-4 whitespace-nowrap align-top text-right text-sm font-medium">
                                 {u.role !== "domain_owner" &&
                                   u.role !== "global_admin" &&
                                   u.id !== user.id && (
@@ -1221,7 +1226,7 @@ export function Management() {
                         type="button"
                         onClick={() =>
                           setDomainSortOrder(
-                            domainSortOrder === "asc" ? "desc" : "asc"
+                            domainSortOrder === "asc" ? "desc" : "asc",
                           )
                         }
                         className="management-sort-button"
@@ -1252,10 +1257,10 @@ export function Management() {
                   <>
                     {/* Desktop Table */}
                     <div className="hidden sm:block overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
+                      <table className="min-w-full table-auto divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="min-w-[14rem] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Domain Name
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1275,27 +1280,27 @@ export function Management() {
                         <tbody className="bg-white divide-y divide-gray-200">
                           {filteredAndSortedDomains.map((d) => (
                             <tr key={d.id} className="hover:bg-gray-50">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900">
+                              <td className="min-w-[14rem] px-6 py-4 align-top">
+                                <div className="break-words text-sm font-medium text-gray-900">
                                   {d.name}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-500">
+                              <td className="px-6 py-4 align-top">
+                                <div className="break-words text-sm text-gray-500">
                                   {d.adminEmail}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
+                              <td className="px-6 py-4 whitespace-nowrap align-top">
                                 <span
                                   className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getDomainStatusBadge(d.status)}`}
                                 >
                                   {d.status || "active"}
                                 </span>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              <td className="px-6 py-4 whitespace-nowrap align-top text-sm text-gray-500">
                                 {formatDate(d.createdAt)}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              <td className="px-6 py-4 whitespace-nowrap align-top text-right text-sm font-medium">
                                 <div className="flex justify-end gap-2">
                                   {d.status !== "active" && (
                                     <button
@@ -1466,7 +1471,7 @@ export function Management() {
                         type="button"
                         onClick={() =>
                           setRequestSortOrder(
-                            requestSortOrder === "asc" ? "desc" : "asc"
+                            requestSortOrder === "asc" ? "desc" : "asc",
                           )
                         }
                         className="management-sort-button"
@@ -1502,10 +1507,10 @@ export function Management() {
                   <>
                     {/* Desktop Table */}
                     <div className="hidden sm:block overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
+                      <table className="min-w-full table-auto divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="min-w-[14rem] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Name
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1525,27 +1530,27 @@ export function Management() {
                         <tbody className="bg-white divide-y divide-gray-200">
                           {filteredAndSortedRequests.map((req) => (
                             <tr key={req.id} className="hover:bg-gray-50">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900">
+                              <td className="min-w-[14rem] px-6 py-4 align-top">
+                                <div className="break-words text-sm font-medium text-gray-900">
                                   {req.name}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-500">
+                              <td className="px-6 py-4 align-top">
+                                <div className="break-words text-sm text-gray-500">
                                   {req.email}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900">
+                              <td className="px-6 py-4 align-top">
+                                <div className="break-words text-sm text-gray-900">
                                   {req.proposedDomainName}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              <td className="px-6 py-4 whitespace-nowrap align-top text-sm text-gray-500">
                                 {formatDate(req.createdAt)}
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="px-6 py-4 align-top">
                                 <div
-                                  className="text-sm text-gray-500 max-w-xs truncate"
+                                  className="max-w-xl whitespace-pre-wrap break-words text-sm text-gray-500"
                                   title={req.message}
                                 >
                                   {req.message || "—"}
@@ -1677,7 +1682,7 @@ export function Management() {
                         type="button"
                         onClick={() =>
                           setCustomerRequestSortOrder(
-                            customerRequestSortOrder === "asc" ? "desc" : "asc"
+                            customerRequestSortOrder === "asc" ? "desc" : "asc",
                           )
                         }
                         className="management-sort-button"
@@ -1713,10 +1718,10 @@ export function Management() {
                   <>
                     {/* Desktop Table */}
                     <div className="hidden sm:block overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
+                      <table className="min-w-full table-auto divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="min-w-[14rem] px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Name
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1728,7 +1733,7 @@ export function Management() {
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Submitted
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="min-w-[18rem] px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                               Assign Domain
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1739,31 +1744,31 @@ export function Management() {
                         <tbody className="bg-white divide-y divide-gray-200">
                           {filteredAndSortedCustomerRequests.map((req) => (
                             <tr key={req.id} className="hover:bg-gray-50">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900">
+                              <td className="min-w-[14rem] px-6 py-4 align-top">
+                                <div className="break-words text-sm font-medium text-gray-900">
                                   {req.name}
                                 </div>
-                                <div className="text-xs text-gray-500">
+                                <div className="break-words text-xs text-gray-500">
                                   {req.status}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-500">
+                              <td className="px-6 py-4 align-top">
+                                <div className="break-words text-sm text-gray-500">
                                   {req.email}
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="min-w-[18rem] px-6 py-4 align-top">
                                 <div
-                                  className="text-sm text-gray-500 max-w-xs truncate"
+                                  className="max-w-xl whitespace-pre-wrap break-words text-sm text-gray-500"
                                   title={req.message}
                                 >
                                   {req.message || "—"}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              <td className="px-6 py-4 whitespace-nowrap align-top text-sm text-gray-500">
                                 {formatDate(req.createdAt)}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
+                              <td className="w-[22rem] min-w-[18rem] px-6 py-4 whitespace-nowrap align-top">
                                 <SearchableSelect
                                   id={`customer-domain-${req.id}`}
                                   ariaLabel="Assign domain"
@@ -1781,20 +1786,25 @@ export function Management() {
                                   }
                                   options={domainOptions}
                                   placeholder="Select a domain..."
+                                  containerClassName="w-full min-w-[16rem]"
                                   className="w-full px-2 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 />
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
+                              <td className="px-6 py-4 whitespace-nowrap align-top">
                                 <button
                                   onClick={() => handleCustomerInvite(req.id)}
-                                  disabled={req.status === "invited" || isInviting}
+                                  disabled={
+                                    req.status === "invited" || isInviting
+                                  }
                                   className={`px-3 py-2 text-sm rounded-lg border ${
                                     req.status === "invited"
                                       ? "border-gray-200 text-gray-400 cursor-not-allowed"
                                       : "border-blue-300 text-blue-600 hover:text-blue-900"
                                   }`}
                                 >
-                                  {req.status === "invited" ? "Invited" : "Send Invite"}
+                                  {req.status === "invited"
+                                    ? "Invited"
+                                    : "Send Invite"}
                                 </button>
                               </td>
                             </tr>
@@ -1830,10 +1840,10 @@ export function Management() {
 
                           {req.message && (
                             <div className="bg-gray-50 rounded-lg p-3">
-                              <p className="text-xs font-medium text-gray-500 mb-1">
+                              <p className="mb-1 text-xs font-medium text-gray-500">
                                 Message
                               </p>
-                              <p className="text-sm text-gray-700">
+                              <p className="whitespace-pre-wrap break-words text-sm text-gray-700">
                                 {req.message}
                               </p>
                             </div>
@@ -1873,7 +1883,9 @@ export function Management() {
                                 : "border-blue-300 text-blue-600 hover:text-blue-900"
                             }`}
                           >
-                            {req.status === "invited" ? "Invited" : "Send Invite"}
+                            {req.status === "invited"
+                              ? "Invited"
+                              : "Send Invite"}
                           </button>
                         </div>
                       ))}

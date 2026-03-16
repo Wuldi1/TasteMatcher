@@ -215,8 +215,6 @@ export class UsersController {
   ): Promise<User> {
     const currentUser = req.user as User;
 
-    console.log(inviteDto);
-
     if (inviteDto.domainId == undefined || inviteDto.domainId == "") {
       // empty!
       inviteDto.domainId = currentUser.domainId;

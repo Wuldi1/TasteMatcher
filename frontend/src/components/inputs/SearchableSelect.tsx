@@ -15,6 +15,7 @@ export type SearchableSelectProps = {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  containerClassName?: string;
 };
 
 export function SearchableSelect({
@@ -26,6 +27,7 @@ export function SearchableSelect({
   placeholder = "Select...",
   disabled = false,
   className,
+  containerClassName,
 }: SearchableSelectProps) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -77,7 +79,10 @@ export function SearchableSelect({
   const showClearButton = !disabled && (query.length > 0 || !!value);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div
+      ref={containerRef}
+      className={`relative w-full ${containerClassName ?? ""}`.trim()}
+    >
       <input
         id={id}
         type="text"

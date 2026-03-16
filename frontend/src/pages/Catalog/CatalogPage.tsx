@@ -56,6 +56,7 @@ const getViewedStorageKey = (domainId: string, userId?: string) =>
   `tm.viewedArtworks.${userId || "anon"}.${domainId}`;
 const compareByLabel = (left: string, right: string) =>
   left.localeCompare(right, undefined, { sensitivity: "base", numeric: true });
+const CATALOG_PAGE_SIZE = 40;
 
 /**
  * Catalog page displaying all uploaded artworks in a responsive grid.
@@ -90,7 +91,7 @@ export function CatalogPage() {
     () => new Set(),
   );
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-  const [showEndedAuctions, setShowEndedAuctions] = useState(false);
+  const [showEndedAuctions, setShowEndedAuctions] = useState(true);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const [feedbackTab, setFeedbackTab] = useState<
     "preferences" | "comments" | "proposals"
@@ -257,7 +258,7 @@ export function CatalogPage() {
         throw new Error("No domain ID");
       }
       const result = await apiClient.getArtworks(effectiveDomainId, {
-        limit: 20,
+        limit: CATALOG_PAGE_SIZE,
         continuationToken: pageParam,
         sortBy,
         sortOrder,
@@ -276,7 +277,10 @@ export function CatalogPage() {
         !("continuationToken" in lastPage)
       )
         return undefined;
-      return lastPage.continuationToken ?? undefined;
+      if (!("hasMore" in lastPage) || !lastPage.hasMore) {
+        return undefined;
+      }
+      return lastPage.continuationToken || undefined;
     },
     enabled: !!effectiveDomainId,
     staleTime: 30000,

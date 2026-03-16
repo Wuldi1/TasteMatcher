@@ -19,11 +19,11 @@ import {
   DomainActivitySummaryResponse,
   DomainRequest,
 } from "@tastematcher/common";
+import { DomainActivityService } from "../activity/domain-activity.service";
 import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
 import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
 import { Roles } from "../auth/utils/roles.decorator";
 import { RolesGuard } from "../auth/utils/roles.guard";
-import { DomainActivityService } from "../activity/domain-activity.service";
 import { DomainsService } from "./domains.service";
 import { CreateDomainRequestDto } from "./dto/create-domain-request.dto";
 import { UpdateDomainDto } from "./dto/update-domain.dto";

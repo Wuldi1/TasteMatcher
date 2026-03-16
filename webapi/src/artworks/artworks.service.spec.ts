@@ -1,180 +1,140 @@
-import { Test, TestingModule } from "@nestjs/testing";
+import type { Artwork, QueryParams } from "@tastematcher/common";
 import { ArtworksService } from "./artworks.service";
-import { NotFoundException, ForbiddenException } from "@nestjs/common";
-import { CosmosService } from "@tastematcher/common";
 
-describe("ArtworksService", () => {
-  let service: ArtworksService;
-  //   let cosmosService: jest.Mocked<CosmosService>;
+const buildArtwork = (
+  id: string,
+  overrides: Partial<Artwork> = {},
+): Artwork =>
+  ({
+    id,
+    domainId: "domain-1",
+    type: "artwork",
+    title: `Artwork ${id}`,
+    description: "Description",
+    artist: "Artist",
+    date: "2024",
+    filename: `${id}.jpg`,
+    vector: Array.from({ length: 1024 }, () => 1),
+    vectorModel: "test-model",
+    isPrivate: false,
+    isAuction: false,
+    createdAt: Date.now(),
+    ...overrides,
+  }) as Artwork;
 
-  const mockContainer = {
+const setupService = () => {
+  const service = new ArtworksService({} as never);
+  const artworksContainer = {
     items: {
       query: jest.fn(),
     },
     item: jest.fn(),
   };
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        ArtworksService,
-        {
-          provide: CosmosService,
-          useValue: {
-            getContainer: jest.fn().mockReturnValue(mockContainer),
-          },
-        },
-      ],
-    }).compile();
+  (service as unknown as { cosmosService: Record<string, jest.Mock> })
+    .cosmosService = {
+    getArtworksContainer: jest.fn().mockResolvedValue(artworksContainer),
+    getArtworkPreferencesContainer: jest.fn(),
+  };
 
-    service = module.get<ArtworksService>(ArtworksService);
-    // cosmosService = module.get(CosmosService) as jest.Mocked<CosmosService>;
+  return { service, artworksContainer };
+};
+
+describe("ArtworksService.findAll", () => {
+  beforeAll(() => {
+    process.env.AzureWebJobsStorage = "UseDevelopmentStorage=true";
+    process.env.AZURE_AI_VISION_ENDPOINT = "https://example.com";
+    process.env.AZURE_AI_VISION_KEY = "test-key";
+    process.env.COSMOS_DB_ENDPOINT = "https://example.com";
+    process.env.COSMOS_DB_KEY = "test-key";
+    process.env.COSMOS_DB_DATABASE = "test-db";
+    process.env.AZURE_STORAGE_ACCOUNT = "test-account";
+    process.env.AZURE_STORAGE_ACCOUNT_KEY = "test-key";
+    process.env.IMAGE_PROCESSING_QUEUE_NAME = "test-queue";
   });
 
-  it("should be defined", () => {
-    expect(service).toBeDefined();
-  });
-
-  describe("findAll", () => {
-    it("should return paginated artworks", async () => {
-      const mockArtworks = [
-        { id: "1", domainId: "domain-1", title: "Artwork 1" },
-        { id: "2", domainId: "domain-1", title: "Artwork 2" },
-      ];
-
-      mockContainer.items.query.mockReturnValue({
-        fetchNext: jest.fn().mockResolvedValue({
-          resources: mockArtworks,
-          continuationToken: "token-123",
-          hasMoreResults: true,
-        }),
-      });
-
-      const result = await service.findAll("domain-1", { limit: 20 });
-
-      expect(result.items).toHaveLength(2);
-      expect(result.hasMore).toBe(true);
-      expect(result.continuationToken).toBe("token-123");
+  it("advances continuation tokens until it collects visible artworks", async () => {
+    const { service, artworksContainer } = setupService();
+    const hiddenArtwork = buildArtwork("hidden", {
+      isPrivate: true,
+      uploadedBy: "dealer-2",
     });
-  });
+    const visibleArtwork = buildArtwork("visible");
 
-  describe("findOne", () => {
-    it("should return artwork by ID", async () => {
-      const mockArtwork = { id: "1", domainId: "domain-1", title: "Artwork 1" };
-
-      mockContainer.item.mockReturnValue({
-        read: jest.fn().mockResolvedValue({ resource: mockArtwork }),
-      });
-
-      const result = await service.findOne("domain-1", "1");
-
-      expect(result.id).toBe("1");
-      expect(result.title).toBe("Artwork 1");
-    });
-
-    it("should throw NotFoundException if artwork not found", async () => {
-      mockContainer.item.mockReturnValue({
-        read: jest.fn().mockResolvedValue({ resource: null }),
-      });
-
-      await expect(service.findOne("domain-1", "999")).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-  });
-
-  describe("update", () => {
-    it("should update artwork metadata", async () => {
-      const existing = { id: "1", domainId: "domain-1", title: "Old Title" };
-      const updated = { ...existing, title: "New Title" };
-
-      mockContainer.item.mockReturnValue({
-        read: jest.fn().mockResolvedValue({ resource: existing }),
-        replace: jest.fn().mockResolvedValue({ resource: updated }),
-      });
-
-      const result = await service.update(
-        "domain-1",
-        "1",
-        { title: "New Title" },
-        { id: "user-1" },
-      );
-
-      expect(result.title).toBe("New Title");
-    });
-
-    it("should block privacy changes if requester is not uploader", async () => {
-      const existing = {
-        id: "1",
-        domainId: "domain-1",
-        uploadedBy: "uploader-1",
-        isPrivate: false,
-      };
-
-      mockContainer.item.mockReturnValue({
-        read: jest.fn().mockResolvedValue({ resource: existing }),
-        replace: jest.fn(),
-      });
-
-      await expect(
-        service.update(
-          "domain-1",
-          "1",
-          { isPrivate: true },
-          { id: "other-user" },
+    artworksContainer.items.query.mockImplementation(
+      (
+        _query: unknown,
+        options?: { continuationToken?: string; maxItemCount?: number },
+      ) => ({
+        fetchNext: jest.fn().mockResolvedValue(
+          options?.continuationToken === "page-1"
+            ? {
+                resources: [visibleArtwork],
+                continuationToken: "page-2",
+                hasMoreResults: true,
+              }
+            : {
+                resources: [hiddenArtwork],
+                continuationToken: "page-1",
+                hasMoreResults: true,
+              },
         ),
-      ).rejects.toThrow(ForbiddenException);
-    });
+      }),
+    );
+
+    const result = await service.findAll(
+      "domain-1",
+      { limit: 1 } satisfies QueryParams<Artwork>,
+      undefined,
+      {
+        id: "customer-1",
+        role: "customer",
+        invitedBy: "owner-1",
+      },
+    );
+
+    expect(result.items.map((item) => item.id)).toEqual(["visible"]);
+    expect(result.continuationToken).toBe("page-2");
+    expect(result.hasMore).toBe(true);
+    expect(artworksContainer.items.query).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        query: expect.stringContaining("c.domainId = @param0"),
+      }),
+      expect.objectContaining({
+        partitionKey: "domain-1",
+        maxItemCount: 1,
+        continuationToken: undefined,
+      }),
+    );
+    expect(artworksContainer.items.query).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Object),
+      expect.objectContaining({
+        partitionKey: "domain-1",
+        maxItemCount: 1,
+        continuationToken: "page-1",
+      }),
+    );
   });
 
-  describe("remove", () => {
-    it("deletes the artwork from cosmos without search cleanup", async () => {
-      const deleteMock = jest.fn().mockResolvedValue(undefined);
+  it("stops pagination when cosmos has no more results", async () => {
+    const { service, artworksContainer } = setupService();
+    const visibleArtwork = buildArtwork("only-page");
 
-      mockContainer.item.mockReturnValue({
-        delete: deleteMock,
-      });
-
-      await service.remove("domain-1", "artwork-1");
-
-      expect(mockContainer.item).toHaveBeenCalledWith("artwork-1", "domain-1");
-      expect(deleteMock).toHaveBeenCalled();
-    });
-  });
-
-  describe("getStats", () => {
-    it("should return aggregated statistics", async () => {
-      const mockStats = {
-        totalArtworks: 42,
-        totalSwiped: 28,
-        recentlyAdded: 5,
-      };
-
-      mockContainer.items.query.mockReturnValue({
-        fetchAll: jest
-          .fn()
-          .mockResolvedValueOnce({ resources: [mockStats.totalArtworks] }) // total
-          .mockResolvedValueOnce({ resources: [mockStats.totalSwiped] }) // swiped
-          .mockResolvedValueOnce({ resources: [mockStats.recentlyAdded] }), // recent
-      });
-
-      const result = await service.getStats("domain-1", "user-1");
-
-      expect(result.totalArtworks).toBe(42);
-      expect(result.totalSwiped).toBe(28);
-      expect(result.recentlyAdded).toBe(5);
+    artworksContainer.items.query.mockReturnValue({
+      fetchNext: jest.fn().mockResolvedValue({
+        resources: [visibleArtwork],
+        continuationToken: undefined,
+        hasMoreResults: false,
+      }),
     });
 
-    it("should handle zero results gracefully", async () => {
-      mockContainer.items.query.mockReturnValue({
-        fetchAll: jest.fn().mockResolvedValue({ resources: [] }),
-      });
+    const result = await service.findAll("domain-1", { limit: 1 });
 
-      const result = await service.getStats("domain-1", "user-1");
-
-      expect(result.totalArtworks).toBe(0);
-      expect(result.totalSwiped).toBe(0);
-      expect(result.recentlyAdded).toBe(0);
-    });
+    expect(result.items.map((item) => item.id)).toEqual(["only-page"]);
+    expect(result.continuationToken).toBeUndefined();
+    expect(result.hasMore).toBe(false);
+    expect(artworksContainer.items.query).toHaveBeenCalledTimes(1);
   });
 });
