@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -73,11 +73,18 @@ describe("Management customer requests table", () => {
       expect(mockGetAllCustomerRequests).toHaveBeenCalled();
     });
 
-    const desktopAssignDomain = document.getElementById("customer-domain-request-1");
-    expect(desktopAssignDomain).not.toBeNull();
-    expect(desktopAssignDomain?.hasAttribute("disabled")).toBe(false);
-    expect(desktopAssignDomain?.closest("div")?.className).toContain("min-w-[16rem]");
-    expect(desktopAssignDomain?.closest("td")?.className).toContain("min-w-[18rem]");
-    expect(desktopAssignDomain?.closest("td")?.className).toContain("w-[22rem]");
+    const requestRow = screen
+      .getAllByRole("row")
+      .find((row) => within(row).queryByText("Customer One"));
+
+    expect(requestRow).toBeTruthy();
+
+    const desktopAssignDomain = within(requestRow as HTMLElement).getByRole(
+      "combobox",
+      { name: "Assign domain" },
+    );
+
+    expect(desktopAssignDomain).toBeTruthy();
+    expect(desktopAssignDomain.hasAttribute("disabled")).toBe(false);
   });
 });

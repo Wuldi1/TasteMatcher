@@ -1,8 +1,9 @@
+import { Artwork } from "@tastematcher/common";
 import { ArtworksService } from "./artworks.service";
 
-const buildVector = () => Array.from({ length: 1024 }, () => 1);
+const buildVector = (): number[] => Array.from({ length: 1024 }, () => 1);
 
-const buildArtwork = (id: string) => ({
+const buildArtwork = (id: string): Artwork => ({
   id,
   domainId: "domain-1",
   type: "artwork",
@@ -16,46 +17,96 @@ const buildArtwork = (id: string) => ({
   isPrivate: false,
 });
 
-const setupService = () => {
-  const service = new ArtworksService({} as never);
+const futureIso = (minutes: number = 30) =>
+  new Date(Date.now() + minutes * 60 * 1000).toISOString();
 
-  const candidateResources = [
+const pastIso = (minutes: number = 30) =>
+  new Date(Date.now() - minutes * 60 * 1000).toISOString();
+
+type CandidateResource = {
+  id: string;
+  isPrivate: boolean;
+  uploadedBy: string;
+  isAuction: boolean;
+  endDate?: string;
+};
+
+const setupService = ({
+  primaryCandidateResources = [
     {
       id: "rated-art",
       isPrivate: false,
       uploadedBy: "owner-1",
-      isAuction: false,
+      isAuction: true,
+      endDate: futureIso(),
     },
     {
       id: "fresh-art",
       isPrivate: false,
       uploadedBy: "owner-1",
-      isAuction: false,
+      isAuction: true,
+      endDate: futureIso(60),
     },
-  ];
+  ] as CandidateResource[],
+  expiredAuctionCandidateResources = [] as CandidateResource[],
+  pageResources = [buildArtwork("rated-art"), buildArtwork("fresh-art")],
+} = {}) => {
+  const service = new ArtworksService({} as never);
 
-  const candidateIterator = {
+  const createCandidateIterator = (resources: unknown[]) => ({
     hasMoreResults: jest
       .fn()
       .mockReturnValueOnce(true)
       .mockReturnValueOnce(false),
     fetchNext: jest.fn().mockResolvedValue({
-      resources: candidateResources,
+      resources,
     }),
-  };
+  });
 
   const pageIterator = {
     fetchAll: jest.fn().mockResolvedValue({
-      resources: [buildArtwork("rated-art"), buildArtwork("fresh-art")],
+      resources: pageResources,
     }),
   };
 
   const artworksContainer = {
     items: {
-      query: jest
-        .fn()
-        .mockReturnValueOnce(candidateIterator)
-        .mockReturnValueOnce(pageIterator),
+      query: jest.fn().mockImplementation((query: {
+        query: string;
+        parameters?: Array<{ name: string; value: unknown }>;
+      }) => {
+        const excludedArtworkIds =
+          query.parameters?.find(
+            (parameter) => parameter.name === "@excludedArtworkIds",
+          )?.value ?? [];
+        const excludedIdSet = new Set(
+          Array.isArray(excludedArtworkIds) ? excludedArtworkIds : [],
+        );
+        const filterExcluded = <
+          T extends { id?: string | null | undefined },
+        >(
+          resources: T[],
+        ) =>
+          resources.filter(
+            (resource) => !resource.id || !excludedIdSet.has(resource.id),
+          );
+
+        if (
+          query.query.includes("c.endDate > @activeAuctionAfter") ||
+          query.query.includes("c.isAuction != true") ||
+          query.query.includes("NOT IS_DEFINED(c.isAuction)")
+        ) {
+          return createCandidateIterator(
+            filterExcluded(primaryCandidateResources),
+          );
+        }
+        if (query.query.includes("c.endDate <= @activeAuctionAfter")) {
+          return createCandidateIterator(
+            filterExcluded(expiredAuctionCandidateResources),
+          );
+        }
+        return pageIterator;
+      }),
     },
   };
 
@@ -97,6 +148,18 @@ const setupService = () => {
 };
 
 describe("ArtworksService includeRated behavior", () => {
+  beforeAll(() => {
+    process.env.AzureWebJobsStorage = "UseDevelopmentStorage=true";
+    process.env.AZURE_AI_VISION_ENDPOINT = "https://example.com";
+    process.env.AZURE_AI_VISION_KEY = "test-key";
+    process.env.COSMOS_DB_ENDPOINT = "https://example.com";
+    process.env.COSMOS_DB_KEY = "test-key";
+    process.env.COSMOS_DB_DATABASE = "test-db";
+    process.env.AZURE_STORAGE_ACCOUNT = "test-account";
+    process.env.AZURE_STORAGE_ACCOUNT_KEY = "test-key";
+    process.env.IMAGE_PROCESSING_QUEUE_NAME = "test-queue";
+  });
+
   it("excludes rated artworks when includeRated=false", async () => {
     const service = setupService();
 
@@ -159,6 +222,145 @@ describe("ArtworksService includeRated behavior", () => {
       expect.arrayContaining([
         expect.objectContaining({ name: "@excludedArtworkIds" }),
       ]),
+    );
+  });
+
+  it("returns live auctions and non-auctions before expired auctions", async () => {
+    const service = setupService({
+      primaryCandidateResources: [
+        {
+          id: "auction-art",
+          isPrivate: false,
+          uploadedBy: "owner-1",
+          isAuction: true,
+          endDate: futureIso(),
+        },
+        {
+          id: "non-auction-art",
+          isPrivate: false,
+          uploadedBy: "owner-1",
+          isAuction: false,
+        },
+      ],
+      expiredAuctionCandidateResources: [
+        {
+          id: "expired-auction-art",
+          isPrivate: false,
+          uploadedBy: "owner-1",
+          isAuction: true,
+          endDate: pastIso(),
+        },
+      ],
+      pageResources: [
+        {
+          ...buildArtwork("auction-art"),
+          isAuction: true,
+          endDate: futureIso(),
+        },
+        buildArtwork("non-auction-art"),
+        {
+          ...buildArtwork("expired-auction-art"),
+          isAuction: true,
+          endDate: pastIso(),
+        },
+      ],
+    });
+
+    const results = await service.getRecommendationsForUser(
+      "domain-1",
+      { id: "owner-1", role: "domain_owner" },
+      "customer-1",
+      2,
+      0,
+      true,
+    );
+
+    expect(results.map((artwork) => artwork.id)).toEqual([
+      "auction-art",
+      "non-auction-art",
+    ]);
+
+    const cosmosService = (
+      service as unknown as { cosmosService: { getArtworksContainer: jest.Mock } }
+    ).cosmosService;
+    const artworksContainer = await cosmosService.getArtworksContainer.mock
+      .results[0].value;
+
+    expect(artworksContainer.items.query.mock.calls[0][0].query).toContain(
+      "c.endDate > @activeAuctionAfter",
+    );
+    expect(artworksContainer.items.query.mock.calls[0][0].query).toContain(
+      "c.isAuction != true",
+    );
+    expect(
+      artworksContainer.items.query.mock.calls.some((call: [{ query: string }]) =>
+        call[0].query.includes("c.endDate <= @activeAuctionAfter"),
+      ),
+    ).toBe(false);
+    expect(artworksContainer.items.query.mock.calls[1][0].query).toContain(
+      "ARRAY_CONTAINS(@ids, c.id)",
+    );
+  });
+
+  it("uses expired auctions only after the primary pool is exhausted", async () => {
+    const service = setupService({
+      primaryCandidateResources: [
+        {
+          id: "active-auction-art",
+          isPrivate: false,
+          uploadedBy: "owner-1",
+          isAuction: true,
+          endDate: futureIso(),
+        },
+      ],
+      expiredAuctionCandidateResources: [
+        {
+          id: "expired-auction-art",
+          isPrivate: false,
+          uploadedBy: "owner-1",
+          isAuction: true,
+          endDate: pastIso(),
+        },
+      ],
+      pageResources: [
+        {
+          ...buildArtwork("active-auction-art"),
+          isAuction: true,
+          endDate: futureIso(),
+        },
+        {
+          ...buildArtwork("expired-auction-art"),
+          isAuction: true,
+          endDate: pastIso(),
+        },
+      ],
+    });
+
+    const results = await service.getRecommendationsForUser(
+      "domain-1",
+      { id: "owner-1", role: "domain_owner" },
+      "customer-1",
+      2,
+      0,
+      true,
+    );
+
+    expect(results.map((artwork) => artwork.id)).toEqual([
+      "active-auction-art",
+      "expired-auction-art",
+    ]);
+
+    const cosmosService = (
+      service as unknown as { cosmosService: { getArtworksContainer: jest.Mock } }
+    ).cosmosService;
+    const artworksContainer = await cosmosService.getArtworksContainer.mock
+      .results[0].value;
+
+    expect(artworksContainer.items.query.mock.calls[0][0].query).toContain(
+      "c.endDate > @activeAuctionAfter",
+    );
+    expect(artworksContainer.items.query.mock.calls[1][0].query).toContain(
+      "c.endDate <= @activeAuctionAfter",
     );
   });
 });

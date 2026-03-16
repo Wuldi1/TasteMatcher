@@ -941,114 +941,132 @@ export class ArtworksService {
       const requestedCount = offset + limit;
       const pageSize = Math.max(requestedCount + 20, 50);
       const visibleCandidates: CandidateScore[] = [];
+      const visibleCandidateIds = new Set<string>();
       let scannedCount = 0;
       const preferenceVectorLiteral = JSON.stringify(normalizedPreference);
 
       const includeRatedAndReactedArtworksBiggerThanZero =
         !includeRated && reactedArtworkIds.size > 0;
 
-      const candidateQueryText = [
-        "SELECT c.id, c.isPrivate, c.uploadedBy, c.isAuction, c.endDate",
-        "FROM c",
-        "WHERE c.type = @type",
-        "AND c.domainId = @domainId",
-        "AND IS_DEFINED(c.vector)",
-        includeRatedAndReactedArtworksBiggerThanZero
-          ? "AND NOT ARRAY_CONTAINS(@excludedArtworkIds, c.id)"
-          : "",
-        `ORDER BY VectorDistance(c.vector, ${preferenceVectorLiteral}, false)`,
-      ]
-        .filter(Boolean)
-        .join("\n");
+      const activeAuctionAfter = new Date().toISOString();
 
-      const candidateQuery = {
-        query: candidateQueryText,
-        parameters: [
-          { name: "@type", value: "artwork" },
-          { name: "@domainId", value: domainId },
-          ...(includeRatedAndReactedArtworksBiggerThanZero
+      const buildCandidateQuery = (mode: "primary" | "expired-auction") => {
+        const auctionClause =
+          mode === "primary"
             ? [
-                {
-                  name: "@excludedArtworkIds",
-                  value: Array.from(reactedArtworkIds),
-                },
-              ]
-            : []),
-        ],
+                "AND (",
+                "  c.isAuction != true",
+                "  OR NOT IS_DEFINED(c.isAuction)",
+                "  OR NOT IS_DEFINED(c.endDate)",
+                "  OR c.endDate > @activeAuctionAfter",
+                ")",
+              ].join("\n")
+            : [
+                "AND c.isAuction = true",
+                "AND IS_DEFINED(c.endDate)",
+                "AND c.endDate <= @activeAuctionAfter",
+              ].join("\n");
+
+        const query = [
+          "SELECT c.id, c.isPrivate, c.uploadedBy, c.isAuction, c.endDate",
+          "FROM c",
+          "WHERE c.type = @type",
+          "AND c.domainId = @domainId",
+          "AND IS_DEFINED(c.vector)",
+          auctionClause,
+          includeRatedAndReactedArtworksBiggerThanZero
+            ? "AND NOT ARRAY_CONTAINS(@excludedArtworkIds, c.id)"
+            : "",
+          `ORDER BY VectorDistance(c.vector, ${preferenceVectorLiteral}, false)`,
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+        return {
+          query,
+          parameters: [
+            { name: "@type", value: "artwork" },
+            { name: "@domainId", value: domainId },
+            { name: "@activeAuctionAfter", value: activeAuctionAfter },
+            ...(includeRatedAndReactedArtworksBiggerThanZero
+              ? [
+                  {
+                    name: "@excludedArtworkIds",
+                    value: Array.from(reactedArtworkIds),
+                  },
+                ]
+              : []),
+          ],
+        };
       };
 
-      this.logger.debug({
-        msg: "Recommendation candidate query",
-        domainId,
-        targetUserId: resolvedUserId,
-        includeRated,
-        reactedArtworkIdsCount: reactedArtworkIds.size,
-        requestedCount,
-        pageSize,
-        query: candidateQuery.query,
-        parameters: candidateQuery.parameters.map((parameter) => ({
-          name: parameter.name,
-          valuePreview:
-            parameter.name === "@excludedArtworkIds"
-              ? parameter.value
-              : parameter.name === "@domainId" || parameter.name === "@type"
-                ? parameter.value
-                : parameter.name === "@preferenceVector"
-                  ? "[inlined-in-query]"
-                  : Array.isArray(parameter.value)
-                    ? `array(${parameter.value.length})`
-                    : parameter.value,
-        })),
-      });
+      const collectCandidates = async (mode: "primary" | "expired-auction") => {
+        const candidateQuery = buildCandidateQuery(mode);
 
-      const candidateIterator = artworksContainer.items.query(candidateQuery, {
-        partitionKey: domainId,
-        maxItemCount: pageSize,
-      });
+        const candidateIterator = artworksContainer.items.query(
+          candidateQuery,
+          {
+            partitionKey: domainId,
+            maxItemCount: pageSize,
+          },
+        );
 
-      while (
-        candidateIterator.hasMoreResults() &&
-        visibleCandidates.length < requestedCount
-      ) {
-        const { resources } = await candidateIterator.fetchNext();
-        this.logger.debug({
-          msg: "Recommendation candidate page",
-          domainId,
-          targetUserId: resolvedUserId,
-          fetchedCount: resources?.length ?? 0,
-          fetchedIds: (resources ?? []).map((candidate) => candidate.id),
-        });
-        for (const candidate of resources ?? []) {
-          scannedCount += 1;
-
-          const candidateArtwork = candidate as Artwork;
-          const canSeeCandidate = this.canViewerSeeArtwork(
-            candidateArtwork,
-            requester,
-          );
-          if (!canSeeCandidate) {
-            this.logger.debug({
-              msg: "Recommendation candidate filtered by visibility",
-              domainId,
-              targetUserId: resolvedUserId,
-              artworkId: candidateArtwork.id,
-              requesterRole: requester.role,
-              isPrivate: candidateArtwork.isPrivate,
-              uploadedBy: candidateArtwork.uploadedBy,
-            });
-          }
-          if (!canSeeCandidate) {
-            continue;
-          }
-
-          visibleCandidates.push({
-            artworkId: candidateArtwork.id,
+        while (
+          candidateIterator.hasMoreResults() &&
+          visibleCandidates.length < requestedCount
+        ) {
+          const { resources } = await candidateIterator.fetchNext();
+          this.logger.debug({
+            msg: "Recommendation candidate page",
+            domainId,
+            targetUserId: resolvedUserId,
+            mode,
+            fetchedCount: resources?.length ?? 0,
+            fetchedIds: (resources ?? []).map((candidate) => candidate.id),
           });
+          for (const candidate of resources ?? []) {
+            scannedCount += 1;
 
-          if (visibleCandidates.length >= requestedCount) {
-            break;
+            const candidateArtwork = candidate as Artwork;
+            const canSeeCandidate = this.canViewerSeeArtwork(
+              candidateArtwork,
+              requester,
+              mode === "expired-auction",
+            );
+            if (!canSeeCandidate) {
+              this.logger.debug({
+                msg: "Recommendation candidate filtered by visibility",
+                domainId,
+                targetUserId: resolvedUserId,
+                artworkId: candidateArtwork.id,
+                requesterRole: requester.role,
+                mode,
+                isPrivate: candidateArtwork.isPrivate,
+                uploadedBy: candidateArtwork.uploadedBy,
+              });
+            }
+            if (
+              !canSeeCandidate ||
+              visibleCandidateIds.has(candidateArtwork.id)
+            ) {
+              continue;
+            }
+
+            visibleCandidateIds.add(candidateArtwork.id);
+            visibleCandidates.push({
+              artworkId: candidateArtwork.id,
+            });
+
+            if (visibleCandidates.length >= requestedCount) {
+              break;
+            }
           }
         }
+      };
+
+      await collectCandidates("primary");
+      if (visibleCandidates.length < requestedCount) {
+        await collectCandidates("expired-auction");
       }
 
       this.logger.log({
@@ -1102,9 +1120,6 @@ export class ArtworksService {
         if (!artwork) {
           continue;
         }
-        if (!this.canViewerSeeArtwork(artwork, requester)) {
-          continue;
-        }
 
         const prefEntry = preferencesMap.get(artwork.id);
         const liked = prefEntry?.liked;
@@ -1140,11 +1155,7 @@ export class ArtworksService {
         durationMs: Date.now() - start,
       });
 
-      const visibleRecommendations = recommendedArtworks.filter((art) =>
-        this.canViewerSeeArtwork(art, requester),
-      );
-
-      return visibleRecommendations;
+      return recommendedArtworks;
     } catch (error) {
       this.logger.error({
         msg: "Failed to generate AI suggestions",
@@ -1349,9 +1360,13 @@ export class ArtworksService {
   private canViewerSeeArtwork(
     artwork: Artwork,
     viewer?: { id: string; role: string; invitedBy?: string | null },
-    isTaster: boolean = false,
+    ignoreAuctionEnded: boolean = false,
   ): boolean {
-    if (viewer?.role === "customer" && isAuctionEnded(artwork) && !isTaster) {
+    if (
+      viewer?.role === "customer" &&
+      !ignoreAuctionEnded &&
+      isAuctionEnded(artwork)
+    ) {
       return false;
     }
     if (!artwork.isPrivate) {
