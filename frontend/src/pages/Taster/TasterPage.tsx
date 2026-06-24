@@ -22,6 +22,9 @@ import { AppLoadingState } from "../../components/Loading/AppLoadingState";
 import "./TasterPage.css";
 
 type SwipeDirection = "left" | "right" | null;
+type DragPoint = { x: number; y: number };
+
+const SWIPE_THRESHOLD_PX = 100;
 
 /**
  * Taster page with Tinder-style swipe interface for artwork preferences.
@@ -35,11 +38,12 @@ export function TasterPage() {
   const queryClient = useQueryClient();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeDirection, setSwipeDirection] = useState<SwipeDirection>(null);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(
-    null,
-  );
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const activePointerIdRef = useRef<number | null>(null);
+  const dragStartRef = useRef<DragPoint | null>(null);
+  const latestDragOffsetRef = useRef<DragPoint>({ x: 0, y: 0 });
   const [showAiUnlockModal, setShowAiUnlockModal] = useState(false);
   const hasShownUnlockRef = useRef(false);
   const previousTotalSwipedRef = useRef<number | null>(null);
@@ -238,6 +242,10 @@ export function TasterPage() {
     (direction: "left" | "right") => {
       if (!currentArtwork || swipeDirection || !isCurrentImageReady) return;
 
+      activePointerIdRef.current = null;
+      dragStartRef.current = null;
+      latestDragOffsetRef.current = { x: 0, y: 0 };
+      setIsDragging(false);
       setSwipeDirection(direction);
       savePreference.mutate({
         artworkId: currentArtwork.id,
@@ -254,29 +262,139 @@ export function TasterPage() {
     [currentArtwork, swipeDirection, savePreference, isCurrentImageReady],
   );
 
-  // Mouse/touch drag handlers
-  const handleDragStart = (clientX: number, clientY: number) => {
-    setDragStart({ x: clientX, y: clientY });
-  };
+  const resetDrag = useCallback(() => {
+    activePointerIdRef.current = null;
+    dragStartRef.current = null;
+    latestDragOffsetRef.current = { x: 0, y: 0 };
+    setIsDragging(false);
+    setDragOffset({ x: 0, y: 0 });
+  }, []);
 
-  const handleDragMove = (clientX: number, clientY: number) => {
+  const canStartDrag =
+    !!currentArtwork && !swipeDirection && isCurrentImageReady;
+
+  const startDrag = useCallback((clientX: number, clientY: number) => {
+    dragStartRef.current = { x: clientX, y: clientY };
+    latestDragOffsetRef.current = { x: 0, y: 0 };
+    setDragOffset({ x: 0, y: 0 });
+    setIsDragging(true);
+  }, []);
+
+  const updateDragOffset = useCallback((clientX: number, clientY: number) => {
+    const dragStart = dragStartRef.current;
     if (!dragStart) return;
 
-    const deltaX = clientX - dragStart.x;
-    const deltaY = clientY - dragStart.y;
-    setDragOffset({ x: deltaX, y: deltaY });
-  };
+    const nextOffset = {
+      x: clientX - dragStart.x,
+      y: clientY - dragStart.y,
+    };
+    latestDragOffsetRef.current = nextOffset;
+    setDragOffset(nextOffset);
+  }, []);
 
-  const handleDragEnd = () => {
-    if (!dragStart) return;
+  const commitDrag = useCallback(() => {
+    const finalOffset = latestDragOffsetRef.current;
+    activePointerIdRef.current = null;
+    dragStartRef.current = null;
+    latestDragOffsetRef.current = { x: 0, y: 0 };
+    setIsDragging(false);
 
-    const threshold = 100;
-    if (Math.abs(dragOffset.x) > threshold) {
-      handleSwipe(dragOffset.x > 0 ? "right" : "left");
-    } else {
-      setDragOffset({ x: 0, y: 0 });
+    if (Math.abs(finalOffset.x) > SWIPE_THRESHOLD_PX) {
+      handleSwipe(finalOffset.x > 0 ? "right" : "left");
+      return;
     }
-    setDragStart(null);
+
+    setDragOffset({ x: 0, y: 0 });
+  }, [handleSwipe]);
+
+  // Pointer drag handlers cover mouse, touch, and pen input with one path.
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (
+      !canStartDrag ||
+      (e.pointerType === "mouse" &&
+        typeof e.button === "number" &&
+        e.button !== 0)
+    ) {
+      return;
+    }
+
+    e.preventDefault();
+    activePointerIdRef.current = e.pointerId;
+    startDrag(e.clientX, e.clientY);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activePointerIdRef.current !== e.pointerId) return;
+    e.preventDefault();
+    updateDragOffset(e.clientX, e.clientY);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activePointerIdRef.current !== e.pointerId) return;
+
+    e.preventDefault();
+    updateDragOffset(e.clientX, e.clientY);
+    const pointerId = e.pointerId;
+    commitDrag();
+    e.currentTarget.releasePointerCapture?.(pointerId);
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activePointerIdRef.current !== e.pointerId) return;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    resetDrag();
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (
+      !canStartDrag ||
+      activePointerIdRef.current !== null ||
+      (typeof e.button === "number" && e.button !== 0)
+    ) {
+      return;
+    }
+
+    e.preventDefault();
+    startDrag(e.clientX, e.clientY);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dragStartRef.current) return;
+    e.preventDefault();
+    updateDragOffset(e.clientX, e.clientY);
+  };
+
+  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dragStartRef.current) return;
+    e.preventDefault();
+    updateDragOffset(e.clientX, e.clientY);
+    commitDrag();
+  };
+
+  const handleMouseLeave = () => {
+    if (!dragStartRef.current) return;
+    commitDrag();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    if (!canStartDrag || activePointerIdRef.current !== null || !touch) return;
+    startDrag(touch.clientX, touch.clientY);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    if (!dragStartRef.current || !touch) {
+      return;
+    }
+    e.preventDefault();
+    updateDragOffset(touch.clientX, touch.clientY);
+  };
+
+  const handleTouchEnd = () => {
+    if (!dragStartRef.current) return;
+    commitDrag();
   };
 
   // Keyboard controls
@@ -406,10 +524,16 @@ export function TasterPage() {
   }
 
   const rotation = dragOffset.x * 0.05;
-  const opacity = 1 - Math.abs(dragOffset.x) / 300;
+  const opacity = Math.max(0.2, 1 - Math.abs(dragOffset.x) / 300);
   const showNewTag = currentArtwork ? isArtworkNew(currentArtwork) : false;
   const nextArtwork = hasMoreInQueue ? artworks[currentIndex + 1] : undefined;
   const nextImageUrl = getArtworkImageUrl(nextArtwork);
+  const dragDirection =
+    isDragging && Math.abs(dragOffset.x) > 20
+      ? dragOffset.x > 0
+        ? "right"
+        : "left"
+      : null;
 
   return (
     <div className="taster-page">
@@ -445,25 +569,30 @@ export function TasterPage() {
           {currentArtwork && (
             <div
               ref={cardRef}
-              className={`taster-card ${swipeDirection ? `taster-card--swiping-${swipeDirection}` : ""}`}
+              className={[
+                "taster-card",
+                isDragging ? "taster-card--dragging" : "",
+                dragDirection ? `taster-card--dragging-${dragDirection}` : "",
+                swipeDirection
+                  ? `taster-card--swiping-${swipeDirection}`
+                  : "",
+              ].join(" ")}
               style={{
                 transform: `translateX(${dragOffset.x}px) translateY(${dragOffset.y}px) rotate(${rotation}deg)`,
                 opacity,
               }}
-              onMouseDown={(e) => handleDragStart(e.clientX, e.clientY)}
-              onMouseMove={(e) =>
-                dragStart && handleDragMove(e.clientX, e.clientY)
-              }
-              onMouseUp={handleDragEnd}
-              onMouseLeave={handleDragEnd}
-              onTouchStart={(e) =>
-                handleDragStart(e.touches[0].clientX, e.touches[0].clientY)
-              }
-              onTouchMove={(e) =>
-                dragStart &&
-                handleDragMove(e.touches[0].clientX, e.touches[0].clientY)
-              }
-              onTouchEnd={handleDragEnd}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
+              onLostPointerCapture={resetDrag}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
               role="img"
               aria-label={currentArtwork.title}
             >

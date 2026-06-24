@@ -117,6 +117,11 @@
   cursor: grabbing;
 }
 
+.taster-card--dragging {
+  cursor: grabbing;
+  transition: opacity 0.15s ease;
+}
+
 .taster-card--next {
   transform: scale(0.95);
   opacity: 0.5;
@@ -285,7 +290,9 @@
 }
 
 .taster-card--swiping-right .taster-card__indicator--like,
-.taster-card--swiping-left .taster-card__indicator--dislike {
+.taster-card--swiping-left .taster-card__indicator--dislike,
+.taster-card--dragging-right .taster-card__indicator--like,
+.taster-card--dragging-left .taster-card__indicator--dislike {
   opacity: 1;
 }
 

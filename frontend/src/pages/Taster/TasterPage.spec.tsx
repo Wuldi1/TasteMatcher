@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TasterPage } from "./TasterPage";
@@ -67,9 +67,44 @@ const renderWithProviders = (component: React.ReactElement) => {
   );
 };
 
+const getCurrentArtworkCard = async () => {
+  await waitFor(() => {
+    expect(screen.queryByText(/Loading/i)).not.toBeInTheDocument();
+  });
+  await waitFor(() => {
+    expect(screen.queryByText(/Loading image/i)).not.toBeInTheDocument();
+  });
+  await waitFor(() => {
+    expect(
+      screen.getByRole("button", { name: /^Like this artwork/i }),
+    ).not.toBeDisabled();
+  });
+
+  const card = screen.getByText("Artwork 1").closest(".taster-card");
+  expect(card).not.toBeNull();
+  return card as HTMLElement;
+};
+
 describe("TasterPage", () => {
   beforeEach(() => {
     vi.useRealTimers();
+    vi.stubGlobal(
+      "Image",
+      class {
+        onload: ((event: Event) => void) | null = null;
+        onerror: ((event: Event) => void) | null = null;
+        private imageSrc = "";
+
+        set src(value: string) {
+          this.imageSrc = value;
+          queueMicrotask(() => this.onload?.(new Event("load")));
+        }
+
+        get src() {
+          return this.imageSrc;
+        }
+      },
+    );
     queryClient.clear();
     mockFetchUntasted.mockReset();
     mockFetchUntasted.mockResolvedValue({
@@ -142,11 +177,86 @@ describe("TasterPage", () => {
       expect(screen.queryByText(/Loading/i)).not.toBeInTheDocument();
     });
 
-    const likeButton = screen.getByRole("button", { name: /like/i });
+    const likeButton = screen.getByRole("button", {
+      name: /^Like this artwork/i,
+    });
     await user.click(likeButton);
 
     // Check API was called after the click
     expect(mockSavePreference).toHaveBeenCalled();
+  });
+
+  it("saves a like when desktop drag passes the right swipe threshold", async () => {
+    renderWithProviders(<TasterPage />);
+
+    const card = await getCurrentArtworkCard();
+    fireEvent.mouseDown(card, {
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+    });
+    expect(card).toHaveClass("taster-card--dragging");
+    fireEvent.mouseMove(card, {
+      clientX: 230,
+      clientY: 110,
+    });
+    expect(card).toHaveStyle({
+      transform: "translateX(130px) translateY(10px) rotate(6.5deg)",
+    });
+    fireEvent.mouseUp(card, {
+      clientX: 230,
+      clientY: 110,
+    });
+
+    await waitFor(() => {
+      expect(mockSavePreference).toHaveBeenCalledWith("domain-1", "user-1", {
+        domainId: "domain-1",
+        artworkId: "art-1",
+        liked: true,
+      });
+    });
+  });
+
+  it("saves a dislike when mobile drag passes the left swipe threshold", async () => {
+    renderWithProviders(<TasterPage />);
+
+    const card = await getCurrentArtworkCard();
+    fireEvent.touchStart(card, {
+      touches: [{ clientX: 220, clientY: 100 }],
+    });
+    fireEvent.touchMove(card, {
+      touches: [{ clientX: 80, clientY: 100 }],
+    });
+    fireEvent.touchEnd(card);
+
+    await waitFor(() => {
+      expect(mockSavePreference).toHaveBeenCalledWith("domain-1", "user-1", {
+        domainId: "domain-1",
+        artworkId: "art-1",
+        liked: false,
+      });
+    });
+  });
+
+  it("does not save a preference for a short drag", async () => {
+    renderWithProviders(<TasterPage />);
+
+    const card = await getCurrentArtworkCard();
+    fireEvent.mouseDown(card, {
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+    });
+    fireEvent.mouseMove(card, {
+      clientX: 140,
+      clientY: 104,
+    });
+    fireEvent.mouseUp(card, {
+      clientX: 140,
+      clientY: 104,
+    });
+
+    expect(mockSavePreference).not.toHaveBeenCalled();
   });
 
   it("shows message when no untasted artworks available", async () => {
@@ -183,19 +293,20 @@ describe("TasterPage", () => {
   });
 
   it("prefetches next batch when 10 artworks remain", async () => {
-    vi.useFakeTimers();
     mockFetchUntasted
       .mockResolvedValueOnce({ artworks: buildArtworks(11), hasMore: false })
       .mockResolvedValueOnce({ artworks: buildArtworks(5, 100), hasMore: false });
 
     renderWithProviders(<TasterPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Artwork 1/i)).toBeInTheDocument();
-    });
+    await getCurrentArtworkCard();
 
-    fireEvent.click(screen.getByLabelText(/Like this artwork/i));
-    vi.advanceTimersByTime(350);
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByLabelText(/^Like this artwork/i));
+    act(() => {
+      vi.advanceTimersByTime(350);
+    });
+    vi.useRealTimers();
 
     await waitFor(() => {
       expect(mockFetchUntasted).toHaveBeenCalledTimes(2);

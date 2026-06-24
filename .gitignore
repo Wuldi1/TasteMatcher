@@ -23,7 +23,8 @@ TasterMatcherRagoArtsPrintsMultiples_2026
 TasterMatcherSothebysContemporaryCurated_2026
 TasterMatcherPhilipAuction_NY010226
 TasterMatcherPhilipAuction_UK010326
-scripts/scapper/inventory/parsed_*
+scripts/scrapper/inventory/parsed_*
+scripts/scrapper/inventory/old/
 
 # IDE
 .vscode/

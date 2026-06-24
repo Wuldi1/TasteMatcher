@@ -1,7 +1,7 @@
+import { load } from "cheerio";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { load } from "cheerio";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 const INPUT_HTML_DIR = path.join(__dirname, "inventory", "philips");
 const OUTPUT_ROOT = path.join(__dirname, "inventory", "parsed_philips");
 
-const END_DATE = process.env.END_DATE;
+const END_DATE = process.env.END_DATE || "2026-05-30T23:59";
 const SLEEP_MS = 120;
 if (!END_DATE) {
   throw new Error(
@@ -261,7 +261,10 @@ async function downloadImageWithRetry(url, folderPath, label) {
       const res = await fetch(url, { headers: IMAGE_HEADERS });
 
       if (res.ok) {
-        const ext = inferImageExtension(url, res.headers.get("content-type") || "");
+        const ext = inferImageExtension(
+          url,
+          res.headers.get("content-type") || "",
+        );
         const filePath = path.join(folderPath, `image.${ext}`);
         const buffer = Buffer.from(await res.arrayBuffer());
         await fs.writeFile(filePath, buffer);
@@ -319,8 +322,9 @@ function extractSaleTitle($, html) {
   }
 
   const ogTitle =
-    html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
-    "";
+    html.match(
+      /<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i,
+    )?.[1] || "";
   return normalize(ogTitle).replace(/\s*\|\s*Phillips.*$/i, "");
 }
 
@@ -338,8 +342,9 @@ function extractAuctionUrl($, html) {
   if (canonical) return canonical;
 
   const ogUrl =
-    html.match(/<meta[^>]*property=["']og:url["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
-    "";
+    html.match(
+      /<meta[^>]*property=["']og:url["'][^>]*content=["']([^"']+)["']/i,
+    )?.[1] || "";
   return normalize(ogUrl);
 }
 
@@ -379,7 +384,9 @@ function coverageSummary(items) {
 }
 
 function parseLotCard(tile, index, context) {
-  const lotNumber = normalize(tile.find(".seldon-object-tile__lot-number").text());
+  const lotNumber = normalize(
+    tile.find(".seldon-object-tile__lot-number").text(),
+  );
   const title = normalize(
     tile.find(".seldon-object-tile__title .pah-html-parser").text(),
   );
@@ -407,7 +414,10 @@ function parseLotCard(tile, index, context) {
     "";
 
   const img = tile.find("[data-testid='seldon-image-img']").first();
-  const sourceImage = pickLargestImageUrl(img.attr("srcset") || "", img.attr("src") || "");
+  const sourceImage = pickLargestImageUrl(
+    img.attr("srcset") || "",
+    img.attr("src") || "",
+  );
 
   const folderSlug = sanitizeSlug(
     `${lotNumber || `lot_${index + 1}`}_${title || "untitled"}`,
@@ -448,7 +458,9 @@ async function listInputHtmlFiles() {
   await fs.mkdir(INPUT_HTML_DIR, { recursive: true });
   const entries = await fs.readdir(INPUT_HTML_DIR, { withFileTypes: true });
   return entries
-    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".html"))
+    .filter(
+      (entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".html"),
+    )
     .map((entry) => path.join(INPUT_HTML_DIR, entry.name))
     .sort((a, b) => a.localeCompare(b));
 }
@@ -489,7 +501,9 @@ async function processHtmlFile(htmlPath, index, totalFiles) {
     }),
   );
 
-  const usable = parsed.filter((item) => item.title && item.artist && item.sourceImage);
+  const usable = parsed.filter(
+    (item) => item.title && item.artist && item.sourceImage,
+  );
   const skipped = parsed.length - usable.length;
 
   console.log(`  Source name: ${sourceName}`);

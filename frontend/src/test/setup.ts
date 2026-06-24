@@ -21,3 +21,33 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: vi.fn(),
   })),
 });
+
+if (!window.PointerEvent) {
+  class TestPointerEvent extends MouseEvent {
+    pointerId: number;
+    pointerType: string;
+
+    constructor(
+      type: string,
+      eventInitDict: MouseEventInit & {
+        pointerId?: number;
+        pointerType?: string;
+      } = {},
+    ) {
+      super(type, eventInitDict);
+      this.pointerId = eventInitDict.pointerId ?? 0;
+      this.pointerType = eventInitDict.pointerType ?? "";
+    }
+  }
+
+  Object.defineProperty(window, "PointerEvent", {
+    configurable: true,
+    writable: true,
+    value: TestPointerEvent,
+  });
+  Object.defineProperty(globalThis, "PointerEvent", {
+    configurable: true,
+    writable: true,
+    value: TestPointerEvent,
+  });
+}
