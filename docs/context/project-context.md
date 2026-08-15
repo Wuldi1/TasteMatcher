@@ -34,6 +34,8 @@ TasteMatcher is an AI-powered art matching platform with:
 1. HTML/PDF ingestion scripts are under `scripts/scapper/`.
 2. Upload-ready structure is `<artwork_folder>/image.*` + `metadata.json`.
 3. Upload pipeline consumes metadata fields used by `scripts/scapper/upload_artworks.js`.
+4. The in-app Phillips preview, review, and approval workflow is documented in
+   [`automatic-uploads.md`](./automatic-uploads.md).
 
 ## Common Commands
 

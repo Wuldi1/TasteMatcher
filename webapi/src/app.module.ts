@@ -10,6 +10,7 @@ import { UsersModule } from "./users/users.module";
 import { EmailModule } from "./email/email.module";
 import { SalesModule } from "./sales/sales.module";
 import { ActivityModule } from "./activity/activity.module";
+import { AutomaticUploadsModule } from "./automatic-uploads/automatic-uploads.module";
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { ActivityModule } from "./activity/activity.module";
     EmailModule,
     SalesModule,
     ActivityModule,
+    AutomaticUploadsModule,
   ],
   controllers: [],
   providers: [],

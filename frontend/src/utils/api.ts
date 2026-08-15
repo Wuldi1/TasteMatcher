@@ -14,6 +14,10 @@ import {
   Artwork,
   ArtworkFeedback,
   ArtworkStats,
+  AutomaticUploadApprovalRequest,
+  AutomaticUploadApprovalResponse,
+  AutomaticUploadPreviewRequest,
+  AutomaticUploadPreviewResponse,
   CustomerRequest,
   Domain,
   DomainActivitySummaryResponse,
@@ -373,6 +377,40 @@ class ApiClient extends BaseApiClient {
    */
   async getAllDomains(): Promise<Domain[]> {
     return this.request<Domain[]>("/domains", { method: "GET" });
+  }
+
+  /** Fetch provisional artwork drafts from a supported auction URL. */
+  async previewAutomaticUploads(
+    domainId: string,
+    request: AutomaticUploadPreviewRequest,
+  ): Promise<AutomaticUploadPreviewResponse> {
+    this.validateRequired(domainId, "Domain ID");
+    this.validateRequired(request.url, "Auction URL");
+    return this.request<AutomaticUploadPreviewResponse>(
+      `/domains/${encodeURIComponent(domainId)}/automatic-uploads/preview`,
+      {
+        method: "POST",
+        body: JSON.stringify(request),
+      },
+    );
+  }
+
+  /** Approve selected provisional drafts into the target gallery. */
+  async approveAutomaticUploads(
+    domainId: string,
+    request: AutomaticUploadApprovalRequest,
+  ): Promise<AutomaticUploadApprovalResponse> {
+    this.validateRequired(domainId, "Domain ID");
+    if (request.drafts.length === 0) {
+      throw new ApiError("At least one draft is required", 400);
+    }
+    return this.request<AutomaticUploadApprovalResponse>(
+      `/domains/${encodeURIComponent(domainId)}/automatic-uploads/approve`,
+      {
+        method: "POST",
+        body: JSON.stringify(request),
+      },
+    );
   }
 
   /**

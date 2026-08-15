@@ -1,0 +1,371 @@
+import { BadRequestException } from "@nestjs/common";
+import {
+  ApprovedPhillipsAutomaticUploadDraft,
+  AutomaticUploadPreviewResponse,
+} from "@tastematcher/common";
+import { ArtworkIngestionError } from "../upload/upload.service";
+import { AutomaticUploadsService } from "./automatic-uploads.service";
+import { RemoteFetchError } from "./safe-remote-fetcher";
+
+describe("AutomaticUploadsService", () => {
+  const fetcher = {
+    validateSourceUrl: jest.fn((value: string) => new URL(value)),
+    validateImageUrl: jest.fn((value: string) => new URL(value)),
+    fetchHtml: jest.fn(),
+    fetchImage: jest.fn(),
+  };
+  const provider = {
+    canParse: jest.fn().mockReturnValue(true),
+    parse: jest.fn(),
+  };
+  const uploadService = {
+    findArtworkBySourceIdentity: jest.fn(),
+    uploadAutomaticArtwork: jest.fn(),
+  };
+  const actor = { id: "owner-1", role: "domain_owner" as const };
+  let service: AutomaticUploadsService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    fetcher.validateSourceUrl.mockImplementation(
+      (value: string) => new URL(value),
+    );
+    fetcher.validateImageUrl.mockImplementation(
+      (value: string) => new URL(value),
+    );
+    fetcher.fetchHtml.mockResolvedValue({
+      body: "<html></html>",
+      contentType: "text/html",
+      finalUrl: auctionUrl,
+    });
+    fetcher.fetchImage.mockImplementation(async (url: string) => ({
+      body: Buffer.from("image"),
+      contentType: "image/jpeg",
+      finalUrl: url,
+    }));
+    provider.canParse.mockReturnValue(true);
+    provider.parse.mockImplementation(() => previewResponse(3));
+    uploadService.findArtworkBySourceIdentity.mockResolvedValue(undefined);
+    uploadService.uploadAutomaticArtwork.mockImplementation(
+      async (
+        _domainId: string,
+        _file: unknown,
+        _artwork: unknown,
+        _actor: unknown,
+        forcedId: string,
+      ) => ({ id: forcedId }),
+    );
+    service = new AutomaticUploadsService(
+      fetcher as never,
+      provider as never,
+      uploadService as never,
+    );
+  });
+
+  it("returns all 110 verified live-page lots without truncation", async () => {
+    provider.parse.mockReturnValue(previewResponse(110));
+    const result = await service.preview("domain-1", actor, {
+      url: auctionUrl,
+    });
+    expect(result.drafts).toHaveLength(110);
+    expect(result.issues).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "preview_truncated" }),
+      ]),
+    );
+    expect(uploadService.uploadAutomaticArtwork).not.toHaveBeenCalled();
+  });
+
+  it("caps unusually large previews at 200 drafts", async () => {
+    provider.parse.mockReturnValue(previewResponse(201));
+    const result = await service.preview("domain-1", actor, {
+      url: auctionUrl,
+    });
+    expect(result.drafts).toHaveLength(200);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "preview_truncated" }),
+      ]),
+    );
+  });
+
+  it("keeps malformed drafts item-level while uploading valid drafts", async () => {
+    const invalid = draft("2");
+    invalid.artwork.title = "x".repeat(501);
+
+    const result = await service.approve("domain-1", actor, {
+      provider: "phillips",
+      sourceUrl: auctionUrl,
+      drafts: [draft("1"), invalid, null],
+    });
+
+    expect(result.created).toHaveLength(1);
+    expect(result.created[0].draftId).toBe("draft-1");
+    expect(result.failed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          draftId: "draft-2",
+          code: "validation_failed",
+          sourceIdentity: expect.objectContaining({
+            provider: "phillips",
+            sourceAuctionUrl: auctionUrl,
+            sourceLotNumber: "2",
+          }),
+        }),
+        expect.objectContaining({
+          draftId: "invalid-draft-3",
+          code: "validation_failed",
+          sourceIdentity: expect.objectContaining({
+            sourceAuctionUrl: auctionUrl,
+            sourceLotNumber: "invalid-lot-3",
+          }),
+        }),
+      ]),
+    );
+    expect(uploadService.uploadAutomaticArtwork).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses trusted source values when client audit fields are tampered", async () => {
+    const baseDraft = draft("1");
+    const clientDraft: ApprovedPhillipsAutomaticUploadDraft = {
+      ...baseDraft,
+      source: {
+        ...baseDraft.source,
+        sourceImageUrl: "https://assets.phillips.com/tampered.jpg",
+        originalEstimateText: "USD 999999",
+        originalEstimateLow: 999999,
+      },
+    };
+
+    const result = await service.approve("domain-1", actor, {
+      provider: "phillips",
+      sourceUrl: auctionUrl,
+      drafts: [clientDraft],
+    });
+
+    expect(result.created).toHaveLength(1);
+    expect(fetcher.fetchImage).toHaveBeenCalledWith(
+      "https://dist.phillips.com/1.jpg",
+    );
+    expect(uploadService.findArtworkBySourceIdentity).toHaveBeenCalledWith(
+      "domain-1",
+      trustedDraft("1").source.identity,
+    );
+    expect(uploadService.uploadAutomaticArtwork).toHaveBeenCalledWith(
+      "domain-1",
+      expect.any(Object),
+      expect.objectContaining({
+        metadata: {
+          automaticUpload: expect.objectContaining({
+            sourceImageUrl: "https://dist.phillips.com/1.jpg",
+            originalEstimateText: "USD 100 - 200",
+            originalEstimateLow: 100,
+          }),
+        },
+      }),
+      actor,
+      expect.any(String),
+    );
+    expect(result.created[0].sourceIdentity).toEqual(
+      trustedDraft("1").source.identity,
+    );
+  });
+
+  it("rejects a lot URL that does not match the trusted parsed lot", async () => {
+    const baseDraft = draft("1");
+    const clientDraft: ApprovedPhillipsAutomaticUploadDraft = {
+      ...baseDraft,
+      source: {
+        ...baseDraft.source,
+        identity: {
+          ...baseDraft.source.identity,
+          sourceLotUrl: "https://www.phillips.com/detail/artist/NY030826/2",
+        },
+      },
+    };
+
+    const result = await service.approve("domain-1", actor, {
+      provider: "phillips",
+      sourceUrl: auctionUrl,
+      drafts: [clientDraft],
+    });
+
+    expect(result.failed).toEqual([
+      expect.objectContaining({
+        draftId: "draft-1",
+        code: "source_validation_failed",
+        sourceIdentity: trustedDraft("1").source.identity,
+      }),
+    ]);
+    expect(fetcher.fetchImage).not.toHaveBeenCalled();
+  });
+
+  it("fetches and parses the trusted auction only once per approval", async () => {
+    await service.approve("domain-1", actor, {
+      provider: "phillips",
+      sourceUrl: auctionUrl,
+      drafts: [draft("1"), draft("2"), draft("3")],
+    });
+    expect(fetcher.fetchHtml).toHaveBeenCalledTimes(1);
+    expect(provider.parse).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns created, skipped, and failed results without rolling back", async () => {
+    uploadService.findArtworkBySourceIdentity.mockImplementation(
+      async (_domainId: string, identity: { sourceLotNumber: string }) =>
+        identity.sourceLotNumber === "2" ? { id: "existing-2" } : undefined,
+    );
+    fetcher.fetchImage.mockImplementation(async (url: string) => {
+      if (url.endsWith("3.jpg")) {
+        throw new RemoteFetchError("network_error", "image unavailable", true);
+      }
+      return {
+        body: Buffer.from("image"),
+        contentType: "image/jpeg",
+        finalUrl: url,
+      };
+    });
+
+    const result = await service.approve("domain-1", actor, {
+      provider: "phillips",
+      sourceUrl: auctionUrl,
+      drafts: [draft("1"), draft("2"), draft("3")],
+    });
+
+    expect(result.created).toHaveLength(1);
+    expect(result.skipped).toEqual([
+      expect.objectContaining({
+        draftId: "draft-2",
+        reason: "already_imported",
+        existingArtworkId: "existing-2",
+      }),
+    ]);
+    expect(result.failed).toEqual([
+      expect.objectContaining({
+        draftId: "draft-3",
+        code: "image_download_failed",
+        retryable: true,
+      }),
+    ]);
+  });
+
+  it("maps concurrent deterministic-ID conflicts to already imported", async () => {
+    let writeCount = 0;
+    uploadService.uploadAutomaticArtwork.mockImplementation(
+      async (
+        _domainId: string,
+        _file: unknown,
+        _artwork: unknown,
+        _actor: unknown,
+        forcedId: string,
+      ) => {
+        writeCount += 1;
+        if (writeCount === 1) return { id: forcedId };
+        throw new ArtworkIngestionError("persistence", { statusCode: 409 });
+      },
+    );
+
+    const [first, second] = await Promise.all([
+      service.approve("domain-1", actor, approvalFor(draft("1"))),
+      service.approve("domain-1", actor, approvalFor(draft("1"))),
+    ]);
+
+    const created = [...first.created, ...second.created];
+    const skipped = [...first.skipped, ...second.skipped];
+    expect(created).toHaveLength(1);
+    expect(skipped).toHaveLength(1);
+    expect(skipped[0]).toMatchObject({
+      reason: "already_imported",
+      existingArtworkId: created[0].artworkId,
+    });
+    const forcedIds = uploadService.uploadAutomaticArtwork.mock.calls.map(
+      (call) => call[4],
+    );
+    expect(new Set(forcedIds).size).toBe(1);
+  });
+
+  it("keeps approval batch-size errors envelope-level", async () => {
+    await expect(
+      service.approve("domain-1", actor, {
+        provider: "phillips",
+        sourceUrl: auctionUrl,
+        drafts: Array.from({ length: 21 }, () => draft("1")),
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(fetcher.fetchHtml).not.toHaveBeenCalled();
+  });
+
+  function approvalFor(value: ApprovedPhillipsAutomaticUploadDraft) {
+    return { provider: "phillips", sourceUrl: auctionUrl, drafts: [value] };
+  }
+
+  function draft(lotNumber: string): ApprovedPhillipsAutomaticUploadDraft {
+    const trusted = trustedDraft(lotNumber);
+    return {
+      draftId: `draft-${lotNumber}`,
+      source: { ...trusted.source, identity: { ...trusted.source.identity } },
+      artwork: {
+        title: `Edited work ${lotNumber}`,
+        description: "Edited description",
+        artist: "Edited artist",
+        date: "2026",
+        isAuction: true,
+        shouldDisplayPrice: false,
+        useForTaster: true,
+        isPrivate: false,
+        endDate: "2026-05-01T00:00:00Z",
+        tags: ["phillips"],
+      },
+    };
+  }
+
+  function trustedDraft(lotNumber: string) {
+    return previewResponse(3).drafts[Number(lotNumber) - 1];
+  }
+
+  function previewResponse(count: number): AutomaticUploadPreviewResponse {
+    return {
+      provider: "phillips",
+      source: {
+        provider: "phillips",
+        sourceAuctionUrl: auctionUrl,
+      },
+      drafts: Array.from({ length: count }, (_, index) => {
+        const lotNumber = String(index + 1);
+        return {
+          draftId: `trusted-${lotNumber}`,
+          source: {
+            identity: {
+              provider: "phillips" as const,
+              sourceAuctionUrl: auctionUrl,
+              sourceLotNumber: lotNumber,
+              sourceLotUrl: `https://www.phillips.com/detail/artist/NY030826/${lotNumber}`,
+            },
+            sourceImageUrl: `https://dist.phillips.com/${lotNumber}.jpg`,
+            originalEstimateText: "USD 100 - 200",
+            originalEstimateCurrency: "USD",
+            originalEstimateLow: 100,
+            originalEstimateHigh: 200,
+            pricingConversionStatus: "not_required" as const,
+          },
+          artwork: {
+            title: `Trusted work ${lotNumber}`,
+            description: "",
+            artist: "Trusted artist",
+            date: "",
+            isAuction: true,
+            shouldDisplayPrice: false,
+            useForTaster: true,
+            isPrivate: false,
+            tags: ["phillips"],
+          },
+          included: true,
+          issues: [],
+        };
+      }),
+      issues: [],
+    };
+  }
+});
+
+const auctionUrl = "https://www.phillips.com/auction/NY030826";
