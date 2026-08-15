@@ -108,6 +108,9 @@ function parseSource(
       "originalEstimateCurrency",
       "originalEstimateLow",
       "originalEstimateHigh",
+      "soldPriceText",
+      "soldPriceCurrency",
+      "soldPriceAmount",
       "pricingConversionStatus",
     ],
     label,
@@ -145,6 +148,20 @@ function parseSource(
     originalEstimateHigh: optionalNumber(
       record.originalEstimateHigh,
       `${label}.originalEstimateHigh`,
+    ),
+    soldPriceText: optionalString(
+      record.soldPriceText,
+      `${label}.soldPriceText`,
+      500,
+    ),
+    soldPriceCurrency: optionalString(
+      record.soldPriceCurrency,
+      `${label}.soldPriceCurrency`,
+      10,
+    ),
+    soldPriceAmount: optionalNumber(
+      record.soldPriceAmount,
+      `${label}.soldPriceAmount`,
     ),
     pricingConversionStatus:
       record.pricingConversionStatus as AutomaticUploadPricingConversionStatus,

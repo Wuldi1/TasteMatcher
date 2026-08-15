@@ -35,6 +35,9 @@ export interface PhillipsAutomaticUploadDraftSource {
   readonly originalEstimateCurrency?: string;
   readonly originalEstimateLow?: number;
   readonly originalEstimateHigh?: number;
+  readonly soldPriceText?: string;
+  readonly soldPriceCurrency?: string;
+  readonly soldPriceAmount?: number;
   readonly pricingConversionStatus: AutomaticUploadPricingConversionStatus;
 }
 

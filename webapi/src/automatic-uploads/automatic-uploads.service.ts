@@ -26,6 +26,8 @@ interface AutomaticUploadActor {
 }
 
 const MAX_PREVIEW_DRAFTS = 200;
+const PREVIEW_DETAIL_CONCURRENCY = 6;
+export const PREVIEW_DETAIL_BUDGET_MS = 30_000;
 const APPROVAL_CONCURRENCY = 3;
 const AUTOMATIC_ARTWORK_NAMESPACE = "7dfbe954-b517-5c87-98d6-c647a16a9f73";
 
@@ -76,12 +78,16 @@ export class AutomaticUploadsService {
           blocking: false,
         });
       }
+      const detailResult = await this.enrichPreviewDrafts(parsed.drafts);
+      parsed.drafts = detailResult.drafts;
       this.logger.log({
         action: "automaticUploads.preview.success",
         provider: "phillips",
         domainId,
         actorId: actor.id,
         lotCount: parsed.drafts.length,
+        detailEnrichedCount: detailResult.enrichedCount,
+        detailFailedCount: detailResult.failedCount,
         durationMs: Date.now() - startedAt,
         ...logSource,
       });
@@ -99,6 +105,90 @@ export class AutomaticUploadsService {
       });
       throw error;
     }
+  }
+
+  private async enrichPreviewDrafts(
+    drafts: readonly PhillipsAutomaticUploadDraft[],
+  ): Promise<{
+    drafts: PhillipsAutomaticUploadDraft[];
+    enrichedCount: number;
+    failedCount: number;
+  }> {
+    let enrichedCount = 0;
+    let failedCount = 0;
+    let budgetExceededCount = 0;
+    const deadline = Date.now() + PREVIEW_DETAIL_BUDGET_MS;
+    const enriched = await this.mapWithConcurrency(
+      drafts,
+      PREVIEW_DETAIL_CONCURRENCY,
+      async (draft) => {
+        const lotUrl = draft.source.identity.sourceLotUrl;
+        if (!lotUrl) return draft;
+        if (Date.now() >= deadline) {
+          failedCount += 1;
+          budgetExceededCount += 1;
+          return this.withDetailUnavailableIssue(
+            draft,
+            "The Phillips detail enrichment time limit was reached. Review and complete the draft fields before upload.",
+          );
+        }
+        try {
+          const detailPage = await this.fetcher.fetchHtml(lotUrl);
+          const result = this.phillipsProvider.enrichDraftFromLotDetail(
+            draft,
+            detailPage.body,
+          );
+          if (result === draft) {
+            throw new Error("Phillips returned no lot cataloging details.");
+          }
+          enrichedCount += 1;
+          return result;
+        } catch (error) {
+          failedCount += 1;
+          this.logger.warn({
+            action: "automaticUploads.preview.detail.failed",
+            provider: "phillips",
+            sourceLotNumber: draft.source.identity.sourceLotNumber,
+            category:
+              error instanceof RemoteFetchError
+                ? error.code
+                : "detail_parse_failed",
+          });
+          return this.withDetailUnavailableIssue(
+            draft,
+            "Phillips lot details could not be loaded. Review and complete the draft fields before upload.",
+          );
+        }
+      },
+    );
+    if (budgetExceededCount > 0) {
+      this.logger.warn({
+        action: "automaticUploads.preview.detail.budgetExceeded",
+        provider: "phillips",
+        skippedDetailCount: budgetExceededCount,
+        budgetMs: PREVIEW_DETAIL_BUDGET_MS,
+      });
+    }
+    return { drafts: enriched, enrichedCount, failedCount };
+  }
+
+  private withDetailUnavailableIssue(
+    draft: PhillipsAutomaticUploadDraft,
+    message: string,
+  ): PhillipsAutomaticUploadDraft {
+    return {
+      ...draft,
+      issues: [
+        ...draft.issues,
+        {
+          scope: "draft",
+          code: "lot_detail_unavailable",
+          message,
+          severity: "warning",
+          blocking: false,
+        },
+      ],
+    };
   }
 
   async approve(
@@ -275,6 +365,9 @@ export class AutomaticUploadsService {
               originalEstimateCurrency: draft.source.originalEstimateCurrency,
               originalEstimateLow: draft.source.originalEstimateLow,
               originalEstimateHigh: draft.source.originalEstimateHigh,
+              soldPriceText: draft.source.soldPriceText,
+              soldPriceCurrency: draft.source.soldPriceCurrency,
+              soldPriceAmount: draft.source.soldPriceAmount,
               pricingConversionStatus: draft.source.pricingConversionStatus,
             },
           },
@@ -553,6 +646,12 @@ export class AutomaticUploadsService {
   }
 
   private isCosmosConflict(error: unknown): boolean {
+    if (
+      error instanceof ArtworkIngestionError &&
+      error.stage !== "persistence"
+    ) {
+      return false;
+    }
     const originalError =
       error instanceof ArtworkIngestionError ? error.originalError : error;
     if (!this.isRecord(originalError)) return false;

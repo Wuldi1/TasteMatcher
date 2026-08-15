@@ -5,6 +5,7 @@ import {
   AutomaticUploadEditableArtworkInput,
   AutomaticUploadPreviewResponse,
   AutomaticUploadPricingConversionStatus,
+  PhillipsAutomaticUploadDraft,
 } from "@tastematcher/common";
 import { load } from "cheerio";
 import {
@@ -20,6 +21,12 @@ interface ParsedEstimate {
   currency?: string;
   low?: number;
   high?: number;
+}
+
+interface ParsedDimensions {
+  width?: number;
+  height?: number;
+  depth?: number;
 }
 
 interface SchemaEvent {
@@ -107,6 +114,14 @@ export class PhillipsProvider implements AutomaticUploadProviderAdapter {
             .text(),
         );
       const estimate = this.parseEstimate(estimateText);
+      const soldPrice = this.parseEstimate(
+        this.normalize(
+          tile
+            .find(".seldon-bid-snapshot__sold .seldon-detail__value")
+            .first()
+            .text(),
+        ),
+      );
       const pricing = this.toEditablePricing(estimate);
       const sourceLotUrl = this.absoluteSourceUrl(tile.attr("href"), canonical);
       const image = tile.find("[data-testid='seldon-image-img']").first();
@@ -151,6 +166,9 @@ export class PhillipsProvider implements AutomaticUploadProviderAdapter {
           originalEstimateCurrency: estimate.currency,
           originalEstimateLow: estimate.low,
           originalEstimateHigh: estimate.high,
+          soldPriceText: soldPrice.text,
+          soldPriceCurrency: soldPrice.currency,
+          soldPriceAmount: soldPrice.low,
           pricingConversionStatus: pricing.status,
         },
         artwork,
@@ -172,6 +190,50 @@ export class PhillipsProvider implements AutomaticUploadProviderAdapter {
       },
       drafts,
       issues,
+    };
+  }
+
+  /** Enriches an overview draft with ordered cataloging fields from lot HTML. */
+  enrichDraftFromLotDetail(
+    draft: PhillipsAutomaticUploadDraft,
+    detailHtml: string,
+  ): PhillipsAutomaticUploadDraft {
+    const $ = load(detailHtml);
+    const cataloging = $(
+      "#lot-cataloging-section [data-testid='html-parser']",
+    )
+      .toArray()
+      .map((element) => this.normalize($(element).text()));
+    if (cataloging.length === 0 || cataloging.every((value) => !value)) {
+      return draft;
+    }
+
+    const [date, medium, dimensionsText, signature] =
+      this.catalogingFields(cataloging);
+    const dimensions = this.parseDimensions(dimensionsText);
+    const artwork: AutomaticUploadEditableArtworkInput = {
+      ...draft.artwork,
+      date: date || draft.artwork.date,
+      medium: medium || draft.artwork.medium,
+      signature: signature || draft.artwork.signature,
+      width: dimensions.width ?? draft.artwork.width,
+      height: dimensions.height ?? draft.artwork.height,
+      depth: dimensions.depth ?? draft.artwork.depth,
+    };
+    const enrichedFields = new Set<keyof AutomaticUploadEditableArtworkInput>();
+    if (date) enrichedFields.add("date");
+    if (medium) enrichedFields.add("medium");
+    if (signature) enrichedFields.add("signature");
+
+    return {
+      ...draft,
+      artwork,
+      issues: draft.issues.filter(
+        (issue) =>
+          issue.scope !== "field" ||
+          !enrichedFields.has(issue.field) ||
+          issue.code !== `missing_${issue.field}`,
+      ),
     };
   }
 
@@ -223,14 +285,7 @@ export class PhillipsProvider implements AutomaticUploadProviderAdapter {
     const text = this.normalize(value).replace(/\u00a0/g, " ");
     if (!text) return {};
     const upper = text.toUpperCase();
-    const currency =
-      upper.includes("GBP") || text.includes("£")
-        ? "GBP"
-        : upper.includes("EUR") || text.includes("€")
-          ? "EUR"
-          : upper.includes("USD") || upper.includes("US$") || text.includes("$")
-            ? "USD"
-            : upper.match(/\b([A-Z]{3})\b/)?.[1];
+    const currency = this.parseCurrency(upper, text);
     const values = text
       .replace(/,/g, "")
       .match(/\d+(?:\.\d+)?/g)
@@ -242,6 +297,35 @@ export class PhillipsProvider implements AutomaticUploadProviderAdapter {
       low: values?.[0],
       high: values?.[1] ?? values?.[0],
     };
+  }
+
+  private parseCurrency(upper: string, original: string): string | undefined {
+    const explicitCode = upper.match(/\b([A-Z]{3})\b(?=\s*[\d])/i)?.[1];
+    if (explicitCode) return explicitCode;
+
+    const dollarPrefix = upper.match(
+      /\b(HK|AU|A|CA|C|SG|S|NZ|US)\$(?=\s*[\d])/,
+    )?.[1];
+    if (dollarPrefix) {
+      return {
+        HK: "HKD",
+        AU: "AUD",
+        A: "AUD",
+        CA: "CAD",
+        C: "CAD",
+        SG: "SGD",
+        S: "SGD",
+        NZ: "NZD",
+        US: "USD",
+      }[dollarPrefix];
+    }
+
+    if (original.includes("£")) return "GBP";
+    if (original.includes("€")) return "EUR";
+    if (/\b(?:CN|RMB)¥(?=\s*[\d])/.test(upper)) return "CNY";
+    if (original.includes("¥")) return "JPY";
+    if (original.includes("$")) return "USD";
+    return undefined;
   }
 
   private toEditablePricing(estimate: ParsedEstimate): {
@@ -260,6 +344,102 @@ export class PhillipsProvider implements AutomaticUploadProviderAdapter {
       return { status: "not_attempted" };
     }
     return { status: "unavailable" };
+  }
+
+  private parseDimensions(value: string | undefined): ParsedDimensions {
+    const text = this.normalize(value);
+    if (!text) return {};
+    const imperial = text.match(
+      /((?:\d+\s+)?\d+\/\d+|\d+(?:\.\d+)?)\s*[x×]\s*((?:\d+\s+)?\d+\/\d+|\d+(?:\.\d+)?)(?:\s*[x×]\s*((?:\d+\s+)?\d+\/\d+|\d+(?:\.\d+)?))?\s*in\.?/i,
+    );
+    if (imperial) {
+      const height = this.parseMeasurement(imperial[1]);
+      const width = this.parseMeasurement(imperial[2]);
+      const depth = this.parseMeasurement(imperial[3]);
+      return {
+        width,
+        height,
+        ...(depth !== undefined ? { depth } : {}),
+      };
+    }
+
+    const metric = text.match(
+      /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)(?:\s*[x×]\s*(\d+(?:\.\d+)?))?\s*cm\.?/i,
+    );
+    if (!metric) return {};
+    const heightCm = Number(metric[1]);
+    const widthCm = Number(metric[2]);
+    const depthCm = metric[3] ? Number(metric[3]) : undefined;
+    return {
+      width: this.centimetersToInches(widthCm),
+      height: this.centimetersToInches(heightCm),
+      ...(depthCm !== undefined
+        ? { depth: this.centimetersToInches(depthCm) }
+        : {}),
+    };
+  }
+
+  private catalogingFields(
+    cataloging: readonly string[],
+  ): [string?, string?, string?, string?] {
+    if (cataloging.length >= 4 || cataloging.some((value) => !value)) {
+      return [cataloging[0], cataloging[1], cataloging[2], cataloging[3]];
+    }
+
+    const dimensionsIndex = cataloging.findIndex(
+      (value) => Object.keys(this.parseDimensions(value)).length > 0,
+    );
+    const signatureIndex = cataloging.findIndex(
+      (value, index) =>
+        index !== dimensionsIndex &&
+        /\b(?:signed|numbered|dated|inscribed|stamped|marked)\b/i.test(value),
+    );
+    const dateIndex = cataloging.findIndex(
+      (value, index) =>
+        index !== dimensionsIndex &&
+        index !== signatureIndex &&
+        /\b(?:18|19|20)\d{2}\b/.test(value),
+    );
+    const mediumIndex = cataloging.findIndex(
+      (_value, index) =>
+        index !== dimensionsIndex &&
+        index !== signatureIndex &&
+        index !== dateIndex,
+    );
+    return [
+      dateIndex >= 0 ? cataloging[dateIndex] : undefined,
+      mediumIndex >= 0 ? cataloging[mediumIndex] : undefined,
+      dimensionsIndex >= 0 ? cataloging[dimensionsIndex] : undefined,
+      signatureIndex >= 0 ? cataloging[signatureIndex] : undefined,
+    ];
+  }
+
+  private parseMeasurement(value: string | undefined): number | undefined {
+    if (!value) return undefined;
+    const parts = value.trim().split(/\s+/);
+    let total = 0;
+    for (const part of parts) {
+      if (part.includes("/")) {
+        const [numerator, denominator] = part.split("/").map(Number);
+        if (
+          !Number.isFinite(numerator) ||
+          !Number.isFinite(denominator) ||
+          denominator === 0
+        ) {
+          return undefined;
+        }
+        total += numerator / denominator;
+      } else {
+        const number = Number(part);
+        if (!Number.isFinite(number)) return undefined;
+        total += number;
+      }
+    }
+    return total;
+  }
+
+  private centimetersToInches(value: number): number | undefined {
+    return Number.isFinite(value) ? Number((value / 2.54).toFixed(4)) : undefined;
   }
 
   private buildIssues(

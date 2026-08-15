@@ -126,10 +126,10 @@ result; it does not reject or roll back other valid drafts.
 The browser sends `source` for lot correlation, but those values are not
 authoritative. The API fetches and parses `sourceUrl` once per approval request,
 matches each requested lot against that trusted parse, and replaces the
-client-supplied source identity, image URL, raw estimate, currency, estimate
-bounds, and conversion status. A mismatched auction URL, lot URL, or missing or
-ambiguous lot is a per-item `source_validation_failed` result. Only the explicit
-`artwork` fields remain client-editable.
+client-supplied source identity, image URL, raw estimate, sold result, currency,
+estimate bounds, and conversion status. A mismatched auction URL, lot URL, or
+missing or ambiguous lot is a per-item `source_validation_failed` result. Only
+the explicit `artwork` fields remain client-editable.
 
 Editable artwork fields are title, description, artist, date, signature,
 medium, width, height, depth, auction flag, minimum/maximum price, price
@@ -182,8 +182,12 @@ browser or execute page JavaScript.
   ignored. The title falls back to the first `h1`, then the document title.
 - Lots are links matching
   `a.seldon-object-tile.pah-lot-object-tile`.
-- Lot number, title, artist, description, date, medium, signature, and estimate
-  are read from the current `seldon-object-tile` markup.
+- Lot number, title, artist, estimate, sold result, lot URL, and image are read
+  from the current `seldon-object-tile` markup.
+- Preview fetches each trusted lot-detail URL with six concurrent workers. The
+  `lot-cataloging-section` enriches date, medium, imperial/metric dimensions,
+  and signature. A failed detail request leaves the overview draft editable and
+  adds the non-blocking `lot_detail_unavailable` warning.
 - The largest width candidate from the image `srcset`/`src` is selected, but it
   must resolve to an allowed Phillips image host.
 - USD estimates populate editable `price` and `maxPrice`. Non-USD estimates are
@@ -206,6 +210,8 @@ new markup.
 | Redirects | 5 maximum |
 | Global JSON/urlencoded request body | 2 MiB maximum |
 | Preview drafts | 200 maximum |
+| Preview detail workers | 6 concurrent lots |
+| Preview detail scheduling budget | 30 seconds; remaining lots stay editable with warnings |
 | Approval drafts per API request | 20 maximum |
 | Frontend approval chunk | 20 drafts |
 | Approval workers | 3 concurrent items |
@@ -236,6 +242,9 @@ Approved artwork stores the following under
 - `originalEstimateCurrency`
 - `originalEstimateLow`
 - `originalEstimateHigh`
+- `soldPriceText`
+- `soldPriceCurrency`
+- `soldPriceAmount`
 - `pricingConversionStatus`
 
 Duplicate identity is scoped to the target domain and consists of provider,
@@ -309,47 +318,69 @@ storage and database are isolated from shared and production data.
 
 Final review included a local live parse of
 `https://www.phillips.com/auction/NY030826`. It found 110 lots without
-truncation, and the first lot's estimate and selected largest image matched the
-live source. This was parser verification only: no live upload was performed
-and the feature was not deployed to staging.
+truncation. A subsequent read-only server preview enriched all 110 lot-detail
+pages in 22.4 seconds with no detail failures and retained 68 sold results. The
+first lot's date, medium, dimensions, signature, estimate, sold result, and
+selected largest image matched the live source. No live or production upload
+was performed.
 
-## Staging Verification
+## Release Environment
 
-Staging validation is required before production enablement; it is not claimed
-as completed by this document.
+TasteMatcher has no staging environment. It was intentionally disabled to
+reduce operating cost, so staging is not a release requirement or an available
+validation target for this feature.
 
-1. Confirm `domain_owner` and `global_admin` can open the page and that dealer
-   and customer accounts cannot access the route or endpoints.
-2. Preview a sampled live Phillips auction from an allowed source host. Confirm
-   auction metadata, lot count, largest images, USD/non-USD estimates, and issue
-   messages against the source page.
-3. Edit fields, exclude lots, and approve a small subset into a staging gallery.
-4. Confirm every created artwork appears in the intended domain with its image,
-   uploader, editable values, and `metadata.automaticUpload` audit data.
-5. Include one intentionally invalid draft and confirm valid items still succeed
-   while the failed draft remains editable.
-6. Repeat approval of a created lot and confirm it is skipped as
-   `already_imported` with no second artwork record.
-7. Check application logs for start/success/failure categories and verify that
-   fetched HTML, image bytes, and credentials are absent.
+Before deployment, complete the deterministic local checks above. Local write
+tests may be performed only when explicitly configured credentials point to
+isolated local storage and database resources. A local environment must not be
+described as isolated merely because it runs on a developer machine; when the
+resource boundary is unknown, keep local validation read-only and mocked.
 
-Do not use production galleries for sampled live upload verification.
+## Production Canary
+
+After explicit deployment approval, use this controlled release sequence. This
+is a plan, not a record of completed production validation.
+
+1. Confirm local builds, focused tests, fixture parsing, read-only live parsing,
+   and `git diff --check` pass. Record the Web API and frontend versions selected
+   for release and their previous rollback versions.
+2. Confirm a dedicated production test gallery has been created and explicitly
+   approved for canary data. Its name alone does not prove data isolation or
+   authorize writes.
+3. Deploy the Web API application to production first. Do not deploy Functions,
+   queues, infrastructure definitions, or Azure resources. Verify API health and
+   authentication before continuing.
+4. Deploy the frontend application to production. Confirm only `domain_owner`
+   and `global_admin` users can see and open Automatic Uploads.
+5. In the dedicated test gallery, preview a supported Phillips auction and
+   approve only 1-3 selected lots. Confirm target domain, images, edited artwork
+   fields, uploader, and `metadata.automaticUpload` before and after approval.
+6. Re-approve one canary lot and confirm it returns `already_imported` without a
+   second artwork record.
+7. Review production logs and per-item results for source-binding, image,
+   duplicate, persistence, and latency failures. Stop the canary on any domain
+   mismatch, unexpected duplicate, malformed metadata, or elevated error rate.
+
+No production canary or production upload has been performed as part of the
+implementation or documentation work recorded here.
 
 ## Rollout And Rollback
 
-Roll out through the existing frontend and Web API deployment process after
-package builds, focused tests, code review, and staging checks pass. Deploy no
-Functions or infrastructure changes. Monitor preview failure categories,
-empty/truncated previews, approval created/skipped/failed counts, request
-duration, and reports of Phillips selector drift.
+Roll out only through the production canary sequence above. Monitor preview
+failure categories, empty/truncated previews, approval
+created/skipped/failed counts, request duration, and reports of Phillips
+selector drift. Do not deploy Functions or infrastructure changes.
 
-The MVP has no feature flag. To roll back, redeploy the previous frontend and
-Web API application versions together so navigation, contracts, and endpoints
-remain aligned. A frontend-only emergency rollback can hide access to the page,
-but the API should also be rolled back promptly. Rollback does not remove
-artwork already approved; handle any data correction through the existing
-gallery management workflow after identifying exact artwork IDs. Never bulk
-delete by source metadata without a separately reviewed data-change plan.
+The MVP has no feature flag. If the Web API fails before the frontend release,
+stop and redeploy the previous Web API version. If both applications have been
+released, roll back the frontend first to stop new user attempts, then redeploy
+the previous Web API version so contracts and routes remain aligned. Recheck API
+health and the existing manual upload flow after rollback.
+
+Rollback does not remove canary artwork already approved. Record exact artwork
+IDs and use the existing gallery management workflow only after the test-gallery
+owner decides whether correction or removal is appropriate. Never bulk delete
+by source metadata without a separately reviewed data-change plan.
 
 ## Out Of Scope
 
@@ -358,6 +389,6 @@ delete by source metadata without a separately reviewed data-change plan.
 - Scheduled or recurring imports, background scraping, persisted drafts,
   approval history, cross-session resume, or collaborative review.
 - Azure Functions, queues, new storage resources, or other infrastructure.
-- Automatic metadata enrichment, AI rewriting, visual deduplication, image
-  editing, or live currency conversion.
+- AI-generated metadata or rewriting, visual deduplication, image editing, or
+  live currency conversion.
 - Atomic all-or-nothing approval and automatic retries of gallery writes.

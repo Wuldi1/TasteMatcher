@@ -21,6 +21,8 @@ interface HealthStatus {
   };
 }
 
+export const HEALTH_DEPENDENCY_TIMEOUT_MS = 5_000;
+
 @ApiTags("health")
 @Controller("health")
 export class HealthController {
@@ -37,29 +39,11 @@ export class HealthController {
   @ApiResponse({ status: 200, description: "Service is healthy" })
   @ApiResponse({ status: 503, description: "Service is unhealthy" })
   async checkHealth(): Promise<HealthStatus> {
-    const checks = {
-      database: "error" as "ok" | "error",
-      storage: "error" as "ok" | "error",
-    };
-
-    // Check Cosmos DB
-    try {
-      const container = await this.cosmosService.getContainer("Core");
-      await container.read();
-      checks.database = "ok";
-    } catch (_) {
-      checks.database = "error";
-    }
-
-    // Check Blob Storage
-    try {
-      const containerClient =
-        await this.blobService.getBlobContainerClient("originals");
-      const exists = await containerClient.exists();
-      checks.storage = exists ? "ok" : "error";
-    } catch (_) {
-      checks.storage = "error";
-    }
+    const [database, storage] = await Promise.all([
+      this.checkDatabase(),
+      this.checkStorage(),
+    ]);
+    const checks = { database, storage };
 
     const status: HealthStatus = {
       status:
@@ -77,5 +61,53 @@ export class HealthController {
     }
 
     return status;
+  }
+
+  private async checkDatabase(): Promise<"ok" | "error"> {
+    try {
+      await this.withTimeout(async (abortSignal) => {
+        const container = await this.cosmosService.getContainer("Core");
+        await container.read({ abortSignal });
+      });
+      return "ok";
+    } catch {
+      return "error";
+    }
+  }
+
+  private async checkStorage(): Promise<"ok" | "error"> {
+    try {
+      const exists = await this.withTimeout(async (abortSignal) => {
+        const containerClient =
+          await this.blobService.getBlobContainerClient("originals");
+        return containerClient.exists({ abortSignal });
+      });
+      return exists ? "ok" : "error";
+    } catch {
+      return "error";
+    }
+  }
+
+  private async withTimeout<T>(
+    operation: (abortSignal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const controller = new AbortController();
+    try {
+      return await Promise.race([
+        operation(controller.signal),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(
+            () => {
+              controller.abort();
+              reject(new Error("Health dependency check timed out"));
+            },
+            HEALTH_DEPENDENCY_TIMEOUT_MS,
+          );
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
   }
 }

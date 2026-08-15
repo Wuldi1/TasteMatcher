@@ -4,7 +4,10 @@ import {
   AutomaticUploadPreviewResponse,
 } from "@tastematcher/common";
 import { ArtworkIngestionError } from "../upload/upload.service";
-import { AutomaticUploadsService } from "./automatic-uploads.service";
+import {
+  AutomaticUploadsService,
+  PREVIEW_DETAIL_BUDGET_MS,
+} from "./automatic-uploads.service";
 import { RemoteFetchError } from "./safe-remote-fetcher";
 
 describe("AutomaticUploadsService", () => {
@@ -17,6 +20,7 @@ describe("AutomaticUploadsService", () => {
   const provider = {
     canParse: jest.fn().mockReturnValue(true),
     parse: jest.fn(),
+    enrichDraftFromLotDetail: jest.fn(),
   };
   const uploadService = {
     findArtworkBySourceIdentity: jest.fn(),
@@ -45,6 +49,10 @@ describe("AutomaticUploadsService", () => {
     }));
     provider.canParse.mockReturnValue(true);
     provider.parse.mockImplementation(() => previewResponse(3));
+    provider.enrichDraftFromLotDetail.mockImplementation((value) => ({
+      ...value,
+      artwork: { ...value.artwork },
+    }));
     uploadService.findArtworkBySourceIdentity.mockResolvedValue(undefined);
     uploadService.uploadAutomaticArtwork.mockImplementation(
       async (
@@ -60,6 +68,10 @@ describe("AutomaticUploadsService", () => {
       provider as never,
       uploadService as never,
     );
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it("returns all 110 verified live-page lots without truncation", async () => {
@@ -85,6 +97,73 @@ describe("AutomaticUploadsService", () => {
     expect(result.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: "preview_truncated" }),
+      ]),
+    );
+  });
+
+  it("enriches preview drafts from lot pages and keeps detail failures editable", async () => {
+    provider.parse.mockReturnValue(previewResponse(2));
+    provider.enrichDraftFromLotDetail.mockImplementation((value) => ({
+      ...value,
+      artwork: { ...value.artwork, date: "1998" },
+    }));
+    fetcher.fetchHtml.mockImplementation(async (url: string) => {
+      if (url === auctionUrl) {
+        return { body: "<html>auction</html>", finalUrl: url };
+      }
+      if (url.endsWith("/2")) {
+        throw new RemoteFetchError(
+          "network_error",
+          "detail unavailable",
+          true,
+        );
+      }
+      return { body: "<html>detail</html>", finalUrl: url };
+    });
+
+    const result = await service.preview("domain-1", actor, {
+      url: auctionUrl,
+    });
+
+    expect(result.drafts[0].artwork.date).toBe("1998");
+    expect(result.drafts[1].issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "lot_detail_unavailable",
+          blocking: false,
+        }),
+      ]),
+    );
+    expect(provider.enrichDraftFromLotDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops scheduling detail requests after the preview enrichment budget", async () => {
+    jest.useFakeTimers();
+    provider.parse.mockReturnValue(previewResponse(13));
+    fetcher.fetchHtml.mockImplementation((url: string) => {
+      if (url === auctionUrl) {
+        return Promise.resolve({ body: "<html>auction</html>", finalUrl: url });
+      }
+      return new Promise((resolve) => {
+        setTimeout(
+          () => resolve({ body: "<html>detail</html>", finalUrl: url }),
+          PREVIEW_DETAIL_BUDGET_MS / 2,
+        );
+      });
+    });
+
+    const preview = service.preview("domain-1", actor, { url: auctionUrl });
+    await jest.advanceTimersByTimeAsync(PREVIEW_DETAIL_BUDGET_MS);
+    const result = await preview;
+
+    expect(fetcher.fetchHtml).toHaveBeenCalledTimes(13);
+    expect(provider.enrichDraftFromLotDetail).toHaveBeenCalledTimes(12);
+    expect(result.drafts[12].issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "lot_detail_unavailable",
+          blocking: false,
+        }),
       ]),
     );
   });
@@ -134,6 +213,8 @@ describe("AutomaticUploadsService", () => {
         sourceImageUrl: "https://assets.phillips.com/tampered.jpg",
         originalEstimateText: "USD 999999",
         originalEstimateLow: 999999,
+        soldPriceText: "Sold for $999999",
+        soldPriceAmount: 999999,
       },
     };
 
@@ -160,6 +241,8 @@ describe("AutomaticUploadsService", () => {
             sourceImageUrl: "https://dist.phillips.com/1.jpg",
             originalEstimateText: "USD 100 - 200",
             originalEstimateLow: 100,
+            soldPriceText: "Sold for $150",
+            soldPriceAmount: 150,
           }),
         },
       }),
@@ -284,6 +367,23 @@ describe("AutomaticUploadsService", () => {
     expect(new Set(forcedIds).size).toBe(1);
   });
 
+  it("does not report a Blob conflict as an existing artwork", async () => {
+    uploadService.uploadAutomaticArtwork.mockRejectedValue(
+      new ArtworkIngestionError("upload", { statusCode: 409 }),
+    );
+
+    const result = await service.approve(
+      "domain-1",
+      actor,
+      approvalFor(draft("1")),
+    );
+
+    expect(result.skipped).toHaveLength(0);
+    expect(result.failed).toEqual([
+      expect.objectContaining({ draftId: "draft-1", code: "upload_failed" }),
+    ]);
+  });
+
   it("keeps approval batch-size errors envelope-level", async () => {
     await expect(
       service.approve("domain-1", actor, {
@@ -346,6 +446,9 @@ describe("AutomaticUploadsService", () => {
             originalEstimateCurrency: "USD",
             originalEstimateLow: 100,
             originalEstimateHigh: 200,
+            soldPriceText: "Sold for $150",
+            soldPriceCurrency: "USD",
+            soldPriceAmount: 150,
             pricingConversionStatus: "not_required" as const,
           },
           artwork: {

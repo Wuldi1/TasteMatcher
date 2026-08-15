@@ -2,6 +2,10 @@
 
 > **Status:** Validated
 
+> Local validation only. TasteMatcher has no staging environment because it was
+> intentionally disabled to reduce operating cost. No production deployment or
+> upload is recorded in this plan.
+
 Generated: 2026-08-15
 
 ---
@@ -31,6 +35,7 @@ or modify Azure resources.
 | Location | Existing deployment location; unchanged |
 | Access | `domain_owner` and `global_admin` only |
 | Initial provider | Phillips auction pages |
+| Release environments | Isolated local validation, then production canary; no staging environment |
 
 ---
 
@@ -108,7 +113,11 @@ without supporting a new runtime requirement.
 
 ### Phase 4: Deployment
 
-- [ ] Not requested in this task
+- [ ] Obtain explicit production deployment approval
+- [ ] Deploy the Web API application to production and verify health
+- [ ] Deploy the frontend application to production after the API check
+- [ ] Run a 1-3 lot canary in a dedicated production test gallery
+- [ ] Confirm no Functions, queues, infrastructure, or Azure resources are deployed
 
 ---
 
@@ -117,11 +126,12 @@ without supporting a new runtime requirement.
 | Check | Command Run | Result | Timestamp |
 |-------|-------------|--------|-----------|
 | Shared validation | `pnpm --filter @tastematcher/common typecheck` and `pnpm --filter @tastematcher/common test` | Pass: 17 tests | 2026-08-15 |
-| Web API validation | `pnpm --filter @tastematcher/webapi typecheck` and focused Jest suites | Pass: 34 tests | 2026-08-15 |
+| Web API validation | Web API lint/typecheck and focused Jest suites | Pass: 48 tests | 2026-08-15 |
 | Frontend validation | `pnpm --filter @tastematcher/frontend typecheck` and focused Vitest suite | Pass: 16 tests | 2026-08-15 |
-| Production builds | `pnpm run build:webapi` and `pnpm run build:frontend` | Pass | 2026-08-15 |
+| Functions regression validation | Functions typecheck, Jest suite, and production build | Pass: 4 tests | 2026-08-15 |
+| Production builds | `pnpm run build:webapi`, `pnpm run build:frontend`, and `pnpm run build:functions` run serially | Pass | 2026-08-15 |
 | Static checks | Web API lint and `git diff --check` | Pass | 2026-08-15 |
-| Live parser sample | Parse downloaded `NY030826` HTML with `PhillipsProvider` | Pass: 110 lots; no upload | 2026-08-15 |
+| Live server preview sample | Read-only preview of `NY030826` through `AutomaticUploadsService` | Pass: 110 lots and 110 detail pages enriched in 22.4 seconds; no upload | 2026-08-15 |
 | Azure footprint | Confirm no `azure.yaml`, Bicep, Terraform, Functions, or resource changes were introduced | Pass: application-only change | 2026-08-15 |
 
 ---
@@ -140,8 +150,13 @@ without supporting a new runtime requirement.
 
 ## 9. Next Steps
 
-> Current: Locally validated; staging verification pending
+> Current: Locally validated; production deployment and canary not performed
 
-1. Run the documented staging role, preview, and small-subset upload checks.
-2. Confirm source metadata and duplicate behavior in the staging gallery.
-3. Use the existing deployment process only after explicit deployment approval.
+1. Confirm any local write tests use explicitly configured isolated storage and
+   database resources; otherwise keep local checks read-only and mocked.
+2. After explicit approval, deploy the production Web API first and verify
+   health/authentication before deploying the frontend.
+3. Run the documented 1-3 lot canary only in a dedicated production test
+   gallery, then confirm source metadata and duplicate behavior.
+4. On failure after both deployments, roll back the frontend first and then the
+   Web API. Do not deploy or modify Functions or infrastructure.
