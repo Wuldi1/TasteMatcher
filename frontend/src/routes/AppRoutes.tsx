@@ -14,6 +14,8 @@ import { AISuggestionsPage } from "../pages/AISuggestions/AISuggestionsPage";
 import SalesPage from "../pages/SalesPage";
 import { BuyingProposalPage } from "../pages/BuyingProposal/BuyingProposalPage";
 import { OnboardingPage } from "../pages/Onboarding/OnboardingPage";
+import { AutomaticUploadsPage } from "../pages/AutomaticUploads/AutomaticUploadsPage";
+import { RoleProtectedRoute } from "./RoleProtectedRoute";
 
 /**
  * Wrapper component that redirects authenticated users away from auth pages
@@ -141,6 +143,21 @@ export function AppRoutes() {
             <AppLayout>
               <UploadPage />
             </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/automatic-uploads"
+        element={
+          <ProtectedRoute>
+            <RoleProtectedRoute
+              allowedRoles={["domain_owner", "global_admin"]}
+            >
+              <AppLayout>
+                <AutomaticUploadsPage />
+              </AppLayout>
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       />

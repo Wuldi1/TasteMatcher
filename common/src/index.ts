@@ -7,6 +7,7 @@ export * from "./types/user.types";
 export * from "./types/query.types";
 export * from "./types/sales.types";
 export * from "./types/activity.types";
+export * from "./types/automatic-upload.types";
 
 // utils
 export * from "./utils/naming";

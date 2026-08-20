@@ -35,6 +35,7 @@ export const MobileSidebar = () => {
 
   const mobileLabelById: Partial<Record<string, string>> = {
     "ai-suggestions": "AI",
+    "automatic-uploads": "Auto Upload",
     management: "Manage",
     "buying-proposal": "Proposal",
   };

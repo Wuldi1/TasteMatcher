@@ -7,6 +7,7 @@ import {
   Sparkles,
   ShoppingCart,
   FileText,
+  RefreshCw,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -47,6 +48,15 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
     roles: ["dealer", "domain_owner", "global_admin"],
     ariaLabel: "Navigate to upload page",
     bubbleText: "Upload new artworks with images and metadata.",
+  },
+  {
+    id: "automatic-uploads",
+    name: "Automatic Uploads",
+    href: "/automatic-uploads",
+    icon: RefreshCw,
+    roles: ["domain_owner", "global_admin"],
+    ariaLabel: "Navigate to automatic uploads page",
+    bubbleText: "Review auction lots before adding them to a gallery.",
   },
   {
     id: "taster",

@@ -1,5 +1,8 @@
 import { HttpStatus } from "@nestjs/common";
-import { HealthController } from "./health.controller";
+import {
+  HEALTH_DEPENDENCY_TIMEOUT_MS,
+  HealthController,
+} from "./health.controller";
 
 describe("HealthController", () => {
   let controller: HealthController;
@@ -41,6 +44,7 @@ describe("HealthController", () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     process.env = originalEnv;
   });
 
@@ -81,5 +85,29 @@ describe("HealthController", () => {
         },
       }),
     });
+  });
+
+  it("returns 503 when dependency checks do not settle", async () => {
+    jest.useFakeTimers();
+    const read = jest.fn().mockReturnValue(new Promise(() => {}));
+    const exists = jest.fn().mockReturnValue(new Promise(() => {}));
+    mockCosmosService.getContainer.mockResolvedValue({ read });
+    mockBlobService.getBlobContainerClient.mockResolvedValue({ exists });
+
+    const healthCheck = expect(controller.checkHealth()).rejects.toMatchObject({
+      status: HttpStatus.SERVICE_UNAVAILABLE,
+      response: expect.objectContaining({
+        checks: {
+          database: "error",
+          storage: "error",
+        },
+      }),
+    });
+    await jest.advanceTimersByTimeAsync(HEALTH_DEPENDENCY_TIMEOUT_MS);
+    await healthCheck;
+    const databaseOptions = read.mock.calls[0][0];
+    const storageOptions = exists.mock.calls[0][0];
+    expect(databaseOptions.abortSignal.aborted).toBe(true);
+    expect(storageOptions.abortSignal.aborted).toBe(true);
   });
 });
