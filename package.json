@@ -2,19 +2,38 @@
   "name": "tastematcher",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@10.20.0",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=10 <11"
+  },
   "scripts": {
+    "prepare": "husky",
     "install:all": "pnpm install",
+    "lint": "pnpm --filter @tastematcher/common lint && pnpm --filter @tastematcher/webapi lint && pnpm --filter @tastematcher/functions lint && pnpm --filter @tastematcher/frontend lint",
+    "typecheck": "pnpm --filter @tastematcher/common typecheck && pnpm --filter @tastematcher/webapi typecheck && pnpm --filter @tastematcher/functions typecheck && pnpm --filter @tastematcher/frontend typecheck",
+    "test:common": "pnpm --filter @tastematcher/common test",
+    "test:webapi": "pnpm --filter @tastematcher/webapi exec jest --runInBand",
+    "test:functions": "pnpm --filter @tastematcher/functions exec jest --runInBand",
+    "test:frontend": "CI=true pnpm --filter @tastematcher/frontend exec react-scripts test --watchAll=false --runInBand",
+    "test": "pnpm run test:common && pnpm run test:webapi && pnpm run test:functions && pnpm run test:frontend",
+    "validate:static": "./scripts/ci/validate-repository.sh",
+    "quality:fast": "pnpm run lint && pnpm run typecheck && pnpm run test",
+    "ci:check": "pnpm run quality:fast && pnpm run build:common && pnpm run build:webapi && pnpm run build:functions && pnpm run build:frontend && pnpm run validate:static",
+    "precommit:check": "lint-staged && pnpm run quality:fast",
+    "prepush:check": "pnpm run ci:check",
     "build:common": "pnpm --filter @tastematcher/common build",
-    "build:webapi": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/webapi build && cp ./webapi/package.json ./webapi/build/package.json && cp ./webapi/.env.dev ./webapi/build/.env.dev",
+    "build:webapi": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/webapi build && cp ./webapi/package.json ./webapi/build/package.json",
     "build:frontend": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/frontend build",
     "build:functions": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/functions build",
-    "start:local:webapi": "pnpm run build:webapi && pnpm --filter @tastematcher/webapi start:local",
-    "start:dev:webapi": "pnpm --filter @tastematcher/webapi start:dev",
-    "start:prd:webapi": "pnpm --filter @tastematcher/webapi start:prd",
+    "sync:local:production": "./scripts/azure/sync-local-production-config.sh",
+    "start:local:webapi": "pnpm --filter @tastematcher/webapi start:local:production",
+    "start:local:production:webapi": "pnpm --filter @tastematcher/webapi start:local:production",
+    "start:local:production": "pnpm run sync:local:production && pnpm run build:common && pnpm --parallel --filter @tastematcher/webapi --filter @tastematcher/frontend run start:local:production",
     "start:frontend": "pnpm run build:frontend && pnpm --filter @tastematcher/frontend start"
   },
   "devDependencies": {
-    "@types/node": "^25.0.9",
+    "@types/node": "^24.0.0",
     "@types/react": "^18.3.26",
     "baseline-browser-mapping": "^2.9.15",
     "eslint": "^9.38.0",
@@ -31,5 +50,8 @@
     "path": "^0.12.7",
     "pino": "^10.1.0",
     "react-easy-crop": "^5.5.6"
+  },
+  "lint-staged": {
+    "*.{json,md,yaml,yml}": "prettier --check"
   }
 }

@@ -1,22 +1,21 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, beforeEach, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { AuthContext } from "../../contexts/AuthContext";
 import { createMockAuthContext } from "../../test/mocks/authContext";
 import { apiClient } from "../../utils/api";
 import { Management } from "./Management";
 
-vi.mock("../../utils/api", () => ({
+jest.mock("../../utils/api", () => ({
   apiClient: {
-    getAllDomains: vi.fn(),
-    getAllCustomerRequests: vi.fn(),
+    getAllDomains: jest.fn(),
+    getAllCustomerRequests: jest.fn(),
   },
   ApiError: class ApiError extends Error {},
 }));
 
-const mockGetAllDomains = vi.mocked(apiClient.getAllDomains);
-const mockGetAllCustomerRequests = vi.mocked(apiClient.getAllCustomerRequests);
+const mockGetAllDomains = jest.mocked(apiClient.getAllDomains);
+const mockGetAllCustomerRequests = jest.mocked(apiClient.getAllCustomerRequests);
 
 describe("Management customer requests table", () => {
   beforeEach(() => {

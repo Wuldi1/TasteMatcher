@@ -46,6 +46,26 @@ export class ApiError extends Error {
   }
 }
 
+/** Resolve the API endpoint without allowing local UI sessions to bypass the local API. */
+export function resolveApiBaseUrl(
+  hostname: string,
+  configuredUrl?: string
+): string {
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return "http://localhost:8080";
+  }
+
+  if (hostname === "tastematcher.art" || hostname.endsWith(".tastematcher.art")) {
+    return "https://api.tastematcher.art";
+  }
+
+  if (configuredUrl?.trim()) {
+    return configuredUrl.trim();
+  }
+
+  throw new Error("REACT_APP_API_URL must be configured for this host");
+}
+
 /**
  * Base API client with shared functionality for all requests
  * Handles authentication, headers, error handling, and logging
@@ -57,28 +77,10 @@ class BaseApiClient {
 
   constructor() {
     console.log("BaseApiClient initialized", window.location.hostname);
-    if (
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1"
-    ) {
-      console.log("Setting baseURL to localhost for development");
-      this.baseURL = "http://localhost:8080";
-    } else if (window.location.hostname.includes("tastematcher-dev-web")) {
-      console.log(
-        "Setting baseURL to tastematcher-dev-api.azurewebsites.net for development"
-      );
-      this.baseURL = "https://tastematcher-dev-api.azurewebsites.net";
-    } else if (window.location.hostname.includes("tastematcher-stg-web")) {
-      console.log(
-        "Setting baseURL to tastematcher-stg-api.azurewebsites.net for staging"
-      );
-      this.baseURL = "https://tastematcher-stg-api.azurewebsites.net";
-    } else if (window.location.hostname.includes("tastematcher.art")) {
-      console.log("Setting baseURL to api.tastematcher.art for production");
-      this.baseURL = "https://api.tastematcher.art";
-    } else {
-      this.baseURL = process.env.REACT_APP_API_URL!;
-    }
+    this.baseURL = resolveApiBaseUrl(
+      window.location.hostname,
+      process.env.REACT_APP_API_URL
+    );
 
     this.loadAuthToken();
   }

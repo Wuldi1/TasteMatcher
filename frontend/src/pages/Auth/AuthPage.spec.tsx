@@ -3,7 +3,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { AuthPage } from "./AuthPage";
 import { AuthContext } from "../../contexts/AuthContext";
-import { describe, it, expect } from "vitest";
 import { createMockAuthContext } from "../../test/mocks/authContext";
 
 const queryClient = new QueryClient({
@@ -24,10 +23,13 @@ const renderWithProviders = (component: React.ReactElement) => {
 };
 
 describe("AuthPage", () => {
-  it("renders DomainRegistration component", () => {
+  it("renders the login form", () => {
     renderWithProviders(<AuthPage />);
 
-    // Verify the component renders using Testing Library queries
-    expect(screen.getByRole("main")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "TasteMatcher" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Email Address")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
   });
 });

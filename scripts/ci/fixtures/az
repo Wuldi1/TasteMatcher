@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+printf '%s\n' "$*" >>"${FAKE_AZ_LOG}"
+
+if [[ "${1:-}" == "login" ]]; then
+  printf 'authenticated\n' >"${FAKE_AZ_STATE}"
+  exit 0
+fi
+
+if [[ "${1:-}" == "account" && "${2:-}" == "set" ]]; then
+  if [[ "${FAKE_AZ_SCENARIO}" == "selection_failure" ]]; then
+    exit 1
+  fi
+  exit 0
+fi
+
+if [[ "${1:-}" == "account" && "${2:-}" == "show" ]]; then
+  if [[ "${FAKE_AZ_SCENARIO}" == "login_required" && ! -s "${FAKE_AZ_STATE}" ]]; then
+    exit 1
+  fi
+
+  if [[ "$*" == *"--query tenantId"* ]]; then
+    if [[ "${FAKE_AZ_SCENARIO}" == "wrong_tenant" ]]; then
+      printf 'unexpected-tenant\n'
+    else
+      printf '043348b8-3c3a-488d-a337-62a7ce2e4ae8\n'
+    fi
+  else
+    printf 'e105e38a-7820-4c7e-b1da-de05227d6355\n'
+  fi
+  exit 0
+fi
+
+echo "Unexpected fake Azure CLI command: $*" >&2
+exit 1

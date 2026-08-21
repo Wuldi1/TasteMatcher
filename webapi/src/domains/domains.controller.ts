@@ -85,16 +85,6 @@ export class DomainsController {
   }
 
   /**
-   * Get a specific domain by ID (global_admin only)
-   */
-  @Get(":id")
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("global_admin")
-  async findOne(@Param("id") domainId: string): Promise<Domain> {
-    return this.domainsService.findOne(domainId);
-  }
-
-  /**
    * Update a domain (global_admin only)
    */
   @Patch(":id")

@@ -14,10 +14,11 @@ describe("AuthController", () => {
   };
 
   let controller: AuthController;
-  const originalNodeEnv = process.env.NODE_ENV;
+  const originalEnv = process.env;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env = { ...originalEnv };
     controller = new AuthController(
       mockAuthService as never,
       mockDomainsService as never,
@@ -26,7 +27,7 @@ describe("AuthController", () => {
   });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalNodeEnv;
+    process.env = originalEnv;
   });
 
   it("delegates login requests to AuthService", async () => {
@@ -77,6 +78,21 @@ describe("AuthController", () => {
 
   it("rejects the testing domain creation endpoint outside development", async () => {
     process.env.NODE_ENV = "test";
+
+    await expect(
+      controller.createDomainForTesting({
+        name: "Gallery Owner",
+        email: "owner@example.com",
+        proposedDomainName: "gallery.example",
+      } as never),
+    ).rejects.toThrow("This endpoint is disabled in production");
+
+    expect(mockDomainsService.createDomainWithAdmin).not.toHaveBeenCalled();
+  });
+
+  it("rejects the testing endpoint when local development targets production data", async () => {
+    process.env.NODE_ENV = "development";
+    process.env.TASTEMATCHER_DATA_ENV = "prd";
 
     await expect(
       controller.createDomainForTesting({

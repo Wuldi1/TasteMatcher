@@ -72,7 +72,7 @@ async function main() {
       console.log(`  [${i + 1}] ${opt.label}`);
     });
 
-    for (const key of ["TM_ENV", "TM_MODE", "TM_OWNER"]) {
+    for (const key of ["TM_API_TARGET", "TM_MODE", "TM_OWNER"]) {
       const envOverride = process.env[key];
       if (envOverride) {
         const found = options.find(
@@ -98,18 +98,18 @@ async function main() {
   }
 
   try {
-    const env = await askChoice(
-      "Select environment:",
+    const apiTarget = await askChoice(
+      "Select API target:",
       [
-        { label: "Dev", value: "dev" },
-        { label: "Prod", value: "prd" },
+        { label: "Local API", value: "local" },
+        { label: "Production API", value: "production" },
       ],
       1,
     );
     const apiBaseUrl =
-      env === "prd"
-        ? process.env.API_BASE_URL_PROD || "https://tastematcher.art"
-        : process.env.API_BASE_URL_DEV || "http://localhost:8080";
+      apiTarget === "production"
+        ? process.env.API_BASE_URL_PROD || "https://api.tastematcher.art"
+        : process.env.API_BASE_URL_LOCAL || "http://localhost:8080";
 
     const mode = await askChoice(
       "Select mode:",
@@ -150,7 +150,7 @@ async function main() {
 
     rl.close();
 
-    console.log(`Using environment: ${env}`);
+    console.log(`Using API target: ${apiTarget}`);
     console.log(`API base URL: ${apiBaseUrl}`);
     console.log(`Mode: ${mode}`);
     console.log(`Owner: ${ownerChoice} (${email})`);

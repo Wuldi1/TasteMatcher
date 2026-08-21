@@ -138,7 +138,8 @@ async function askChoice(
     const envOverride = process.env[key];
     if (!envOverride) continue;
     const found = options.find(
-      (o) => String(o.value).toLowerCase() === String(envOverride).toLowerCase(),
+      (o) =>
+        String(o.value).toLowerCase() === String(envOverride).toLowerCase(),
     );
     if (found) return found.value;
   }
@@ -150,10 +151,7 @@ async function askChoice(
   const idx =
     raw === ""
       ? defaultIndex
-      : Math.max(
-          0,
-          Math.min(options.length - 1, (parseInt(raw, 10) || 1) - 1),
-        );
+      : Math.max(0, Math.min(options.length - 1, (parseInt(raw, 10) || 1) - 1));
 
   return options[idx].value;
 }
@@ -186,7 +184,9 @@ async function askMultiChoice(
 
   const defaultText = defaultIndices.map((i) => i + 1).join(",");
   const raw = (
-    await rl.question(`Choose one or more options (comma-separated) [${defaultText}]: `)
+    await rl.question(
+      `Choose one or more options (comma-separated) [${defaultText}]: `,
+    )
   ).trim();
 
   const indices =
@@ -323,21 +323,21 @@ async function main() {
   const rl = createInterface({ input, output });
 
   try {
-    const env = await askChoice(
+    const apiTarget = await askChoice(
       rl,
-      "Select environment:",
+      "Select API target:",
       [
-        { label: "Dev", value: "dev" },
-        { label: "Prod", value: "prd" },
+        { label: "Local API", value: "local" },
+        { label: "Production API", value: "production" },
       ],
-      ["TM_ENV"],
+      ["TM_API_TARGET"],
       1,
     );
 
     const apiBaseUrl =
-      env === "prd"
+      apiTarget === "production"
         ? process.env.API_BASE_URL_PROD || "https://api.tastematcher.art"
-        : process.env.API_BASE_URL_DEV || "http://localhost:8080";
+        : process.env.API_BASE_URL_LOCAL || "http://localhost:8080";
 
     const mode = await askChoice(
       rl,
@@ -406,7 +406,9 @@ async function main() {
 
     if (mode === "learning") {
       if (!(await fs.pathExists(LEARNING_CONTENT_DIR))) {
-        throw new Error(`Learning content directory not found: ${LEARNING_CONTENT_DIR}`);
+        throw new Error(
+          `Learning content directory not found: ${LEARNING_CONTENT_DIR}`,
+        );
       }
 
       const learningItems = await discoverArtworkFoldersFromRoot(
@@ -452,8 +454,10 @@ async function main() {
       throw new Error("No upload-ready artwork folders found.");
     }
 
-    console.log(`\nStarting upload for ${discoveredItems.length} artwork(s)...`);
-    console.log(`Environment: ${env}`);
+    console.log(
+      `\nStarting upload for ${discoveredItems.length} artwork(s)...`,
+    );
+    console.log(`API target: ${apiTarget}`);
     console.log(`API base URL: ${apiBaseUrl}`);
     console.log(`Mode: ${mode}`);
     console.log(`Owner: ${ownerChoice} (${email})`);
@@ -471,7 +475,9 @@ async function main() {
     for (let i = 0; i < discoveredItems.length; i += 1) {
       const item = discoveredItems[i];
       const itemLabel = buildItemLabel(item);
-      console.log(`\n[${i + 1}/${discoveredItems.length}] Uploading ${itemLabel}`);
+      console.log(
+        `\n[${i + 1}/${discoveredItems.length}] Uploading ${itemLabel}`,
+      );
 
       const outcome = await uploadWithRetryUntilSuccess({
         item,

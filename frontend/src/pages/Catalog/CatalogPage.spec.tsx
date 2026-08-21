@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Artwork } from "@tastematcher/common";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { AuthContext } from "../../contexts/AuthContext";
 import { ViewerPreferencesProvider } from "../../contexts/ViewerPreferencesContext";
@@ -10,13 +9,13 @@ import { createMockAuthContext } from "../../test/mocks/authContext";
 import { apiClient } from "../../utils/api";
 import { CatalogPage } from "./CatalogPage";
 
-vi.mock("../../utils/api", () => ({
+jest.mock("../../utils/api", () => ({
   apiClient: {
-    getArtworks: vi.fn(),
+    getArtworks: jest.fn(),
   },
 }));
 
-const mockGetArtworks = vi.mocked(apiClient.getArtworks);
+const mockGetArtworks = jest.mocked(apiClient.getArtworks);
 
 const buildArtwork = (index: number): Artwork =>
   ({
@@ -36,22 +35,7 @@ const buildArtwork = (index: number): Artwork =>
 const buildArtworks = (count: number, startAt: number = 1): Artwork[] =>
   Array.from({ length: count }, (_, index) => buildArtwork(startAt + index));
 
-let latestIntersectionCallback:
-  | ((entries: Array<{ isIntersecting: boolean }>) => void)
-  | null = null;
-
 class MockIntersectionObserver {
-  private readonly callback: IntersectionObserverCallback;
-
-  constructor(callback: IntersectionObserverCallback) {
-    this.callback = callback;
-    latestIntersectionCallback = (
-      entries: Array<{ isIntersecting: boolean }>,
-    ) => {
-      this.callback(entries as IntersectionObserverEntry[], this);
-    };
-  }
-
   observe() {}
 
   unobserve() {}
@@ -101,7 +85,6 @@ const renderPage = () => {
 
 describe("CatalogPage pagination", () => {
   beforeEach(() => {
-    latestIntersectionCallback = null;
     mockGetArtworks.mockReset();
     globalThis.IntersectionObserver =
       MockIntersectionObserver as typeof IntersectionObserver;

@@ -1,11 +1,13 @@
 # Task Brief
 
 ## Objective
+
 - Deliver an `Automatic Uploads` workflow for `domain_owner` and `global_admin` users that accepts a supported Phillips auction URL, returns editable artwork drafts for review in the frontend, and uploads only user-approved drafts to the selected domain gallery.
 - Keep preview data provisional until approval. Parsed records must never be written to Cosmos DB or Blob Storage during preview.
 - Reuse the current artwork upload behavior for image validation, Blob Storage, vectorization, Cosmos persistence, response cleanup, and uploader attribution rather than creating a second ingestion implementation.
 
 ## Scope
+
 - In scope:
   - Add an authenticated `/automatic-uploads` frontend route and navigation item visible only to `domain_owner` and `global_admin`.
   - Enforce the same role restriction at route-rendering and API levels; a `domain_owner` may act only on their own domain, while a `global_admin` may act on another selected domain under the existing domain-access rules.
@@ -19,7 +21,7 @@
   - Perform remote auction HTML and image retrieval in the backend. Permit only HTTPS URLs for the recognized Phillips host and explicitly allowed Phillips image hosts; reject private/local network targets, unsafe redirects, unsupported content types, oversized responses, and timed-out requests.
   - Make approval best-effort at the item level: valid selected drafts can succeed when another draft fails, and the response must identify each created, skipped, or failed draft without silently retrying writes.
   - Add deterministic frontend, controller/service, parser-fixture, authorization, validation, and upload-orchestration tests. Tests must not depend on live Phillips availability.
-  - TasteMatcher has no staging environment because it was intentionally disabled to reduce operating cost. Validate with isolated local/mocked checks, then, after explicit deployment approval, deploy the production Web API followed by the frontend and run a 1-3 lot canary in a dedicated production test gallery. Use existing deployment mechanisms only.
+  - Production is the sole deployment target. Validate with isolated local/mocked checks, then, after explicit deployment approval, deploy the production Web API followed by the frontend and run a 1-3 lot canary in a dedicated production test gallery. Use existing deployment mechanisms only.
 - Out of scope:
   - Auction providers other than Phillips, arbitrary website scraping, PDF ingestion, OCR, browser automation, authenticated auction pages, and anti-bot bypasses.
   - Scheduled imports, recurring URL monitoring, background scraping jobs, Azure Functions changes, new queues, new storage accounts/containers, or other Azure infrastructure changes.
@@ -29,6 +31,7 @@
   - Refactoring unrelated upload UI, roles, navigation, or ingestion scripts beyond extracting/reusing logic required for this feature.
 
 ## Acceptance Criteria
+
 1. A signed-in `domain_owner` or `global_admin` sees `Automatic Uploads` in desktop and mobile navigation and can open `/automatic-uploads`; a `dealer` or `customer` does not see the link and direct navigation does not render the page.
 2. Both automatic-upload endpoints require authentication and explicitly allow only `domain_owner` and `global_admin`; a domain owner receives a rejected response for a different `domainId`, while a global admin follows the existing cross-domain access behavior.
 3. Submitting a syntactically invalid URL, a non-HTTPS URL, or a non-Phillips auction URL produces a clear validation error and performs no remote fetch or persistence.
@@ -46,6 +49,7 @@
 15. `common`, `webapi`, and `frontend` builds pass; focused shared/backend/frontend tests pass without live-network dependency; the release plan requires Web API-first production deployment, frontend deployment, and a 1-3 lot canary in a dedicated test gallery without any Functions or infrastructure deployment.
 
 ## Constraints
+
 - Technical:
   - Cross-package request/response contracts live in `common/` and use strict TypeScript without `any`.
   - High-level preview request: `{ url: string }`. High-level preview response: `{ provider: "phillips", source, drafts, issues }`, where each draft has a client-only `draftId`, editable artwork input, immutable source identity, inclusion state, and validation issues.
@@ -68,6 +72,7 @@
   - Optimize the MVP for a single Phillips auction URL per preview and bounded batch sizes; defer persisted/background batches until production evidence requires them.
 
 ## Suggested Agent Plan
+
 1. `planner-agent`: hand off this brief and keep Phillips-only scope, testable acceptance criteria, and infrastructure constraints explicit.
 2. `shared-types-agent`: define/export automatic-upload contracts and editable-field allowlists in `common/`; validate with the common build and type tests.
 3. `backend-agent`: add provider parsing, guarded preview/approval endpoints, safe remote retrieval, reusable upload orchestration, duplicate-source checks, and isolated tests using HTML/image fixtures and mocked Azure services.
@@ -76,6 +81,7 @@
 6. `docs-agent`: document Phillips support and limitations, configuration/limits, isolated local verification, selector maintenance, operational failure categories, and production canary/rollback steps.
 
 ## Files Likely Affected
+
 - `common/src/types/automatic-upload.types.ts`
 - `common/src/index.ts`
 - `webapi/src/automatic-uploads/automatic-uploads.module.ts`
@@ -98,6 +104,7 @@
 - Relevant workflow/configuration documentation selected by `docs-agent`
 
 ## Validation Commands
+
 - `git diff --check`
 - `pnpm run build:common`
 - `pnpm --filter @tastematcher/common test -- --runInBand`
@@ -108,6 +115,7 @@
 - Production canary after explicit deployment approval: deploy Web API then frontend, preview a supported Phillips sale in a dedicated test gallery, approve 1-3 lots, confirm per-item results/source metadata, and repeat one approval to confirm duplicate handling. This is a release step, not completed validation.
 
 ## Risks
+
 - Phillips may block server requests, require browser-rendered content, rate-limit traffic, or change selectors. Mitigation: Phillips-only host allowlist, bounded retries/timeouts, fixture-based parser tests, coverage metrics, explicit user errors, read-only local live parsing, and a controlled production canary; do not add anti-bot bypass behavior.
 - Remote URL and redirect handling creates SSRF and resource-exhaustion risk. Mitigation: HTTPS/provider/image-host allowlists, DNS/IP and redirect validation, content-type checks, byte/time limits, bounded concurrency, and security-focused tests.
 - Phillips image URLs may expire or reject hotlinking. Mitigation: show a frontend fallback, fetch and validate the image again during approval, and return an item-level failure that leaves the draft editable.

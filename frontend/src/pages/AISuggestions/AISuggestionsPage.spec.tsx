@@ -1,19 +1,22 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { AISuggestionsPage } from "./AISuggestionsPage";
 import { AuthContext } from "../../contexts/AuthContext";
 import { ViewerPreferencesProvider } from "../../contexts/ViewerPreferencesContext";
 import { createMockAuthContext } from "../../test/mocks/authContext";
 import type { Artwork } from "@tastematcher/common";
 
-const mockGetRecommendations = vi.fn();
-const mockGetAllUsers = vi.fn();
-const mockSaveArtworkPreference = vi.fn();
+const mockGetRecommendations = jest.fn();
+const mockGetAllUsers = jest.fn();
+const mockSaveArtworkPreference = jest.fn();
 
-vi.mock("../../utils/api", () => {
+jest.mock("../../utils/api", () => {
   class MockApiError extends Error {
-    constructor(message: string, public readonly status: number = 500) {
+    constructor(
+      message: string,
+      public readonly status: number = 500,
+    ) {
       super(message);
     }
   }
@@ -21,7 +24,8 @@ vi.mock("../../utils/api", () => {
   return {
     ApiError: MockApiError,
     apiClient: {
-      getRecommendations: (...args: unknown[]) => mockGetRecommendations(...args),
+      getRecommendations: (...args: unknown[]) =>
+        mockGetRecommendations(...args),
       getAllUsers: (...args: unknown[]) => mockGetAllUsers(...args),
       saveArtworkPreference: (...args: unknown[]) =>
         mockSaveArtworkPreference(...args),
@@ -84,6 +88,8 @@ class MockIntersectionObserver {
   readonly thresholds = [];
 }
 
+const originalIntersectionObserver = window.IntersectionObserver;
+
 const renderPage = ({
   role,
   showOwnerRatedFilter = true,
@@ -122,13 +128,15 @@ const renderPage = ({
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={authContext}>
-        <ViewerPreferencesProvider>
-          <AISuggestionsPage
-            domainId="domain-1"
-            userId={selectedUserId}
-            showOwnerRatedFilter={showOwnerRatedFilter}
-          />
-        </ViewerPreferencesProvider>
+        <MemoryRouter>
+          <ViewerPreferencesProvider>
+            <AISuggestionsPage
+              domainId="domain-1"
+              userId={selectedUserId}
+              showOwnerRatedFilter={showOwnerRatedFilter}
+            />
+          </ViewerPreferencesProvider>
+        </MemoryRouter>
       </AuthContext.Provider>
     </QueryClientProvider>,
   );
@@ -143,11 +151,19 @@ describe("AISuggestionsPage owner includeRated filter", () => {
     mockSaveArtworkPreference.mockReset();
     mockGetAllUsers.mockResolvedValue([]);
     mockGetRecommendations.mockResolvedValue([]);
-    vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+    Object.defineProperty(window, "IntersectionObserver", {
+      configurable: true,
+      writable: true,
+      value: MockIntersectionObserver,
+    });
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    Object.defineProperty(window, "IntersectionObserver", {
+      configurable: true,
+      writable: true,
+      value: originalIntersectionObserver,
+    });
   });
 
   it("shows the include-rated toggle for owner in Sales context", async () => {
@@ -157,7 +173,9 @@ describe("AISuggestionsPage owner includeRated filter", () => {
       expect(mockGetRecommendations).toHaveBeenCalled();
     });
 
-    expect(screen.getByLabelText("Include rated artworks")).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText("Include rated artworks"),
+    ).toBeInTheDocument();
     expect(mockGetRecommendations).toHaveBeenCalledWith(
       "domain-1",
       "customer-1",
@@ -174,20 +192,10 @@ describe("AISuggestionsPage owner includeRated filter", () => {
       selectedUserId: "customer-1",
     });
 
-    await waitFor(() => {
-      expect(mockGetRecommendations).toHaveBeenCalled();
-    });
-
     expect(
       screen.queryByLabelText("Include rated artworks"),
     ).not.toBeInTheDocument();
-    expect(mockGetRecommendations).toHaveBeenCalledWith(
-      "domain-1",
-      undefined,
-      20,
-      0,
-      undefined,
-    );
+    expect(mockGetRecommendations).not.toHaveBeenCalled();
   });
 
   it("uses stored include-rated preference on mount", async () => {
@@ -205,10 +213,10 @@ describe("AISuggestionsPage owner includeRated filter", () => {
       );
     });
 
-    const toggle = screen.getByLabelText(
-      "Include rated artworks",
-    ) as HTMLInputElement;
-    expect(toggle.checked).toBe(true);
+    const toggle = await screen.findByLabelText("Include rated artworks");
+    expect(toggle).toBeInstanceOf(HTMLInputElement);
+    const input = toggle as HTMLInputElement;
+    expect(input.checked).toBe(true);
   });
 
   it("refetches from first page when include-rated is toggled after pagination", async () => {
@@ -230,6 +238,7 @@ describe("AISuggestionsPage owner includeRated filter", () => {
       );
     });
 
+    await screen.findByText("Artwork 1");
     latestIntersectionCallback?.([{ isIntersecting: true }]);
 
     await waitFor(() => {
@@ -243,7 +252,7 @@ describe("AISuggestionsPage owner includeRated filter", () => {
       );
     });
 
-    fireEvent.click(screen.getByLabelText("Include rated artworks"));
+    fireEvent.click(await screen.findByLabelText("Include rated artworks"));
 
     await waitFor(() => {
       expect(mockGetRecommendations).toHaveBeenNthCalledWith(

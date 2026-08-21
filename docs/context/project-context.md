@@ -39,11 +39,18 @@ TasteMatcher is an AI-powered art matching platform with:
 
 ## Common Commands
 
-1. Install dependencies: `pnpm install`
-2. Build frontend: `pnpm run build:frontend`
-3. Build API: `pnpm run build:webapi`
-4. Build functions: `pnpm run build:functions`
-5. Run API dev server: `pnpm run start:dev:webapi`
+1. Select the repository runtime: `nvm use` (Node.js 24 LTS).
+2. Install pinned dependencies: `corepack enable && pnpm install --frozen-lockfile`
+3. Sync ignored local configuration from production (Azure read-only):
+   `pnpm run sync:local:production`
+4. Run the local API and frontend against production-backed services:
+   `pnpm run start:local:production`
+5. Read-only local API smoke check: `curl --fail http://localhost:8080/health`
+6. Read-only Azure Node.js 24 preflight:
+   `./scripts/azure/update-node24-runtimes.sh`
+7. Build frontend: `pnpm run build:frontend`
+8. Build API: `pnpm run build:webapi`
+9. Build functions: `pnpm run build:functions`
 
 ## Collaboration Defaults
 

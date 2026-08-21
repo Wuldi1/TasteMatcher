@@ -1,72 +1,84 @@
 name: Web API CI/CD
 
 on:
-  push:
-    branches:
-      - main
+  pull_request:
+    branches: [main]
     paths:
       - "webapi/**"
       - "common/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".npmrc"
+      - ".nvmrc"
+      - "scripts/ci/**"
+      - ".github/workflows/webapi-deploy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "webapi/**"
+      - "common/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".npmrc"
+      - ".nvmrc"
+      - "scripts/ci/**"
       - ".github/workflows/webapi-deploy.yml"
   workflow_dispatch:
-    inputs:
-      environment:
-        description: "Deployment environment"
-        required: true
-        default: "dev"
-        type: choice
-        options:
-          - dev
-          # - stg
-          - prd
+
+permissions:
+  contents: read
+
+concurrency:
+  group: webapi-production-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  NODE_VERSION: "22.x"
-  PNPM_VERSION: "8"
+  NODE_VERSION: "24.x"
   WEBAPI_DIR: webapi
-  BUILD_OUTPUT: webapi/build
 
 jobs:
   build-test:
-    name: Build & Test Web API
+    name: Validate, Test & Build Web API
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-
       - name: Enable Corepack
         run: corepack enable
-
       - name: Install dependencies
-        run: pnpm run install:all
-
-      - name: Build common + Web API packages
+        run: pnpm install --frozen-lockfile
+      - name: Lint shared and Web API code
+        run: |
+          pnpm --filter @tastematcher/common lint
+          pnpm --filter @tastematcher/webapi lint
+      - name: Type-check shared and Web API code
+        run: |
+          pnpm --filter @tastematcher/common typecheck
+          pnpm --filter @tastematcher/webapi typecheck
+      - name: Run shared and Web API tests
+        run: |
+          pnpm --filter @tastematcher/common test
+          pnpm --filter @tastematcher/webapi exec jest --runInBand
+      - name: Build common and Web API packages
         run: pnpm run build:webapi
-
       - name: Prepare deployment package
         run: |
           cd ${{ env.WEBAPI_DIR }}
           cp package.json build/
           sed -i 's|build/main.js|main.js|g' build/package.json
-
-          # Ensure all node_modules files are copied successfully
           mkdir -p build/node_modules
           rsync -a node_modules/ ../node_modules/ build/node_modules/
-
-          # Copy @tastematcher/common into node_modules
           rm -rf build/node_modules/@tastematcher/common
           mkdir -p build/node_modules/@tastematcher/common
           rsync -a ../common/build/ build/node_modules/@tastematcher/common
-
           cd build
-          zip -r ../webapi-build.zip . > /dev/null
-
+          zip -r ../webapi-build.zip . >/dev/null
+      - name: Validate repository and build artifact
+        run: pnpm run validate:static
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -75,40 +87,25 @@ jobs:
           retention-days: 1
 
   deploy:
-    name: Deploy to Azure Web App
+    name: Deploy Web API to Production
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs: build-test
     environment:
-      name: ${{ github.event.inputs.environment || 'dev' }}
-      url: ${{ github.event.inputs.environment == 'stg' && 'https://tastematcher-stg-api.azurewebsites.net' || github.event.inputs.environment == 'prd' && 'https://tastematcher-prd-api.azurewebsites.net' || 'https://tastematcher-dev-api.azurewebsites.net' }}
-
+      name: prd
+      url: https://api.tastematcher.art
+    env:
+      AZURE_WEBAPP_NAME: tastematcher-prd-api
+      AZURE_RESOURCE_GROUP: tastematcher-prd-rg
     steps:
-      - name: Set Environment Variables
-        run: |
-          if [ "${{ github.event.inputs.environment }}" == "stg" ]; then
-            echo "AZURE_WEBAPP_NAME=tastematcher-stg-api" >> $GITHUB_ENV
-            echo "AZURE_RESOURCE_GROUP=tastematcher-stg-rg" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
-          elif [ "${{ github.event.inputs.environment }}" == "prd" ]; then
-            echo "AZURE_WEBAPP_NAME=tastematcher-prd-api" >> $GITHUB_ENV
-            echo "AZURE_RESOURCE_GROUP=tastematcher-prd-rg" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
-          else
-            echo "AZURE_WEBAPP_NAME=tastematcher-dev-api" >> $GITHUB_ENV
-            echo "AZURE_RESOURCE_GROUP=tastematcher-dev-rg" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
-          fi
-
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: webapi-build
-
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          creds: ${{ github.event.inputs.environment == 'stg' && secrets.AZURE_CREDENTIALS_STG || github.event.inputs.environment == 'prd' && secrets.AZURE_CREDENTIALS_PRD || secrets.AZURE_CREDENTIALS_DEV }}
-
+          creds: ${{ secrets.AZURE_CREDENTIALS_PRD }}
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
@@ -116,7 +113,8 @@ jobs:
           resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
           package: webapi-build.zip
           startup-command: "npm start"
-
+      - name: Verify production API health
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-all-errors https://api.tastematcher.art/health >/dev/null
       - name: Azure logout
         if: always()
         run: az logout

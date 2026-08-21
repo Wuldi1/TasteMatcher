@@ -53,8 +53,7 @@ functions-deploy.zip
 azurite/
 
 # Environment variables
-.env
-.env.dev
-.env.local
-.env.development
-.env.prd
+.env*
+!.env.example
+!**/.env.example
+functions/local.settings.json

@@ -13,8 +13,6 @@
 import {
   getDerivativeBlobPath,
   getOriginalBlobPath,
-  getQueueDlqName,
-  getQueueName,
   getSearchDocId,
 } from "../naming";
 import { describe, expect, it } from "vitest";
@@ -41,13 +39,10 @@ describe("naming utils", () => {
     );
   });
 
-  it("returns queue name", () => {
-    expect(getQueueName("Dev")).toBe("tastematcher-dev-queue-indexing");
-    expect(getQueueDlqName("Dev")).toBe("tastematcher-dev-queue-indexing-dlq");
-  });
-
   it("throws for invalid ids", () => {
     expect(() => getOriginalBlobPath("", artworkId, "jpg")).toThrow();
-    expect(() => getDerivativeBlobPath(domainId, artworkId, "XLarge")).toThrow();
+    expect(() =>
+      getDerivativeBlobPath(domainId, artworkId, "XLarge"),
+    ).toThrow();
   });
 });

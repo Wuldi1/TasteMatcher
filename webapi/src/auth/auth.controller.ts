@@ -11,6 +11,7 @@ import {
 } from "@tastematcher/common";
 import { DomainsService } from "../domains/domains.service";
 import { UsersService } from "../users/users.service";
+import { isProductionDataTarget } from "../config/runtime-profile";
 
 @Controller("auth")
 export class AuthController {
@@ -78,7 +79,10 @@ export class AuthController {
     @Body() dto: CreateDomainRequestDto,
   ): Promise<void> {
     // Add environment check - only allow in development
-    if (process.env.NODE_ENV === "development") {
+    if (
+      process.env.NODE_ENV === "development" &&
+      !isProductionDataTarget()
+    ) {
       await this.domainsService.createDomainWithAdmin(dto);
       return;
     }

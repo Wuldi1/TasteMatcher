@@ -15,6 +15,7 @@ import { LoginRequestDto } from "./dto/login-request.dto";
 import { LoginVerifyDto } from "./dto/login-verify.dto";
 import { EmailService } from "../email/email.service";
 import { DomainActivityService } from "../activity/domain-activity.service";
+import { shouldUseSecureAuthCodes } from "../config/runtime-profile";
 
 const VERIFICATION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -22,7 +23,6 @@ const VERIFICATION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly cosmosService: CosmosService;
-  private readonly isPrd?: boolean;
   private readonly jwtSecret: string;
 
   constructor(
@@ -31,7 +31,6 @@ export class AuthService {
   ) {
     this.cosmosService = new CosmosService();
     this.jwtSecret = process.env.JWT_SECRET ?? "";
-    this.isPrd = process.env.NODE_ENV === "prd";
 
     if (!this.jwtSecret) {
       throw new Error("JWT_SECRET environment variable is required");
@@ -218,7 +217,7 @@ export class AuthService {
    * Generate 6-digit verification code
    */
   private generateVerificationCode(): string {
-    if (this.isPrd) {
+    if (shouldUseSecureAuthCodes()) {
       return randomInt(0, 1_000_000).toString().padStart(6, "0");
     }
     return "000000";

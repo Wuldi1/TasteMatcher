@@ -70,7 +70,7 @@ function getRequiredEnv(key: string): string {
       `Required environment variable '${key}' is not set.\n` +
         `Available Azure-related env vars: ${availableKeys.join(", ")}\n` +
         `Check:\n` +
-        `  - Local dev: Ensure 'local.settings.json' exists in the functions directory\n` +
+        `  - Local execution: Ensure 'local.settings.json' exists in the functions directory\n` +
         `  - Azure: Verify Application Settings are configured for the Function App\n` +
         `  - Current directory: ${process.cwd()}`,
     );

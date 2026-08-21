@@ -17,7 +17,6 @@ import {
 import { DomainsService } from "./domains.service";
 import { EmailService } from "../email/email.service";
 import { sign } from "jsonwebtoken";
-import { CosmosService } from "@tastematcher/common";
 import { CreateDomainRequestDto } from "./dto/create-domain-request.dto";
 
 jest.mock("jsonwebtoken", () => ({
@@ -37,12 +36,25 @@ const createMockContainer = () => {
         const idParam = parameters?.find(
           (p: { name: string }) => p.name === "@id",
         )?.value;
+        const ownerEmailParam = parameters?.find(
+          (p: { name: string }) => p.name === "@email",
+        )?.value;
+        const domainIdParam = parameters?.find(
+          (p: { name: string }) => p.name === "@domainId",
+        )?.value;
         const resources = Object.values(store).filter((doc) => {
           if (emailParam) {
             return doc.adminEmail === emailParam;
           }
           if (idParam) {
             return doc.id === idParam;
+          }
+          if (ownerEmailParam) {
+            return (
+              doc.type === "user" &&
+              doc.email === ownerEmailParam &&
+              doc.domainId === domainIdParam
+            );
           }
           return true;
         });
@@ -66,9 +78,20 @@ const createMockContainer = () => {
 
 describe("DomainsService", () => {
   let service: DomainsService;
-  let cosmos: CosmosService;
   let emailService: EmailService;
   let mockContainer: ReturnType<typeof createMockContainer>;
+
+  beforeAll(() => {
+    process.env.AzureWebJobsStorage = "UseDevelopmentStorage=true";
+    process.env.AZURE_AI_VISION_ENDPOINT = "https://example.com";
+    process.env.AZURE_AI_VISION_KEY = "test-key";
+    process.env.COSMOS_DB_ENDPOINT = "https://example.com";
+    process.env.COSMOS_DB_KEY = "test-key";
+    process.env.COSMOS_DB_DATABASE = "test-db";
+    process.env.AZURE_STORAGE_ACCOUNT = "test-account";
+    process.env.AZURE_STORAGE_ACCOUNT_KEY = "test-key";
+    process.env.IMAGE_PROCESSING_QUEUE_NAME = "test-queue";
+  });
 
   beforeEach(() => {
     process.env.JWT_SECRET = "test-secret";
@@ -76,10 +99,17 @@ describe("DomainsService", () => {
     mockContainer = createMockContainer();
 
     emailService = {
-      sendVerificationCode: jest.fn().mockResolvedValue(undefined),
+      sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
     } as unknown as EmailService;
 
     service = new DomainsService(emailService);
+    (
+      service as unknown as {
+        cosmosService: { getContainer: jest.Mock };
+      }
+    ).cosmosService = {
+      getContainer: jest.fn().mockResolvedValue(mockContainer),
+    };
   });
 
   afterEach(() => {
@@ -87,7 +117,7 @@ describe("DomainsService", () => {
     delete process.env.JWT_SECRET;
   });
 
-  it("creates a new domain and issues verification code", async () => {
+  it("creates a new domain without issuing a verification code", async () => {
     const dto: CreateDomainRequestDto = {
       name: "Gallery",
       email: "new@tld.com",
@@ -97,12 +127,7 @@ describe("DomainsService", () => {
     const result = await service.createDomain(dto);
 
     expect(result.adminEmail).toBe("new@tld.com");
-    expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(
-      "new@tld.com",
-      "Gallery",
-      expect.any(String),
-      expect.any(String),
-    );
+    expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
   });
 
   it("rejects creation if domain already exists", async () => {
@@ -129,7 +154,7 @@ describe("DomainsService", () => {
     const result = await service.sendVerificationCode(email);
 
     expect(result.adminEmail).toBe(email);
-    expect(emailService.sendVerificationEmail).toHaveBeenCalledTimes(2);
+    expect(emailService.sendVerificationEmail).toHaveBeenCalledTimes(1);
   });
 
   it("throws NotFound when requesting verification for missing domain", async () => {
@@ -145,9 +170,10 @@ describe("DomainsService", () => {
       email,
       proposedDomainName: "verify.com",
     });
+    await service.sendVerificationCode(email);
 
     const sentCode = (emailService.sendVerificationEmail as jest.Mock).mock
-      .calls[0][2] as string;
+      .calls[0][0].code as string;
 
     const result = await service.verifyDomainCode(email, sentCode);
 
@@ -155,7 +181,7 @@ describe("DomainsService", () => {
     expect(sign).toHaveBeenCalledWith(
       expect.objectContaining({ id: expect.any(String), email }),
       "test-secret",
-      expect.objectContaining({ expiresIn: "1h" }),
+      expect.objectContaining({ expiresIn: "4h" }),
     );
   });
 
@@ -166,6 +192,7 @@ describe("DomainsService", () => {
       email,
       proposedDomainName: "invaliddomain.com",
     });
+    await service.sendVerificationCode(email);
 
     await expect(
       service.verifyDomainCode(email, "123456"),
@@ -179,13 +206,15 @@ describe("DomainsService", () => {
       email,
       proposedDomainName: "expireddomain.com",
     });
+    await service.sendVerificationCode(email);
     const storeEntry = Object.values((mockContainer as any).__store)[0] as any;
-    storeEntry.verificationCodeExpiresAt = new Date(
-      Date.now() - 1000,
-    ).toISOString();
+    storeEntry.verificationCodeExpiresAt = Date.now() - 1000;
 
     await expect(
-      service.verifyDomainCode(email, "000000"),
+      service.verifyDomainCode(
+        email,
+        (emailService.sendVerificationEmail as jest.Mock).mock.calls[0][0].code,
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

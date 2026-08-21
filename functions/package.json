@@ -4,18 +4,18 @@
   "description": "Azure Functions for TasteMatcher image processing",
   "main": "build/index.js",
   "scripts": {
-    "build": "tsc && npm run copy-files",
+    "build": "rimraf build && tsc && cp host.json build/",
     "watch": "tsc --watch",
     "clean": "rimraf build",
-    "prestart": "npm run build",
-    "start": "func start",
+    "prestart": "pnpm build",
+    "start": "node -e \"console.error('Functions are not started by default. Use the documented start:local-production command with exactly one trigger.'); process.exit(1)\"",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "dev": "npm run build && func start",
-    "copy-files": "cp host.json build/ && cp local.settings.json build/"
+    "start:local-production": "pnpm build && node scripts/start-local-production.mjs",
+    "copy-files": "cp host.json build/"
   },
   "dependencies": {
     "@azure-rest/ai-vision-image-analysis": "^1.0.0-beta.3",
@@ -23,7 +23,6 @@
     "@azure/core-auth": "^1.9.0",
     "@azure/cosmos": "^4.9.0",
     "@azure/functions": "^4.8.0",
-    "@azure/identity": "^4.13.0",
     "@azure/storage-blob": "^12.29.1",
     "@azure/storage-queue": "^12.28.1",
     "@nestjs/common": "^11.1.8",
@@ -37,7 +36,7 @@
   "devDependencies": {
     "@eslint/js": "^9.38.0",
     "@types/jest": "^29.5.14",
-    "@types/node": "^20.11.5",
+    "@types/node": "^24.0.0",
     "@typescript-eslint/eslint-plugin": "^8.46.3",
     "@typescript-eslint/parser": "^8.46.3",
     "eslint": "^9.38.0",
@@ -48,6 +47,6 @@
     "typescript": "^5.9.3"
   },
   "engines": {
-    "node": ">=22.x"
+    "node": ">=24 <25"
   }
 }

@@ -1,71 +1,69 @@
-# ---------- CODEGEN CHECKLIST (must be satisfied) ----------
-# 1. Uses Azure Functions deployment best practices
-# 2. Includes build validation before deployment
-# 3. Separates build and deploy stages
-# 4. Uses environment-specific configurations
-# 5. CI-friendly: runs lint, typecheck, and tests
-# -----------------------------------------------------------
-
 name: Functions CI/CD
 
 on:
-  push:
-    branches:
-      - main
+  pull_request:
+    branches: [main]
     paths:
       - "functions/**"
       - "common/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".npmrc"
+      - ".nvmrc"
+      - "scripts/ci/**"
+      - ".github/workflows/functions-deploy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "functions/**"
+      - "common/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".npmrc"
+      - ".nvmrc"
+      - "scripts/ci/**"
       - ".github/workflows/functions-deploy.yml"
   workflow_dispatch:
-    inputs:
-      environment:
-        description: "Deployment environment"
-        required: true
-        default: "dev"
-        type: choice
-        options:
-          - dev
-          # - stg
-          - prd
+
+permissions:
+  contents: read
+
+concurrency:
+  group: functions-production-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  NODE_VERSION: "22.x"
+  NODE_VERSION: "24.x"
 
 jobs:
-  build:
-    name: Build Azure Functions
+  build-test:
+    name: Validate, Test & Build Functions
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-
       - name: Enable Corepack
         run: corepack enable
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Build common package
-        run: pnpm --filter @tastematcher/common build
-
-      - name: Lint functions
-        run: pnpm --filter @tastematcher/functions lint
-
-      - name: Type check functions
-        run: pnpm --filter @tastematcher/functions typecheck
-
-      # - name: Run tests
-      #   run: pnpm --filter @tastematcher/functions test
-
-      - name: Build functions
-        run: pnpm --filter @tastematcher/functions build
-
+      - name: Lint shared and Functions code
+        run: |
+          pnpm --filter @tastematcher/common lint
+          pnpm --filter @tastematcher/functions lint
+      - name: Type-check shared and Functions code
+        run: |
+          pnpm --filter @tastematcher/common typecheck
+          pnpm --filter @tastematcher/functions typecheck
+      - name: Run shared and Functions tests
+        run: |
+          pnpm --filter @tastematcher/common test
+          pnpm --filter @tastematcher/functions exec jest --runInBand
+      - name: Build Functions
+        run: pnpm run build:functions
       - name: Prepare deployment package
         run: |
           cd functions
@@ -76,8 +74,6 @@ jobs:
             mkdir -p deploy/ProcessImagesFromBlob
             cp ProcessImagesFromBlob/function.json deploy/ProcessImagesFromBlob/
           fi
-
-          # Install production dependencies in temp directory
           TEMP_DIR=$(mktemp -d)
           cat > "$TEMP_DIR/package.json" <<EOF
           {
@@ -86,29 +82,20 @@ jobs:
             "main": "index.js",
             "dependencies": $(jq '.dependencies' package.json | jq 'del(.["@tastematcher/common"])'),
             "engines": {
-              "node": ">=22.x"
+              "node": ">=24 <25"
             }
           }
           EOF
-
           cd "$TEMP_DIR"
-          npm install --omit=dev --no-package-lock --production
-
-          # Get back to project root to access functions/deploy
-          cd $GITHUB_WORKSPACE/functions
-
-          # Copy node_modules to deploy
+          npm install --omit=dev --no-package-lock
+          cd "$GITHUB_WORKSPACE/functions"
           cp -r "$TEMP_DIR/node_modules" deploy/
-
-          # Copy common package build
           if [ -d "$GITHUB_WORKSPACE/common/build" ]; then
             mkdir -p deploy/node_modules/@tastematcher/common
-            cp -r $GITHUB_WORKSPACE/common/build/* deploy/node_modules/@tastematcher/common/
-            cp $GITHUB_WORKSPACE/common/package.json deploy/node_modules/@tastematcher/common/
+            cp -r "$GITHUB_WORKSPACE/common/build/"* deploy/node_modules/@tastematcher/common/
+            cp "$GITHUB_WORKSPACE/common/package.json" deploy/node_modules/@tastematcher/common/
             sed -i 's|build/index.|index.|g' deploy/node_modules/@tastematcher/common/package.json
           fi
-
-          # Create minimal package.json
           cd deploy
           cat > package.json <<'PKGJSON'
           {
@@ -116,11 +103,12 @@ jobs:
             "version": "1.0.0",
             "main": "index.js",
             "engines": {
-              "node": ">=22.x"
+              "node": ">=24 <25"
             }
           }
           PKGJSON
-
+      - name: Validate repository and build artifact
+        run: pnpm run validate:static
       - name: Upload deployment artifact
         uses: actions/upload-artifact@v4
         with:
@@ -129,47 +117,38 @@ jobs:
           retention-days: 1
 
   deploy:
-    name: Deploy to Azure Function App
+    name: Deploy Functions to Production
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-test
     environment:
-      name: ${{ github.event.inputs.environment || 'dev' }}
-      url: ${{ github.event.inputs.environment == 'stg' && 'https://tastematcher-stg-func.azurewebsites.net' || github.event.inputs.environment == 'prd' && 'https://tastematcher-prd-func.azurewebsites.net' || 'https://tastematcher-dev-func.azurewebsites.net' }}
-
+      name: prd
+      url: https://tastematcher-prd-func.azurewebsites.net
+    env:
+      AZURE_FUNCTIONAPP_NAME: tastematcher-prd-func
+      AZURE_RESOURCE_GROUP: tastematcher-prd-rg
+      AZURE_SUBSCRIPTION: e105e38a-7820-4c7e-b1da-de05227d6355
     steps:
-      - name: Set Environment Variables
-        run: |
-          if [ "${{ github.event.inputs.environment }}" == "stg" ]; then
-            echo "AZURE_FUNCTIONAPP_NAME=tastematcher-stg-func" >> $GITHUB_ENV
-            echo "AZURE_RESOURCE_GROUP=tastematcher-stg-rg" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
-          elif [ "${{ github.event.inputs.environment }}" == "prd" ]; then
-            echo "AZURE_FUNCTIONAPP_NAME=tastematcher-prd-func" >> $GITHUB_ENV
-            echo "AZURE_RESOURCE_GROUP=tastematcher-prd-rg" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
-          else
-            echo "AZURE_FUNCTIONAPP_NAME=tastematcher-dev-func" >> $GITHUB_ENV
-            echo "AZURE_RESOURCE_GROUP=tastematcher-dev-rg" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
-          fi
-
       - name: Download deployment artifact
         uses: actions/download-artifact@v4
         with:
           name: functions-deploy
           path: deploy
-
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          creds: ${{ github.event.inputs.environment == 'stg' && secrets.AZURE_CREDENTIALS_STG || github.event.inputs.environment == 'prd' && secrets.AZURE_CREDENTIALS_PROD || secrets.AZURE_CREDENTIALS_DEV }}
-
+          creds: ${{ secrets.AZURE_CREDENTIALS_PROD }}
+      - name: Select production subscription
+        run: az account set --subscription "${{ env.AZURE_SUBSCRIPTION }}"
       - name: Deploy to Azure Function App
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
           package: deploy
-
+      - name: Verify production Functions
+        run: |
+          test "$(az functionapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_FUNCTIONAPP_NAME" --query state -o tsv)" = "Running"
+          test "$(az functionapp function list --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_FUNCTIONAPP_NAME" --query 'length(@)' -o tsv)" -gt 0
       - name: Azure logout
         if: always()
         run: az logout

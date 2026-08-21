@@ -1,13 +1,22 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { HomePage } from "./HomePage";
 import { AuthContext } from "../../contexts/AuthContext";
-import { describe, it, expect } from "vitest";
 import { createMockAuthContext } from "../../test/mocks/authContext";
+
+jest.mock("../../hooks/useProposalData", () => ({
+  useProposalData: () => ({
+    hasSubmittedProposal: false,
+    proposalMetadata: null,
+    proposals: [],
+    loading: false,
+  }),
+}));
 
 const mockUser = {
   id: "user-1",
+  name: "Test User",
   email: "test@example.com",
   domainId: "domain-1",
   domainName: "Test Domain",
@@ -35,38 +44,40 @@ const renderWithProviders = (component: React.ReactElement) => {
 };
 
 describe("HomePage", () => {
-  it("renders welcome message with domain name", () => {
+  it("renders a personalized welcome message", () => {
     renderWithProviders(<HomePage />);
 
-    expect(screen.getByText(/Welcome to Test Domain/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Hello, Test User!" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/welcome to your/i)).toHaveTextContent("gallery");
   });
 
-  it("displays statistics cards", async () => {
+  it("displays customer journey and profile statistics", () => {
     renderWithProviders(<HomePage />);
 
-    // Verify statistics are rendered
-    await waitFor(() => {
-      expect(screen.getByText(/Total Artworks/i)).toBeInTheDocument();
-    });
-    expect(screen.getByText("Likes")).toBeInTheDocument();
-    expect(screen.getByText("Recently Added")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Your Journey" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Your Profile Section" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Artworks Liked")).toBeInTheDocument();
+    expect(screen.getByText("Artworks Disliked")).toBeInTheDocument();
+    expect(screen.getByText("Total Swipes")).toBeInTheDocument();
   });
 
-  it("renders quick action cards with proper links", () => {
+  it("renders journey cards with proper links", () => {
     renderWithProviders(<HomePage />);
 
-    const uploadLink = screen.getByRole("link", {
-      name: /upload new artworks/i,
-    });
-    const catalogLink = screen.getByRole("link", {
-      name: /browse your catalog/i,
+    const onboardingLink = screen.getByRole("link", {
+      name: /complete onboarding/i,
     });
     const tasterLink = screen.getByRole("link", {
-      name: /start tasting artworks/i,
+      name: /train your model/i,
     });
 
-    expect(uploadLink).toHaveAttribute("href", "/upload");
-    expect(catalogLink).toHaveAttribute("href", "/catalog");
+    expect(onboardingLink).toHaveAttribute("href", "/onboarding");
     expect(tasterLink).toHaveAttribute("href", "/taster");
   });
 
@@ -86,10 +97,9 @@ describe("HomePage", () => {
     expect(screen.queryByText(/Welcome to/i)).not.toBeInTheDocument();
   });
 
-  it("has proper ARIA labels for accessibility", () => {
+  it("provides an accessible logout control", () => {
     renderWithProviders(<HomePage />);
 
-    expect(screen.getByLabelText("Domain statistics")).toBeInTheDocument();
-    expect(screen.getByLabelText("Quick actions")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Logout" })).toBeEnabled();
   });
 });

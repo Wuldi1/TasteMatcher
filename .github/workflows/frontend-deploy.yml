@@ -1,61 +1,74 @@
 name: Frontend CI/CD
 
 on:
-  push:
-    branches:
-      - main
+  pull_request:
+    branches: [main]
     paths:
       - "frontend/**"
       - "common/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".npmrc"
+      - ".nvmrc"
+      - "scripts/ci/**"
+      - ".github/workflows/frontend-deploy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "common/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".npmrc"
+      - ".nvmrc"
+      - "scripts/ci/**"
       - ".github/workflows/frontend-deploy.yml"
   workflow_dispatch:
-    inputs:
-      environment:
-        description: "Deployment environment"
-        required: true
-        default: "dev"
-        type: choice
-        options:
-          - dev
-          # - stg
-          - prd
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-production-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  NODE_VERSION: "22.x"
-  PNPM_VERSION: "8"
-  FRONTEND_DIR: frontend
+  NODE_VERSION: "24.x"
   BUILD_OUTPUT: frontend/build
-  # Define API URLs for different environments
-  API_URL_DEV: "https://tastematcher-dev-api.azurewebsites.net"
-  API_URL_STG: "https://tastematcher-stg-api.azurewebsites.net"
-  API_URL_PRD: "https://tastematcher-prd-api.azurewebsites.net"
+  REACT_APP_API_URL: "https://api.tastematcher.art"
+  AZURE_WEBAPP_NAME: "tastematcher-prd-web"
 
 jobs:
-  build-pack:
-    name: Build & Test Frontend
+  build-test:
+    name: Validate, Test & Build Frontend
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-
       - name: Enable Corepack
         run: corepack enable
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Lint frontend
-        run: pnpm --filter @tastematcher/frontend lint
-
+      - name: Lint shared and frontend code
+        run: |
+          pnpm --filter @tastematcher/common lint
+          pnpm --filter @tastematcher/frontend lint
+      - name: Type-check shared and frontend code
+        run: |
+          pnpm --filter @tastematcher/common typecheck
+          pnpm --filter @tastematcher/frontend typecheck
+      - name: Run shared and frontend tests
+        run: |
+          pnpm --filter @tastematcher/common test
+          CI=true pnpm --filter @tastematcher/frontend exec react-scripts test --watchAll=false --runInBand
       - name: Build frontend
-        run: pnpm --filter @tastematcher/frontend build
-
+        run: pnpm run build:frontend
+      - name: Validate repository and build artifact
+        run: pnpm run validate:static
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -64,40 +77,22 @@ jobs:
           retention-days: 1
 
   deploy:
-    name: Deploy to Azure Web App
+    name: Deploy Frontend to Production
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    needs: build-pack
+    needs: build-test
     environment:
-      name: ${{ github.event.inputs.environment || 'dev' }}
-      url: ${{ github.event.inputs.environment == 'stg' && 'https://tastematcher-stg-web.azurewebsites.net' || github.event.inputs.environment == 'prd' && 'https://tastematcher-prd-web.azurewebsites.net' || 'https://tastematcher-dev-web.azurewebsites.net' }}
-
+      name: prd
+      url: https://tastematcher.art
     steps:
-      - name: Set Environment Variables
-        run: |
-          if [ "${{ github.event.inputs.environment }}" == "stg" ]; then
-            echo "AZURE_WEBAPP_NAME=tastematcher-stg-web" >> $GITHUB_ENV
-            echo "AZURE_RESOURCE_GROUP=tastematcher-stg-rg" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
-          elif [ "${{ github.event.inputs.environment }}" == "prd" ]; then
-            echo "AZURE_WEBAPP_NAME=tastematcher-prd-web" >> $GITHUB_ENV
-            echo "AZURE_RESOURCE_GROUP=tastematcher-prd-rg" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
-          else
-            echo "AZURE_WEBAPP_NAME=tastematcher-dev-web" >> $GITHUB_ENV
-            echo "AZURE_RESOURCE_GROUP=tastematcher-dev-rg" >> $GITHUB_ENV
-            echo "AZURE_SUBSCRIPTION=e105e38a-7820-4c7e-b1da-de05227d6355" >> $GITHUB_ENV
-          fi
-
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: frontend-build
           path: build
-
-      - name: Create deployment package with dependencies
+      - name: Create deployment package
         run: |
           cd build
-          # Create package.json with serve dependency
           cat > package.json <<'EOF'
           {
             "name": "tastematcher-frontend",
@@ -107,34 +102,30 @@ jobs:
             },
             "dependencies": {
               "serve": "^14.2.3"
+            },
+            "engines": {
+              "node": ">=24 <25"
             }
           }
           EOF
-
-          # Install dependencies so they're included in the zip
-          npm install --production --no-package-lock
-
-          # Create .deployment file to tell Azure to skip build
+          npm install --omit=dev --no-package-lock
           cat > .deployment <<'EOF'
           [config]
           SCM_DO_BUILD_DURING_DEPLOYMENT = false
           EOF
-
           zip -r ../build.zip .
-          cd ..
-
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          creds: ${{ github.event.inputs.environment == 'stg' && secrets.AZURE_CREDENTIALS_STG || github.event.inputs.environment == 'prd' && secrets.AZURE_CREDENTIALS_PROD || secrets.AZURE_CREDENTIALS_DEV }}
-
+          creds: ${{ secrets.AZURE_CREDENTIALS_PROD }}
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: build.zip
           startup-command: "npm start"
-
+      - name: Verify production frontend
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-all-errors https://tastematcher.art/ >/dev/null
       - name: Azure logout
         if: always()
         run: az logout

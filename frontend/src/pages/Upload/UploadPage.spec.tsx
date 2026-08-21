@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { UploadPage } from "./UploadPage";
 import { AuthContext } from "../../contexts/AuthContext";
-import { describe, it, expect } from "vitest";
+import { DomainContext } from "../../contexts/DomainContext";
 import { createMockAuthContext } from "../../test/mocks/authContext";
 import userEvent from "@testing-library/user-event";
 
@@ -29,7 +29,22 @@ const renderWithProviders = (component: React.ReactElement) => {
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={mockAuthContext}>
-        <BrowserRouter>{component}</BrowserRouter>
+        <DomainContext.Provider
+          value={{
+            currentDomain: {
+              id: "domain-1",
+              name: "Test Domain",
+              adminEmail: "owner@example.com",
+              status: "active",
+              createdAt: 1,
+              updatedAt: 1,
+            },
+            setCurrentDomain: jest.fn(),
+            isLoading: false,
+          }}
+        >
+          <BrowserRouter>{component}</BrowserRouter>
+        </DomainContext.Provider>
       </AuthContext.Provider>
     </QueryClientProvider>,
   );
@@ -40,7 +55,7 @@ describe("UploadPage", () => {
     renderWithProviders(<UploadPage />);
 
     expect(
-      screen.getByRole("heading", { name: /upload artwork/i }),
+      screen.getByRole("heading", { name: /upload new artwork/i }),
     ).toBeInTheDocument();
   });
 

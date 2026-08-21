@@ -1,0 +1,28 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "WEBSITE_NODE_DEFAULT_VERSION": "~24",
+    "FUNCTIONS_EXTENSION_VERSION": "~4",
+    "NODE_ENV": "development",
+    "TASTEMATCHER_RUNTIME_MODE": "local-production",
+    "TASTEMATCHER_DATA_ENV": "prd",
+    "TASTEMATCHER_LOCAL_PROD_ACK": "I_UNDERSTAND_THIS_USES_PRODUCTION_DATA",
+    "AzureWebJobsStorage": "<production-storage-connection-string>",
+    "AZURE_STORAGE_ACCOUNT": "<production-storage-account-name>",
+    "AZURE_STORAGE_ACCOUNT_KEY": "<production-storage-account-key>",
+    "IMAGE_PROCESSING_QUEUE_NAME": "<production-image-processing-queue>",
+    "NEW_ARTWORK_QUEUE_NAME": "<production-new-artwork-queue>",
+    "AZURE_AI_VISION_ENDPOINT": "https://<production-vision-resource>.cognitiveservices.azure.com/",
+    "AZURE_AI_VISION_KEY": "<production-vision-key>",
+    "COSMOS_DB_ENDPOINT": "https://<production-cosmos-account>.documents.azure.com:443/",
+    "COSMOS_DB_KEY": "<production-cosmos-key>",
+    "COSMOS_DB_DATABASE": "tastematcher",
+    "AZURE_COMMUNICATION_CONNECTION_STRING": "<production-communication-connection-string>",
+    "AZURE_EMAIL_SENDER": "<production-email-sender>",
+    "FRONTEND_URL": "http://localhost:3000",
+    "AzureWebJobs.ProcessImagesFromBlob.Disabled": "true",
+    "AzureWebJobs.NotifyUsersNewArtwork.Disabled": "true",
+    "AzureWebJobs.DailyDomainOwnerSummary.Disabled": "true"
+  }
+}

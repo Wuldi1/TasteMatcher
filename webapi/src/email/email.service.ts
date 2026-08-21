@@ -12,6 +12,10 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { EmailClient, EmailMessage } from "@azure/communication-email";
 import { Role, Proposal } from "@tastematcher/common";
+import {
+  shouldSendRealEmail,
+  shouldSendVerificationEmail,
+} from "../config/runtime-profile";
 
 export interface SendVerificationEmailPayload {
   recipient: string;
@@ -26,12 +30,14 @@ export class EmailService {
   private readonly connectionString?: string;
   private readonly senderAddress?: string;
   private readonly emailClient?: EmailClient;
-  private readonly isPrd?: boolean;
+  private readonly sendsRealEmail: boolean;
+  private readonly sendsVerificationEmail: boolean;
 
   constructor() {
     this.connectionString = process.env.AZURE_COMMUNICATION_CONNECTION_STRING;
     this.senderAddress = process.env.AZURE_EMAIL_SENDER;
-    this.isPrd = process.env.NODE_ENV === "prd";
+    this.sendsRealEmail = shouldSendRealEmail();
+    this.sendsVerificationEmail = shouldSendVerificationEmail();
 
     if (!this.connectionString || !this.senderAddress) {
       this.logger.warn(
@@ -101,7 +107,7 @@ export class EmailService {
     };
 
     try {
-      await this.sendEmail(message);
+      await this.sendEmail(message, "verification");
 
       this.logger.log({
         action: "sendVerificationEmail",
@@ -562,12 +568,21 @@ export class EmailService {
     };
   }
 
-  async sendEmail(message: EmailMessage): Promise<void> {
-    // Placeholder for future email sending functionality
-    if (this.isPrd && this.emailClient) {
+  async sendEmail(
+    message: EmailMessage,
+    deliveryType: "verification" | "side-effect" = "side-effect",
+  ): Promise<void> {
+    const isDeliveryAllowed =
+      deliveryType === "verification"
+        ? this.sendsVerificationEmail
+        : this.sendsRealEmail;
+
+    if (isDeliveryAllowed && this.emailClient) {
       try {
-        this.logger.log("Production environment detected; sending email", {
-          message,
+        this.logger.log({
+          action: "sendEmail",
+          deliveryType,
+          mode: "delivery",
         });
         const poller = await this.emailClient.beginSend(message);
         await poller.pollUntilDone();

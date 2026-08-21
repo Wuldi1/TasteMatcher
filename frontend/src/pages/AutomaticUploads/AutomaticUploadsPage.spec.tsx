@@ -6,7 +6,6 @@ import type {
   Domain,
   Role,
 } from "@tastematcher/common";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AuthContext } from "../../contexts/AuthContext";
 import { DomainContext } from "../../contexts/DomainContext";
@@ -16,11 +15,11 @@ import { apiClient } from "../../utils/api";
 import { NAVIGATION_LINKS } from "../../constants/navigation";
 import { AutomaticUploadsPage } from "./AutomaticUploadsPage";
 
-vi.mock("../../utils/api", () => ({
+jest.mock("../../utils/api", () => ({
   apiClient: {
-    getAllDomains: vi.fn(),
-    previewAutomaticUploads: vi.fn(),
-    approveAutomaticUploads: vi.fn(),
+    getAllDomains: jest.fn(),
+    previewAutomaticUploads: jest.fn(),
+    approveAutomaticUploads: jest.fn(),
   },
   ApiError: class ApiError extends Error {},
 }));
@@ -126,7 +125,7 @@ const renderPage = (role: Role = "domain_owner") => {
       <DomainContext.Provider
         value={{
           currentDomain: domain,
-          setCurrentDomain: vi.fn(),
+          setCurrentDomain: jest.fn(),
           isLoading: false,
         }}
       >
@@ -185,12 +184,12 @@ const toLocalDateTimeValue = (value: string): string => {
 
 describe("AutomaticUploadsPage", () => {
   beforeEach(() => {
-    vi.mocked(apiClient.getAllDomains).mockReset();
-    vi.mocked(apiClient.previewAutomaticUploads).mockReset();
-    vi.mocked(apiClient.approveAutomaticUploads).mockReset();
-    vi.mocked(apiClient.previewAutomaticUploads).mockResolvedValue(
-      previewResponse,
-    );
+    jest.mocked(apiClient.getAllDomains).mockReset();
+    jest.mocked(apiClient.previewAutomaticUploads).mockReset();
+    jest.mocked(apiClient.approveAutomaticUploads).mockReset();
+    jest
+      .mocked(apiClient.previewAutomaticUploads)
+      .mockResolvedValue(previewResponse);
   });
 
   it("previews drafts, edits local fields, excludes a lot, and approves the selection", async () => {
@@ -206,7 +205,7 @@ describe("AutomaticUploadsPage", () => {
       skipped: [],
       failed: [],
     };
-    vi.mocked(apiClient.approveAutomaticUploads).mockResolvedValue(approval);
+    jest.mocked(apiClient.approveAutomaticUploads).mockResolvedValue(approval);
     renderPage();
 
     const user = await previewAuction();
@@ -246,13 +245,20 @@ describe("AutomaticUploadsPage", () => {
 
     await user.clear(within(firstDraft).getByLabelText("Artist"));
 
-    expect(within(firstDraft).getByText("Artist is required.")).toBeInTheDocument();
+    expect(
+      within(firstDraft).getByText("Artist is required."),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Upload 2 selected artworks" }),
     ).toBeDisabled();
 
-    await user.type(within(firstDraft).getByLabelText("Artist"), "Corrected Artist");
-    expect(within(firstDraft).queryByText("Artist is required.")).not.toBeInTheDocument();
+    await user.type(
+      within(firstDraft).getByLabelText("Artist"),
+      "Corrected Artist",
+    );
+    expect(
+      within(firstDraft).queryByText("Artist is required."),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Upload 2 selected artworks" }),
     ).toBeEnabled();
@@ -275,7 +281,7 @@ describe("AutomaticUploadsPage", () => {
         },
       ],
     }));
-    vi.mocked(apiClient.previewAutomaticUploads).mockResolvedValue(response);
+    jest.mocked(apiClient.previewAutomaticUploads).mockResolvedValue(response);
     renderPage();
 
     const user = await previewAuction();
@@ -292,12 +298,14 @@ describe("AutomaticUploadsPage", () => {
     screen.getAllByLabelText("Auction end date").forEach((input) => {
       expect(input).toHaveValue("2026-09-01T18:00");
     });
-    expect(screen.queryByText("Auction end date is required.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Auction end date is required."),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Upload 2 selected artworks" }),
     ).toBeEnabled();
 
-    vi.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
+    jest.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
       created: [],
       skipped: [],
       failed: [],
@@ -307,7 +315,7 @@ describe("AutomaticUploadsPage", () => {
     );
     const expectedIso = new Date(2026, 8, 1, 18, 0).toISOString();
     await waitFor(() => {
-      const request = vi.mocked(apiClient.approveAutomaticUploads).mock
+      const request = jest.mocked(apiClient.approveAutomaticUploads).mock
         .calls[0][1];
       expect(request.drafts).toHaveLength(2);
       request.drafts.forEach((draft) => {
@@ -317,7 +325,7 @@ describe("AutomaticUploadsPage", () => {
   });
 
   it("renders ISO auction dates locally and stores individual edits as ISO UTC", async () => {
-    vi.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
+    jest.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
       created: [],
       skipped: [],
       failed: [],
@@ -334,16 +342,16 @@ describe("AutomaticUploadsPage", () => {
     await user.clear(endDateInput);
     await user.type(endDateInput, "2026-09-02T10:30");
     await user.click(
-      within(screen.getByTestId("automatic-upload-draft-draft-2")).getByLabelText(
-        "Include lot 13",
-      ),
+      within(
+        screen.getByTestId("automatic-upload-draft-draft-2"),
+      ).getByLabelText("Include lot 13"),
     );
     await user.click(
       screen.getByRole("button", { name: "Upload 1 selected artwork" }),
     );
 
     await waitFor(() => {
-      const request = vi.mocked(apiClient.approveAutomaticUploads).mock
+      const request = jest.mocked(apiClient.approveAutomaticUploads).mock
         .calls[0][1];
       expect(request.drafts[0].artwork.endDate).toBe(
         new Date(2026, 8, 2, 10, 30).toISOString(),
@@ -352,9 +360,11 @@ describe("AutomaticUploadsPage", () => {
   });
 
   it("disables selection and draft editing while approval is pending", async () => {
-    vi.mocked(apiClient.approveAutomaticUploads).mockImplementation(
-      () => new Promise<AutomaticUploadApprovalResponse>(() => undefined),
-    );
+    jest
+      .mocked(apiClient.approveAutomaticUploads)
+      .mockImplementation(
+        () => new Promise<AutomaticUploadApprovalResponse>(() => undefined),
+      );
     renderPage();
 
     const user = await previewAuction();
@@ -376,7 +386,7 @@ describe("AutomaticUploadsPage", () => {
   });
 
   it("retains failed drafts with an actionable approval message", async () => {
-    vi.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
+    jest.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
       created: [
         {
           draftId: "draft-1",
@@ -405,14 +415,16 @@ describe("AutomaticUploadsPage", () => {
     );
 
     expect(
-      await screen.findByText("Phillips blocked the image download. Retry this lot."),
+      await screen.findByText(
+        "Phillips blocked the image download. Retry this lot.",
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByText("Untitled")).not.toBeInTheDocument();
     expect(screen.getByText("Second work")).toBeInTheDocument();
   });
 
   it("uses structured failure issues without leaving a generic validation blocker", async () => {
-    vi.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
+    jest.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
       created: [],
       skipped: [],
       failed: [
@@ -440,9 +452,9 @@ describe("AutomaticUploadsPage", () => {
 
     const user = await previewAuction();
     await user.click(
-      within(screen.getByTestId("automatic-upload-draft-draft-1")).getByLabelText(
-        "Include lot 12",
-      ),
+      within(
+        screen.getByTestId("automatic-upload-draft-draft-1"),
+      ).getByLabelText("Include lot 12"),
     );
     await user.click(
       screen.getByRole("button", { name: "Upload 1 selected artwork" }),
@@ -476,7 +488,7 @@ describe("AutomaticUploadsPage", () => {
   });
 
   it("clears a generic validation failure after any artwork field is corrected", async () => {
-    vi.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
+    jest.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
       created: [],
       skipped: [],
       failed: [
@@ -494,9 +506,9 @@ describe("AutomaticUploadsPage", () => {
 
     const user = await previewAuction();
     await user.click(
-      within(screen.getByTestId("automatic-upload-draft-draft-1")).getByLabelText(
-        "Include lot 12",
-      ),
+      within(
+        screen.getByTestId("automatic-upload-draft-draft-1"),
+      ).getByLabelText("Include lot 12"),
     );
     await user.click(
       screen.getByRole("button", { name: "Upload 1 selected artwork" }),
@@ -524,9 +536,10 @@ describe("AutomaticUploadsPage", () => {
 
   it("splits large approvals into chunks of at most 20 and aggregates results", async () => {
     const response = buildLargePreview(101);
-    vi.mocked(apiClient.previewAutomaticUploads).mockResolvedValue(response);
-    vi.mocked(apiClient.approveAutomaticUploads).mockImplementation(
-      async (_domainId, request) => ({
+    jest.mocked(apiClient.previewAutomaticUploads).mockResolvedValue(response);
+    jest
+      .mocked(apiClient.approveAutomaticUploads)
+      .mockImplementation(async (_domainId, request) => ({
         created: request.drafts.map((draft) => ({
           draftId: draft.draftId,
           status: "created" as const,
@@ -535,8 +548,7 @@ describe("AutomaticUploadsPage", () => {
         })),
         skipped: [],
         failed: [],
-      }),
-    );
+      }));
     renderPage();
 
     const user = await previewAuction();
@@ -548,18 +560,23 @@ describe("AutomaticUploadsPage", () => {
       expect(apiClient.approveAutomaticUploads).toHaveBeenCalledTimes(6);
     });
     expect(
-      vi
+      jest
         .mocked(apiClient.approveAutomaticUploads)
         .mock.calls.map((call) => call[1].drafts.length),
     ).toEqual([20, 20, 20, 20, 20, 1]);
-    expect(await screen.findByText("101 artworks uploaded.")).toBeInTheDocument();
-    expect(screen.getByText("No drafts remain in this batch.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("101 artworks uploaded."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("No drafts remain in this batch."),
+    ).toBeInTheDocument();
   });
 
   it("keeps prior chunk successes when a later approval request fails", async () => {
     const response = buildLargePreview(101);
-    vi.mocked(apiClient.previewAutomaticUploads).mockResolvedValue(response);
-    vi.mocked(apiClient.approveAutomaticUploads)
+    jest.mocked(apiClient.previewAutomaticUploads).mockResolvedValue(response);
+    jest
+      .mocked(apiClient.approveAutomaticUploads)
       .mockResolvedValueOnce({
         created: response.drafts.slice(0, 20).map((draft) => ({
           draftId: draft.draftId,
@@ -578,7 +595,9 @@ describe("AutomaticUploadsPage", () => {
       screen.getByRole("button", { name: "Upload 101 selected artworks" }),
     );
 
-    expect(await screen.findByText("20 artworks uploaded.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("20 artworks uploaded."),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         "Upload stopped after 20 of 101 drafts were processed. Approval service unavailable.",
@@ -617,14 +636,22 @@ describe("AutomaticUploadsPage", () => {
   });
 
   it("loads a required target gallery selector for a global admin", async () => {
-    vi.mocked(apiClient.getAllDomains).mockResolvedValue([
-      domain,
-      { ...domain, id: "domain-2", name: "South Gallery" },
-    ]);
+    jest
+      .mocked(apiClient.getAllDomains)
+      .mockResolvedValue([
+        domain,
+        { ...domain, id: "domain-2", name: "South Gallery" },
+      ]);
     renderPage("global_admin");
 
-    expect(await screen.findByRole("combobox", { name: "Target gallery" })).toBeInTheDocument();
-    expect(screen.getByText("Choose the gallery that will receive approved artwork.")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("combobox", { name: "Target gallery" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Choose the gallery that will receive approved artwork.",
+      ),
+    ).toBeInTheDocument();
   });
 });
 
@@ -647,7 +674,9 @@ describe("RoleProtectedRoute", () => {
             <Route
               path="/automatic-uploads"
               element={
-                <RoleProtectedRoute allowedRoles={["domain_owner", "global_admin"]}>
+                <RoleProtectedRoute
+                  allowedRoles={["domain_owner", "global_admin"]}
+                >
                   <div>Restricted automatic uploads</div>
                 </RoleProtectedRoute>
               }
@@ -658,7 +687,9 @@ describe("RoleProtectedRoute", () => {
       </AuthContext.Provider>,
     );
 
-    expect(screen.queryByText("Restricted automatic uploads")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Restricted automatic uploads"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Home route")).toBeInTheDocument();
   });
 

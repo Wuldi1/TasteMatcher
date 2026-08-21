@@ -202,19 +202,19 @@ new markup.
 
 ## Limits
 
-| Control | MVP value |
-|---|---:|
-| HTML response | 2 MiB maximum |
-| Image response | 10 MiB maximum |
-| Remote request timeout | 15 seconds |
-| Redirects | 5 maximum |
-| Global JSON/urlencoded request body | 2 MiB maximum |
-| Preview drafts | 200 maximum |
-| Preview detail workers | 6 concurrent lots |
-| Preview detail scheduling budget | 30 seconds; remaining lots stay editable with warnings |
-| Approval drafts per API request | 20 maximum |
-| Frontend approval chunk | 20 drafts |
-| Approval workers | 3 concurrent items |
+| Control                             |                                              MVP value |
+| ----------------------------------- | -----------------------------------------------------: |
+| HTML response                       |                                          2 MiB maximum |
+| Image response                      |                                         10 MiB maximum |
+| Remote request timeout              |                                             15 seconds |
+| Redirects                           |                                              5 maximum |
+| Global JSON/urlencoded request body |                                          2 MiB maximum |
+| Preview drafts                      |                                            200 maximum |
+| Preview detail workers              |                                      6 concurrent lots |
+| Preview detail scheduling budget    | 30 seconds; remaining lots stay editable with warnings |
+| Approval drafts per API request     |                                             20 maximum |
+| Frontend approval chunk             |                                              20 drafts |
+| Approval workers                    |                                     3 concurrent items |
 
 The HTML and image limits are checked against both `Content-Length` and bytes
 read from the response stream. A preview containing more than 200 parsed lots
@@ -324,11 +324,9 @@ first lot's date, medium, dimensions, signature, estimate, sold result, and
 selected largest image matched the live source. No live or production upload
 was performed.
 
-## Release Environment
+## Release Target
 
-TasteMatcher has no staging environment. It was intentionally disabled to
-reduce operating cost, so staging is not a release requirement or an available
-validation target for this feature.
+Production is the sole deployment target for this feature.
 
 Before deployment, complete the deterministic local checks above. Local write
 tests may be performed only when explicitly configured credentials point to

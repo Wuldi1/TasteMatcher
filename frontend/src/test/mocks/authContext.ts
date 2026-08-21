@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 import type { useAuth } from "../../contexts/AuthContext";
 
 export type MockAuthContext = ReturnType<typeof useAuth>;
@@ -9,15 +8,15 @@ export const createMockAuthContext = (
   user: null,
   isAuthenticated: false,
   isInitializing: false,
-  logout: vi.fn(),
-  setUserFromToken: vi.fn(),
-  setUserFromUser: vi.fn(),
-  refreshUser: vi.fn().mockResolvedValue(null),
+  logout: jest.fn(),
+  setUserFromToken: jest.fn(),
+  setUserFromUser: jest.fn(),
+  refreshUser: jest.fn().mockResolvedValue(null),
   stats: null,
   answeredQuestions: 0,
   totalQuestions: 0,
   isStatsLoading: false,
-  refreshStats: vi.fn().mockResolvedValue(undefined),
-  incrementSwipeCount: vi.fn(),
+  refreshStats: jest.fn().mockResolvedValue(undefined),
+  incrementSwipeCount: jest.fn(),
   ...overrides,
 });

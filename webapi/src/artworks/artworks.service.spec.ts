@@ -102,7 +102,6 @@ describe("ArtworksService.findAll", () => {
         query: expect.stringContaining("c.domainId = @param0"),
       }),
       expect.objectContaining({
-        partitionKey: "domain-1",
         maxItemCount: 1,
         continuationToken: undefined,
       }),
@@ -111,7 +110,6 @@ describe("ArtworksService.findAll", () => {
       2,
       expect.any(Object),
       expect.objectContaining({
-        partitionKey: "domain-1",
         maxItemCount: 1,
         continuationToken: "page-1",
       }),

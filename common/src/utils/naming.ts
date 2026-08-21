@@ -99,17 +99,6 @@ export const getSearchDocId = (domainId: string, artworkId: string): string => {
   return `${domainId}::${artworkId}`;
 };
 
-export const getQueueName = (env: string): string => {
-  const normalized = env.trim().toLowerCase();
-  if (!normalized) {
-    throw new BadRequestException("env required");
-  }
-  return `tastematcher-${normalized}-queue-indexing`;
-};
-
-export const getQueueDlqName = (env: string): string =>
-  `${getQueueName(env)}-dlq`;
-
 // Returns thumbnail size string based on dimensions - Small, Medium, Large
 export const getThumbnailSizeFromDimensions = (
   width: number,

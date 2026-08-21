@@ -3,8 +3,18 @@ import { AppModule } from "./app.module";
 import { ValidationPipe } from "@nestjs/common";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { configureHttpBodyParsers } from "./http-body-parser";
+import {
+  assertSafeRuntimeProfile,
+  isLocalProductionRuntime,
+} from "./config/runtime-profile";
 
 async function bootstrap() {
+  assertSafeRuntimeProfile();
+  if (isLocalProductionRuntime()) {
+    console.warn(
+      "WARNING: local API is connected to PRODUCTION data; only verification email delivery is enabled.",
+    );
+  }
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
   });

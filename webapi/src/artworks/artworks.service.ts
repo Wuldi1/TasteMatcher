@@ -67,13 +67,45 @@ export class ArtworksService {
     };
 
     try {
-      const result = await executeCosmosQuery<Artwork>(
-        container,
-        "domainId",
-        domainId,
-        normalizedQueryParams,
-        { field: "createdAt", order: "desc" },
-      );
+      const limit = Math.min(queryParams.limit ?? 20, 100);
+      const collectedItems: Artwork[] = [];
+      let continuationToken = queryParams.continuationToken;
+      let hasMore = false;
+
+      do {
+        const page = await executeCosmosQuery<Artwork>(
+          container,
+          "domainId",
+          domainId,
+          {
+            ...normalizedQueryParams,
+            continuationToken,
+          },
+          { field: "createdAt", order: "desc" },
+        );
+
+        collectedItems.push(...page.items);
+        continuationToken = page.continuationToken;
+        hasMore = page.hasMore;
+
+        const visibleCount = collectedItems.filter(
+          (artwork) =>
+            this.canViewerSeeArtwork(artwork, viewer) &&
+            (!hideEndedAuctions ||
+              artwork.isAuction !== true ||
+              !isAuctionEnded(artwork)),
+        ).length;
+
+        if (visibleCount >= limit || !hasMore || !continuationToken) {
+          break;
+        }
+      } while (hasMore && Boolean(continuationToken));
+
+      const result = {
+        items: collectedItems,
+        continuationToken,
+        hasMore,
+      };
 
       this.logger.log(
         `Fetched ${result.items.length} artworks for domain ${domainId}`,
@@ -153,7 +185,7 @@ export class ArtworksService {
       });
 
       return {
-        items: filteredItems,
+        items: filteredItems.slice(0, limit),
         continuationToken: result.continuationToken,
         hasMore: result.hasMore,
       };

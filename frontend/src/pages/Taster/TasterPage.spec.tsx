@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TasterPage } from "./TasterPage";
 import { AuthContext } from "../../contexts/AuthContext";
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createMockAuthContext } from "../../test/mocks/authContext";
 
 const buildArtworks = (count: number, startAt: number = 1) =>
@@ -19,16 +18,16 @@ const buildArtworks = (count: number, startAt: number = 1) =>
     };
   });
 
-const mockFetchUntasted = vi.fn();
+const mockFetchUntasted = jest.fn();
 
-const mockSavePreference = vi.fn();
+const mockSavePreference = jest.fn();
 
-vi.mock("../../utils/api", () => ({
+jest.mock("../../utils/api", () => ({
   apiClient: {
     fetchUntastedArtworks: (...args: unknown[]) => mockFetchUntasted(...args),
     saveArtworkPreference: (...args: unknown[]) => mockSavePreference(...args),
-    refreshCurrentUser: vi.fn(),
-    setAuthToken: vi.fn(),
+    refreshCurrentUser: jest.fn(),
+    setAuthToken: jest.fn(),
   },
 }));
 
@@ -45,6 +44,8 @@ const queryClient = new QueryClient({
     queries: { retry: false },
   },
 });
+
+const originalImage = window.Image;
 
 const renderWithProviders = (component: React.ReactElement) => {
   const mockAuthContext = createMockAuthContext({
@@ -80,6 +81,8 @@ const getCurrentArtworkCard = async () => {
     ).not.toBeDisabled();
   });
 
+  // The card has no accessible role of its own; traverse from its visible title.
+  // eslint-disable-next-line testing-library/no-node-access
   const card = screen.getByText("Artwork 1").closest(".taster-card");
   expect(card).not.toBeNull();
   return card as HTMLElement;
@@ -87,10 +90,11 @@ const getCurrentArtworkCard = async () => {
 
 describe("TasterPage", () => {
   beforeEach(() => {
-    vi.useRealTimers();
-    vi.stubGlobal(
-      "Image",
-      class {
+    jest.useRealTimers();
+    Object.defineProperty(window, "Image", {
+      configurable: true,
+      writable: true,
+      value: class {
         onload: ((event: Event) => void) | null = null;
         onerror: ((event: Event) => void) | null = null;
         private imageSrc = "";
@@ -104,7 +108,7 @@ describe("TasterPage", () => {
           return this.imageSrc;
         }
       },
-    );
+    });
     queryClient.clear();
     mockFetchUntasted.mockReset();
     mockFetchUntasted.mockResolvedValue({
@@ -134,6 +138,14 @@ describe("TasterPage", () => {
       expect(
         screen.getByLabelText(/Dislike this artwork/i),
       ).toBeInTheDocument();
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, "Image", {
+      configurable: true,
+      writable: true,
+      value: originalImage,
     });
   });
 
@@ -301,12 +313,12 @@ describe("TasterPage", () => {
 
     await getCurrentArtworkCard();
 
-    vi.useFakeTimers();
+    jest.useFakeTimers();
     fireEvent.click(screen.getByLabelText(/^Like this artwork/i));
     act(() => {
-      vi.advanceTimersByTime(350);
+      jest.advanceTimersByTime(350);
     });
-    vi.useRealTimers();
+    jest.useRealTimers();
 
     await waitFor(() => {
       expect(mockFetchUntasted).toHaveBeenCalledTimes(2);

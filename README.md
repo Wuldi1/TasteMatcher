@@ -29,27 +29,39 @@ tastematcher
 
 ### Prerequisites
 
-- Node.js 22+
-- pnpm 10+
+- Node.js 24 LTS (use the committed `.nvmrc`)
+- pnpm 10 (the exact version is pinned in `package.json`)
+- Azure CLI and `jq` when syncing the production-backed local profile
 
 ### Install
 
 ```bash
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 ```
 
-### Run the API
+### Run locally against production-backed data
+
+Production data is live customer data. The sync command is read-only in Azure,
+but API write endpoints still modify production. Authenticate to the approved
+subscription, generate the ignored owner-only configuration, and then start the
+local API and frontend. The command reuses a valid Azure CLI session, opens the
+Microsoft login flow only when needed, and selects the approved subscription
+automatically:
 
 ```bash
-pnpm run start:dev:webapi
+pnpm run start:local:production
 ```
 
-API runs on `http://localhost:8080`.
+The API runs on `http://localhost:8080` and the frontend on
+`http://localhost:3000`. Local browser sessions always use the local API.
+Functions are not started by this command because their triggers can consume
+production queues; see `functions/README.md` for the guarded one-trigger opt-in.
 
-### Run the Frontend
+To start only the already-synced production-backed API, run:
 
 ```bash
-pnpm run start:frontend
+pnpm run start:local:webapi
 ```
 
 ### Build Targets
@@ -60,11 +72,36 @@ pnpm run build:frontend
 pnpm run build:functions
 ```
 
-### Environment Notes
+### Quality gates and deployment
 
-- Root `.env.example`: Not found in repo.
-- `scripts/dev.sh`: Not found in repo.
-- API env files currently present in `webapi/`: `.env.local`, `.env.dev`, `.env.prd`.
+Install dependencies once to activate the Husky hooks. Every commit runs
+linting, type-checking, and all unit/component tests; every push additionally
+runs every production build and repository safety validation:
+
+```bash
+pnpm run precommit:check
+pnpm run prepush:check
+pnpm run ci:check
+```
+
+Pull requests to `main` run the relevant component workflow without deploying.
+After all gates pass, a matching push to `main` automatically deploys the
+affected Web API, frontend, or Functions component to production and performs a
+post-deployment health check. Manual workflow dispatch uses the same gates and
+cannot bypass validation.
+
+### Environment safety
+
+- Never commit `webapi/.env.local-production` or
+  `functions/local.settings.json`; the sync creates both with mode `600` and
+  does not print their values.
+- `webapi/.env.example` and `functions/local.settings.example.json` contain
+  placeholders only.
+- Previously tracked credentials must be rotated because deleting current
+  files does not remove values from Git history.
+- Production runtime changes use
+  `scripts/azure/update-node24-runtimes.sh`; its default mode is read-only and
+  any approved update changes exactly one component.
 
 ## Sub-Agent Workflow
 

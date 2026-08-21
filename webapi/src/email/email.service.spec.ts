@@ -45,6 +45,7 @@ describe("EmailService", () => {
   });
 
   it("sends verification email when configuration is provided", async () => {
+    process.env.NODE_ENV = "prd";
     process.env.AZURE_COMMUNICATION_CONNECTION_STRING =
       "endpoint=https://unit-test/;accessKey=abc";
     process.env.AZURE_EMAIL_SENDER = "no-reply@example.com";
@@ -91,5 +92,36 @@ describe("EmailService", () => {
     expect(warnSpy).toHaveBeenCalledWith(
       "Azure Communication Services email configuration missing; verification emails will be logged only.",
     );
+  });
+
+  it("sends only verification email in local-production mode", async () => {
+    process.env.NODE_ENV = "development";
+    process.env.TASTEMATCHER_RUNTIME_MODE = "local-production";
+    process.env.TASTEMATCHER_DATA_ENV = "prd";
+    process.env.TASTEMATCHER_EMAIL_MODE = "verification-only";
+    process.env.AZURE_COMMUNICATION_CONNECTION_STRING =
+      "endpoint=https://unit-test/;accessKey=abc";
+    process.env.AZURE_EMAIL_SENDER = "no-reply@example.com";
+
+    const service = new EmailService();
+    await service.sendVerificationEmail({
+      recipient: "user@example.com",
+      domainName: "Production-backed test",
+      code: "123456",
+      expiresAt: new Date("2025-01-01T00:00:00.000Z").getTime(),
+    });
+
+    expect(MockedEmailClient).toHaveBeenCalled();
+    expect(getMockedBeginSend()).toHaveBeenCalledTimes(1);
+
+    process.env.FRONTEND_URL = "http://localhost:3000";
+    await service.sendUserInvitation(
+      "invitee@example.com",
+      "Invitee",
+      "domain-1",
+      "customer" as never,
+    );
+
+    expect(getMockedBeginSend()).toHaveBeenCalledTimes(1);
   });
 });

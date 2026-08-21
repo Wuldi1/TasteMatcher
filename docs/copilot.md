@@ -13,7 +13,7 @@
 7. **Logging & metrics** — add structured logs at entry/exit/error points for each public API and worker. Use `pino` style structured logs (or your chosen logger). Include correlation id / request id where relevant. Add a metric increment for significant events (ingest_received, ingest_failed, ingest_succeeded).
 8. **Errors** — never swallow exceptions. Use typed error classes and map them to proper HTTP codes in controllers (401,403,404,422,500). Log the error with context and throw / return proper response.
 9. **Idempotency** — for any background job or external side-effect operation, implement idempotency checks. Use DB flags or messageId checks.
-10. **Security** — never print secrets in logs. Never commit secrets. Use `.env` or Key Vault.
+10. **Security** — never print or commit secrets. Use ignored local configuration files and production GitHub Actions secrets.
 11. **Documentation** — update README, endpoints docs, and the `CHANGELOG.md` for behavior changes or added features.
 12. **Frontend quality & accessibility** — every FE change must be clean and smooth (no janky UI/UX), must support mobile and desktop layouts responsively, and must meet Accessibility requirements (follow WCAG AA at minimum). Include accessibility attributes (aria-\*) where relevant, keyboard navigation, focus states, semantic HTML, and automated/audited accessibility tests in the PR.
 
@@ -47,11 +47,11 @@ Copilot must ensure the generated files satisfy all items above.
 When asked to implement a new endpoint or feature, **always** follow this order:
 
 1. Create or update test files first (unit tests + minimal integration test). Example file paths:
-   - Backend unit: `backend/src/module/service.spec.ts`
-   - Backend integration: `backend/test/integration/feature.integration.spec.ts`
+   - Web API unit: `webapi/src/module/service.spec.ts`
+   - Functions integration: `functions/src/module/function.integration.spec.ts`
    - Frontend: `frontend/src/components/Component.spec.tsx`
 
-2. Run tests locally `pnpm --filter backend test` (or `pnpm --filter frontend test`) — fix failing tests first.
+2. Run tests locally with the relevant workspace filter — fix failing tests first.
 3. Implement code until tests pass.
 4. Add E2E or Playwright smoke test if the change touches user flow.
 5. Add test coverage to ensure the changed module has >= 80% coverage; critical modules must be >= 90%.
@@ -60,8 +60,8 @@ When asked to implement a new endpoint or feature, **always** follow this order:
 **Test structure guidelines**
 
 - Unit tests must mock external dependencies (db, storage, network) and validate behavior and edge cases.
-- Integration tests use local dev stack (Azurite, sqlite) and are permitted to be slower. Keep a small test dataset.
-- Use consistent test fixtures in `backend/test/fixtures` and `frontend/test/fixtures`.
+- Integration tests must use isolated mocks or explicit emulators and must never point at production data.
+- Keep fixtures beside the package that owns the behavior.
 
 ---
 
@@ -136,12 +136,12 @@ Refs: #ISSUE
 
 Add (or update) CI workflow steps to run these commands in order:
 
-1. `pnpm -w install`
-2. `pnpm -w -r lint` (eslint + prettier)
-3. `pnpm -w -r typecheck` (tsc --noEmit)
-4. `pnpm -w -r test` (run fast unit tests)
-5. `pnpm --filter backend run test:integration` (optional stage)
-6. `pnpm -w -r build` (ensure compile)
+1. `corepack pnpm install --frozen-lockfile`
+2. `pnpm run lint`
+3. `pnpm run typecheck`
+4. `pnpm run test`
+5. `pnpm run build`
+6. `pnpm run validate:repo`
 
 If any step fails, CI must block merge.
 
@@ -159,7 +159,7 @@ For any refactor touching >1 file or shared code:
 
 ## 8 — Error handling & retries (workers / external calls)
 
-- Any call to external systems (Blob, Queue, Search, OpenAI) must be wrapped with retry logic (exponential backoff) with bounded retries and proper circuit-breaker semantics if repeated failures happen.
+- Any call to external systems (Blob, Queue, Cosmos DB, Vision, or Communication Services) must use bounded retry behavior appropriate to that SDK and operation.
 - After retry exhaustion, set a clear `indexingError` in DB and send `metrics.increment('indexing_failed')` and `logger.error` with full context.
 - Implement a dead-letter mechanism for background jobs and surface failed jobs in admin UI.
 
@@ -167,7 +167,7 @@ For any refactor touching >1 file or shared code:
 
 ## 9 — Minimal logging level guidelines (what to log/avoid)
 
-- **Debug**: detailed internal data (only in dev)
+- **Debug**: detailed internal data (only during guarded local execution)
 - **Info**: high-level actions (ingest received, user logged in, job enqueued)
 - **Warn**: recoverable unexpected conditions
 - **Error**: failures requiring attention — include stack and context
@@ -182,7 +182,7 @@ When asked to implement `upload.service.uploadFileAndEnqueue`, Copilot must:
 1. Search repo for existing upload logic.
 2. If none, create `UploadService` with:
    - `uploadFileAndEnqueue(domainId, buffer, filename, contentType, metadata)` signature.
-   - Use Prisma to create Artwork row in a transaction.
+   - Use the shared Cosmos DB service to create the Artwork record.
    - Use `@azure/storage-blob` to upload buffer safely.
    - Use `@azure/storage-queue` to enqueue base64 message.
    - Add unit tests mocking blob & queue clients.
@@ -194,23 +194,8 @@ When asked to implement `upload.service.uploadFileAndEnqueue`, Copilot must:
 
 ## 11 — Tooling & developer ergonomics (commands to run locally)
 
-Include these scripts in root `package.json` and Copilot should use them in examples:
-
-```json
-{
-  "scripts": {
-    "dev": "pnpm --parallel --filter backend dev --filter frontend dev",
-    "lint": "pnpm --filter backend lint && pnpm --filter frontend lint",
-    "typecheck": "pnpm --filter backend typecheck && pnpm --filter frontend typecheck",
-    "test": "pnpm -w -r test",
-    "test:backend": "pnpm --filter backend test",
-    "test:frontend": "pnpm --filter frontend test",
-    "ci-check": "pnpm install && pnpm lint && pnpm typecheck && pnpm test"
-  }
-}
-```
-
-Developers must run `pnpm run ci-check` before opening a PR.
+Use the scripts already defined in root `package.json`. Developers must run
+`pnpm run ci:check` before opening a PR.
 
 ---
 
@@ -225,7 +210,7 @@ When generating code, **simulate a senior engineer**:
 
 ---
 
-## 13 — Azure Functions Configuration (environment-specific)
+## 13 — Azure Configuration and Production Safety
 
 ### Azure Platform: Linux (all services)
 
@@ -237,18 +222,30 @@ When generating code, **simulate a senior engineer**:
 - ✅ **Industry standard** - Modern serverless and container platforms default to Linux
 - ✅ **Cost effective** - Linux App Service plans are typically 10-15% cheaper than Windows
 
-**Azure Resources on Linux:**
+**Configured Azure resources:**
 
-- Azure Functions: Linux with Node.js 22 runtime
-- Backend API (App Service): Linux with Node.js 22-lts
-- Frontend (App Service): Linux with Node.js 22-lts (serving static files via `serve`)
+- Azure Functions: Linux with Node.js 24 runtime configuration
+- Backend API (App Service): Linux with Node.js 24 LTS configuration
+- Frontend (App Service): Linux with Node.js 24 LTS configuration (serving
+  static files via `serve`)
+
+Repository configuration selecting Node.js 24 does not prove that the live
+Azure runtimes have been updated. Run
+`scripts/azure/update-node24-runtimes.sh` in its default read-only mode before
+any separately approved, one-component production update.
 
 ### Local Development (Functions)
 
 - Configuration comes from `local.settings.json` (auto-loaded by Azure Functions Core Tools)
 - **Never use `.env` files** in Functions projects
 - **Never commit `local.settings.json`** to git (add to `.gitignore`)
-- Provide `local.settings.json.example` as a template
+- Provide `local.settings.example.json` as a template
+- Generate the ignored production-backed settings with
+  `scripts/azure/sync-local-production-config.sh`; do not paste credentials into
+  the example file.
+- Keep every local trigger disabled by default. Use only the guarded,
+  one-trigger opt-in documented in `functions/README.md` because a trigger can
+  consume production messages or mutate live data.
 
 ### Azure Deployment (Functions & Web Apps)
 
@@ -256,6 +253,13 @@ When generating code, **simulate a senior engineer**:
 - **No environment files are deployed** - Application Settings are set via Azure CLI
 - Values are available as `process.env.*` at runtime
 - All services run on **Linux containers** for consistency
+- Production (`prd`) is the only Azure environment. Never generate or select
+  another Azure target or credential.
+- Pull requests to `main` lint, type-check, test, and build without deploying.
+  Matching pushes to `main` automatically deploy the affected component to the
+  `prd` GitHub environment after every gate passes, then run a production
+  health check. Manual dispatch follows the same gated path.
+- Never run the broad provisioning script merely to change a runtime.
 
 ### Configuration Loading Pattern
 
@@ -285,5 +289,3 @@ With Linux on all Azure resources, native modules like `sharp` work seamlessly:
 - No need for `--platform` or `--arch` flags during deployment
 - npm/pnpm automatically installs the correct binaries for the target platform
 - Consistent behavior across all environments
-
-https://tastematcherdevsa.blob.core.windows.net/originals/a7912bc0-385e-44c3-b072-c2d991bb6b45/artworks/7875c72b-121a-4ead-905c-3bbed5fd972b/original.jpeg

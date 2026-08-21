@@ -6,7 +6,7 @@ import {
   Logger,
 } from "@nestjs/common";
 import { v4 as uuidv4 } from "uuid";
-import { createHash } from "crypto";
+import { createHash, randomInt } from "crypto";
 import { sign } from "jsonwebtoken";
 import {
   CosmosService,
@@ -18,6 +18,7 @@ import {
 import { EmailService } from "../email/email.service";
 import { CreateDomainRequestDto } from "./dto/create-domain-request.dto";
 import { UpdateDomainDto } from "./dto/update-domain.dto";
+import { shouldUseSecureAuthCodes } from "../config/runtime-profile";
 
 const VERIFICATION_TTL_MS = 10 * 60 * 1000;
 const VECTOR_DIMENSIONS = 1024;
@@ -566,8 +567,9 @@ export class DomainsService {
    * Generate 6-digit verification code
    */
   private generateVerificationCode(): string {
-    // TODO: Use randomInt in production
-    // return randomInt(0, 1_000_000).toString().padStart(6, '0');
+    if (shouldUseSecureAuthCodes()) {
+      return randomInt(0, 1_000_000).toString().padStart(6, "0");
+    }
     return "000000";
   }
 

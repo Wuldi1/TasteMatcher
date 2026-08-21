@@ -16,37 +16,37 @@ React + TypeScript (Create React App) frontend for the TasteMatcher art recommen
 
 ### Prerequisites
 
-- Node.js 22+
-- pnpm 8+
+- Node.js 24 LTS
+- pnpm (use the workspace version managed by Corepack)
 
 ### Installation
 
 ```bash
-cd frontend
+corepack enable
 pnpm install
 ```
 
 ### Development
 
 ```bash
-# Start dev server
-pnpm start
+# From the repository root, start the local API first (port 8080), then:
+pnpm --filter @tastematcher/frontend start
 
 # Run tests
-pnpm test
+pnpm --filter @tastematcher/frontend test --runInBand
 
 # Type checking
-pnpm typecheck
+pnpm --filter @tastematcher/frontend typecheck
 
 # Linting
-pnpm lint
+pnpm --filter @tastematcher/frontend lint
 ```
 
 ### Build
 
 ```bash
 # Production build
-pnpm build
+pnpm --filter @tastematcher/frontend build
 ```
 
 ## Project Structure
@@ -60,7 +60,13 @@ The frontend project is structured as follows:
 
 ## API Integration
 
-The frontend communicates with the backend API. Ensure that the backend server is running to fetch data successfully.
+The local frontend always calls `http://localhost:8080`. Copy `.env.example` to
+`.env.local` only if you need the documented local setting; both files contain
+an API URL, never database credentials. The local Web API owns the separately
+configured, production-backed data connection.
+
+Production builds use `https://api.tastematcher.art`. The deployment workflow
+targets only the `prd` GitHub environment and `tastematcher-prd-web` App Service.
 
 ## Contributing
 

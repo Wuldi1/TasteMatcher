@@ -9,13 +9,14 @@
     "typecheck": "tsc --noEmit",
     "eject": "react-scripts eject",
     "build": "react-scripts build",
-    "start": "react-scripts start"
+    "start": "react-scripts start",
+    "start:local:production": "react-scripts start"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.6",
     "@tanstack/react-query-devtools": "^5.62.14",
     "@tastematcher/common": "workspace:*",
-    "@types/node": "^18.19.130",
+    "@types/node": "^24.9.2",
     "@types/react": "^18.3.26",
     "@types/react-dom": "^18.3.7",
     "env-cmd": "^10.1.0",
@@ -61,6 +62,6 @@
     ]
   },
   "engines": {
-    "node": ">=22.x"
+    "node": ">=24 <25"
   }
 }
