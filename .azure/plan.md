@@ -6,6 +6,32 @@ Generated: 2026-08-20
 
 ---
 
+## 0. CI Incident: Clean-Checkout Shared Package Ordering
+
+**Goal:** Fix the three production workflows that failed on commit `2c43aa54`
+before deployment because fresh GitHub runners could not resolve
+`@tastematcher/common` during dependent-package type-checking.
+
+**Path:** Build the shared package immediately after dependency installation in
+each component workflow, make the local aggregate quality gate build it before
+dependent checks, and add a static ordering assertion so the clean-checkout
+prerequisite cannot silently regress. Update first-party GitHub setup actions to
+their Node 24-based major versions while touching the workflows. No Azure
+resource configuration or application runtime behavior changes.
+
+### Incident checklist
+
+- [x] Inspect all three failed workflow runs and identify the shared failure
+- [x] Confirm the approved production-only deployment architecture is unchanged
+- [x] **User authorized fixing and redeploying the failed production workflows** (2026-08-21)
+- [x] Reproduce the clean-checkout dependency failure locally
+- [x] Implement shared-package build ordering in local and GitHub gates
+- [x] Add regression validation for workflow step ordering
+- [x] Run the complete Node 24 validation suite from a clean shared build
+- [ ] Push the correction and verify all three production deployments
+
+---
+
 ## 0. Local Command: Automatic Azure CLI Preparation
 
 **Goal:** Make `pnpm run start:local:production` self-contained so a developer
@@ -317,29 +343,31 @@ No Azure resources will be created or deleted. The only intended live-resource m
 
 > **Required:** The azure-validate skill will populate this section before status can become `Validated`.
 
-| Check                        | Command Run                                                                                             | Result                                                                                                         | Timestamp  |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------- |
-| Runtime/toolchain            | `node --version`; `pnpm --version`                                                                      | Pass: Node 24.19.0, pnpm 10.20.0                                                                               | 2026-08-20 |
-| Frozen install               | `CI=true pnpm install --frozen-lockfile`                                                                | Pass                                                                                                           | 2026-08-20 |
-| Type safety                  | Four workspace `typecheck` commands                                                                     | Pass                                                                                                           | 2026-08-20 |
-| Focused behavior tests       | Common, API safety/auth/email, Functions, frontend API resolution                                       | Pass: 17 + 16 + 4 + 4 tests                                                                                    | 2026-08-20 |
-| Production builds            | `pnpm run build:webapi`; `build:frontend`; `build:functions`                                            | Pass                                                                                                           | 2026-08-20 |
-| Static configuration         | Shell, YAML, JSON, Git tracking/artifact scans, `git diff --check`                                      | Pass                                                                                                           | 2026-08-20 |
-| Azure live preflight         | `./scripts/azure/update-node24-runtimes.sh`                                                             | Pass: Linux Functions v4 on non-Consumption P0v3; Node 24 advertised; no mutation                              | 2026-08-21 |
-| Fresh toolchain/install      | Node 24.19.0; Corepack pnpm 10.20.0; `CI=true corepack pnpm install --frozen-lockfile`                  | Pass                                                                                                           | 2026-08-21 |
-| Fresh lint/typecheck/tests   | All workspace typechecks; API/Functions/frontend lint; focused Common/API/Functions/frontend tests      | Pass: 17 + 16 + 4 + 4 tests; one non-failing pre-existing frontend warning                                     | 2026-08-21 |
-| Fresh production builds      | `corepack pnpm run build:webapi`; `build:frontend`; `build:functions`                                   | Pass under Node 24.19.0                                                                                        | 2026-08-21 |
-| Credential safety            | Rotated Storage, Cosmos, Vision, Communication, and JWT credentials without printing values             | Pass: both historical key slots invalidated; frontend backend-secret settings removed                          | 2026-08-21 |
-| Local-production profiles    | `./scripts/azure/sync-local-production-config.sh prd`; permission/safety-marker and Git-tracking checks | Pass: ignored mode-600 files; API targets `prd`; all Functions triggers disabled                               | 2026-08-21 |
-| Final static/live validation | Shell/YAML/JSON checks; secret/artifact scans; corrected runtime preflight; endpoint checks             | Pass: API 200, frontend 200, Function App Running; no Azure mutation during preflight                          | 2026-08-21 |
-| Continuous-delivery tests    | Full Common, Web API, Functions, and frontend suites                                                    | Pass: 17 + 92 + 4 + 53 = 166 tests                                                                             | 2026-08-21 |
-| Continuous-delivery quality  | All four lint and typecheck commands; all four production builds; `./scripts/ci/validate-repository.sh` | Pass; workflow YAML, shell, JSON, secret tracking, artifact, and Node target checks                            | 2026-08-21 |
-| Current Azure runtime        | `az account show`; `./scripts/azure/update-node24-runtimes.sh`                                          | Pass: exact subscription/RG; Functions P0v3; Node 24 advertised and already selected                           | 2026-08-21 |
-| Resource-reference cleanup   | Obsolete environment/config and unused resource-wiring scans                                            | Pass: no obsolete Azure environment target or removed resource wiring remains                                  | 2026-08-21 |
-| Cleanup regression gate      | Node 24.19.0; `corepack pnpm run ci:check`                                                              | Pass: lint, typecheck, all tests, all builds, and repository static validation                                 | 2026-08-21 |
-| Cleanup Azure preflight      | `./scripts/azure/update-node24-runtimes.sh`                                                             | Pass: exact production resources and Node 24 runtime identifiers; no Azure mutation                            | 2026-08-21 |
-| Dev deletion preflight       | Exact subscription/group existence, resource counts, locks, and production-reference checks             | Pass: 23 + 1 + 1 Dev resources; zero locks; production has no Dev resource references                          | 2026-08-21 |
-| Automatic local Azure login  | Four fake-CLI scenarios; Node 24 `pnpm run ci:check`; real `pnpm run sync:local:production`             | Pass: reused valid session, login/refusal branches covered, exact tenant/subscription verified, files mode 600 | 2026-08-21 |
+| Check                        | Command Run                                                                                                                                 | Result                                                                                                                                                 | Timestamp  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| Runtime/toolchain            | `node --version`; `pnpm --version`                                                                                                          | Pass: Node 24.19.0, pnpm 10.20.0                                                                                                                       | 2026-08-20 |
+| Frozen install               | `CI=true pnpm install --frozen-lockfile`                                                                                                    | Pass                                                                                                                                                   | 2026-08-20 |
+| Type safety                  | Four workspace `typecheck` commands                                                                                                         | Pass                                                                                                                                                   | 2026-08-20 |
+| Focused behavior tests       | Common, API safety/auth/email, Functions, frontend API resolution                                                                           | Pass: 17 + 16 + 4 + 4 tests                                                                                                                            | 2026-08-20 |
+| Production builds            | `pnpm run build:webapi`; `build:frontend`; `build:functions`                                                                                | Pass                                                                                                                                                   | 2026-08-20 |
+| Static configuration         | Shell, YAML, JSON, Git tracking/artifact scans, `git diff --check`                                                                          | Pass                                                                                                                                                   | 2026-08-20 |
+| Azure live preflight         | `./scripts/azure/update-node24-runtimes.sh`                                                                                                 | Pass: Linux Functions v4 on non-Consumption P0v3; Node 24 advertised; no mutation                                                                      | 2026-08-21 |
+| Fresh toolchain/install      | Node 24.19.0; Corepack pnpm 10.20.0; `CI=true corepack pnpm install --frozen-lockfile`                                                      | Pass                                                                                                                                                   | 2026-08-21 |
+| Fresh lint/typecheck/tests   | All workspace typechecks; API/Functions/frontend lint; focused Common/API/Functions/frontend tests                                          | Pass: 17 + 16 + 4 + 4 tests; one non-failing pre-existing frontend warning                                                                             | 2026-08-21 |
+| Fresh production builds      | `corepack pnpm run build:webapi`; `build:frontend`; `build:functions`                                                                       | Pass under Node 24.19.0                                                                                                                                | 2026-08-21 |
+| Credential safety            | Rotated Storage, Cosmos, Vision, Communication, and JWT credentials without printing values                                                 | Pass: both historical key slots invalidated; frontend backend-secret settings removed                                                                  | 2026-08-21 |
+| Local-production profiles    | `./scripts/azure/sync-local-production-config.sh prd`; permission/safety-marker and Git-tracking checks                                     | Pass: ignored mode-600 files; API targets `prd`; all Functions triggers disabled                                                                       | 2026-08-21 |
+| Final static/live validation | Shell/YAML/JSON checks; secret/artifact scans; corrected runtime preflight; endpoint checks                                                 | Pass: API 200, frontend 200, Function App Running; no Azure mutation during preflight                                                                  | 2026-08-21 |
+| Continuous-delivery tests    | Full Common, Web API, Functions, and frontend suites                                                                                        | Pass: 17 + 92 + 4 + 53 = 166 tests                                                                                                                     | 2026-08-21 |
+| Continuous-delivery quality  | All four lint and typecheck commands; all four production builds; `./scripts/ci/validate-repository.sh`                                     | Pass; workflow YAML, shell, JSON, secret tracking, artifact, and Node target checks                                                                    | 2026-08-21 |
+| Current Azure runtime        | `az account show`; `./scripts/azure/update-node24-runtimes.sh`                                                                              | Pass: exact subscription/RG; Functions P0v3; Node 24 advertised and already selected                                                                   | 2026-08-21 |
+| Resource-reference cleanup   | Obsolete environment/config and unused resource-wiring scans                                                                                | Pass: no obsolete Azure environment target or removed resource wiring remains                                                                          | 2026-08-21 |
+| Cleanup regression gate      | Node 24.19.0; `corepack pnpm run ci:check`                                                                                                  | Pass: lint, typecheck, all tests, all builds, and repository static validation                                                                         | 2026-08-21 |
+| Cleanup Azure preflight      | `./scripts/azure/update-node24-runtimes.sh`                                                                                                 | Pass: exact production resources and Node 24 runtime identifiers; no Azure mutation                                                                    | 2026-08-21 |
+| Dev deletion preflight       | Exact subscription/group existence, resource counts, locks, and production-reference checks                                                 | Pass: 23 + 1 + 1 Dev resources; zero locks; production has no Dev resource references                                                                  | 2026-08-21 |
+| Automatic local Azure login  | Four fake-CLI scenarios; Node 24 `pnpm run ci:check`; real `pnpm run sync:local:production`                                                 | Pass: reused valid session, login/refusal branches covered, exact tenant/subscription verified, files mode 600                                         | 2026-08-21 |
+| CI incident clean-run fix    | Remove `common/build`; reproduce dependent typecheck failure; Node 24 `pnpm run ci:check`; workflow ordering assertions; independent review | Pass: original GitHub error reproduced; all lint, typechecks, 166 tests, builds, YAML/shell/format/static gates pass; no high-severity review findings | 2026-08-21 |
+| CI incident Azure preflight  | `./scripts/azure/update-node24-runtimes.sh`                                                                                                 | Pass: exact production RG/apps, Functions P0v3, Node 24 runtimes/defaults; no Azure mutation                                                           | 2026-08-21 |
 
 **Validated by:** azure-validate skill
 

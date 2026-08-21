@@ -18,7 +18,7 @@
     "test:frontend": "CI=true pnpm --filter @tastematcher/frontend exec react-scripts test --watchAll=false --runInBand",
     "test": "pnpm run test:common && pnpm run test:webapi && pnpm run test:functions && pnpm run test:frontend",
     "validate:static": "./scripts/ci/validate-repository.sh",
-    "quality:fast": "pnpm run lint && pnpm run typecheck && pnpm run test",
+    "quality:fast": "pnpm run build:common && pnpm run lint && pnpm run typecheck && pnpm run test",
     "ci:check": "pnpm run quality:fast && pnpm run build:common && pnpm run build:webapi && pnpm run build:functions && pnpm run build:frontend && pnpm run validate:static",
     "precommit:check": "lint-staged && pnpm run quality:fast",
     "prepush:check": "pnpm run ci:check",

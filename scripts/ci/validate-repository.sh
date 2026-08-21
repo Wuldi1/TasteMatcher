@@ -42,7 +42,17 @@ for workflow in .github/workflows/frontend-deploy.yml \
   grep -q 'NODE_VERSION: "24.x"' "$workflow"
   grep -q 'pull_request:' "$workflow"
   grep -q "github.event_name != 'pull_request'" "$workflow"
+
+  common_build_line="$(grep -n -m1 'run: pnpm run build:common' "$workflow" | cut -d: -f1)"
+  dependent_typecheck_line="$(grep -n -m1 'name: Type-check' "$workflow" | cut -d: -f1)"
+  if [[ -z "$common_build_line" || -z "$dependent_typecheck_line" || \
+    "$common_build_line" -ge "$dependent_typecheck_line" ]]; then
+    echo "Shared package must be built before dependent type-checking in $workflow." >&2
+    exit 1
+  fi
 done
+
+grep -q '"quality:fast": "pnpm run build:common' package.json
 
 grep -q 'AZURE_WEBAPP_NAME: "tastematcher-prd-web"' \
   .github/workflows/frontend-deploy.yml
