@@ -283,6 +283,10 @@ describe("AutomaticUploadsPage", () => {
     expect(
       await screen.findByText("Reading auction lots and preparing drafts..."),
     ).toBeInTheDocument();
+    expect(screen.getByTestId("tastematcher-loading-logo")).toHaveAttribute(
+      "src",
+      "/tastematcher_icon_icon_128.png",
+    );
   });
 
   it("previews drafts, edits local fields, excludes a lot, and approves the selection", async () => {
@@ -378,8 +382,11 @@ describe("AutomaticUploadsPage", () => {
     renderPage();
 
     const user = await previewAuction();
+    const firstDraft = screen.getByTestId("automatic-upload-draft-draft-1");
+    const secondDraft = screen.getByTestId("automatic-upload-draft-draft-2");
+    await user.click(within(secondDraft).getByLabelText("Include lot 13"));
     expect(
-      screen.getByRole("button", { name: "Upload 2 selected artworks" }),
+      screen.getByRole("button", { name: "Upload 1 selected artwork" }),
     ).toBeDisabled();
 
     await user.type(
@@ -388,14 +395,14 @@ describe("AutomaticUploadsPage", () => {
     );
     await user.click(screen.getByRole("button", { name: "Apply to selected" }));
 
-    screen.getAllByLabelText("Auction end date").forEach((input) => {
-      expect(input).toHaveValue("2026-09-01T18:00");
-    });
+    expect(within(firstDraft).getByLabelText("Auction end date")).toHaveValue(
+      "2026-09-01T18:00",
+    );
+    expect(within(secondDraft).getByLabelText("Auction end date")).toHaveValue(
+      "",
+    );
     expect(
-      screen.queryByText("Auction end date is required."),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Upload 2 selected artworks" }),
+      screen.getByRole("button", { name: "Upload 1 selected artwork" }),
     ).toBeEnabled();
 
     jest.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
@@ -404,17 +411,16 @@ describe("AutomaticUploadsPage", () => {
       failed: [],
     });
     await user.click(
-      screen.getByRole("button", { name: "Upload 2 selected artworks" }),
+      screen.getByRole("button", { name: "Upload 1 selected artwork" }),
     );
     const expectedIso = new Date(2026, 8, 1, 18, 0).toISOString();
-    await waitFor(() => {
-      const request = jest.mocked(apiClient.approveAutomaticUploads).mock
-        .calls[0][1];
-      expect(request.drafts).toHaveLength(2);
-      request.drafts.forEach((draft) => {
-        expect(draft.artwork.endDate).toBe(expectedIso);
-      });
-    });
+    await waitFor(() =>
+      expect(apiClient.approveAutomaticUploads).toHaveBeenCalledTimes(1),
+    );
+    const request = jest.mocked(apiClient.approveAutomaticUploads).mock
+      .calls[0][1];
+    expect(request.drafts).toHaveLength(1);
+    expect(request.drafts[0].artwork.endDate).toBe(expectedIso);
   });
 
   it("bulk edits display, Taster, and privacy values on selected drafts only", async () => {
@@ -517,6 +523,60 @@ describe("AutomaticUploadsPage", () => {
       jest.mocked(apiClient.approveAutomaticUploads).mock.calls[0][1].drafts[0]
         .artwork.tags,
     ).toEqual(["phillips", "featured", "Contemporary"]);
+  });
+
+  it("rejects overlong bulk tags without modifying any selected draft", async () => {
+    renderPage();
+    const user = await previewAuction();
+    const tagInputs = screen.getAllByLabelText("Tags");
+    const originalValues = tagInputs.map((input) =>
+      input.getAttribute("value"),
+    );
+
+    await user.type(
+      screen.getByLabelText("Add tags to selected drafts"),
+      "x".repeat(101),
+    );
+    await user.click(screen.getByRole("button", { name: "Add to selected" }));
+
+    expect(
+      screen.getByText("Each tag must be 100 characters or fewer."),
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByLabelText("Tags")
+        .map((input) => input.getAttribute("value")),
+    ).toEqual(originalValues);
+  });
+
+  it("rejects bulk tags that would exceed 50 without partial updates", async () => {
+    const response = clonePreview();
+    response.drafts[0].artwork.tags = Array.from(
+      { length: 50 },
+      (_, index) => `tag-${index + 1}`,
+    );
+    jest.mocked(apiClient.previewAutomaticUploads).mockResolvedValue(response);
+    renderPage();
+    const user = await previewAuction();
+    const tagInputs = screen.getAllByLabelText("Tags");
+    const originalValues = tagInputs.map((input) =>
+      input.getAttribute("value"),
+    );
+
+    await user.type(
+      screen.getByLabelText("Add tags to selected drafts"),
+      "additional",
+    );
+    await user.click(screen.getByRole("button", { name: "Add to selected" }));
+
+    expect(
+      screen.getByText("A selected artwork cannot have more than 50 tags."),
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByLabelText("Tags")
+        .map((input) => input.getAttribute("value")),
+    ).toEqual(originalValues);
   });
 
   it("supports multi-word and comma-separated tags in an individual draft", async () => {

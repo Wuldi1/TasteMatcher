@@ -67,6 +67,25 @@ describe("UploadPage", () => {
     expect(input).toBeInTheDocument();
   });
 
+  it("uses low and high price terminology for auction uploads", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<UploadPage />);
+
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Mark this artwork as an auction",
+      }),
+    );
+
+    expect(screen.getByLabelText("Low price (USD)")).toBeInTheDocument();
+    expect(screen.getByLabelText("High price / reserve")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "High price must be greater than or equal to low price for auctions.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("uploads artwork successfully", async () => {
     const user = userEvent.setup();
     renderWithProviders(<UploadPage />);

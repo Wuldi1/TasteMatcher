@@ -122,6 +122,7 @@ export function AppLoadingState({
               src={APP_ICON_SRC}
               alt=""
               aria-hidden="true"
+              data-testid="tastematcher-loading-logo"
               className="h-full w-full animate-pulse object-cover"
             />
           </span>

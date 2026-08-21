@@ -126,6 +126,51 @@ describe("AutomaticUploadsService", () => {
     expect(provider.parse).not.toHaveBeenCalled();
   });
 
+  it("rejects approval when no parser is registered for the source URL", async () => {
+    providerRegistry.findForUrl.mockReturnValueOnce(undefined);
+
+    await expect(
+      service.approve("domain-1", actor, approvalFor(draft("1"))),
+    ).rejects.toThrow("The approval provider does not match the auction URL.");
+    expect(fetcher.fetchHtml).not.toHaveBeenCalled();
+    expect(fetcher.fetchImage).not.toHaveBeenCalled();
+    expect(uploadService.uploadAutomaticArtwork).not.toHaveBeenCalled();
+  });
+
+  it("rejects approval when the URL parser does not match the request provider", async () => {
+    providerRegistry.findForUrl.mockReturnValueOnce({
+      ...provider,
+      provider: "different-provider",
+    });
+
+    await expect(
+      service.approve("domain-1", actor, approvalFor(draft("1"))),
+    ).rejects.toThrow("The approval provider does not match the auction URL.");
+    expect(fetcher.fetchHtml).not.toHaveBeenCalled();
+    expect(fetcher.fetchImage).not.toHaveBeenCalled();
+    expect(uploadService.uploadAutomaticArtwork).not.toHaveBeenCalled();
+  });
+
+  it("rejects an approval redirect to another or unsupported provider", async () => {
+    fetcher.fetchHtml.mockResolvedValue({
+      body: "<html></html>",
+      contentType: "text/html",
+      finalUrl: "https://www.sothebys.com/auction/example",
+    });
+    providerRegistry.findForUrl.mockImplementation((url: URL) =>
+      url.hostname === "www.phillips.com" ? provider : undefined,
+    );
+
+    await expect(
+      service.approve("domain-1", actor, approvalFor(draft("1"))),
+    ).rejects.toThrow(
+      "The auction URL redirected to a different or unsupported provider.",
+    );
+    expect(provider.parse).not.toHaveBeenCalled();
+    expect(fetcher.fetchImage).not.toHaveBeenCalled();
+    expect(uploadService.uploadAutomaticArtwork).not.toHaveBeenCalled();
+  });
+
   it("caps unusually large previews at 200 drafts", async () => {
     provider.parse.mockReturnValue(previewResponse(201));
     const result = await service.preview("domain-1", actor, {
