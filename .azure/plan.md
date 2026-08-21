@@ -16,8 +16,10 @@ before deployment because fresh GitHub runners could not resolve
 each component workflow, make the local aggregate quality gate build it before
 dependent checks, and add a static ordering assertion so the clean-checkout
 prerequisite cannot silently regress. Update first-party GitHub setup actions to
-their Node 24-based major versions while touching the workflows. No Azure
-resource configuration or application runtime behavior changes.
+their Node 24-based major versions while touching the workflows. Explicitly
+disable setup-node's automatic package-manager cache so it does not try to invoke
+pnpm before the following Corepack step makes pnpm available. No Azure resource
+configuration or application runtime behavior changes.
 
 ### Incident checklist
 
@@ -28,6 +30,7 @@ resource configuration or application runtime behavior changes.
 - [x] Implement shared-package build ordering in local and GitHub gates
 - [x] Add regression validation for workflow step ordering
 - [x] Run the complete Node 24 validation suite from a clean shared build
+- [x] Diagnose the second-run setup-node failure and disable its pre-Corepack pnpm cache lookup
 - [ ] Push the correction and verify all three production deployments
 
 ---

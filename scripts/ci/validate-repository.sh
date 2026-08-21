@@ -42,6 +42,7 @@ for workflow in .github/workflows/frontend-deploy.yml \
   grep -q 'NODE_VERSION: "24.x"' "$workflow"
   grep -q 'pull_request:' "$workflow"
   grep -q "github.event_name != 'pull_request'" "$workflow"
+  grep -q 'package-manager-cache: false' "$workflow"
 
   common_build_line="$(grep -n -m1 'run: pnpm run build:common' "$workflow" | cut -d: -f1)"
   dependent_typecheck_line="$(grep -n -m1 'name: Type-check' "$workflow" | cut -d: -f1)"
