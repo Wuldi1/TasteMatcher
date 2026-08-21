@@ -15,6 +15,7 @@ import {
   ExternalLink,
   ImageOff,
   RefreshCw,
+  Tag,
   Upload,
 } from "lucide-react";
 import { SearchableSelect } from "../../components/inputs/SearchableSelect";
@@ -35,12 +36,7 @@ const fieldClass =
 const labelClass = "block text-xs font-medium text-gray-600";
 const APPROVAL_CHUNK_SIZE = 20;
 
-type NumericArtworkField =
-  | "width"
-  | "height"
-  | "depth"
-  | "price"
-  | "maxPrice";
+type NumericArtworkField = "width" | "height" | "depth" | "price" | "maxPrice";
 
 type BatchBooleanArtworkField =
   | "shouldDisplayPrice"
@@ -100,6 +96,24 @@ export function validateAutomaticUploadDraft(
       ),
     );
   }
+  if (artwork.tags.length > 50) {
+    issues.push(
+      issueForField(
+        "tags",
+        "too_many_tags",
+        "An artwork cannot have more than 50 tags.",
+      ),
+    );
+  }
+  if (artwork.tags.some((tag) => tag.length > 100)) {
+    issues.push(
+      issueForField(
+        "tags",
+        "tag_too_long",
+        "Each tag must be 100 characters or fewer.",
+      ),
+    );
+  }
 
   const numericFields: Array<[NumericArtworkField, number | undefined]> = [
     ["width", artwork.width],
@@ -114,7 +128,7 @@ export function validateAutomaticUploadDraft(
         issueForField(
           field,
           `${field}_non_negative`,
-          `${field === "maxPrice" ? "Maximum price" : field[0].toUpperCase() + field.slice(1)} must be zero or greater.`,
+          `${field === "maxPrice" ? "High price" : field === "price" ? "Low price" : field[0].toUpperCase() + field.slice(1)} must be zero or greater.`,
         ),
       );
     }
@@ -128,7 +142,7 @@ export function validateAutomaticUploadDraft(
       issueForField(
         "maxPrice",
         "max_price_below_price",
-        "Maximum price must be greater than or equal to the minimum price.",
+        "High price must be greater than or equal to the low price.",
       ),
     );
   }
@@ -169,6 +183,19 @@ function withUpdatedArtworkField<
         ),
     ),
   };
+}
+
+function mergeTags(
+  existingTags: readonly string[],
+  additionalTags: readonly string[],
+): string[] {
+  const seen = new Set<string>();
+  return [...existingTags, ...additionalTags].filter((tag) => {
+    const normalized = tag.toLowerCase();
+    if (!tag || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
 }
 
 function toDateTimeInput(value?: string): string {
@@ -293,6 +320,45 @@ function BatchBooleanControl({
   );
 }
 
+function DraftTagsInput({
+  tags,
+  onCommit,
+}: {
+  tags: readonly string[];
+  onCommit: (tags: string[]) => void;
+}) {
+  const [value, setValue] = useState(tags.join(", "));
+
+  useEffect(() => {
+    setValue(tags.join(", "));
+  }, [tags]);
+
+  const commit = () => {
+    onCommit(
+      mergeTags(
+        [],
+        value.split(",").map((tag) => tag.trim()),
+      ),
+    );
+  };
+
+  return (
+    <input
+      aria-label="Tags"
+      value={value}
+      onChange={(event) => setValue(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+      }}
+      className={fieldClass}
+    />
+  );
+}
+
 function DraftImage({ src, title }: { src?: string; title: string }) {
   const [failed, setFailed] = useState(false);
   if (!src || failed) {
@@ -326,7 +392,10 @@ function IssueList({ issues }: { issues: AutomaticUploadIssue[] }) {
             issue.severity === "error" ? "text-red-700" : "text-amber-700"
           }`}
         >
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-none" aria-hidden="true" />
+          <AlertCircle
+            className="mt-0.5 h-3.5 w-3.5 flex-none"
+            aria-hidden="true"
+          />
           <span>{issue.message}</span>
         </li>
       ))}
@@ -346,6 +415,7 @@ export function AutomaticUploadsPage() {
   const [batchDisplayPrice, setBatchDisplayPrice] = useState(false);
   const [batchUseForTaster, setBatchUseForTaster] = useState(true);
   const [batchPrivate, setBatchPrivate] = useState(false);
+  const [batchTags, setBatchTags] = useState("");
   const [preview, setPreview] = useState<AutomaticUploadPreviewResponse | null>(
     null,
   );
@@ -356,7 +426,7 @@ export function AutomaticUploadsPage() {
 
   const effectiveDomainId = isGlobalAdmin
     ? selectedDomainId
-    : user?.domainId ?? "";
+    : (user?.domainId ?? "");
   const targetDomain = isGlobalAdmin
     ? domains.find((domain) => domain.id === selectedDomainId)
     : currentDomain;
@@ -427,7 +497,9 @@ export function AutomaticUploadsPage() {
     setNotice(null);
   };
 
-  const updateArtworkField = <Field extends keyof AutomaticUploadEditableArtworkInput>(
+  const updateArtworkField = <
+    Field extends keyof AutomaticUploadEditableArtworkInput,
+  >(
     draftId: string,
     field: Field,
     value: AutomaticUploadEditableArtworkInput[Field],
@@ -481,6 +553,50 @@ export function AutomaticUploadsPage() {
     );
   };
 
+  const parsedBatchTags = useMemo(() => {
+    return mergeTags(
+      [],
+      batchTags.split(",").map((tag) => tag.trim()),
+    );
+  }, [batchTags]);
+
+  const applyBatchTags = () => {
+    if (selectedCount === 0 || parsedBatchTags.length === 0) return;
+    if (parsedBatchTags.some((tag) => tag.length > 100)) {
+      setError("Each tag must be 100 characters or fewer.");
+      return;
+    }
+
+    const exceedsTagLimit = selectedDetails.some(
+      ({ draft }) => mergeTags(draft.artwork.tags, parsedBatchTags).length > 50,
+    );
+    if (exceedsTagLimit) {
+      setError("A selected artwork cannot have more than 50 tags.");
+      return;
+    }
+
+    setPreview((current) =>
+      current
+        ? {
+            ...current,
+            drafts: current.drafts.map((draft) => {
+              if (!draft.included) return draft;
+              return withUpdatedArtworkField(
+                draft,
+                "tags",
+                mergeTags(draft.artwork.tags, parsedBatchTags),
+              );
+            }),
+          }
+        : current,
+    );
+    setBatchTags("");
+    setError(null);
+    setNotice(
+      `Tags added to ${selectedCount} selected ${selectedCount === 1 ? "draft" : "drafts"}.`,
+    );
+  };
+
   const handlePreview = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
@@ -506,6 +622,7 @@ export function AutomaticUploadsPage() {
       setBatchDisplayPrice(firstDraft?.artwork.shouldDisplayPrice ?? false);
       setBatchUseForTaster(firstDraft?.artwork.useForTaster ?? true);
       setBatchPrivate(firstDraft?.artwork.isPrivate ?? false);
+      setBatchTags("");
       if (response.drafts.length === 0) {
         setNotice("No artwork lots were found at this auction URL.");
       }
@@ -640,9 +757,12 @@ export function AutomaticUploadsPage() {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-5 pb-6">
       <header className="border-b border-gray-200 pb-4">
-        <h1 className="text-2xl font-semibold text-gray-900">Automatic Uploads</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">
+          Automatic Uploads
+        </h1>
         <p className="mt-1 text-sm text-gray-600">
-          Review supported auction lots as drafts before adding them to a gallery.
+          Review supported auction lots as drafts before adding them to a
+          gallery.
         </p>
       </header>
 
@@ -652,10 +772,7 @@ export function AutomaticUploadsPage() {
       >
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(14rem,20rem)_auto] lg:items-end">
           <div>
-            <label
-              htmlFor="automatic-upload-source-url"
-              className={labelClass}
-            >
+            <label htmlFor="automatic-upload-source-url" className={labelClass}>
               Auction URL
             </label>
             <input
@@ -663,7 +780,9 @@ export function AutomaticUploadsPage() {
               type="url"
               value={sourceUrl}
               onChange={(event) => setSourceUrl(event.target.value)}
-              placeholder={AUTOMATIC_UPLOAD_PROVIDER_UI_DEFINITIONS[0].exampleUrl}
+              placeholder={
+                AUTOMATIC_UPLOAD_PROVIDER_UI_DEFINITIONS[0].exampleUrl
+              }
               className={fieldClass}
               disabled={requestActive}
               aria-describedby="automatic-upload-provider-status"
@@ -705,7 +824,9 @@ export function AutomaticUploadsPage() {
                   value: domain.id,
                   label: domain.name,
                 }))}
-                placeholder={domainsLoading ? "Loading galleries..." : "Select gallery"}
+                placeholder={
+                  domainsLoading ? "Loading galleries..." : "Select gallery"
+                }
                 disabled={domainsLoading || requestActive}
                 className={fieldClass}
               />
@@ -731,11 +852,7 @@ export function AutomaticUploadsPage() {
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
           >
             {isPreviewing ? (
-              <AppInlineLoader
-                size="xs"
-                theme="light"
-                label="Reviewing..."
-              />
+              <AppInlineLoader size="xs" theme="light" label="Reviewing..." />
             ) : (
               <>
                 <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -747,14 +864,26 @@ export function AutomaticUploadsPage() {
       </form>
 
       {error && (
-        <div role="alert" className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          <AlertCircle className="mt-0.5 h-4 w-4 flex-none" aria-hidden="true" />
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
+          <AlertCircle
+            className="mt-0.5 h-4 w-4 flex-none"
+            aria-hidden="true"
+          />
           {error}
         </div>
       )}
       {notice && (
-        <div role="status" className="flex items-start gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none" aria-hidden="true" />
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
+        >
+          <CheckCircle2
+            className="mt-0.5 h-4 w-4 flex-none"
+            aria-hidden="true"
+          />
           {notice}
         </div>
       )}
@@ -767,14 +896,22 @@ export function AutomaticUploadsPage() {
 
       {preview && !isPreviewing && (
         <>
-          <section className="border-y border-gray-200 bg-white px-4 py-4 sm:rounded-md sm:border" aria-labelledby="source-summary-heading">
+          <section
+            className="border-y border-gray-200 bg-white px-4 py-4 sm:rounded-md sm:border"
+            aria-labelledby="source-summary-heading"
+          >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase text-gray-500">
                   {previewProviderName} source
                 </p>
-                <h2 id="source-summary-heading" className="mt-1 text-base font-semibold text-gray-900">
-                  {preview.source.auctionTitle ?? preview.source.auctionCode ?? "Auction preview"}
+                <h2
+                  id="source-summary-heading"
+                  className="mt-1 text-base font-semibold text-gray-900"
+                >
+                  {preview.source.auctionTitle ??
+                    preview.source.auctionCode ??
+                    "Auction preview"}
                 </h2>
                 <p className="mt-1 text-sm text-gray-600">
                   {[preview.source.location, preview.source.auctionCode]
@@ -788,26 +925,47 @@ export function AutomaticUploadsPage() {
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:text-blue-800"
               >
-                Open source <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                Open source{" "}
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
               </a>
             </div>
-            {preview.issues.length > 0 && <div className="mt-3"><IssueList issues={preview.issues} /></div>}
+            {preview.issues.length > 0 && (
+              <div className="mt-3">
+                <IssueList issues={preview.issues} />
+              </div>
+            )}
           </section>
 
           <section className="space-y-3" aria-labelledby="drafts-heading">
             <div className="flex flex-col gap-3 border-b border-gray-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 id="drafts-heading" className="text-lg font-semibold text-gray-900">Artwork drafts</h2>
+                <h2
+                  id="drafts-heading"
+                  className="text-lg font-semibold text-gray-900"
+                >
+                  Artwork drafts
+                </h2>
                 <p className="text-sm text-gray-600">
-                  {selectedCount} selected · {issueCount} issues · {selectedBlockingCount} selected drafts blocked
+                  {selectedCount} selected · {issueCount} issues ·{" "}
+                  {selectedBlockingCount} selected drafts blocked
                 </p>
               </div>
               {draftDetails.length > 0 && (
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => setAllIncluded(true)} disabled={requestActive} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400">
+                  <button
+                    type="button"
+                    onClick={() => setAllIncluded(true)}
+                    disabled={requestActive}
+                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                  >
                     Select all
                   </button>
-                  <button type="button" onClick={() => setAllIncluded(false)} disabled={requestActive} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400">
+                  <button
+                    type="button"
+                    onClick={() => setAllIncluded(false)}
+                    disabled={requestActive}
+                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                  >
                     Exclude all
                   </button>
                 </div>
@@ -821,7 +979,8 @@ export function AutomaticUploadsPage() {
                     Bulk edit selected
                   </h3>
                   <p className="mt-0.5 text-xs text-gray-500">
-                    Updates {selectedCount} selected {selectedCount === 1 ? "draft" : "drafts"}.
+                    Updates {selectedCount} selected{" "}
+                    {selectedCount === 1 ? "draft" : "drafts"}.
                   </p>
                 </div>
                 <div className="grid divide-y divide-gray-200 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
@@ -832,7 +991,9 @@ export function AutomaticUploadsPage() {
                         aria-label="Set auction end date for selected drafts"
                         type="datetime-local"
                         value={batchEndDate}
-                        onChange={(event) => setBatchEndDate(event.target.value)}
+                        onChange={(event) =>
+                          setBatchEndDate(event.target.value)
+                        }
                         disabled={requestActive}
                         className={fieldClass}
                       />
@@ -902,6 +1063,37 @@ export function AutomaticUploadsPage() {
                     }
                   />
                 </div>
+                <div className="border-t border-gray-200 px-3 py-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <label className={`${labelClass} min-w-0 flex-1`}>
+                      Add Tags
+                      <input
+                        aria-label="Add tags to selected drafts"
+                        value={batchTags}
+                        onChange={(event) => setBatchTags(event.target.value)}
+                        disabled={requestActive}
+                        placeholder="featured, contemporary"
+                        className={fieldClass}
+                      />
+                      <span className="mt-1 block font-normal text-gray-500">
+                        Comma-separated tags are appended to existing tags.
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={applyBatchTags}
+                      disabled={
+                        parsedBatchTags.length === 0 ||
+                        selectedCount === 0 ||
+                        requestActive
+                      }
+                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                    >
+                      <Tag className="h-4 w-4" aria-hidden="true" />
+                      Add to selected
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -919,71 +1111,298 @@ export function AutomaticUploadsPage() {
                     data-testid={`automatic-upload-draft-${draft.draftId}`}
                     className={`overflow-hidden rounded-md border bg-white ${draft.included ? "border-gray-300" : "border-gray-200 opacity-70"}`}
                   >
-                    <fieldset disabled={requestActive} className="min-w-0 border-0 p-0">
-                      <legend className="sr-only">
-                        Edit lot {lotNumber}
-                      </legend>
-                    <div className="flex flex-col sm:flex-row">
-                      <DraftImage src={draft.source.sourceImageUrl} title={draft.artwork.title} />
-                      <div className="min-w-0 flex-1 p-3 sm:p-4">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <p className="text-xs font-semibold uppercase text-gray-500">Lot {lotNumber}</p>
-                            <p className="mt-0.5 text-sm font-medium text-gray-900">{draft.artwork.title || "Untitled draft"}</p>
-                            <p className="text-xs text-gray-500">{draft.artwork.artist || "Artist missing"}</p>
+                    <fieldset
+                      disabled={requestActive}
+                      className="min-w-0 border-0 p-0"
+                    >
+                      <legend className="sr-only">Edit lot {lotNumber}</legend>
+                      <div className="flex flex-col sm:flex-row">
+                        <DraftImage
+                          src={draft.source.sourceImageUrl}
+                          title={draft.artwork.title}
+                        />
+                        <div className="min-w-0 flex-1 p-3 sm:p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-semibold uppercase text-gray-500">
+                                Lot {lotNumber}
+                              </p>
+                              <p className="mt-0.5 text-sm font-medium text-gray-900">
+                                {draft.artwork.title || "Untitled draft"}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {draft.artwork.artist || "Artist missing"}
+                              </p>
+                            </div>
+                            <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700">
+                              <input
+                                type="checkbox"
+                                checked={draft.included}
+                                onChange={(event) =>
+                                  updateDraft(draft.draftId, (current) => ({
+                                    ...current,
+                                    included: event.target.checked,
+                                  }))
+                                }
+                                aria-label={`Include lot ${lotNumber}`}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                              />
+                              Include
+                            </label>
                           </div>
-                          <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700">
+                          {draft.source.originalEstimateText && (
+                            <p className="mt-2 text-xs text-gray-600">
+                              Source estimate:{" "}
+                              {draft.source.originalEstimateText}
+                            </p>
+                          )}
+                          {issues.length > 0 && (
+                            <div className="mt-3 rounded-md bg-gray-50 p-2.5">
+                              <IssueList issues={issues} />
+                            </div>
+                          )}
+                          {blocking && draft.included && (
+                            <p className="mt-2 text-xs font-medium text-red-700">
+                              Correct these issues or exclude this lot to
+                              continue.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="border-t border-gray-200 p-3 sm:p-4">
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          <label className={labelClass}>
+                            Title
                             <input
-                              type="checkbox"
-                              checked={draft.included}
-                              onChange={(event) => updateDraft(draft.draftId, (current) => ({ ...current, included: event.target.checked }))}
-                              aria-label={`Include lot ${lotNumber}`}
-                              className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                              aria-label="Title"
+                              value={draft.artwork.title}
+                              onChange={(event) =>
+                                updateArtworkField(
+                                  draft.draftId,
+                                  "title",
+                                  event.target.value,
+                                )
+                              }
+                              className={fieldClass}
                             />
-                            Include
+                          </label>
+                          <label className={labelClass}>
+                            Artist
+                            <input
+                              aria-label="Artist"
+                              value={draft.artwork.artist}
+                              onChange={(event) =>
+                                updateArtworkField(
+                                  draft.draftId,
+                                  "artist",
+                                  event.target.value,
+                                )
+                              }
+                              className={fieldClass}
+                            />
+                          </label>
+                          <label className={labelClass}>
+                            Artwork date
+                            <input
+                              aria-label="Artwork date"
+                              value={draft.artwork.date}
+                              onChange={(event) =>
+                                updateArtworkField(
+                                  draft.draftId,
+                                  "date",
+                                  event.target.value,
+                                )
+                              }
+                              className={fieldClass}
+                            />
+                          </label>
+                          <label className={labelClass}>
+                            Medium
+                            <input
+                              aria-label="Medium"
+                              value={draft.artwork.medium ?? ""}
+                              onChange={(event) =>
+                                updateArtworkField(
+                                  draft.draftId,
+                                  "medium",
+                                  event.target.value || undefined,
+                                )
+                              }
+                              className={fieldClass}
+                            />
+                          </label>
+                          <label className={labelClass}>
+                            Signature
+                            <input
+                              aria-label="Signature"
+                              value={draft.artwork.signature ?? ""}
+                              onChange={(event) =>
+                                updateArtworkField(
+                                  draft.draftId,
+                                  "signature",
+                                  event.target.value || undefined,
+                                )
+                              }
+                              className={fieldClass}
+                            />
+                          </label>
+                          {(
+                            [
+                              "width",
+                              "height",
+                              "depth",
+                            ] as NumericArtworkField[]
+                          ).map((field) => (
+                            <label key={field} className={labelClass}>
+                              {field[0].toUpperCase() + field.slice(1)}
+                              <input
+                                aria-label={
+                                  field[0].toUpperCase() + field.slice(1)
+                                }
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={draft.artwork[field] ?? ""}
+                                onChange={(event) =>
+                                  updateArtworkField(
+                                    draft.draftId,
+                                    field,
+                                    event.target.value === ""
+                                      ? undefined
+                                      : Number(event.target.value),
+                                  )
+                                }
+                                className={fieldClass}
+                              />
+                            </label>
+                          ))}
+                          <label className={labelClass}>
+                            Low price
+                            <input
+                              aria-label="Low price"
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={draft.artwork.price ?? ""}
+                              onChange={(event) =>
+                                updateArtworkField(
+                                  draft.draftId,
+                                  "price",
+                                  event.target.value === ""
+                                    ? undefined
+                                    : Number(event.target.value),
+                                )
+                              }
+                              className={fieldClass}
+                            />
+                          </label>
+                          <label className={labelClass}>
+                            High price
+                            <input
+                              aria-label="High price"
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={draft.artwork.maxPrice ?? ""}
+                              onChange={(event) =>
+                                updateArtworkField(
+                                  draft.draftId,
+                                  "maxPrice",
+                                  event.target.value === ""
+                                    ? undefined
+                                    : Number(event.target.value),
+                                )
+                              }
+                              className={fieldClass}
+                            />
+                          </label>
+                          <label className={`${labelClass} sm:col-span-2`}>
+                            Auction end date
+                            <input
+                              aria-label="Auction end date"
+                              type="datetime-local"
+                              value={toDateTimeInput(draft.artwork.endDate)}
+                              onChange={(event) =>
+                                updateArtworkField(
+                                  draft.draftId,
+                                  "endDate",
+                                  fromDateTimeInput(event.target.value),
+                                )
+                              }
+                              disabled={!draft.artwork.isAuction}
+                              className={fieldClass}
+                            />
+                          </label>
+                          <label className={`${labelClass} sm:col-span-2`}>
+                            Tags
+                            <DraftTagsInput
+                              tags={draft.artwork.tags}
+                              onCommit={(tags) =>
+                                updateArtworkField(draft.draftId, "tags", tags)
+                              }
+                            />
+                          </label>
+                          <label
+                            className={`${labelClass} sm:col-span-2 lg:col-span-4`}
+                          >
+                            Description
+                            <textarea
+                              aria-label="Description"
+                              rows={2}
+                              value={draft.artwork.description}
+                              onChange={(event) =>
+                                updateArtworkField(
+                                  draft.draftId,
+                                  "description",
+                                  event.target.value,
+                                )
+                              }
+                              className={fieldClass}
+                            />
                           </label>
                         </div>
-                        {draft.source.originalEstimateText && (
-                          <p className="mt-2 text-xs text-gray-600">Source estimate: {draft.source.originalEstimateText}</p>
-                        )}
-                        {issues.length > 0 && <div className="mt-3 rounded-md bg-gray-50 p-2.5"><IssueList issues={issues} /></div>}
-                        {blocking && draft.included && (
-                          <p className="mt-2 text-xs font-medium text-red-700">Correct these issues or exclude this lot to continue.</p>
-                        )}
+                        <fieldset className="mt-4 flex flex-wrap gap-x-5 gap-y-3 border-t border-gray-100 pt-3">
+                          <legend className="sr-only">Artwork defaults</legend>
+                          {(
+                            [
+                              ["isAuction", "Auction"],
+                              ["shouldDisplayPrice", "Display price"],
+                              ["useForTaster", "Use for Taster"],
+                              ["isPrivate", "Private"],
+                            ] as Array<
+                              [
+                                (
+                                  | "isAuction"
+                                  | "shouldDisplayPrice"
+                                  | "useForTaster"
+                                  | "isPrivate"
+                                ),
+                                string,
+                              ]
+                            >
+                          ).map(([field, label]) => (
+                            <label
+                              key={field}
+                              className="inline-flex items-center gap-2 text-sm text-gray-700"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={draft.artwork[field]}
+                                onChange={(event) =>
+                                  updateArtworkField(
+                                    draft.draftId,
+                                    field,
+                                    event.target.checked,
+                                  )
+                                }
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </fieldset>
                       </div>
-                    </div>
-
-                    <div className="border-t border-gray-200 p-3 sm:p-4">
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <label className={labelClass}>Title<input aria-label="Title" value={draft.artwork.title} onChange={(event) => updateArtworkField(draft.draftId, "title", event.target.value)} className={fieldClass} /></label>
-                        <label className={labelClass}>Artist<input aria-label="Artist" value={draft.artwork.artist} onChange={(event) => updateArtworkField(draft.draftId, "artist", event.target.value)} className={fieldClass} /></label>
-                        <label className={labelClass}>Artwork date<input aria-label="Artwork date" value={draft.artwork.date} onChange={(event) => updateArtworkField(draft.draftId, "date", event.target.value)} className={fieldClass} /></label>
-                        <label className={labelClass}>Medium<input aria-label="Medium" value={draft.artwork.medium ?? ""} onChange={(event) => updateArtworkField(draft.draftId, "medium", event.target.value || undefined)} className={fieldClass} /></label>
-                        <label className={labelClass}>Signature<input aria-label="Signature" value={draft.artwork.signature ?? ""} onChange={(event) => updateArtworkField(draft.draftId, "signature", event.target.value || undefined)} className={fieldClass} /></label>
-                        {(["width", "height", "depth"] as NumericArtworkField[]).map((field) => (
-                          <label key={field} className={labelClass}>{field[0].toUpperCase() + field.slice(1)}<input aria-label={field[0].toUpperCase() + field.slice(1)} type="number" min="0" step="any" value={draft.artwork[field] ?? ""} onChange={(event) => updateArtworkField(draft.draftId, field, event.target.value === "" ? undefined : Number(event.target.value))} className={fieldClass} /></label>
-                        ))}
-                        <label className={labelClass}>Minimum price<input aria-label="Minimum price" type="number" min="0" step="any" value={draft.artwork.price ?? ""} onChange={(event) => updateArtworkField(draft.draftId, "price", event.target.value === "" ? undefined : Number(event.target.value))} className={fieldClass} /></label>
-                        <label className={labelClass}>Maximum price<input aria-label="Maximum price" type="number" min="0" step="any" value={draft.artwork.maxPrice ?? ""} onChange={(event) => updateArtworkField(draft.draftId, "maxPrice", event.target.value === "" ? undefined : Number(event.target.value))} className={fieldClass} /></label>
-                        <label className={`${labelClass} sm:col-span-2`}>Auction end date<input aria-label="Auction end date" type="datetime-local" value={toDateTimeInput(draft.artwork.endDate)} onChange={(event) => updateArtworkField(draft.draftId, "endDate", fromDateTimeInput(event.target.value))} disabled={!draft.artwork.isAuction} className={fieldClass} /></label>
-                        <label className={`${labelClass} sm:col-span-2`}>Tags<input aria-label="Tags" value={draft.artwork.tags.join(", ")} onChange={(event) => updateArtworkField(draft.draftId, "tags", event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean))} className={fieldClass} /></label>
-                        <label className={`${labelClass} sm:col-span-2 lg:col-span-4`}>Description<textarea aria-label="Description" rows={2} value={draft.artwork.description} onChange={(event) => updateArtworkField(draft.draftId, "description", event.target.value)} className={fieldClass} /></label>
-                      </div>
-                      <fieldset className="mt-4 flex flex-wrap gap-x-5 gap-y-3 border-t border-gray-100 pt-3">
-                        <legend className="sr-only">Artwork defaults</legend>
-                        {([
-                          ["isAuction", "Auction"],
-                          ["shouldDisplayPrice", "Display price"],
-                          ["useForTaster", "Use for Taster"],
-                          ["isPrivate", "Private"],
-                        ] as Array<["isAuction" | "shouldDisplayPrice" | "useForTaster" | "isPrivate", string]>).map(([field, label]) => (
-                          <label key={field} className="inline-flex items-center gap-2 text-sm text-gray-700">
-                            <input type="checkbox" checked={draft.artwork[field]} onChange={(event) => updateArtworkField(draft.draftId, field, event.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
-                            {label}
-                          </label>
-                        ))}
-                      </fieldset>
-                    </div>
                     </fieldset>
                   </article>
                 );
@@ -993,8 +1412,19 @@ export function AutomaticUploadsPage() {
 
           <div className="sticky bottom-20 z-10 flex flex-col gap-3 rounded-md border border-gray-300 bg-white p-3 shadow-md sm:flex-row sm:items-center sm:justify-between md:bottom-3">
             <p className="text-sm text-gray-700">
-              Upload {selectedCount} selected {selectedCount === 1 ? "artwork" : "artworks"} to <span className="font-semibold text-gray-900">{targetDomainName || "the selected gallery"}</span>.
-              {selectedBlockingCount > 0 && <span className="ml-1 text-red-700">{selectedBlockingCount} selected {selectedBlockingCount === 1 ? "draft has" : "drafts have"} blocking issues.</span>}
+              Upload {selectedCount} selected{" "}
+              {selectedCount === 1 ? "artwork" : "artworks"} to{" "}
+              <span className="font-semibold text-gray-900">
+                {targetDomainName || "the selected gallery"}
+              </span>
+              .
+              {selectedBlockingCount > 0 && (
+                <span className="ml-1 text-red-700">
+                  {selectedBlockingCount} selected{" "}
+                  {selectedBlockingCount === 1 ? "draft has" : "drafts have"}{" "}
+                  blocking issues.
+                </span>
+              )}
             </p>
             <button
               type="button"
@@ -1004,11 +1434,7 @@ export function AutomaticUploadsPage() {
               aria-label={`Upload ${selectedCount} selected ${selectedCount === 1 ? "artwork" : "artworks"}`}
             >
               {isApproving ? (
-                <AppInlineLoader
-                  size="xs"
-                  theme="light"
-                  label="Uploading..."
-                />
+                <AppInlineLoader size="xs" theme="light" label="Uploading..." />
               ) : (
                 <>
                   <Upload className="h-4 w-4" aria-hidden="true" />

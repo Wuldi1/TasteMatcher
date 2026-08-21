@@ -50,7 +50,7 @@ export class UpdateArtworkDto {
   price?: number;
 
   @ApiPropertyOptional({
-    description: "Auction max price in USD",
+    description: "Auction high price in USD",
     type: Number,
   })
   @IsOptional()

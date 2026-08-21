@@ -15,6 +15,11 @@ import {
 
 const SOURCE_HOSTS = new Set(["phillips.com", "www.phillips.com"]);
 const IMAGE_HOSTS = new Set(["assets.phillips.com", "dist.phillips.com"]);
+// These fixed reference rates match the manual upload currency conversion.
+const USD_REFERENCE_RATES: Readonly<Record<string, number>> = {
+  EUR: 0.92,
+  GBP: 0.79,
+};
 
 interface ParsedEstimate {
   text?: string;
@@ -152,6 +157,7 @@ export class PhillipsProvider implements AutomaticUploadProviderAdapter {
         sourceLotUrl,
         sourceImageUrl,
         estimate,
+        pricing.status,
       );
       return {
         draftId: this.draftId(auctionCode, lotNumber, index),
@@ -200,9 +206,7 @@ export class PhillipsProvider implements AutomaticUploadProviderAdapter {
     detailHtml: string,
   ): PhillipsAutomaticUploadDraft {
     const $ = load(detailHtml);
-    const cataloging = $(
-      "#lot-cataloging-section [data-testid='html-parser']",
-    )
+    const cataloging = $("#lot-cataloging-section [data-testid='html-parser']")
       .toArray()
       .map((element) => this.normalize($(element).text()));
     if (cataloging.length === 0 || cataloging.every((value) => !value)) {
@@ -341,6 +345,18 @@ export class PhillipsProvider implements AutomaticUploadProviderAdapter {
         status: "not_required",
       };
     }
+    const referenceRate = estimate.currency
+      ? USD_REFERENCE_RATES[estimate.currency]
+      : undefined;
+    if (referenceRate && estimate.low !== undefined) {
+      const low = estimate.low / referenceRate;
+      const high = (estimate.high ?? estimate.low) / referenceRate;
+      return {
+        price: Math.min(low, high),
+        maxPrice: Math.max(low, high),
+        status: "converted",
+      };
+    }
     if (estimate.currency && estimate.low !== undefined) {
       return { status: "not_attempted" };
     }
@@ -440,7 +456,9 @@ export class PhillipsProvider implements AutomaticUploadProviderAdapter {
   }
 
   private centimetersToInches(value: number): number | undefined {
-    return Number.isFinite(value) ? Number((value / 2.54).toFixed(4)) : undefined;
+    return Number.isFinite(value)
+      ? Number((value / 2.54).toFixed(4))
+      : undefined;
   }
 
   private buildIssues(
@@ -449,6 +467,7 @@ export class PhillipsProvider implements AutomaticUploadProviderAdapter {
     sourceLotUrl: string | undefined,
     sourceImageUrl: string | undefined,
     estimate: ParsedEstimate,
+    pricingStatus: AutomaticUploadPricingConversionStatus,
   ): AutomaticUploadArtworkDraftIssue[] {
     const issues: AutomaticUploadArtworkDraftIssue[] = [];
     const fieldIssue = (
@@ -523,11 +542,19 @@ export class PhillipsProvider implements AutomaticUploadProviderAdapter {
         "warning",
         false,
       );
+    else if (pricingStatus === "converted")
+      fieldIssue(
+        "price",
+        "price_converted",
+        `The original ${estimate.currency} estimate was converted to USD using TasteMatcher's reference rate. Review the low and high prices before upload.`,
+        "info",
+        false,
+      );
     else if (estimate.currency !== "USD")
       fieldIssue(
         "price",
         "price_not_converted",
-        "The original non-USD estimate was preserved; enter USD pricing before upload if needed.",
+        "The original non-USD estimate was preserved; enter USD low and high prices before upload if needed.",
         "warning",
         false,
       );

@@ -24,10 +24,12 @@ No new Azure infrastructure or Functions changes are required.
 4. Review images and issues, edit artwork fields, and include or exclude lots.
    Title, artist, source image, and an auction end date are blocking requirements.
 5. Use the bulk editor to set auction end date, price visibility, Taster usage,
-   or privacy for all currently included drafts. Each property is applied only
-   when its own Apply action is selected; excluded drafts are unchanged. Values
-   from `datetime-local` controls are normalized to explicit ISO UTC timestamps
-   before approval.
+   privacy, or append comma-separated tags for all currently included drafts.
+   Tags are deduplicated case-insensitively and retain the API limits of 50 tags
+   per artwork and 100 characters per tag. Each property is applied only when
+   its own Apply action is selected; excluded drafts are unchanged. Values from
+   `datetime-local` controls are normalized to explicit ISO UTC timestamps before
+   approval.
 6. Select `Upload <count> selected` after all included drafts are valid. The
    frontend automatically sends selections over 20 as sequential requests of
    at most 20 drafts.
@@ -137,7 +139,7 @@ missing or ambiguous lot is a per-item `source_validation_failed` result. Only
 the explicit `artwork` fields remain client-editable.
 
 Editable artwork fields are title, description, artist, date, signature,
-medium, width, height, depth, auction flag, minimum/maximum price, price
+medium, width, height, depth, auction flag, low/high price, price
 visibility, taster/private flags, end date, and tags. Server-owned values such
 as artwork ID, domain ID, filename, vectors, timestamps, and uploader are not
 accepted as authoritative input.
@@ -220,9 +222,11 @@ browser or execute page JavaScript.
   adds the non-blocking `lot_detail_unavailable` warning.
 - The largest width candidate from the image `srcset`/`src` is selected, but it
   must resolve to an allowed Phillips image host.
-- USD estimates populate editable `price` and `maxPrice`. Non-USD estimates are
-  preserved in source metadata but are not converted. Missing values are not
-  invented and instead produce review issues where relevant.
+- USD estimates populate editable low and high prices directly. EUR and GBP
+  estimates are converted to USD using TasteMatcher's fixed reference rates
+  (`1 USD = 0.92 EUR` and `1 USD = 0.79 GBP`) and are flagged for review. Other
+  currencies are preserved in source metadata but are not converted. Missing
+  values are not invented and instead produce review issues where relevant.
 - Draft defaults are `isAuction: true`, `shouldDisplayPrice: false`,
   `useForTaster: true`, `isPrivate: false`, and `tags: ["phillips"]`.
 

@@ -388,7 +388,7 @@ export default function SaleProposal({
         item.askedMaxPrice < (item.askedPrice ?? 0)
       ) {
         errors[item.artworkId] =
-          "Max price must be greater than or equal to min price";
+          "High price must be greater than or equal to low price";
         hasError = true;
       }
     });
@@ -859,7 +859,7 @@ export default function SaleProposal({
         });
         if (item.askedMaxPrice !== undefined) {
           detailSections.push({
-            text: `Max Asked Price: ${formatCurrency(item.askedMaxPrice)}`,
+            text: `High Asked Price: ${formatCurrency(item.askedMaxPrice)}`,
             size: 11,
           });
         }
@@ -1278,7 +1278,7 @@ export default function SaleProposal({
                     <div className="col-span-2 mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                          "Asking Price"
+                          Low Asking Price
                         </label>
                         <FormattedPriceInput
                           value={item.askedPrice}
@@ -1300,7 +1300,7 @@ export default function SaleProposal({
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                          Maximum Bid
+                          High Asking Price
                         </label>
                         <FormattedPriceInput
                           value={item.askedMaxPrice}
@@ -1512,7 +1512,9 @@ export default function SaleProposal({
 
             <div
               className="flex justify-end gap-3 border-t border-gray-100 pt-2"
-              style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+              style={{
+                paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
+              }}
             >
               <button
                 onClick={() => setIsSaveModalOpen(false)}

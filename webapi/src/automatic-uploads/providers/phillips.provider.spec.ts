@@ -55,16 +55,44 @@ describe("PhillipsProvider", () => {
     );
   });
 
-  it("uses the legacy estimate fallback and does not convert GBP", () => {
+  it("uses the legacy estimate fallback and converts GBP to USD", () => {
     expect(resultForLegacy().source).toMatchObject({
       sourceImageUrl: "https://assets.phillips.com/legacy-large.jpg",
       originalEstimateCurrency: "GBP",
       originalEstimateLow: 2000,
       originalEstimateHigh: 3000,
-      pricingConversionStatus: "not_attempted",
+      pricingConversionStatus: "converted",
     });
-    expect(resultForLegacy().artwork.price).toBeUndefined();
+    expect(resultForLegacy().artwork.price).toBeCloseTo(2000 / 0.79);
+    expect(resultForLegacy().artwork.maxPrice).toBeCloseTo(3000 / 0.79);
+    expect(resultForLegacy().issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "price_converted", blocking: false }),
+      ]),
+    );
     expect(resultForLegacy().source.soldPriceText).toBeUndefined();
+  });
+
+  it("converts EUR estimates to editable USD low and high prices", () => {
+    const localized = fixture
+      .replace("$3,000–5,000", "€3,000–5,000")
+      .replace("Sold for $6,350", "Sold for €6,350");
+    const result = provider.parse(localized, {
+      sourceUrl: "https://www.phillips.com/auction/NY030826",
+    }).drafts[0];
+
+    expect(result.source).toMatchObject({
+      originalEstimateCurrency: "EUR",
+      soldPriceCurrency: "EUR",
+      pricingConversionStatus: "converted",
+    });
+    expect(result.artwork.price).toBeCloseTo(3000 / 0.92);
+    expect(result.artwork.maxPrice).toBeCloseTo(5000 / 0.92);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "price_converted", blocking: false }),
+      ]),
+    );
   });
 
   it.each([

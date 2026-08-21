@@ -13,7 +13,10 @@ import { RoleProtectedRoute } from "../../routes/RoleProtectedRoute";
 import { createMockAuthContext } from "../../test/mocks/authContext";
 import { apiClient } from "../../utils/api";
 import { NAVIGATION_LINKS } from "../../constants/navigation";
-import { AutomaticUploadsPage } from "./AutomaticUploadsPage";
+import {
+  AutomaticUploadsPage,
+  validateAutomaticUploadDraft,
+} from "./AutomaticUploadsPage";
 
 jest.mock("../../utils/api", () => ({
   apiClient: {
@@ -174,6 +177,43 @@ const buildLargePreview = (count: number): AutomaticUploadPreviewResponse => ({
   }),
 });
 
+describe("validateAutomaticUploadDraft", () => {
+  const withTags = (tags: string[]) => ({
+    ...structuredClone(previewResponse.drafts[0]),
+    artwork: {
+      ...structuredClone(previewResponse.drafts[0].artwork),
+      tags,
+    },
+  });
+
+  it("enforces the API tag count and length limits", () => {
+    expect(
+      validateAutomaticUploadDraft(
+        withTags(Array.from({ length: 50 }, (_, index) => `tag-${index}`)),
+      ).filter((issue) => issue.scope === "field" && issue.field === "tags"),
+    ).toHaveLength(0);
+    expect(
+      validateAutomaticUploadDraft(
+        withTags(Array.from({ length: 51 }, (_, index) => `tag-${index}`)),
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "too_many_tags", blocking: true }),
+      ]),
+    );
+    expect(
+      validateAutomaticUploadDraft(withTags(["a".repeat(100)])).filter(
+        (issue) => issue.scope === "field" && issue.field === "tags",
+      ),
+    ).toHaveLength(0);
+    expect(validateAutomaticUploadDraft(withTags(["a".repeat(101)]))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "tag_too_long", blocking: true }),
+      ]),
+    );
+  });
+});
+
 const toLocalDateTimeValue = (value: string): string => {
   const date = new Date(value);
   const pad = (part: number) => String(part).padStart(2, "0");
@@ -196,12 +236,17 @@ describe("AutomaticUploadsPage", () => {
     const user = userEvent.setup();
     renderPage();
 
-    expect(screen.getByText("Supported providers: Phillips.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Supported providers: Phillips."),
+    ).toBeInTheDocument();
     const urlInput = screen.getByLabelText("Auction URL");
     const reviewButton = screen.getByRole("button", { name: "Review content" });
     expect(reviewButton).toBeDisabled();
 
-    await user.type(urlInput, "https://www.sothebys.com/en/buy/auction/2026/example");
+    await user.type(
+      urlInput,
+      "https://www.sothebys.com/en/buy/auction/2026/example",
+    );
     expect(
       screen.getByText("This auction provider is not supported yet."),
     ).toBeInTheDocument();
@@ -216,7 +261,9 @@ describe("AutomaticUploadsPage", () => {
 
     await user.clear(urlInput);
     await user.type(urlInput, "https://www.phillips.com/auction/NY030826");
-    expect(screen.getByText("Supported provider: Phillips")).toBeInTheDocument();
+    expect(
+      screen.getByText("Supported provider: Phillips"),
+    ).toBeInTheDocument();
     expect(reviewButton).toBeEnabled();
   });
 
@@ -403,17 +450,20 @@ describe("AutomaticUploadsPage", () => {
       }),
     );
     await user.click(
-      within(screen.getByRole("group", { name: "Private bulk value" })).getByRole(
-        "button",
-        { name: "Private" },
-      ),
+      within(
+        screen.getByRole("group", { name: "Private bulk value" }),
+      ).getByRole("button", { name: "Private" }),
     );
     await user.click(
       screen.getByRole("button", { name: "Apply Private to selected" }),
     );
 
-    expect(within(firstDraft).getByLabelText("Display price")).not.toBeChecked();
-    expect(within(firstDraft).getByLabelText("Use for Taster")).not.toBeChecked();
+    expect(
+      within(firstDraft).getByLabelText("Display price"),
+    ).not.toBeChecked();
+    expect(
+      within(firstDraft).getByLabelText("Use for Taster"),
+    ).not.toBeChecked();
     expect(within(firstDraft).getByLabelText("Private")).toBeChecked();
     expect(within(secondDraft).getByLabelText("Use for Taster")).toBeChecked();
     expect(within(secondDraft).getByLabelText("Private")).not.toBeChecked();
@@ -432,6 +482,72 @@ describe("AutomaticUploadsPage", () => {
       useForTaster: false,
       isPrivate: true,
     });
+  });
+
+  it("appends deduplicated tags to selected drafts only", async () => {
+    jest.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
+      created: [],
+      skipped: [],
+      failed: [],
+    });
+    renderPage();
+    const user = await previewAuction();
+    const firstDraft = screen.getByTestId("automatic-upload-draft-draft-1");
+    const secondDraft = screen.getByTestId("automatic-upload-draft-draft-2");
+
+    await user.click(within(secondDraft).getByLabelText("Include lot 13"));
+    await user.type(
+      screen.getByLabelText("Add tags to selected drafts"),
+      "featured, Contemporary, FEATURED, phillips",
+    );
+    await user.click(screen.getByRole("button", { name: "Add to selected" }));
+
+    expect(within(firstDraft).getByLabelText("Tags")).toHaveValue(
+      "phillips, featured, Contemporary",
+    );
+    expect(within(secondDraft).getByLabelText("Tags")).toHaveValue("");
+
+    await user.click(
+      screen.getByRole("button", { name: "Upload 1 selected artwork" }),
+    );
+    await waitFor(() =>
+      expect(apiClient.approveAutomaticUploads).toHaveBeenCalledTimes(1),
+    );
+    expect(
+      jest.mocked(apiClient.approveAutomaticUploads).mock.calls[0][1].drafts[0]
+        .artwork.tags,
+    ).toEqual(["phillips", "featured", "Contemporary"]);
+  });
+
+  it("supports multi-word and comma-separated tags in an individual draft", async () => {
+    jest.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
+      created: [],
+      skipped: [],
+      failed: [],
+    });
+    renderPage();
+    const user = await previewAuction();
+    const firstDraft = screen.getByTestId("automatic-upload-draft-draft-1");
+    const secondDraft = screen.getByTestId("automatic-upload-draft-draft-2");
+    const tagsInput = within(firstDraft).getByLabelText("Tags");
+
+    await user.clear(tagsInput);
+    await user.type(tagsInput, "modern art, featured");
+    expect(tagsInput).toHaveValue("modern art, featured");
+    await user.tab();
+    expect(tagsInput).toHaveValue("modern art, featured");
+    await user.click(within(secondDraft).getByLabelText("Include lot 13"));
+    await user.click(
+      screen.getByRole("button", { name: "Upload 1 selected artwork" }),
+    );
+
+    await waitFor(() =>
+      expect(apiClient.approveAutomaticUploads).toHaveBeenCalledTimes(1),
+    );
+    expect(
+      jest.mocked(apiClient.approveAutomaticUploads).mock.calls[0][1].drafts[0]
+        .artwork.tags,
+    ).toEqual(["modern art", "featured"]);
   });
 
   it("renders ISO auction dates locally and stores individual edits as ISO UTC", async () => {
@@ -741,7 +857,9 @@ describe("AutomaticUploadsPage", () => {
     await user.type(screen.getByLabelText("Auction URL"), url);
 
     expect(screen.getByText(message)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Review content" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Review content" }),
+    ).toBeDisabled();
     expect(apiClient.previewAutomaticUploads).not.toHaveBeenCalled();
   });
 

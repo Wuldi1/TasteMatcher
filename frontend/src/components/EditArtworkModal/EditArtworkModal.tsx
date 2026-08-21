@@ -7,13 +7,7 @@ import {
   useCallback,
 } from "react";
 import { useMutation } from "@tanstack/react-query";
-import {
-  X,
-  Save,
-  Sparkles,
-  Upload as UploadIcon,
-  Lock,
-} from "lucide-react";
+import { X, Save, Sparkles, Upload as UploadIcon, Lock } from "lucide-react";
 import ReactCrop, { type Crop, type PixelCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import type { Artwork } from "@tastematcher/common";
@@ -152,7 +146,7 @@ export function EditArtworkModal({
     if (isAuction) {
       if (isMaxPriceInvalid || isEndDateInvalid) {
         setError(
-          "Please provide a valid max price (>= price) and a future end date for auctions.",
+          "Please provide a valid high price (>= low price) and a future end date for auctions.",
         );
         return;
       }
@@ -189,10 +183,7 @@ export function EditArtworkModal({
       maxPrice:
         enteredMaxPriceValue === undefined
           ? undefined
-          : convertPriceFromCurrencyToUsd(
-              enteredMaxPriceValue,
-              priceCurrency,
-            ),
+          : convertPriceFromCurrencyToUsd(enteredMaxPriceValue, priceCurrency),
       endDate: endDateInput || undefined,
       isAuction,
       isPrivate: isPrivate,
@@ -516,7 +507,7 @@ export function EditArtworkModal({
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    Price ({priceCurrency})
+                    {isAuction ? "Low price" : "Price"} ({priceCurrency})
                   </label>
                   <div className="flex items-center gap-1">
                     {(["USD", "EUR", "GBP"] as const).map((currency) => (
@@ -590,7 +581,7 @@ export function EditArtworkModal({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
-                          Max price / reserve
+                          High price / reserve
                         </label>
                         <input
                           type="text"
@@ -606,7 +597,7 @@ export function EditArtworkModal({
                         />
                         {isMaxPriceInvalid && (
                           <p className="text-xs text-red-600 mt-1">
-                            Max price must be ≥ price ({priceCurrency}).
+                            High price must be ≥ low price ({priceCurrency}).
                           </p>
                         )}
                       </div>

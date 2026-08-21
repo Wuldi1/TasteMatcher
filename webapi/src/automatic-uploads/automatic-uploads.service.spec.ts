@@ -150,11 +150,7 @@ describe("AutomaticUploadsService", () => {
         return { body: "<html>auction</html>", finalUrl: url };
       }
       if (url.endsWith("/2")) {
-        throw new RemoteFetchError(
-          "network_error",
-          "detail unavailable",
-          true,
-        );
+        throw new RemoteFetchError("network_error", "detail unavailable", true);
       }
       return { body: "<html>detail</html>", finalUrl: url };
     });
@@ -315,6 +311,49 @@ describe("AutomaticUploadsService", () => {
     );
     expect(result.created[0].sourceIdentity).toEqual(
       trustedDraft("1").source.identity,
+    );
+  });
+
+  it("preserves reviewed USD prices while restoring trusted EUR metadata", async () => {
+    const trustedPreview = previewResponse(3);
+    trustedPreview.drafts[0].source = {
+      ...trustedPreview.drafts[0].source,
+      originalEstimateText: "EUR 3,000 - 5,000",
+      originalEstimateCurrency: "EUR",
+      originalEstimateLow: 3000,
+      originalEstimateHigh: 5000,
+      pricingConversionStatus: "converted",
+    };
+    provider.parse.mockReturnValue(trustedPreview);
+    const reviewedDraft = draft("1");
+    reviewedDraft.artwork.price = 3300;
+    reviewedDraft.artwork.maxPrice = 5500;
+
+    const result = await service.approve(
+      "domain-1",
+      actor,
+      approvalFor(reviewedDraft),
+    );
+
+    expect(result.created).toHaveLength(1);
+    expect(uploadService.uploadAutomaticArtwork).toHaveBeenCalledWith(
+      "domain-1",
+      expect.any(Object),
+      expect.objectContaining({
+        price: 3300,
+        maxPrice: 5500,
+        metadata: {
+          automaticUpload: expect.objectContaining({
+            originalEstimateText: "EUR 3,000 - 5,000",
+            originalEstimateCurrency: "EUR",
+            originalEstimateLow: 3000,
+            originalEstimateHigh: 5000,
+            pricingConversionStatus: "converted",
+          }),
+        },
+      }),
+      actor,
+      expect.any(String),
     );
   });
 

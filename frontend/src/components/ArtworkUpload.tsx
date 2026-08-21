@@ -76,7 +76,7 @@ export function ArtworkUpload() {
 
   const isReadyToUpload = useMemo(
     () => Boolean(currentDomain && file),
-    [currentDomain, file]
+    [currentDomain, file],
   );
   const parsePriceInput = useCallback((value: string) => {
     const raw = value.replace(/,/g, "").trim();
@@ -98,7 +98,7 @@ export function ArtworkUpload() {
     ? !metadata.endDate || new Date(metadata.endDate).getTime() <= Date.now()
     : false;
   const validationMessage = auctionMaxInvalid
-    ? "Max price must be greater than or equal to price for auctions."
+    ? "High price must be greater than or equal to low price for auctions."
     : auctionEndInvalid
       ? "Auction end date must be in the future."
       : null;
@@ -162,7 +162,7 @@ export function ArtworkUpload() {
         fileInputRef.current.value = "";
       }
     },
-    [previewUrl]
+    [previewUrl],
   );
 
   const handleFiles = useCallback(
@@ -182,14 +182,14 @@ export function ArtworkUpload() {
         setPreviewUrl(null);
       }
     },
-    [previewUrl]
+    [previewUrl],
   );
 
   const handleFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       handleFiles(event.target.files);
     },
-    [handleFiles]
+    [handleFiles],
   );
 
   const handleDragOver = useCallback(
@@ -198,7 +198,7 @@ export function ArtworkUpload() {
       event.stopPropagation();
       setIsDragActive(true);
     },
-    []
+    [],
   );
 
   const handleDragLeave = useCallback(
@@ -207,7 +207,7 @@ export function ArtworkUpload() {
       event.stopPropagation();
       setIsDragActive(false);
     },
-    []
+    [],
   );
 
   const handleDrop = useCallback(
@@ -217,7 +217,7 @@ export function ArtworkUpload() {
       setIsDragActive(false);
       handleFiles(event.dataTransfer.files);
     },
-    [handleFiles]
+    [handleFiles],
   );
 
   const handleMetadataChange = useCallback(
@@ -229,7 +229,7 @@ export function ArtworkUpload() {
           [field]: value.length > 0 ? value : undefined,
         }));
       },
-    []
+    [],
   );
 
   const addTag = useCallback(() => {
@@ -258,7 +258,7 @@ export function ArtworkUpload() {
     (event: React.ChangeEvent<HTMLInputElement>) => {
       setTagInput(event.target.value);
     },
-    []
+    [],
   );
 
   const handleTagInputKeyDown = useCallback(
@@ -273,7 +273,7 @@ export function ArtworkUpload() {
         }
       }
     },
-    [addTag, metadata.tags, removeTag, tagInput]
+    [addTag, metadata.tags, removeTag, tagInput],
   );
 
   const handleTagInputBlur = useCallback(() => {
@@ -304,7 +304,7 @@ export function ArtworkUpload() {
         price: convertPriceFromCurrencyToUsd(Number(raw), priceCurrency),
       }));
     },
-    [priceCurrency]
+    [priceCurrency],
   );
 
   const handleMaxPriceChange = useCallback(
@@ -321,7 +321,7 @@ export function ArtworkUpload() {
         maxPrice: convertPriceFromCurrencyToUsd(Number(raw), priceCurrency),
       }));
     },
-    [priceCurrency]
+    [priceCurrency],
   );
 
   // Numeric metadata input handler (width, height) — allow digits and a single dot (.) as decimal separator.
@@ -358,7 +358,7 @@ export function ArtworkUpload() {
         setMetadata((prev) => ({ ...prev, [field]: numeric }));
       }
     },
-    []
+    [],
   );
 
   // Prevent non-numeric chars in width/height inputs; allow digits, one period, navigation keys
@@ -384,7 +384,7 @@ export function ArtworkUpload() {
       // otherwise prevent
       event.preventDefault();
     },
-    []
+    [],
   );
 
   const handleSubmit = useCallback(
@@ -426,16 +426,16 @@ export function ArtworkUpload() {
         const enteredUploadMaxPrice = parsePriceInput(maxPriceInput);
         const uploadPayload: Partial<Artwork> = {
           ...metadata,
-          width:
-            dimensionUnit === "cm" ? toInches(widthValue) : widthValue,
-          height:
-            dimensionUnit === "cm" ? toInches(heightValue) : heightValue,
-          depth:
-            dimensionUnit === "cm" ? toInches(depthValue) : depthValue,
+          width: dimensionUnit === "cm" ? toInches(widthValue) : widthValue,
+          height: dimensionUnit === "cm" ? toInches(heightValue) : heightValue,
+          depth: dimensionUnit === "cm" ? toInches(depthValue) : depthValue,
           price:
             enteredUploadPrice === undefined
               ? undefined
-              : convertPriceFromCurrencyToUsd(enteredUploadPrice, priceCurrency),
+              : convertPriceFromCurrencyToUsd(
+                  enteredUploadPrice,
+                  priceCurrency,
+                ),
           maxPrice:
             enteredUploadMaxPrice === undefined
               ? undefined
@@ -449,11 +449,11 @@ export function ArtworkUpload() {
         const createdArtwork = await apiClient.uploadArtwork(
           currentDomain!.id,
           file,
-          uploadPayload
+          uploadPayload,
         );
         setStatus("success");
         setMessage(
-          `Artwork "${createdArtwork.title || "Untitled"}" uploaded successfully!`
+          `Artwork "${createdArtwork.title || "Untitled"}" uploaded successfully!`,
         );
         setShowSuccessToast(true);
         resetForm({ preserveFeedback: true });
@@ -461,12 +461,12 @@ export function ArtworkUpload() {
         if (error instanceof ApiError) {
           setStatus("error");
           setMessage(
-            error.message || "Failed to upload artwork. Please try again."
+            error.message || "Failed to upload artwork. Please try again.",
           );
         } else {
           setStatus("error");
           setMessage(
-            "Network error. Please check your connection and try again."
+            "Network error. Please check your connection and try again.",
           );
         }
       }
@@ -485,7 +485,7 @@ export function ArtworkUpload() {
       maxPriceInput,
       priceCurrency,
       parsePriceInput,
-    ]
+    ],
   );
 
   useEffect(() => {
@@ -838,7 +838,7 @@ export function ArtworkUpload() {
                 className="text-sm font-medium text-gray-700 flex items-center gap-2"
               >
                 <DollarSign className="w-4 h-4 text-green-600" />
-                Price ({priceCurrency})
+                {metadata.isAuction ? "Low price" : "Price"} ({priceCurrency})
               </label>
               <div className="flex items-center gap-1">
                 {(["USD", "EUR", "GBP"] as const).map((currency) => (
@@ -932,7 +932,7 @@ export function ArtworkUpload() {
                         className="text-sm font-medium text-gray-700 flex items-center gap-2"
                       >
                         <DollarSign className="w-4 h-4 text-green-600" />
-                        Max price / reserve
+                        High price / reserve
                       </label>
                       <input
                         id="metadata-maxprice"
@@ -946,13 +946,13 @@ export function ArtworkUpload() {
                         disabled={status === "uploading"}
                       />
                       <p className="text-xs text-gray-500">
-                        Must be greater than or equal to price (
+                        Must be greater than or equal to low price (
                         {priceCurrency}).
                       </p>
                       {auctionMaxInvalid && (
                         <p className="text-xs text-red-600 mt-1">
-                          Max price must be greater than or equal to price for
-                          auctions.
+                          High price must be greater than or equal to low price
+                          for auctions.
                         </p>
                       )}
                     </div>

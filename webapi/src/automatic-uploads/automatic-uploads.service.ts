@@ -460,7 +460,7 @@ export class AutomaticUploadsService {
       fieldError(
         "maxPrice",
         "invalid_price_range",
-        "Maximum price must be greater than or equal to price.",
+        "High price must be greater than or equal to low price.",
       );
     }
     return issues;
