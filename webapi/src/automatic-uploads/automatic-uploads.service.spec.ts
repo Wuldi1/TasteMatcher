@@ -238,6 +238,49 @@ describe("AutomaticUploadsService", () => {
     expect(uploadService.uploadAutomaticArtwork).toHaveBeenCalledTimes(1);
   });
 
+  it("accepts an approval draft without an artwork date", async () => {
+    const draftWithoutDate = draft("1");
+    delete draftWithoutDate.artwork.date;
+
+    const result = await service.approve(
+      "domain-1",
+      actor,
+      approvalFor(draftWithoutDate),
+    );
+
+    expect(result.created).toHaveLength(1);
+    expect(result.failed).toHaveLength(0);
+    expect(uploadService.uploadAutomaticArtwork).toHaveBeenCalledWith(
+      "domain-1",
+      expect.any(Object),
+      expect.objectContaining({ date: undefined }),
+      actor,
+      expect.any(String),
+    );
+  });
+
+  it.each([null, 2024, [], {}])(
+    "rejects a non-string artwork date value %#",
+    async (invalidDate) => {
+      const invalidDraft = draft("1") as unknown as Record<string, unknown>;
+      (invalidDraft.artwork as Record<string, unknown>).date = invalidDate;
+
+      const result = await service.approve("domain-1", actor, {
+        provider: "phillips",
+        sourceUrl: auctionUrl,
+        drafts: [invalidDraft],
+      });
+
+      expect(result.failed).toEqual([
+        expect.objectContaining({
+          draftId: "draft-1",
+          code: "validation_failed",
+        }),
+      ]);
+      expect(uploadService.uploadAutomaticArtwork).not.toHaveBeenCalled();
+    },
+  );
+
   it("rejects a draft identity that does not match the approval provider", async () => {
     const invalidProviderDraft = draft("1") as unknown as Record<
       string,

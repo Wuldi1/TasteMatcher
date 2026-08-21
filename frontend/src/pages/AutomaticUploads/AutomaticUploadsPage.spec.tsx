@@ -550,6 +550,39 @@ describe("AutomaticUploadsPage", () => {
     ).toEqual(["modern art", "featured"]);
   });
 
+  it("allows a missing optional artwork date to be reviewed and edited", async () => {
+    const previewWithoutDate = clonePreview();
+    delete previewWithoutDate.drafts[0].artwork.date;
+    jest
+      .mocked(apiClient.previewAutomaticUploads)
+      .mockResolvedValue(previewWithoutDate);
+    jest.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
+      created: [],
+      skipped: [],
+      failed: [],
+    });
+    renderPage();
+    const user = await previewAuction();
+    const firstDraft = screen.getByTestId("automatic-upload-draft-draft-1");
+    const secondDraft = screen.getByTestId("automatic-upload-draft-draft-2");
+    const dateInput = within(firstDraft).getByLabelText("Artwork date");
+
+    expect(dateInput).toHaveValue("");
+    await user.type(dateInput, "2024");
+    await user.click(within(secondDraft).getByLabelText("Include lot 13"));
+    await user.click(
+      screen.getByRole("button", { name: "Upload 1 selected artwork" }),
+    );
+
+    await waitFor(() =>
+      expect(apiClient.approveAutomaticUploads).toHaveBeenCalledTimes(1),
+    );
+    expect(
+      jest.mocked(apiClient.approveAutomaticUploads).mock.calls[0][1].drafts[0]
+        .artwork.date,
+    ).toBe("2024");
+  });
+
   it("renders ISO auction dates locally and stores individual edits as ISO UTC", async () => {
     jest.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
       created: [],

@@ -262,7 +262,7 @@ function parseArtwork(
       true,
     ),
     artist: requireString(record.artist, `${label}.artist`, 500, true),
-    date: requireString(record.date, `${label}.date`, 200, true),
+    date: optionalString(record.date, `${label}.date`, 200),
     signature: optionalString(record.signature, `${label}.signature`, 2_000),
     medium: optionalString(record.medium, `${label}.medium`, 2_000),
     width: optionalNumber(record.width, `${label}.width`),

@@ -103,7 +103,7 @@ export interface AutomaticUploadEditableArtworkInput {
   title: string;
   description: string;
   artist: string;
-  date: string;
+  date?: string;
   signature?: string;
   medium?: string;
   width?: number;

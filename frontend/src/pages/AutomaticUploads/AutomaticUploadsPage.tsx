@@ -1203,10 +1203,10 @@ export function AutomaticUploadsPage() {
                             />
                           </label>
                           <label className={labelClass}>
-                            Artwork date
+                            Artwork date (optional)
                             <input
                               aria-label="Artwork date"
-                              value={draft.artwork.date}
+                              value={draft.artwork.date ?? ""}
                               onChange={(event) =>
                                 updateArtworkField(
                                   draft.draftId,

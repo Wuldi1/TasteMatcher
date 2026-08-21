@@ -138,7 +138,7 @@ estimate bounds, and conversion status. A mismatched auction URL, lot URL, or
 missing or ambiguous lot is a per-item `source_validation_failed` result. Only
 the explicit `artwork` fields remain client-editable.
 
-Editable artwork fields are title, description, artist, date, signature,
+Editable artwork fields are title, description, artist, optional date, signature,
 medium, width, height, depth, auction flag, low/high price, price
 visibility, taster/private flags, end date, and tags. Server-owned values such
 as artwork ID, domain ID, filename, vectors, timestamps, and uploader are not

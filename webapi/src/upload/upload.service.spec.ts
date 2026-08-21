@@ -83,6 +83,20 @@ describe("UploadService", () => {
     expect(items.create).toHaveBeenCalledTimes(1);
   });
 
+  it("persists an omitted automatic-upload date as an empty string", async () => {
+    const result = await service.uploadAutomaticArtwork(
+      "domain-1",
+      { buffer: Buffer.from("image"), mimetype: "image/jpeg", size: 5 },
+      { title: "Automatic work" },
+      { id: "owner-1", role: "domain_owner" },
+    );
+
+    expect(items.create).toHaveBeenCalledWith(
+      expect.objectContaining({ date: "" }),
+    );
+    expect(result.date).toBe("");
+  });
+
   it("uses a forced deterministic ID only for automatic ingestion", async () => {
     const forcedId = "a487ad8d-fbab-55c7-8ad6-19b13cb132f8";
     await service.uploadAutomaticArtwork(
