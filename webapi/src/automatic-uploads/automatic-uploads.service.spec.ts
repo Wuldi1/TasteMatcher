@@ -18,9 +18,15 @@ describe("AutomaticUploadsService", () => {
     fetchImage: jest.fn(),
   };
   const provider = {
+    provider: "phillips" as const,
+    displayName: "Phillips",
     canParse: jest.fn().mockReturnValue(true),
     parse: jest.fn(),
     enrichDraftFromLotDetail: jest.fn(),
+  };
+  const providerRegistry = {
+    findForUrl: jest.fn().mockReturnValue(provider),
+    findByProvider: jest.fn().mockReturnValue(provider),
   };
   const uploadService = {
     findArtworkBySourceIdentity: jest.fn(),
@@ -48,6 +54,8 @@ describe("AutomaticUploadsService", () => {
       finalUrl: url,
     }));
     provider.canParse.mockReturnValue(true);
+    providerRegistry.findForUrl.mockReturnValue(provider);
+    providerRegistry.findByProvider.mockReturnValue(provider);
     provider.parse.mockImplementation(() => previewResponse(3));
     provider.enrichDraftFromLotDetail.mockImplementation((value) => ({
       ...value,
@@ -65,7 +73,7 @@ describe("AutomaticUploadsService", () => {
     );
     service = new AutomaticUploadsService(
       fetcher as never,
-      provider as never,
+      providerRegistry as never,
       uploadService as never,
     );
   });
@@ -86,6 +94,36 @@ describe("AutomaticUploadsService", () => {
       ]),
     );
     expect(uploadService.uploadAutomaticArtwork).not.toHaveBeenCalled();
+    expect(providerRegistry.findForUrl).toHaveBeenCalledWith(
+      new URL(auctionUrl),
+    );
+  });
+
+  it("rejects a supported source host when no parser is registered", async () => {
+    providerRegistry.findForUrl.mockReturnValueOnce(undefined);
+
+    await expect(
+      service.preview("domain-1", actor, { url: auctionUrl }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(fetcher.fetchHtml).not.toHaveBeenCalled();
+  });
+
+  it("rejects a preview redirect to a different provider", async () => {
+    fetcher.fetchHtml.mockResolvedValue({
+      body: "<html></html>",
+      contentType: "text/html",
+      finalUrl: "https://www.sothebys.com/auction/example",
+    });
+    providerRegistry.findForUrl.mockImplementation((url: URL) =>
+      url.hostname === "www.phillips.com" ? provider : undefined,
+    );
+
+    await expect(
+      service.preview("domain-1", actor, { url: auctionUrl }),
+    ).rejects.toThrow(
+      "The auction URL redirected to a different or unsupported provider.",
+    );
+    expect(provider.parse).not.toHaveBeenCalled();
   });
 
   it("caps unusually large previews at 200 drafts", async () => {
@@ -202,6 +240,32 @@ describe("AutomaticUploadsService", () => {
       ]),
     );
     expect(uploadService.uploadAutomaticArtwork).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a draft identity that does not match the approval provider", async () => {
+    const invalidProviderDraft = draft("1") as unknown as Record<
+      string,
+      unknown
+    >;
+    const source = invalidProviderDraft.source as Record<string, unknown>;
+    source.identity = {
+      ...(source.identity as Record<string, unknown>),
+      provider: "sothebys",
+    };
+
+    const result = await service.approve("domain-1", actor, {
+      provider: "phillips",
+      sourceUrl: auctionUrl,
+      drafts: [invalidProviderDraft],
+    });
+
+    expect(result.failed).toEqual([
+      expect.objectContaining({
+        code: "validation_failed",
+        sourceIdentity: expect.objectContaining({ provider: "phillips" }),
+      }),
+    ]);
+    expect(fetcher.fetchImage).not.toHaveBeenCalled();
   });
 
   it("uses trusted source values when client audit fields are tampered", async () => {

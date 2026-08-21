@@ -1,13 +1,13 @@
 import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import {
-  ApprovedPhillipsAutomaticUploadDraft,
+  ApprovedAutomaticUploadDraft,
   Artwork,
   AutomaticUploadApprovalResponse,
   AutomaticUploadArtworkDraftIssue,
+  AutomaticUploadDraft,
   AutomaticUploadFailedDraftResult,
   AutomaticUploadPreviewResponse,
-  PhillipsAutomaticUploadDraft,
-  PhillipsAutomaticUploadSourceIdentity,
+  AutomaticUploadSourceIdentity,
   Role,
 } from "@tastematcher/common";
 import { v5 as uuidv5 } from "uuid";
@@ -18,7 +18,8 @@ import {
   parseApprovalRequest,
   parsePreviewRequest,
 } from "./automatic-upload.validation";
-import { PhillipsProvider } from "./providers/phillips.provider";
+import { AutomaticUploadProviderAdapter } from "./providers/automatic-upload-provider.interface";
+import { AutomaticUploadProviderRegistry } from "./providers/automatic-upload-provider.registry";
 
 interface AutomaticUploadActor {
   id: string;
@@ -37,7 +38,7 @@ export class AutomaticUploadsService {
 
   constructor(
     private readonly fetcher: SafeRemoteFetcher,
-    private readonly phillipsProvider: PhillipsProvider,
+    private readonly providerRegistry: AutomaticUploadProviderRegistry,
     private readonly uploadService: UploadService,
   ) {}
 
@@ -49,15 +50,14 @@ export class AutomaticUploadsService {
     const startedAt = Date.now();
     const request = parsePreviewRequest(body);
     const sourceUrl = this.fetcher.validateSourceUrl(request.url);
-    if (!this.phillipsProvider.canParse(sourceUrl)) {
-      throw new BadRequestException(
-        "Only Phillips auction page URLs are supported.",
-      );
+    const provider = this.providerRegistry.findForUrl(sourceUrl);
+    if (!provider) {
+      throw new BadRequestException("This auction provider is not supported.");
     }
     const logSource = this.loggableUrl(sourceUrl);
     this.logger.log({
       action: "automaticUploads.preview.start",
-      provider: "phillips",
+      provider: provider.provider,
       domainId,
       actorId: actor.id,
       ...logSource,
@@ -65,24 +65,29 @@ export class AutomaticUploadsService {
 
     try {
       const fetched = await this.fetcher.fetchHtml(sourceUrl.toString());
-      const parsed = this.phillipsProvider.parse(fetched.body, {
+      this.assertFinalProvider(fetched.finalUrl, provider);
+      const parsed = provider.parse(fetched.body, {
         sourceUrl: fetched.finalUrl,
       });
+      this.validateParsedPreview(parsed, provider);
       if (parsed.drafts.length > MAX_PREVIEW_DRAFTS) {
         parsed.drafts = parsed.drafts.slice(0, MAX_PREVIEW_DRAFTS);
         parsed.issues.push({
           scope: "batch",
           code: "preview_truncated",
-          message: `Phillips returned more than ${MAX_PREVIEW_DRAFTS} lots. Only the first ${MAX_PREVIEW_DRAFTS} are shown.`,
+          message: `${provider.displayName} returned more than ${MAX_PREVIEW_DRAFTS} lots. Only the first ${MAX_PREVIEW_DRAFTS} are shown.`,
           severity: "warning",
           blocking: false,
         });
       }
-      const detailResult = await this.enrichPreviewDrafts(parsed.drafts);
+      const detailResult = await this.enrichPreviewDrafts(
+        parsed.drafts,
+        provider,
+      );
       parsed.drafts = detailResult.drafts;
       this.logger.log({
         action: "automaticUploads.preview.success",
-        provider: "phillips",
+        provider: provider.provider,
         domainId,
         actorId: actor.id,
         lotCount: parsed.drafts.length,
@@ -95,7 +100,7 @@ export class AutomaticUploadsService {
     } catch (error) {
       this.logger.warn({
         action: "automaticUploads.preview.failed",
-        provider: "phillips",
+        provider: provider.provider,
         domainId,
         actorId: actor.id,
         category:
@@ -108,12 +113,17 @@ export class AutomaticUploadsService {
   }
 
   private async enrichPreviewDrafts(
-    drafts: readonly PhillipsAutomaticUploadDraft[],
+    drafts: readonly AutomaticUploadDraft[],
+    provider: AutomaticUploadProviderAdapter,
   ): Promise<{
-    drafts: PhillipsAutomaticUploadDraft[];
+    drafts: AutomaticUploadDraft[];
     enrichedCount: number;
     failedCount: number;
   }> {
+    const enrichDraftFromLotDetail = provider.enrichDraftFromLotDetail;
+    if (!enrichDraftFromLotDetail) {
+      return { drafts: [...drafts], enrichedCount: 0, failedCount: 0 };
+    }
     let enrichedCount = 0;
     let failedCount = 0;
     let budgetExceededCount = 0;
@@ -129,17 +139,20 @@ export class AutomaticUploadsService {
           budgetExceededCount += 1;
           return this.withDetailUnavailableIssue(
             draft,
-            "The Phillips detail enrichment time limit was reached. Review and complete the draft fields before upload.",
+            `The ${provider.displayName} detail enrichment time limit was reached. Review and complete the draft fields before upload.`,
           );
         }
         try {
           const detailPage = await this.fetcher.fetchHtml(lotUrl);
-          const result = this.phillipsProvider.enrichDraftFromLotDetail(
+          const result = enrichDraftFromLotDetail.call(
+            provider,
             draft,
             detailPage.body,
           );
           if (result === draft) {
-            throw new Error("Phillips returned no lot cataloging details.");
+            throw new Error(
+              `${provider.displayName} returned no lot cataloging details.`,
+            );
           }
           enrichedCount += 1;
           return result;
@@ -147,7 +160,7 @@ export class AutomaticUploadsService {
           failedCount += 1;
           this.logger.warn({
             action: "automaticUploads.preview.detail.failed",
-            provider: "phillips",
+            provider: provider.provider,
             sourceLotNumber: draft.source.identity.sourceLotNumber,
             category:
               error instanceof RemoteFetchError
@@ -156,7 +169,7 @@ export class AutomaticUploadsService {
           });
           return this.withDetailUnavailableIssue(
             draft,
-            "Phillips lot details could not be loaded. Review and complete the draft fields before upload.",
+            `${provider.displayName} lot details could not be loaded. Review and complete the draft fields before upload.`,
           );
         }
       },
@@ -164,7 +177,7 @@ export class AutomaticUploadsService {
     if (budgetExceededCount > 0) {
       this.logger.warn({
         action: "automaticUploads.preview.detail.budgetExceeded",
-        provider: "phillips",
+        provider: provider.provider,
         skippedDetailCount: budgetExceededCount,
         budgetMs: PREVIEW_DETAIL_BUDGET_MS,
       });
@@ -173,9 +186,9 @@ export class AutomaticUploadsService {
   }
 
   private withDetailUnavailableIssue(
-    draft: PhillipsAutomaticUploadDraft,
+    draft: AutomaticUploadDraft,
     message: string,
-  ): PhillipsAutomaticUploadDraft {
+  ): AutomaticUploadDraft {
     return {
       ...draft,
       issues: [
@@ -199,15 +212,16 @@ export class AutomaticUploadsService {
     const startedAt = Date.now();
     const request = parseApprovalRequest(body);
     const sourceUrl = this.fetcher.validateSourceUrl(request.sourceUrl);
-    if (!this.phillipsProvider.canParse(sourceUrl)) {
+    const provider = this.providerRegistry.findForUrl(sourceUrl);
+    if (!provider || provider.provider !== request.provider) {
       throw new BadRequestException(
-        "Only Phillips auction page URLs are supported.",
+        "The approval provider does not match the auction URL.",
       );
     }
     const logSource = this.loggableUrl(sourceUrl);
     this.logger.log({
       action: "automaticUploads.approve.start",
-      provider: "phillips",
+      provider: provider.provider,
       domainId,
       actorId: actor.id,
       lotCount: request.drafts.length,
@@ -215,17 +229,14 @@ export class AutomaticUploadsService {
     });
 
     const fetched = await this.fetcher.fetchHtml(sourceUrl.toString());
-    const trustedPreview = this.phillipsProvider.parse(fetched.body, {
+    this.assertFinalProvider(fetched.finalUrl, provider);
+    const trustedPreview = provider.parse(fetched.body, {
       sourceUrl: fetched.finalUrl,
     });
-    const trustedAuctionUrl = this.fetcher.validateSourceUrl(
-      trustedPreview.source.sourceAuctionUrl,
+    const trustedAuctionUrl = this.validateParsedPreview(
+      trustedPreview,
+      provider,
     );
-    if (!this.phillipsProvider.canParse(trustedAuctionUrl)) {
-      throw new BadRequestException(
-        "Phillips returned an invalid auction source identity.",
-      );
-    }
     const trustedLots = this.indexTrustedLots(trustedPreview.drafts);
     const seen = new Set<string>();
     const results = await this.mapWithConcurrency(
@@ -236,6 +247,7 @@ export class AutomaticUploadsService {
           rawDraft,
           index,
           trustedAuctionUrl.toString(),
+          provider.provider,
         );
         if (!parsed.valid) {
           return this.failedResult(
@@ -280,7 +292,7 @@ export class AutomaticUploadsService {
     };
     this.logger.log({
       action: "automaticUploads.approve.complete",
-      provider: "phillips",
+      provider: provider.provider,
       domainId,
       actorId: actor.id,
       createdCount: response.created.length,
@@ -295,7 +307,7 @@ export class AutomaticUploadsService {
   private async approveDraft(
     domainId: string,
     actor: AutomaticUploadActor,
-    draft: ApprovedPhillipsAutomaticUploadDraft,
+    draft: ApprovedAutomaticUploadDraft,
   ) {
     const issues = this.validateDraft(draft);
     if (issues.some((issue) => issue.blocking)) {
@@ -335,7 +347,7 @@ export class AutomaticUploadsService {
         "image_download_failed",
         error instanceof Error
           ? error.message
-          : "The Phillips image could not be downloaded.",
+          : "The auction image could not be downloaded.",
         error instanceof RemoteFetchError ? error.retryable : true,
       );
     }
@@ -356,7 +368,7 @@ export class AutomaticUploadsService {
           ...draft.artwork,
           metadata: {
             automaticUpload: {
-              provider: "phillips",
+              provider: draft.source.identity.provider,
               sourceAuctionUrl: draft.source.identity.sourceAuctionUrl,
               sourceLotNumber: draft.source.identity.sourceLotNumber,
               sourceLotUrl: draft.source.identity.sourceLotUrl,
@@ -409,11 +421,11 @@ export class AutomaticUploadsService {
   }
 
   private validateDraft(
-    draft: ApprovedPhillipsAutomaticUploadDraft,
+    draft: ApprovedAutomaticUploadDraft,
   ): AutomaticUploadArtworkDraftIssue[] {
     const issues: AutomaticUploadArtworkDraftIssue[] = [];
     const fieldError = (
-      field: keyof ApprovedPhillipsAutomaticUploadDraft["artwork"],
+      field: keyof ApprovedAutomaticUploadDraft["artwork"],
       code: string,
       message: string,
     ) =>
@@ -455,9 +467,9 @@ export class AutomaticUploadsService {
   }
 
   private indexTrustedLots(
-    drafts: readonly PhillipsAutomaticUploadDraft[],
-  ): Map<string, PhillipsAutomaticUploadDraft[]> {
-    const lots = new Map<string, PhillipsAutomaticUploadDraft[]>();
+    drafts: readonly AutomaticUploadDraft[],
+  ): Map<string, AutomaticUploadDraft[]> {
+    const lots = new Map<string, AutomaticUploadDraft[]>();
     for (const draft of drafts) {
       const key = this.normalizeLotNumber(
         draft.source.identity.sourceLotNumber,
@@ -470,22 +482,22 @@ export class AutomaticUploadsService {
   }
 
   private bindTrustedDraft(
-    clientDraft: ApprovedPhillipsAutomaticUploadDraft,
+    clientDraft: ApprovedAutomaticUploadDraft,
     trustedAuctionUrl: URL,
-    trustedLots: ReadonlyMap<string, PhillipsAutomaticUploadDraft[]>,
+    trustedLots: ReadonlyMap<string, AutomaticUploadDraft[]>,
   ):
-    | { valid: true; draft: ApprovedPhillipsAutomaticUploadDraft }
+    | { valid: true; draft: ApprovedAutomaticUploadDraft }
     | {
         valid: false;
-        sourceIdentity: PhillipsAutomaticUploadSourceIdentity;
+        sourceIdentity: AutomaticUploadSourceIdentity;
         message: string;
       } {
     const requestedLotNumber = this.normalizeLotNumber(
       clientDraft.source.identity.sourceLotNumber,
     );
     const candidates = trustedLots.get(requestedLotNumber) ?? [];
-    const fallbackIdentity: PhillipsAutomaticUploadSourceIdentity = {
-      provider: "phillips",
+    const fallbackIdentity: AutomaticUploadSourceIdentity = {
+      provider: clientDraft.source.identity.provider,
       sourceAuctionUrl: trustedAuctionUrl.toString(),
       sourceLotNumber: requestedLotNumber,
     };
@@ -517,7 +529,7 @@ export class AutomaticUploadsService {
       };
     }
 
-    let trustedDraft: PhillipsAutomaticUploadDraft | undefined;
+    let trustedDraft: AutomaticUploadDraft | undefined;
     if (clientDraft.source.identity.sourceLotUrl) {
       let requestedLotUrl: string;
       try {
@@ -561,7 +573,7 @@ export class AutomaticUploadsService {
       return {
         valid: false,
         sourceIdentity: trustedDraft.source.identity,
-        message: "The fetched auction lot has no supported Phillips image.",
+        message: "The fetched auction lot has no supported provider image.",
       };
     }
 
@@ -576,7 +588,7 @@ export class AutomaticUploadsService {
   }
 
   private failedDraft(
-    draft: ApprovedPhillipsAutomaticUploadDraft,
+    draft: ApprovedAutomaticUploadDraft,
     code: AutomaticUploadFailedDraftResult["code"],
     message: string,
     retryable: boolean,
@@ -594,7 +606,7 @@ export class AutomaticUploadsService {
 
   private failedResult(
     draftId: string,
-    sourceIdentity: PhillipsAutomaticUploadSourceIdentity,
+    sourceIdentity: AutomaticUploadSourceIdentity,
     code: AutomaticUploadFailedDraftResult["code"],
     message: string,
     retryable: boolean,
@@ -612,7 +624,7 @@ export class AutomaticUploadsService {
   }
 
   private skippedDraft(
-    draft: ApprovedPhillipsAutomaticUploadDraft,
+    draft: ApprovedAutomaticUploadDraft,
     existingArtworkId: string,
   ) {
     return {
@@ -620,19 +632,19 @@ export class AutomaticUploadsService {
       draftId: draft.draftId,
       sourceIdentity: draft.source.identity,
       reason: "already_imported" as const,
-      message: "This Phillips lot is already in the gallery.",
+      message: "This source lot is already in the gallery.",
       existingArtworkId,
     };
   }
 
-  private identityKey(draft: ApprovedPhillipsAutomaticUploadDraft): string {
+  private identityKey(draft: ApprovedAutomaticUploadDraft): string {
     const identity = draft.source.identity;
     return `${identity.provider}|${identity.sourceAuctionUrl}|${identity.sourceLotNumber}`;
   }
 
   private deterministicArtworkId(
     domainId: string,
-    identity: PhillipsAutomaticUploadSourceIdentity,
+    identity: AutomaticUploadSourceIdentity,
   ): string {
     return uuidv5(
       [
@@ -671,6 +683,42 @@ export class AutomaticUploadsService {
 
   private isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+
+  private assertFinalProvider(
+    finalUrl: string,
+    expectedProvider: AutomaticUploadProviderAdapter,
+  ): void {
+    const resolved = this.providerRegistry.findForUrl(
+      this.fetcher.validateSourceUrl(finalUrl),
+    );
+    if (resolved?.provider !== expectedProvider.provider) {
+      throw new BadRequestException(
+        "The auction URL redirected to a different or unsupported provider.",
+      );
+    }
+  }
+
+  private validateParsedPreview(
+    preview: AutomaticUploadPreviewResponse,
+    provider: AutomaticUploadProviderAdapter,
+  ): URL {
+    const sourceUrl = this.fetcher.validateSourceUrl(
+      preview.source.sourceAuctionUrl,
+    );
+    if (
+      preview.provider !== provider.provider ||
+      preview.source.provider !== provider.provider ||
+      !provider.canParse(sourceUrl) ||
+      preview.drafts.some(
+        (draft) => draft.source.identity.provider !== provider.provider,
+      )
+    ) {
+      throw new BadRequestException(
+        `${provider.displayName} returned an invalid provider source identity.`,
+      );
+    }
+    return sourceUrl;
   }
 
   private loggableUrl(url: URL): { sourceHost: string; sourcePath: string } {

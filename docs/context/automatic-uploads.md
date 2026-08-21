@@ -3,8 +3,10 @@
 ## Overview
 
 Automatic Uploads lets a `domain_owner` or `global_admin` review a supported
-Phillips auction page as editable drafts and approve selected lots into a
-TasteMatcher gallery. Phillips is the only supported provider in this MVP.
+auction page as editable drafts and approve selected lots into a TasteMatcher
+gallery. Phillips is the first and currently only registered provider; the
+server resolves a provider adapter from the submitted URL so additional auction
+houses can be added without changing the workflow service.
 
 Preview is read-only: it fetches and parses Phillips HTML but does not write to
 Cosmos DB, Blob Storage, queues, or Azure Functions. Approval is the only step
@@ -14,15 +16,18 @@ No new Azure infrastructure or Functions changes are required.
 ## User Flow
 
 1. Open `/automatic-uploads` from the `Automatic Uploads` navigation item.
-2. Enter a supported Phillips auction URL. A `global_admin` must also select the
-   target gallery; a `domain_owner` uses their own domain.
+2. Enter an auction URL. The page identifies its provider and shows whether the
+   domain is supported before enabling preview. A `global_admin` must also
+   select the target gallery; a `domain_owner` uses their own domain.
 3. Select `Review content`. The API returns provisional drafts held in frontend
    state only.
 4. Review images and issues, edit artwork fields, and include or exclude lots.
    Title, artist, source image, and an auction end date are blocking requirements.
-5. To update many lots, enter one auction end date and select `Apply to selected`.
-   Only currently included drafts are changed. Values from `datetime-local`
-   controls are normalized to explicit ISO UTC timestamps before approval.
+5. Use the bulk editor to set auction end date, price visibility, Taster usage,
+   or privacy for all currently included drafts. Each property is applied only
+   when its own Apply action is selected; excluded drafts are unchanged. Values
+   from `datetime-local` controls are normalized to explicit ISO UTC timestamps
+   before approval.
 6. Select `Upload <count> selected` after all included drafts are valid. The
    frontend automatically sends selections over 20 as sequential requests of
    at most 20 drafts.
@@ -63,7 +68,7 @@ Request:
 
 The response contains:
 
-- `provider`: always `phillips`.
+- `provider`: the parser selected from the source URL; currently `phillips`.
 - `source`: auction URL, code, title, location, and available start/end dates.
 - `drafts`: `draftId`, source reference data, editable artwork data, inclusion
   state, and field/draft issues. Approval does not trust the returned source
@@ -147,6 +152,31 @@ other successful items in the same request. When more than 20 drafts are
 selected, the frontend aggregates the per-item results from sequential chunks.
 If a whole chunk request fails, processing stops; results from completed chunks
 are retained and unprocessed drafts remain in the review list.
+
+## Provider Resolution
+
+`AutomaticUploadProviderRegistry` owns server-side URL-to-parser resolution.
+Each provider implements `AutomaticUploadProviderAdapter`, including its stable
+provider key, display name, URL matcher, overview parser, and optional lot-detail
+enricher. Preview and approval both resolve the adapter from the source URL;
+approval additionally requires the request provider to match that adapter.
+
+To add another auction provider:
+
+1. Add its provider definition and exact source/image hosts to
+   `common/src/types/automatic-upload.types.ts`.
+2. Implement a provider adapter under
+   `webapi/src/automatic-uploads/providers/` and register it in
+   `automatic-uploads.module.ts`.
+3. Add the browser-safe provider entry in
+   `frontend/src/pages/AutomaticUploads/automaticUploadProviders.ts` so URL
+   support feedback stays aligned with the server.
+4. Add parser fixtures, adapter/registry tests, fetch allowlist tests, and a UI
+   support-state test for the new domain.
+
+Provider hosts are exact allowlists, not suffix matches. Registering an adapter
+without registering its hosts will therefore remain blocked by the remote
+fetcher.
 
 ## URL And Content Policy
 

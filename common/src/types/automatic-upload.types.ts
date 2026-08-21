@@ -1,10 +1,42 @@
-/**
- * Providers supported by the automatic-upload workflow.
- *
- * Keep provider-specific request and source types discriminated by this value
- * as additional providers are introduced.
- */
-export type AutomaticUploadProvider = "phillips";
+/** Runtime provider catalog shared by URL feedback and server allowlists. */
+export const AUTOMATIC_UPLOAD_PROVIDER_DEFINITIONS = [
+  {
+    provider: "phillips",
+    displayName: "Phillips",
+    sourceHosts: ["phillips.com", "www.phillips.com"],
+    imageHosts: ["assets.phillips.com", "dist.phillips.com"],
+    exampleUrl: "https://www.phillips.com/auction/NY030826",
+  },
+] as const;
+
+export type AutomaticUploadProvider =
+  (typeof AUTOMATIC_UPLOAD_PROVIDER_DEFINITIONS)[number]["provider"];
+
+export type AutomaticUploadProviderDefinition =
+  (typeof AUTOMATIC_UPLOAD_PROVIDER_DEFINITIONS)[number];
+
+export function getAutomaticUploadProviderDefinition(
+  value: string | URL,
+): AutomaticUploadProviderDefinition | undefined {
+  let url: URL;
+  try {
+    url = typeof value === "string" ? new URL(value) : value;
+  } catch {
+    return undefined;
+  }
+  const hostname = url.hostname.toLowerCase();
+  return AUTOMATIC_UPLOAD_PROVIDER_DEFINITIONS.find((definition) =>
+    definition.sourceHosts.some((host) => host === hostname),
+  );
+}
+
+export function isAutomaticUploadProvider(
+  value: unknown,
+): value is AutomaticUploadProvider {
+  return AUTOMATIC_UPLOAD_PROVIDER_DEFINITIONS.some(
+    (definition) => definition.provider === value,
+  );
+}
 
 export type AutomaticUploadPricingConversionStatus =
   | "not_required"
@@ -14,22 +46,24 @@ export type AutomaticUploadPricingConversionStatus =
   | "failed";
 
 /** Stable provider identity used for duplicate detection within a domain. */
-export interface PhillipsAutomaticUploadSourceIdentity {
-  readonly provider: "phillips";
+export interface AutomaticUploadSourceIdentity {
+  readonly provider: AutomaticUploadProvider;
   readonly sourceAuctionUrl: string;
   readonly sourceLotNumber: string;
   readonly sourceLotUrl?: string;
 }
 
-export type AutomaticUploadSourceIdentity =
-  PhillipsAutomaticUploadSourceIdentity;
+export interface PhillipsAutomaticUploadSourceIdentity
+  extends AutomaticUploadSourceIdentity {
+  readonly provider: "phillips";
+}
 
 /**
  * Immutable source values retained for approval-time verification and artwork
  * audit metadata. These values are never treated as editable artwork fields.
  */
-export interface PhillipsAutomaticUploadDraftSource {
-  readonly identity: PhillipsAutomaticUploadSourceIdentity;
+export interface AutomaticUploadDraftSource {
+  readonly identity: AutomaticUploadSourceIdentity;
   readonly sourceImageUrl?: string;
   readonly originalEstimateText?: string;
   readonly originalEstimateCurrency?: string;
@@ -41,10 +75,13 @@ export interface PhillipsAutomaticUploadDraftSource {
   readonly pricingConversionStatus: AutomaticUploadPricingConversionStatus;
 }
 
-export type AutomaticUploadDraftSource = PhillipsAutomaticUploadDraftSource;
+export interface PhillipsAutomaticUploadDraftSource
+  extends AutomaticUploadDraftSource {
+  readonly identity: PhillipsAutomaticUploadSourceIdentity;
+}
 
-export interface PhillipsAutomaticUploadSourceSummary {
-  readonly provider: "phillips";
+export interface AutomaticUploadSourceSummary {
+  readonly provider: AutomaticUploadProvider;
   readonly sourceAuctionUrl: string;
   readonly auctionCode?: string;
   readonly auctionTitle?: string;
@@ -53,8 +90,10 @@ export interface PhillipsAutomaticUploadSourceSummary {
   readonly endsAt?: string;
 }
 
-export type AutomaticUploadSourceSummary =
-  PhillipsAutomaticUploadSourceSummary;
+export interface PhillipsAutomaticUploadSourceSummary
+  extends AutomaticUploadSourceSummary {
+  readonly provider: "phillips";
+}
 
 /**
  * The complete allowlist of artwork values a client may edit and approve.
@@ -118,44 +157,55 @@ export interface AutomaticUploadPreviewRequest {
   url: string;
 }
 
-export interface PhillipsAutomaticUploadDraft {
+export interface AutomaticUploadDraft {
   draftId: string;
-  source: PhillipsAutomaticUploadDraftSource;
+  source: AutomaticUploadDraftSource;
   artwork: AutomaticUploadEditableArtworkInput;
   included: boolean;
   issues: AutomaticUploadArtworkDraftIssue[];
 }
 
-export type AutomaticUploadDraft = PhillipsAutomaticUploadDraft;
+export interface PhillipsAutomaticUploadDraft extends AutomaticUploadDraft {
+  source: PhillipsAutomaticUploadDraftSource;
+}
 
-export interface PhillipsAutomaticUploadPreviewResponse {
-  provider: "phillips";
-  source: PhillipsAutomaticUploadSourceSummary;
-  drafts: PhillipsAutomaticUploadDraft[];
+export interface AutomaticUploadPreviewResponse {
+  provider: AutomaticUploadProvider;
+  source: AutomaticUploadSourceSummary;
+  drafts: AutomaticUploadDraft[];
   issues: AutomaticUploadBatchIssue[];
 }
 
-export type AutomaticUploadPreviewResponse =
-  PhillipsAutomaticUploadPreviewResponse;
+export interface PhillipsAutomaticUploadPreviewResponse
+  extends AutomaticUploadPreviewResponse {
+  provider: "phillips";
+  source: PhillipsAutomaticUploadSourceSummary;
+  drafts: PhillipsAutomaticUploadDraft[];
+}
 
 /** Only included drafts are sent for approval; inclusion remains frontend UI state. */
-export interface ApprovedPhillipsAutomaticUploadDraft {
+export interface ApprovedAutomaticUploadDraft {
   draftId: string;
-  source: PhillipsAutomaticUploadDraftSource;
+  source: AutomaticUploadDraftSource;
   artwork: AutomaticUploadEditableArtworkInput;
 }
 
-export type ApprovedAutomaticUploadDraft =
-  ApprovedPhillipsAutomaticUploadDraft;
-
-export interface PhillipsAutomaticUploadApprovalRequest {
-  provider: "phillips";
-  sourceUrl: string;
-  drafts: ApprovedPhillipsAutomaticUploadDraft[];
+export interface ApprovedPhillipsAutomaticUploadDraft
+  extends ApprovedAutomaticUploadDraft {
+  source: PhillipsAutomaticUploadDraftSource;
 }
 
-export type AutomaticUploadApprovalRequest =
-  PhillipsAutomaticUploadApprovalRequest;
+export interface AutomaticUploadApprovalRequest {
+  provider: AutomaticUploadProvider;
+  sourceUrl: string;
+  drafts: ApprovedAutomaticUploadDraft[];
+}
+
+export interface PhillipsAutomaticUploadApprovalRequest
+  extends AutomaticUploadApprovalRequest {
+  provider: "phillips";
+  drafts: ApprovedPhillipsAutomaticUploadDraft[];
+}
 
 interface AutomaticUploadDraftResultBase {
   draftId: string;

@@ -1,11 +1,13 @@
 import { BadRequestException } from "@nestjs/common";
 import {
-  ApprovedPhillipsAutomaticUploadDraft,
+  ApprovedAutomaticUploadDraft,
+  AutomaticUploadDraftSource,
   AutomaticUploadEditableArtworkInput,
   AutomaticUploadPricingConversionStatus,
+  AutomaticUploadProvider,
   AutomaticUploadPreviewRequest,
-  PhillipsAutomaticUploadDraftSource,
-  PhillipsAutomaticUploadSourceIdentity,
+  AutomaticUploadSourceIdentity,
+  isAutomaticUploadProvider,
 } from "@tastematcher/common";
 
 const PRICING_STATUSES = new Set<AutomaticUploadPricingConversionStatus>([
@@ -29,8 +31,8 @@ export function parseApprovalRequest(
 ): AutomaticUploadApprovalEnvelope {
   const record = requireRecord(body, "Request body");
   assertOnlyKeys(record, ["provider", "sourceUrl", "drafts"], "Request body");
-  if (record.provider !== "phillips") {
-    throw new BadRequestException("provider must be phillips.");
+  if (!isAutomaticUploadProvider(record.provider)) {
+    throw new BadRequestException("provider is not supported.");
   }
   if (!Array.isArray(record.drafts) || record.drafts.length === 0) {
     throw new BadRequestException("drafts must contain at least one item.");
@@ -39,14 +41,14 @@ export function parseApprovalRequest(
     throw new BadRequestException("A maximum of 20 drafts may be approved.");
   }
   return {
-    provider: "phillips",
+    provider: record.provider,
     sourceUrl: requireString(record.sourceUrl, "sourceUrl", 2_000),
     drafts: record.drafts,
   };
 }
 
 export interface AutomaticUploadApprovalEnvelope {
-  provider: "phillips";
+  provider: AutomaticUploadProvider;
   sourceUrl: string;
   drafts: unknown[];
 }
@@ -54,12 +56,12 @@ export interface AutomaticUploadApprovalEnvelope {
 export type ParsedApprovalDraft =
   | {
       valid: true;
-      draft: ApprovedPhillipsAutomaticUploadDraft;
+      draft: ApprovedAutomaticUploadDraft;
     }
   | {
       valid: false;
       draftId: string;
-      sourceIdentity: PhillipsAutomaticUploadSourceIdentity;
+      sourceIdentity: AutomaticUploadSourceIdentity;
       message: string;
     };
 
@@ -67,14 +69,20 @@ export function parseApprovalDraft(
   value: unknown,
   index: number,
   fallbackSourceUrl: string,
+  provider: AutomaticUploadProvider,
 ): ParsedApprovalDraft {
   try {
-    return { valid: true, draft: parseDraft(value, index) };
+    return { valid: true, draft: parseDraft(value, index, provider) };
   } catch (error) {
     return {
       valid: false,
       draftId: safeDraftId(value, index),
-      sourceIdentity: safeFallbackIdentity(value, index, fallbackSourceUrl),
+      sourceIdentity: safeFallbackIdentity(
+        value,
+        index,
+        fallbackSourceUrl,
+        provider,
+      ),
       message: badRequestMessage(error),
     };
   }
@@ -83,13 +91,20 @@ export function parseApprovalDraft(
 function parseDraft(
   value: unknown,
   index: number,
-): ApprovedPhillipsAutomaticUploadDraft {
+  provider: AutomaticUploadProvider,
+): ApprovedAutomaticUploadDraft {
   const label = `drafts[${index}]`;
   const record = requireRecord(value, label);
   assertOnlyKeys(record, ["draftId", "source", "artwork"], label);
+  const source = parseSource(record.source, `${label}.source`);
+  if (source.identity.provider !== provider) {
+    throw new BadRequestException(
+      `${label}.source.identity.provider does not match the approval provider.`,
+    );
+  }
   return {
     draftId: requireString(record.draftId, `${label}.draftId`, 200),
-    source: parseSource(record.source, `${label}.source`),
+    source,
     artwork: parseArtwork(record.artwork, `${label}.artwork`),
   };
 }
@@ -97,7 +112,7 @@ function parseDraft(
 function parseSource(
   value: unknown,
   label: string,
-): PhillipsAutomaticUploadDraftSource {
+): AutomaticUploadDraftSource {
   const record = requireRecord(value, label);
   assertOnlyKeys(
     record,
@@ -171,18 +186,18 @@ function parseSource(
 function parseIdentity(
   value: unknown,
   label: string,
-): PhillipsAutomaticUploadSourceIdentity {
+): AutomaticUploadSourceIdentity {
   const record = requireRecord(value, label);
   assertOnlyKeys(
     record,
     ["provider", "sourceAuctionUrl", "sourceLotNumber", "sourceLotUrl"],
     label,
   );
-  if (record.provider !== "phillips") {
-    throw new BadRequestException(`${label}.provider must be phillips.`);
+  if (!isAutomaticUploadProvider(record.provider)) {
+    throw new BadRequestException(`${label}.provider is not supported.`);
   }
   return {
-    provider: "phillips",
+    provider: record.provider,
     sourceAuctionUrl: requireString(
       record.sourceAuctionUrl,
       `${label}.sourceAuctionUrl`,
@@ -349,7 +364,8 @@ function safeFallbackIdentity(
   value: unknown,
   index: number,
   fallbackSourceUrl: string,
-): PhillipsAutomaticUploadSourceIdentity {
+  provider: AutomaticUploadProvider,
+): AutomaticUploadSourceIdentity {
   let sourceLotNumber = `invalid-lot-${index + 1}`;
   if (isRecord(value) && isRecord(value.source)) {
     const identity = value.source.identity;
@@ -365,7 +381,7 @@ function safeFallbackIdentity(
     }
   }
   return {
-    provider: "phillips",
+    provider,
     sourceAuctionUrl: fallbackSourceUrl,
     sourceLotNumber,
   };

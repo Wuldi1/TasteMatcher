@@ -14,14 +14,21 @@ import {
   CheckCircle2,
   ExternalLink,
   ImageOff,
-  LoaderCircle,
   RefreshCw,
   Upload,
 } from "lucide-react";
 import { SearchableSelect } from "../../components/inputs/SearchableSelect";
+import {
+  AppInlineLoader,
+  AppLoadingState,
+} from "../../components/Loading/AppLoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import { useDomain } from "../../contexts/DomainContext";
 import { apiClient } from "../../utils/api";
+import {
+  AUTOMATIC_UPLOAD_PROVIDER_UI_DEFINITIONS,
+  getAutomaticUploadProviderUiDefinition,
+} from "./automaticUploadProviders";
 
 const fieldClass =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100";
@@ -34,6 +41,16 @@ type NumericArtworkField =
   | "depth"
   | "price"
   | "maxPrice";
+
+type BatchBooleanArtworkField =
+  | "shouldDisplayPrice"
+  | "useForTaster"
+  | "isPrivate";
+
+type AuctionUrlSupport =
+  | { status: "empty"; message: string }
+  | { status: "invalid" | "unsupported"; message: string }
+  | { status: "supported"; message: string; displayName: string };
 
 function issueForField(
   field: AutomaticUploadEditableArtworkField,
@@ -170,23 +187,110 @@ function fromDateTimeInput(value: string): string | undefined {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
 }
 
-function validatePhillipsUrl(value: string): string | null {
+function getAuctionUrlSupport(value: string): AuctionUrlSupport {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return {
+      status: "empty",
+      message: `Supported providers: ${AUTOMATIC_UPLOAD_PROVIDER_UI_DEFINITIONS.map(
+        (provider) => provider.displayName,
+      ).join(", ")}.`,
+    };
+  }
   try {
-    const url = new URL(value);
-    const isPhillips =
-      url.hostname === "phillips.com" || url.hostname === "www.phillips.com";
-    if (url.protocol !== "https:") return "Use an HTTPS auction URL.";
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:") {
+      return { status: "invalid", message: "Use an HTTPS auction URL." };
+    }
     if (url.username || url.password) {
-      return "Phillips auction URLs cannot include credentials.";
+      return {
+        status: "invalid",
+        message: "Auction URLs cannot include credentials.",
+      };
     }
     if (url.port) {
-      return "Phillips auction URLs cannot use a non-default port.";
+      return {
+        status: "invalid",
+        message: "Auction URLs cannot use a non-default port.",
+      };
     }
-    if (!isPhillips) return "Only Phillips auction URLs are supported.";
-    return null;
+    const provider = getAutomaticUploadProviderUiDefinition(url);
+    if (!provider) {
+      return {
+        status: "unsupported",
+        message: "This auction provider is not supported yet.",
+      };
+    }
+    return {
+      status: "supported",
+      displayName: provider.displayName,
+      message: `Supported provider: ${provider.displayName}`,
+    };
   } catch {
-    return "Enter a valid Phillips auction URL.";
+    return { status: "invalid", message: "Enter a valid auction URL." };
   }
+}
+
+function BatchBooleanControl({
+  label,
+  value,
+  trueLabel,
+  falseLabel,
+  selectedCount,
+  disabled,
+  onChange,
+  onApply,
+}: {
+  label: string;
+  value: boolean;
+  trueLabel: string;
+  falseLabel: string;
+  selectedCount: number;
+  disabled: boolean;
+  onChange: (value: boolean) => void;
+  onApply: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <span className={labelClass}>{label}</span>
+        <div
+          className="mt-1 inline-flex h-10 rounded-md border border-gray-300 bg-white p-0.5"
+          role="group"
+          aria-label={`${label} bulk value`}
+        >
+          {[
+            [true, trueLabel],
+            [false, falseLabel],
+          ].map(([option, optionLabel]) => (
+            <button
+              key={String(option)}
+              type="button"
+              onClick={() => onChange(Boolean(option))}
+              disabled={disabled}
+              aria-pressed={value === option}
+              className={`min-w-20 rounded px-3 text-sm font-medium ${
+                value === option
+                  ? "bg-gray-900 text-white"
+                  : "text-gray-600 hover:bg-gray-100"
+              } disabled:cursor-not-allowed disabled:opacity-50`}
+            >
+              {String(optionLabel)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onApply}
+        disabled={disabled || selectedCount === 0}
+        aria-label={`Apply ${label} to selected`}
+        className="inline-flex h-10 items-center justify-center rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+      >
+        Apply
+      </button>
+    </div>
+  );
 }
 
 function DraftImage({ src, title }: { src?: string; title: string }) {
@@ -239,6 +343,9 @@ export function AutomaticUploadsPage() {
   const [selectedDomainId, setSelectedDomainId] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [batchEndDate, setBatchEndDate] = useState("");
+  const [batchDisplayPrice, setBatchDisplayPrice] = useState(false);
+  const [batchUseForTaster, setBatchUseForTaster] = useState(true);
+  const [batchPrivate, setBatchPrivate] = useState(false);
   const [preview, setPreview] = useState<AutomaticUploadPreviewResponse | null>(
     null,
   );
@@ -254,6 +361,15 @@ export function AutomaticUploadsPage() {
     ? domains.find((domain) => domain.id === selectedDomainId)
     : currentDomain;
   const targetDomainName = targetDomain?.name ?? effectiveDomainId;
+  const auctionUrlSupport = useMemo(
+    () => getAuctionUrlSupport(sourceUrl),
+    [sourceUrl],
+  );
+  const previewProviderName = preview
+    ? (AUTOMATIC_UPLOAD_PROVIDER_UI_DEFINITIONS.find(
+        (provider) => provider.provider === preview.provider,
+      )?.displayName ?? preview.provider)
+    : "Auction";
 
   useEffect(() => {
     if (!isGlobalAdmin) return;
@@ -341,13 +457,36 @@ export function AutomaticUploadsPage() {
     );
   };
 
+  const applyBatchBoolean = (
+    field: BatchBooleanArtworkField,
+    value: boolean,
+    label: string,
+    valueLabel: string,
+  ) => {
+    if (selectedCount === 0) return;
+    setPreview((current) =>
+      current
+        ? {
+            ...current,
+            drafts: current.drafts.map((draft) =>
+              draft.included
+                ? withUpdatedArtworkField(draft, field, value)
+                : draft,
+            ),
+          }
+        : current,
+    );
+    setNotice(
+      `${label} set to ${valueLabel.toLowerCase()} for ${selectedCount} selected ${selectedCount === 1 ? "draft" : "drafts"}.`,
+    );
+  };
+
   const handlePreview = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
     setNotice(null);
-    const urlError = validatePhillipsUrl(sourceUrl.trim());
-    if (urlError) {
-      setError(urlError);
+    if (auctionUrlSupport.status !== "supported") {
+      setError(auctionUrlSupport.message);
       return;
     }
     if (!effectiveDomainId) {
@@ -363,6 +502,10 @@ export function AutomaticUploadsPage() {
       );
       setPreview(response);
       setBatchEndDate(toDateTimeInput(response.source.endsAt));
+      const firstDraft = response.drafts[0];
+      setBatchDisplayPrice(firstDraft?.artwork.shouldDisplayPrice ?? false);
+      setBatchUseForTaster(firstDraft?.artwork.useForTaster ?? true);
+      setBatchPrivate(firstDraft?.artwork.isPrivate ?? false);
       if (response.drafts.length === 0) {
         setNotice("No artwork lots were found at this auction URL.");
       }
@@ -495,11 +638,11 @@ export function AutomaticUploadsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-5">
-      <header>
+    <div className="mx-auto w-full max-w-7xl space-y-5 pb-6">
+      <header className="border-b border-gray-200 pb-4">
         <h1 className="text-2xl font-semibold text-gray-900">Automatic Uploads</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Review Phillips auction lots as drafts before adding them to a gallery.
+          Review supported auction lots as drafts before adding them to a gallery.
         </p>
       </header>
 
@@ -508,17 +651,42 @@ export function AutomaticUploadsPage() {
         className="border-y border-gray-200 bg-white px-4 py-4 sm:rounded-md sm:border"
       >
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(14rem,20rem)_auto] lg:items-end">
-          <label className={labelClass}>
-            Phillips auction URL
+          <div>
+            <label
+              htmlFor="automatic-upload-source-url"
+              className={labelClass}
+            >
+              Auction URL
+            </label>
             <input
+              id="automatic-upload-source-url"
               type="url"
               value={sourceUrl}
               onChange={(event) => setSourceUrl(event.target.value)}
-              placeholder="https://www.phillips.com/auction/..."
+              placeholder={AUTOMATIC_UPLOAD_PROVIDER_UI_DEFINITIONS[0].exampleUrl}
               className={fieldClass}
               disabled={requestActive}
+              aria-describedby="automatic-upload-provider-status"
             />
-          </label>
+            <span
+              id="automatic-upload-provider-status"
+              aria-live="polite"
+              className={`mt-1.5 flex min-h-4 items-center gap-1.5 text-xs font-normal ${
+                auctionUrlSupport.status === "supported"
+                  ? "text-green-700"
+                  : auctionUrlSupport.status === "empty"
+                    ? "text-gray-500"
+                    : "text-red-700"
+              }`}
+            >
+              {auctionUrlSupport.status === "supported" ? (
+                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : auctionUrlSupport.status !== "empty" ? (
+                <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : null}
+              {auctionUrlSupport.message}
+            </span>
+          </div>
           {isGlobalAdmin ? (
             <div>
               <label htmlFor="automatic-upload-domain" className={labelClass}>
@@ -555,15 +723,25 @@ export function AutomaticUploadsPage() {
           )}
           <button
             type="submit"
-            disabled={requestActive || !effectiveDomainId}
+            disabled={
+              requestActive ||
+              !effectiveDomainId ||
+              auctionUrlSupport.status !== "supported"
+            }
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
           >
             {isPreviewing ? (
-              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+              <AppInlineLoader
+                size="xs"
+                theme="light"
+                label="Reviewing..."
+              />
             ) : (
-              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              <>
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                Review content
+              </>
             )}
-            {isPreviewing ? "Reviewing..." : "Review content"}
           </button>
         </div>
       </form>
@@ -581,10 +759,10 @@ export function AutomaticUploadsPage() {
         </div>
       )}
       {isPreviewing && (
-        <div className="flex min-h-44 items-center justify-center text-sm text-gray-600" role="status">
-          <LoaderCircle className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" />
-          Reading auction lots and preparing drafts...
-        </div>
+        <AppLoadingState
+          message="Reading auction lots and preparing drafts..."
+          className="min-h-44 rounded-md border border-gray-200 bg-white"
+        />
       )}
 
       {preview && !isPreviewing && (
@@ -592,7 +770,9 @@ export function AutomaticUploadsPage() {
           <section className="border-y border-gray-200 bg-white px-4 py-4 sm:rounded-md sm:border" aria-labelledby="source-summary-heading">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase text-gray-500">Phillips source</p>
+                <p className="text-xs font-semibold uppercase text-gray-500">
+                  {previewProviderName} source
+                </p>
                 <h2 id="source-summary-heading" className="mt-1 text-base font-semibold text-gray-900">
                   {preview.source.auctionTitle ?? preview.source.auctionCode ?? "Auction preview"}
                 </h2>
@@ -635,28 +815,93 @@ export function AutomaticUploadsPage() {
             </div>
 
             {draftDetails.length > 0 && (
-              <div className="flex flex-col gap-3 rounded-md border border-gray-200 bg-gray-50 p-3 sm:flex-row sm:items-end">
-                <label className={`${labelClass} min-w-0 flex-1 sm:max-w-xs`}>
-                  Set auction end date for selected drafts
-                  <input
-                    type="datetime-local"
-                    value={batchEndDate}
-                    onChange={(event) => setBatchEndDate(event.target.value)}
+              <div className="overflow-hidden rounded-md border border-gray-200 bg-white">
+                <div className="border-b border-gray-200 bg-gray-50 px-3 py-2.5">
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    Bulk edit selected
+                  </h3>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    Updates {selectedCount} selected {selectedCount === 1 ? "draft" : "drafts"}.
+                  </p>
+                </div>
+                <div className="grid divide-y divide-gray-200 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+                  <div className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-end sm:justify-between">
+                    <label className={`${labelClass} min-w-0 flex-1`}>
+                      Auction end date
+                      <input
+                        aria-label="Set auction end date for selected drafts"
+                        type="datetime-local"
+                        value={batchEndDate}
+                        onChange={(event) => setBatchEndDate(event.target.value)}
+                        disabled={requestActive}
+                        className={fieldClass}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={applyBatchEndDate}
+                      disabled={
+                        !batchEndDate || selectedCount === 0 || requestActive
+                      }
+                      className="inline-flex h-10 items-center justify-center rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                    >
+                      Apply to selected
+                    </button>
+                  </div>
+                  <BatchBooleanControl
+                    label="Display price"
+                    value={batchDisplayPrice}
+                    trueLabel="Show"
+                    falseLabel="Hide"
+                    selectedCount={selectedCount}
                     disabled={requestActive}
-                    className={fieldClass}
+                    onChange={setBatchDisplayPrice}
+                    onApply={() =>
+                      applyBatchBoolean(
+                        "shouldDisplayPrice",
+                        batchDisplayPrice,
+                        "Display price",
+                        batchDisplayPrice ? "Show" : "Hide",
+                      )
+                    }
                   />
-                </label>
-                <button
-                  type="button"
-                  onClick={applyBatchEndDate}
-                  disabled={!batchEndDate || selectedCount === 0 || requestActive}
-                  className="inline-flex min-h-10 items-center justify-center rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-                >
-                  Apply to selected
-                </button>
-                <p className="text-xs text-gray-500 sm:pb-2">
-                  Updates {selectedCount} selected {selectedCount === 1 ? "draft" : "drafts"}.
-                </p>
+                </div>
+                <div className="grid divide-y divide-gray-200 border-t border-gray-200 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+                  <BatchBooleanControl
+                    label="Use for Taster"
+                    value={batchUseForTaster}
+                    trueLabel="Include"
+                    falseLabel="Exclude"
+                    selectedCount={selectedCount}
+                    disabled={requestActive}
+                    onChange={setBatchUseForTaster}
+                    onApply={() =>
+                      applyBatchBoolean(
+                        "useForTaster",
+                        batchUseForTaster,
+                        "Use for Taster",
+                        batchUseForTaster ? "Include" : "Exclude",
+                      )
+                    }
+                  />
+                  <BatchBooleanControl
+                    label="Private"
+                    value={batchPrivate}
+                    trueLabel="Private"
+                    falseLabel="Public"
+                    selectedCount={selectedCount}
+                    disabled={requestActive}
+                    onChange={setBatchPrivate}
+                    onApply={() =>
+                      applyBatchBoolean(
+                        "isPrivate",
+                        batchPrivate,
+                        "Privacy",
+                        batchPrivate ? "Private" : "Public",
+                      )
+                    }
+                  />
+                </div>
               </div>
             )}
 
@@ -758,8 +1003,18 @@ export function AutomaticUploadsPage() {
               className="inline-flex min-h-10 flex-none items-center justify-center gap-2 rounded-md bg-green-700 px-4 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-gray-300"
               aria-label={`Upload ${selectedCount} selected ${selectedCount === 1 ? "artwork" : "artworks"}`}
             >
-              {isApproving ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Upload className="h-4 w-4" aria-hidden="true" />}
-              {isApproving ? "Uploading..." : `Upload ${selectedCount} selected`}
+              {isApproving ? (
+                <AppInlineLoader
+                  size="xs"
+                  theme="light"
+                  label="Uploading..."
+                />
+              ) : (
+                <>
+                  <Upload className="h-4 w-4" aria-hidden="true" />
+                  Upload {selectedCount} selected
+                </>
+              )}
             </button>
           </div>
         </>

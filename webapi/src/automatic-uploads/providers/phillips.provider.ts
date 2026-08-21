@@ -41,6 +41,7 @@ interface SchemaEvent {
 @Injectable()
 export class PhillipsProvider implements AutomaticUploadProviderAdapter {
   readonly provider = "phillips" as const;
+  readonly displayName = "Phillips";
 
   canParse(url: URL): boolean {
     return (

@@ -140,7 +140,7 @@ const renderPage = (role: Role = "domain_owner") => {
 const previewAuction = async () => {
   const user = userEvent.setup();
   await user.type(
-    screen.getByLabelText("Phillips auction URL"),
+    screen.getByLabelText("Auction URL"),
     "https://www.phillips.com/auction/NY030826",
   );
   await user.click(screen.getByRole("button", { name: "Review content" }));
@@ -190,6 +190,52 @@ describe("AutomaticUploadsPage", () => {
     jest
       .mocked(apiClient.previewAutomaticUploads)
       .mockResolvedValue(previewResponse);
+  });
+
+  it("identifies supported and unsupported auction provider domains", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(screen.getByText("Supported providers: Phillips.")).toBeInTheDocument();
+    const urlInput = screen.getByLabelText("Auction URL");
+    const reviewButton = screen.getByRole("button", { name: "Review content" });
+    expect(reviewButton).toBeDisabled();
+
+    await user.type(urlInput, "https://www.sothebys.com/en/buy/auction/2026/example");
+    expect(
+      screen.getByText("This auction provider is not supported yet."),
+    ).toBeInTheDocument();
+    expect(reviewButton).toBeDisabled();
+
+    await user.clear(urlInput);
+    await user.type(urlInput, "https://www.phillips.com/about");
+    expect(
+      screen.getByText("This auction provider is not supported yet."),
+    ).toBeInTheDocument();
+    expect(reviewButton).toBeDisabled();
+
+    await user.clear(urlInput);
+    await user.type(urlInput, "https://www.phillips.com/auction/NY030826");
+    expect(screen.getByText("Supported provider: Phillips")).toBeInTheDocument();
+    expect(reviewButton).toBeEnabled();
+  });
+
+  it("shows the TasteMatcher loading state while preparing a preview", async () => {
+    jest
+      .mocked(apiClient.previewAutomaticUploads)
+      .mockImplementation(() => new Promise(() => undefined));
+    renderPage();
+    const user = userEvent.setup();
+
+    await user.type(
+      screen.getByLabelText("Auction URL"),
+      "https://www.phillips.com/auction/NY030826",
+    );
+    await user.click(screen.getByRole("button", { name: "Review content" }));
+
+    expect(
+      await screen.findByText("Reading auction lots and preparing drafts..."),
+    ).toBeInTheDocument();
   });
 
   it("previews drafts, edits local fields, excludes a lot, and approves the selection", async () => {
@@ -321,6 +367,70 @@ describe("AutomaticUploadsPage", () => {
       request.drafts.forEach((draft) => {
         expect(draft.artwork.endDate).toBe(expectedIso);
       });
+    });
+  });
+
+  it("bulk edits display, Taster, and privacy values on selected drafts only", async () => {
+    jest.mocked(apiClient.approveAutomaticUploads).mockResolvedValue({
+      created: [],
+      skipped: [],
+      failed: [],
+    });
+    renderPage();
+    const user = await previewAuction();
+    const firstDraft = screen.getByTestId("automatic-upload-draft-draft-1");
+    const secondDraft = screen.getByTestId("automatic-upload-draft-draft-2");
+
+    await user.click(within(secondDraft).getByLabelText("Include lot 13"));
+    await user.click(
+      within(
+        screen.getByRole("group", { name: "Display price bulk value" }),
+      ).getByRole("button", { name: "Hide" }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Apply Display price to selected",
+      }),
+    );
+    await user.click(
+      within(
+        screen.getByRole("group", { name: "Use for Taster bulk value" }),
+      ).getByRole("button", { name: "Exclude" }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Apply Use for Taster to selected",
+      }),
+    );
+    await user.click(
+      within(screen.getByRole("group", { name: "Private bulk value" })).getByRole(
+        "button",
+        { name: "Private" },
+      ),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Apply Private to selected" }),
+    );
+
+    expect(within(firstDraft).getByLabelText("Display price")).not.toBeChecked();
+    expect(within(firstDraft).getByLabelText("Use for Taster")).not.toBeChecked();
+    expect(within(firstDraft).getByLabelText("Private")).toBeChecked();
+    expect(within(secondDraft).getByLabelText("Use for Taster")).toBeChecked();
+    expect(within(secondDraft).getByLabelText("Private")).not.toBeChecked();
+
+    await user.click(
+      screen.getByRole("button", { name: "Upload 1 selected artwork" }),
+    );
+    await waitFor(() =>
+      expect(apiClient.approveAutomaticUploads).toHaveBeenCalledTimes(1),
+    );
+    const request = jest.mocked(apiClient.approveAutomaticUploads).mock
+      .calls[0][1];
+    expect(request.drafts).toHaveLength(1);
+    expect(request.drafts[0].artwork).toMatchObject({
+      shouldDisplayPrice: false,
+      useForTaster: false,
+      isPrivate: true,
     });
   });
 
@@ -614,24 +724,24 @@ describe("AutomaticUploadsPage", () => {
   it.each([
     [
       "https://auctions.phillips.com/auction/NY030826",
-      "Only Phillips auction URLs are supported.",
+      "This auction provider is not supported yet.",
     ],
     [
       "https://user:secret@www.phillips.com/auction/NY030826",
-      "Phillips auction URLs cannot include credentials.",
+      "Auction URLs cannot include credentials.",
     ],
     [
       "https://www.phillips.com:444/auction/NY030826",
-      "Phillips auction URLs cannot use a non-default port.",
+      "Auction URLs cannot use a non-default port.",
     ],
   ])("rejects unsupported preflight URL %s", async (url, message) => {
     renderPage();
     const user = userEvent.setup();
 
-    await user.type(screen.getByLabelText("Phillips auction URL"), url);
-    await user.click(screen.getByRole("button", { name: "Review content" }));
+    await user.type(screen.getByLabelText("Auction URL"), url);
 
-    expect(screen.getByRole("alert")).toHaveTextContent(message);
+    expect(screen.getByText(message)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review content" })).toBeDisabled();
     expect(apiClient.previewAutomaticUploads).not.toHaveBeenCalled();
   });
 
