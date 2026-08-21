@@ -25,4 +25,16 @@ describe("automatic upload provider definitions", () => {
     ).toBeUndefined();
     expect(isAutomaticUploadProvider("sothebys")).toBe(false);
   });
+
+  it("returns no provider for malformed URLs", () => {
+    expect(getAutomaticUploadProviderDefinition("not a URL")).toBeUndefined();
+  });
+
+  it("accepts URL objects as well as strings", () => {
+    expect(
+      getAutomaticUploadProviderDefinition(
+        new URL("https://phillips.com/auction/NY030826"),
+      ),
+    ).toMatchObject({ provider: "phillips" });
+  });
 });
