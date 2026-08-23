@@ -50,7 +50,7 @@ describe("runtime profile", () => {
   it("rejects a known production endpoint without an explicit production data target", () => {
     process.env.NODE_ENV = "development";
     process.env.COSMOS_DB_ENDPOINT =
-      "https://tastematcher-prd-cosmos.documents.azure.com:443/";
+      "https://tastematcher-prd-cosmos-sls.documents.azure.com:443/";
 
     expect(() => assertSafeRuntimeProfile()).toThrow(
       "Unsafe production-data configuration",

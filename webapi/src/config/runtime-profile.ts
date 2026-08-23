@@ -49,7 +49,6 @@ function hasKnownProductionResource(): boolean {
 
   return [
     "tastematcherprdsa",
-    "tastematcher-prd-cosmos",
     "tastematcher-prd-cosmos-sls",
     "tastematcher-prd-vision",
     "tastematcher-prd-func",

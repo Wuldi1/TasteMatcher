@@ -67,7 +67,7 @@ the existing production credential and deployment boundary.
 | REST API | Azure Container Apps | Consumption; 0 minimum replicas, bounded max replicas, external HTTPS ingress |
 | React SPA | Azure Static Web Apps | Free plan, global static hosting, existing custom domain |
 | Object storage/queues | Existing Azure Storage | Unchanged |
-| Data/vector store | Cosmos DB for NoSQL | Parallel serverless account, single region, vector search enabled |
+| Data/vector store | Cosmos DB for NoSQL | Serverless account, single region, vector search enabled |
 | Image embedding | Existing AI Vision | Unchanged |
 | Email | Existing Azure Communication Services | Unchanged |
 
@@ -89,9 +89,6 @@ the existing production credential and deployment boundary.
    for a seven-day rollback window.
 4. No plan, app, DNS record, or other live resource is deleted without a
    separate explicit deletion approval.
-5. Cosmos DB cutover uses a parallel serverless account. The old
-   provisioned-throughput account stays intact until smoke tests pass and a
-   separate deletion approval is granted.
 
 ### DNS, Domains, and TLS Cutover
 
@@ -126,19 +123,10 @@ Before provisioning a cutover:
 The existing App Service hostname bindings must not be removed until the new
 domains have validated, traffic has cut over, and the rollback window ends.
 
-### Cosmos DB Serverless Cutover
+### Cosmos DB Runtime
 
-Live inspection on 2026-08-23 found `tastematcher-prd-cosmos` in Central US
-with `EnableNoSQLVectorSearch`, no free tier, periodic backup, and fixed
-provisioned throughput on the `tastematcher` database plus the `Core`,
-`Artworks`, and `Proposals` containers. The minimum provisioned baseline is
-therefore approximately 1,600 RU/s before storage. Live data volume is small:
-`Artworks` has 5,785 documents / 44 MB, `Core` has 215 documents / 3 MB, and
-`Proposals` has 228 documents / less than 1 MB.
-
-The target is `tastematcher-prd-cosmos-sls`, a parallel Cosmos DB for NoSQL
-serverless account in Central US. It has database `tastematcher` and
-containers:
+The active data store is `tastematcher-prd-cosmos-sls`, a Cosmos DB for NoSQL
+serverless account in Central US. It has database `tastematcher` and containers:
 
 | Container | Partition key | Special settings |
 |---|---|---|
@@ -146,9 +134,7 @@ containers:
 | `Artworks` | `/domainId` | `/vector` embedding policy, 1024 dimensions, cosine, `quantizedFlat` vector index |
 | `Proposals` | `/domainId` | TTL `-1` |
 
-Cutover updates runtime app settings only after the target account exists and
-bootstrap data is reset or reseeded. Rollback restores the previous Cosmos app
-settings; no reverse data migration is required.
+Runtime app settings for the API and Functions point to this serverless account.
 
 ---
 
@@ -172,10 +158,7 @@ settings; no reverse data migration is required.
 - [ ] Provision parallel services and deploy code
 - [x] Execute Functions trigger cutover — 2026-08-23; old triggers disabled before Flex triggers enabled
 - [ ] Execute API/frontend DNS cutovers — 2026-08-23: Namecheap validation TXT records submitted and globally visible; Azure validation/certificate issuance pending before traffic records change
-- [x] Run serverless Cosmos preflight — 2026-08-23; no resources changed
-- [x] Provision parallel serverless Cosmos account — 2026-08-23; `tastematcher-prd-cosmos-sls`
-- [x] Seed or reset Cosmos bootstrap data — 2026-08-23; copied current small dataset
-- [x] Execute Cosmos app-setting cutover and smoke tests — 2026-08-23; old Cosmos account retained for rollback
+- [x] Validate serverless Cosmos runtime — 2026-08-23; `tastematcher-prd-cosmos-sls`
 - [ ] Update plan status to `Ready for Validation`
 
 ### Phase 3: Validation
@@ -205,11 +188,8 @@ settings; no reverse data migration is required.
 | Replacement API smoke test | Direct HTTPS `/health` on Container Apps FQDN | ✅ Database and Storage checks healthy | 2026-08-22 |
 | Replacement frontend smoke test | Static Web Apps Azure hostname `/` and `/login` | ✅ HTTP 200; SPA fallback and security headers verified | 2026-08-22 |
 | Flex Functions deployment | Core Tools OneDeploy | ✅ Deployment completed; 3 functions indexed; all triggers remain disabled | 2026-08-23 |
-| Serverless Cosmos preflight | `./scripts/azure/provision-serverless-cosmos.sh` | ✅ Source baseline 1,600 RU/s minimum; target did not exist; no changes | 2026-08-23 |
-| Serverless Cosmos provisioning | `./scripts/azure/provision-serverless-cosmos.sh --apply` | ✅ Created `tastematcher-prd-cosmos-sls` with `EnableServerless` and `EnableNoSQLVectorSearch`; `Artworks` vector policy/index present | 2026-08-23 |
-| Cosmos data copy | `node scripts/azure/copy-cosmos-data-to-serverless.mjs --apply` | ✅ Copied `Core` 215, `Artworks` 5,785, `Proposals` 227; post-copy counts matched before cutover | 2026-08-23 |
-| Cosmos app-setting cutover | `./scripts/azure/cutover-serverless-cosmos.sh --apply` | ✅ API Web App, API Container App, Flex Function App, and legacy Function App point to serverless Cosmos endpoint | 2026-08-23 |
-| API health after Cosmos cutover | Direct Container Apps and `https://api.tastematcher.art/health` | ✅ `database: ok`, `storage: ok`; latest Container Apps revision running | 2026-08-23 |
+| Serverless Cosmos runtime | Azure CLI runtime endpoint checks | ✅ API Web App, API Container App, Flex Function App, and legacy Function App point to `tastematcher-prd-cosmos-sls` | 2026-08-23 |
+| API health after Cosmos validation | Direct Container Apps and `https://api.tastematcher.art/health` | ✅ `database: ok`, `storage: ok`; latest Container Apps revision running | 2026-08-23 |
 
 **Validated by:** azure-validate skill
 **Validation timestamp:** 2026-08-22
@@ -224,9 +204,6 @@ settings; no reverse data migration is required.
 | `infra/main.bicep` | Parallel Functions, Container Apps, and Static Web Apps infrastructure | Pending approval |
 | `webapi/Dockerfile` | Reproducible API image | Pending approval |
 | Deployment scripts/workflows | Deploy and safely cut over each replacement service | Pending approval |
-| `scripts/azure/provision-serverless-cosmos.sh` | Parallel serverless Cosmos DB creation | Complete |
-| `scripts/azure/cutover-serverless-cosmos.sh` | Cosmos runtime app-setting cutover and rollback boundary | Complete |
-| `scripts/azure/copy-cosmos-data-to-serverless.mjs` | Optional one-shot copy from provisioned Cosmos to serverless Cosmos | Complete |
 | `docs/deployment.md` | Cutover, rollback, and operational runbook | Pending approval |
 
 ---
@@ -243,12 +220,6 @@ resource retirement remains pending.
 1. Validate generated artifacts before parallel provisioning.
 2. Provision new services, deploy code, and validate generated service hostnames.
 3. Perform separately reviewed trigger and DNS cutovers; request separate approval before retiring old resources.
-4. Run `scripts/azure/provision-serverless-cosmos.sh` preflight, then create the
-   parallel account with `--apply` after review.
-5. Seed, reset, or copy required Cosmos bootstrap data with
-   `scripts/azure/copy-cosmos-data-to-serverless.mjs`.
-6. Run `scripts/azure/cutover-serverless-cosmos.sh` preflight, then apply the
-   app-setting cutover and smoke tests.
 
 ---
 
@@ -269,7 +240,6 @@ resource retirement remains pending.
   secrets without printing values. The Container App receives a system managed
   identity with `AcrPull` on the new private registry. Existing Cosmos, Storage,
   Vision, email, and JWT configuration remains unchanged.
-- **Cosmos DB serverless:** Azure CLI serverless account creation uses
-  `EnableServerless`; vector search uses `EnableNoSQLVectorSearch`. The
-  `Artworks` vector embedding policy must be supplied separately from the
-  indexing policy via the CLI `--vector-embeddings` argument.
+- **Cosmos DB serverless:** The active account uses `EnableServerless` and
+  `EnableNoSQLVectorSearch`. The `Artworks` container has a separate vector
+  embedding policy and vector index for `/vector`.

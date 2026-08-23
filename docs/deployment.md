@@ -105,60 +105,15 @@ Run the relevant health/smoke check after each command and stop before updating
 the next component if it fails. Roll back only the failed component to the
 runtime values captured by the preflight.
 
-## Cosmos DB serverless migration
+## Cosmos DB runtime
 
-TasteMatcher currently has no real customer data, so the lowest-cost database
-move is a reset/cutover to a parallel Cosmos DB for NoSQL serverless account.
-Do not mutate the existing provisioned-throughput account in place.
+TasteMatcher uses the serverless Cosmos DB for NoSQL account
+`tastematcher-prd-cosmos-sls`, database `tastematcher`. The `Core`, `Artworks`,
+and `Proposals` containers are partitioned by `/domainId`. `Artworks` has the
+required `/vector` embedding policy and `quantizedFlat` vector index for the
+app's `VectorDistance` queries.
 
-Start with the read-only baseline:
-
-```bash
-./scripts/azure/provision-serverless-cosmos.sh
-```
-
-The preflight prints the current provisioned RU/s baseline and whether the
-parallel target account already exists. It does not create, delete, or repoint
-resources.
-
-Create the parallel serverless account only after review:
-
-```bash
-./scripts/azure/provision-serverless-cosmos.sh --apply
-```
-
-The script creates `tastematcher-prd-cosmos-sls`, database `tastematcher`, and
-the `Core`, `Artworks`, and `Proposals` containers without provisioned
-throughput. `Artworks` is created with the required `/vector` embedding policy
-and `quantizedFlat` vector index for the app's `VectorDistance` queries.
-
-Before application cutover, seed only required bootstrap records or accept a
-clean reset. To copy the current small production dataset into the serverless
-account instead, run:
-
-```bash
-node scripts/azure/copy-cosmos-data-to-serverless.mjs
-node scripts/azure/copy-cosmos-data-to-serverless.mjs --apply
-```
-
-Then run a read-only runtime target check:
-
-```bash
-./scripts/azure/cutover-serverless-cosmos.sh
-```
-
-Apply the app-setting cutover only when the serverless account and bootstrap
-state are confirmed:
-
-```bash
-./scripts/azure/cutover-serverless-cosmos.sh --apply
-```
-
-The cutover updates Cosmos settings for the legacy API Web App, replacement API
-Container App, Flex Function App, and legacy Function App without printing the
-Cosmos key. It does not delete the old Cosmos account.
-
-After cutover, verify:
+After any Cosmos app-setting or data-store maintenance, verify:
 
 ```bash
 curl --fail https://api.tastematcher.art/health
@@ -166,10 +121,7 @@ curl --fail https://tastematcher-prd-api-ca.lemonwave-6134900c.centralus.azureco
 ```
 
 Then smoke test login, artwork upload, vectorization, recommendations, and the
-enabled Functions triggers. Keep `tastematcher-prd-cosmos` for a rollback
-window. Roll back by restoring the saved old `COSMOS_DB_ENDPOINT`,
-`COSMOS_DB_DATABASE`, and `COSMOS_DB_KEY` app settings to the same runtimes.
-Delete the old account only after explicit deletion approval.
+enabled Functions triggers.
 
 ## Production checks
 
