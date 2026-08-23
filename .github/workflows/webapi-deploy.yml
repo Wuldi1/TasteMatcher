@@ -94,7 +94,9 @@ jobs:
       - name: Deploy API revision to Container Apps
         run: az containerapp update --name "$AZURE_CONTAINERAPP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --image "$AZURE_CONTAINER_REGISTRY.azurecr.io/tastematcher-api:$IMAGE_TAG"
       - name: Verify replacement API health
-        run: curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-all-errors "https://$(az containerapp show --name \"$AZURE_CONTAINERAPP_NAME\" --resource-group \"$AZURE_RESOURCE_GROUP\" --query properties.configuration.ingress.fqdn -o tsv)/health" >/dev/null
+        run: |
+          api_fqdn="$(az containerapp show --name "$AZURE_CONTAINERAPP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)"
+          curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-all-errors "https://${api_fqdn}/health" >/dev/null
       - name: Azure logout
         if: always()
         run: az logout
