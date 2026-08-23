@@ -160,7 +160,7 @@ Runtime app settings for the API and Functions point to this serverless account.
 - [x] Execute API/frontend DNS cutovers — 2026-08-23: `api` now routes to Container Apps and the apex ALIAS routes to Static Web Apps; public HTTPS checks for `/`, `/login`, and API `/health` passed. Retain legacy App Service bindings/resources through 2026-08-30 for rollback.
 - [x] Validate serverless Cosmos runtime — 2026-08-23; `tastematcher-prd-cosmos-sls`
 - [x] Retire legacy Function/App Service compute — 2026-08-23; old Function App, API/frontend App Services, P0v3 plans, and retired App Service certificates deleted after public smoke tests passed
-- [ ] Retire legacy Cosmos account `tastematcher-prd-cosmos` — pending explicit permanent data-deletion confirmation
+- [x] Retire legacy provisioned Cosmos account — 2026-08-23; deleted after serverless runtime and API health checks passed
 - [x] Update plan status to `Ready for Validation`
 
 ### Phase 3: Validation
