@@ -51,7 +51,6 @@ function hasKnownProductionResource(): boolean {
     "tastematcherprdsa",
     "tastematcher-prd-cosmos-sls",
     "tastematcher-prd-vision",
-    "tastematcher-prd-func",
     "tastematcher-prd-indexing-jobs",
     "tastematcher-prd-new-artwork-jobs",
   ].some((resourceName) => configuredResources.includes(resourceName));

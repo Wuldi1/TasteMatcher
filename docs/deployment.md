@@ -28,9 +28,9 @@ pnpm run build:functions
 
 ## Local execution against production data
 
-The configuration sync reads settings from the exact production Web App and
-Function App and writes ignored, owner-only local files. It does not change an
-Azure resource and does not print secret values.
+The configuration sync reads settings from the production Container App and
+Flex Function App and writes ignored, owner-only local files. It does not
+change an Azure resource and does not print secret values.
 
 ```bash
 az login
@@ -69,41 +69,20 @@ three modes:
 
 Each workflow deploys only its intended production component:
 
-- `.github/workflows/webapi-deploy.yml` targets `tastematcher-prd-api`.
-- `.github/workflows/frontend-deploy.yml` targets `tastematcher-prd-web`.
-- `.github/workflows/functions-deploy.yml` targets `tastematcher-prd-func`.
+- `.github/workflows/webapi-deploy.yml` targets Container App `tastematcher-prd-api-ca`.
+- `.github/workflows/frontend-deploy.yml` targets Static Web App `tastematcher-prd-static`.
+- `.github/workflows/functions-deploy.yml` targets Flex Function App `tastematcher-prd-flex`.
 
 The workflows require their existing production Azure credential secrets. The
 `prd` GitHub environment remains the deployment boundary and can provide
 required-reviewer protection when configured in GitHub.
 
-## Node.js 24 production rollout
+## Current production hosting
 
-Do not run `scripts/azure/provision-resources.sh` to update an existing runtime;
-that script reconciles broader infrastructure. Use the narrow runtime script,
-which is read-only by default:
-
-```bash
-./scripts/azure/update-node24-runtimes.sh
-```
-
-The preflight verifies the approved subscription and resource group, Linux
-hosting, Functions v4, a non-Consumption Functions plan, and Azure-advertised
-Node.js 24 runtime identifiers. It also prints the current runtime identifiers
-and Node defaults to record for rollback. No Azure resource is changed.
-
-After repository validation and explicit production approval, apply and verify
-one component at a time:
-
-```bash
-./scripts/azure/update-node24-runtimes.sh --apply functions
-./scripts/azure/update-node24-runtimes.sh --apply api
-./scripts/azure/update-node24-runtimes.sh --apply frontend
-```
-
-Run the relevant health/smoke check after each command and stop before updating
-the next component if it fails. Roll back only the failed component to the
-runtime values captured by the preflight.
+The production API runs in Container Apps Consumption, the frontend is hosted
+by Static Web Apps Free, and background processing runs on Flex Consumption
+Functions. The public endpoints are `https://tastematcher.art` and
+`https://api.tastematcher.art`; Azure-managed certificates terminate TLS.
 
 ## Cosmos DB runtime
 
@@ -130,18 +109,18 @@ Read current application state without changing it:
 ```bash
 az functionapp show \
   --resource-group tastematcher-prd-rg \
-  --name tastematcher-prd-func \
+  --name tastematcher-prd-flex \
   --query state -o tsv
 
-az webapp show \
+az containerapp show \
   --resource-group tastematcher-prd-rg \
-  --name tastematcher-prd-api \
-  --query state -o tsv
+  --name tastematcher-prd-api-ca \
+  --query properties.runningStatus -o tsv
 
-az webapp show \
+az staticwebapp show \
   --resource-group tastematcher-prd-rg \
-  --name tastematcher-prd-web \
-  --query state -o tsv
+  --name tastematcher-prd-static \
+  --query defaultHostname -o tsv
 ```
 
 For Functions trigger or timeout failures, inspect Application Insights and
@@ -153,7 +132,6 @@ connection strings or app-setting values.
 - Rotate or revoke every credential that may have existed in a tracked local
   environment file, then replace the corresponding production app and GitHub
   secrets.
-- Complete the read-only Node.js 24 Azure preflight.
 - Run repository/CI validation under Node.js 24.
-- Apply each live runtime update separately and record its health check.
+- Verify the public frontend and API health endpoints after each deployment.
 - Merge to `main` only after the preceding checks pass; the production workflows then deploy automatically.

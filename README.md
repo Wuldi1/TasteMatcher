@@ -99,9 +99,9 @@ cannot bypass validation.
   placeholders only.
 - Previously tracked credentials must be rotated because deleting current
   files does not remove values from Git history.
-- Production runtime changes use
-  `scripts/azure/update-node24-runtimes.sh`; its default mode is read-only and
-  any approved update changes exactly one component.
+- Production deployments are performed by the component GitHub Actions
+  workflows: Flex Consumption Functions, Container Apps API, and Static Web
+  Apps frontend.
 
 ## Sub-Agent Workflow
 

@@ -97,33 +97,12 @@ Real local settings files are ignored and must remain untracked. Credentials
 previously committed in local configuration must be rotated; removing them from
 the current tree does not remove them from Git history.
 
-## Deployment and Node 24 rollout
+## Deployment
 
 The Functions workflow validates pull requests without deploying. Matching
-pushes to `main` and manual dispatches run the same Node 24 gates, deploy only
-to the `prd` GitHub environment and `tastematcher-prd-func`, and verify the
-Function App after deployment.
-
-Do not run `scripts/azure/provision-resources.sh` merely to update a runtime; it
-reconciles many production resources. Instead run the narrowly scoped runtime
-script in read-only mode first:
-
-```bash
-./scripts/azure/update-node24-runtimes.sh
-```
-
-It verifies the approved subscription, resource existence, Linux hosting,
-Functions v4, a non-Consumption Functions plan, and advertised Node 24 runtime
-identifiers. After repository validation and separate production approval,
-update one component at a time:
-
-```bash
-./scripts/azure/update-node24-runtimes.sh --apply functions
-```
-
-Run the Function App health/smoke checks before changing either App Service.
-Rollback uses the previous `linuxFxVersion` shown by the preflight and the
-matching `WEBSITE_NODE_DEFAULT_VERSION`; change only the failed component.
+pushes to `main` and manual dispatches run the same Node 24 gates, deploy to
+the `prd` GitHub environment and `tastematcher-prd-flex`, and verify that the
+Flex Consumption Function App is running with functions discovered.
 
 ## Troubleshooting
 

@@ -66,7 +66,8 @@ an API URL, never database credentials. The local Web API owns the separately
 configured, production-backed data connection.
 
 Production builds use `https://api.tastematcher.art`. The deployment workflow
-targets only the `prd` GitHub environment and `tastematcher-prd-web` App Service.
+targets the `prd` GitHub environment and the `tastematcher-prd-static` Static
+Web App.
 
 ## Contributing
 

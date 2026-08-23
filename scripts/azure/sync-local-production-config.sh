@@ -5,8 +5,8 @@ set -euo pipefail
 readonly EXPECTED_SUBSCRIPTION_ID="e105e38a-7820-4c7e-b1da-de05227d6355"
 readonly EXPECTED_TENANT_ID="043348b8-3c3a-488d-a337-62a7ce2e4ae8"
 readonly RESOURCE_GROUP="tastematcher-prd-rg"
-readonly WEBAPP_NAME="tastematcher-prd-api"
-readonly FUNCTIONAPP_NAME="tastematcher-prd-func"
+readonly CONTAINER_APP_NAME="tastematcher-prd-api-ca"
+readonly FUNCTIONAPP_NAME="tastematcher-prd-flex"
 readonly ACKNOWLEDGEMENT="I_UNDERSTAND_THIS_USES_PRODUCTION_DATA"
 readonly REQUESTED_ENVIRONMENT="${1:-prd}"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -39,14 +39,14 @@ if [[ "${active_tenant_id}" != "${EXPECTED_TENANT_ID}" ]]; then
   exit 1
 fi
 
-webapp_id="$(az webapp show \
+containerapp_id="$(az containerapp show \
   --subscription "${EXPECTED_SUBSCRIPTION_ID}" \
   --resource-group "${RESOURCE_GROUP}" \
-  --name "${WEBAPP_NAME}" \
+  --name "${CONTAINER_APP_NAME}" \
   --query id \
   --output tsv)"
-if [[ "${webapp_id}" != "/subscriptions/${EXPECTED_SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${WEBAPP_NAME}" ]]; then
-  echo "Production Web App identity did not match the expected resource." >&2
+if [[ "${containerapp_id}" != "/subscriptions/${EXPECTED_SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.App/containerApps/${CONTAINER_APP_NAME}" ]]; then
+  echo "Production Container App identity did not match the expected resource." >&2
   exit 1
 fi
 
@@ -63,23 +63,44 @@ fi
 
 umask 077
 webapi_settings_file="$(mktemp "${TMPDIR:-/tmp}/tastematcher-webapi-appsettings.XXXXXX")"
+webapi_environment_file="$(mktemp "${TMPDIR:-/tmp}/tastematcher-webapi-environment.XXXXXX")"
+webapi_secrets_file="$(mktemp "${TMPDIR:-/tmp}/tastematcher-webapi-secrets.XXXXXX")"
 functions_settings_file="$(mktemp "${TMPDIR:-/tmp}/tastematcher-functions-appsettings.XXXXXX")"
 generated_webapi_file="$(mktemp "${REPOSITORY_ROOT}/webapi/.env.local-production.XXXXXX")"
 generated_functions_file="$(mktemp "${REPOSITORY_ROOT}/functions/local.settings.XXXXXX")"
 cleanup() {
   rm -f \
     "${webapi_settings_file}" \
+    "${webapi_environment_file}" \
+    "${webapi_secrets_file}" \
     "${functions_settings_file}" \
     "${generated_webapi_file}" \
     "${generated_functions_file}"
 }
 trap cleanup EXIT
 
-az webapp config appsettings list \
+az containerapp show \
   --subscription "${EXPECTED_SUBSCRIPTION_ID}" \
   --resource-group "${RESOURCE_GROUP}" \
-  --name "${WEBAPP_NAME}" \
-  --output json >"${webapi_settings_file}"
+  --name "${CONTAINER_APP_NAME}" \
+  --query 'properties.template.containers[0].env' \
+  --output json >"${webapi_environment_file}"
+
+az containerapp secret list \
+  --subscription "${EXPECTED_SUBSCRIPTION_ID}" \
+  --resource-group "${RESOURCE_GROUP}" \
+  --name "${CONTAINER_APP_NAME}" \
+  --output json >"${webapi_secrets_file}"
+
+jq -s '
+  .[0] as $environment | .[1] as $secrets |
+  [$environment[] | . as $entry | {
+    name: $entry.name,
+    value: (if $entry.secretRef then
+      ($secrets[] | select(.name == $entry.secretRef) | .value)
+    else $entry.value end)
+  }]
+' "${webapi_environment_file}" "${webapi_secrets_file}" >"${webapi_settings_file}"
 
 az functionapp config appsettings list \
   --subscription "${EXPECTED_SUBSCRIPTION_ID}" \

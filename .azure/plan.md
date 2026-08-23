@@ -97,8 +97,8 @@ DNS is externally hosted at Namecheap (`dns1.registrar-servers.com` and
 
 | Public hostname | Current record / target | Current TLS binding | Replacement |
 |---|---|---|---|
-| `tastematcher.art` | Apex A record to `52.165.184.170` | App Service SNI certificate, expires 2026-12-12 | Static Web Apps custom domain with its automatically managed certificate |
-| `api.tastematcher.art` | CNAME to `tastematcher-prd-api.azurewebsites.net` | App Service SNI certificate, expires 2026-12-12 | Container Apps custom domain with a managed DigiCert certificate |
+| `tastematcher.art` | ALIAS to `lemon-sky-095389f10.7.azurestaticapps.net` | Static Web Apps managed certificate | Static Web Apps custom domain with its automatically managed certificate |
+| `api.tastematcher.art` | CNAME to `tastematcher-prd-api-ca.lemonwave-6134900c.centralus.azurecontainerapps.io` | Container Apps managed DigiCert certificate | Container Apps custom domain with a managed DigiCert certificate |
 
 Before provisioning a cutover:
 
@@ -157,7 +157,7 @@ Runtime app settings for the API and Functions point to this serverless account.
 - [ ] Configure monitoring caps/sampling
 - [ ] Provision parallel services and deploy code
 - [x] Execute Functions trigger cutover — 2026-08-23; old triggers disabled before Flex triggers enabled
-- [ ] Execute API/frontend DNS cutovers — 2026-08-23: Namecheap validation TXT records submitted and globally visible; Azure validation/certificate issuance pending before traffic records change
+- [x] Execute API/frontend DNS cutovers — 2026-08-23: `api` now routes to Container Apps and the apex ALIAS routes to Static Web Apps; public HTTPS checks for `/`, `/login`, and API `/health` passed. Retain legacy App Service bindings/resources through 2026-08-30 for rollback.
 - [x] Validate serverless Cosmos runtime — 2026-08-23; `tastematcher-prd-cosmos-sls`
 - [ ] Update plan status to `Ready for Validation`
 
@@ -211,11 +211,11 @@ Runtime app settings for the API and Functions point to this serverless account.
 ## 9. Next Steps
 
 **Current:** The replacement API, frontend, and Functions code are deployed and
-validated on their generated Azure hostnames. Flex Functions are now the sole
-enabled background processors; the old triggers are disabled. The API and
-frontend custom-domain ownership records are live in Namecheap; Azure
-validation/certificate issuance must complete before routing traffic. Legacy
-resource retirement remains pending.
+validated on their public domains. Flex Functions are now the sole enabled
+background processors; the old triggers are disabled. `api.tastematcher.art`
+routes to Container Apps and `tastematcher.art` routes to Static Web Apps with
+managed TLS. Legacy resource retirement remains pending until the rollback
+window ends on 2026-08-30.
 
 1. Validate generated artifacts before parallel provisioning.
 2. Provision new services, deploy code, and validate generated service hostnames.

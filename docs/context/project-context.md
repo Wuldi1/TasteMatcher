@@ -46,8 +46,8 @@ TasteMatcher is an AI-powered art matching platform with:
 4. Run the local API and frontend against production-backed services:
    `pnpm run start:local:production`
 5. Read-only local API smoke check: `curl --fail http://localhost:8080/health`
-6. Read-only Azure Node.js 24 preflight:
-   `./scripts/azure/update-node24-runtimes.sh`
+6. Verify the deployed public endpoints:
+   `curl --fail https://api.tastematcher.art/health`
 7. Build frontend: `pnpm run build:frontend`
 8. Build API: `pnpm run build:webapi`
 9. Build functions: `pnpm run build:functions`

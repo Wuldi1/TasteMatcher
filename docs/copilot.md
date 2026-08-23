@@ -224,15 +224,11 @@ When generating code, **simulate a senior engineer**:
 
 **Configured Azure resources:**
 
-- Azure Functions: Linux with Node.js 24 runtime configuration
-- Backend API (App Service): Linux with Node.js 24 LTS configuration
-- Frontend (App Service): Linux with Node.js 24 LTS configuration (serving
-  static files via `serve`)
+- Azure Functions: Flex Consumption with Node.js 24
+- Backend API: Azure Container Apps Consumption
+- Frontend: Azure Static Web Apps Free
 
-Repository configuration selecting Node.js 24 does not prove that the live
-Azure runtimes have been updated. Run
-`scripts/azure/update-node24-runtimes.sh` in its default read-only mode before
-any separately approved, one-component production update.
+The repository CI workflows validate Node.js 24 before deploying each component.
 
 ### Local Development (Functions)
 
