@@ -92,7 +92,7 @@ jobs:
       - name: Build and publish API image
         run: az acr build --registry "$AZURE_CONTAINER_REGISTRY" --image "tastematcher-api:$IMAGE_TAG" --file webapi/Dockerfile .
       - name: Deploy API revision to Container Apps
-        run: az containerapp update --name "$AZURE_CONTAINERAPP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --image "$AZURE_CONTAINER_REGISTRY.azurecr.io/tastematcher-api:$IMAGE_TAG" --target-port 8080
+        run: az containerapp update --name "$AZURE_CONTAINERAPP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --image "$AZURE_CONTAINER_REGISTRY.azurecr.io/tastematcher-api:$IMAGE_TAG"
       - name: Verify replacement API health
         run: curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-all-errors "https://$(az containerapp show --name \"$AZURE_CONTAINERAPP_NAME\" --resource-group \"$AZURE_RESOURCE_GROUP\" --query properties.configuration.ingress.fqdn -o tsv)/health" >/dev/null
       - name: Azure logout
