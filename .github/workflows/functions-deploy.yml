@@ -126,9 +126,9 @@ jobs:
     needs: build-test
     environment:
       name: prd
-      url: https://tastematcher-prd-func.azurewebsites.net
+      url: https://tastematcher-prd-flex.azurewebsites.net
     env:
-      AZURE_FUNCTIONAPP_NAME: tastematcher-prd-func
+      AZURE_FUNCTIONAPP_NAME: tastematcher-prd-flex
       AZURE_RESOURCE_GROUP: tastematcher-prd-rg
       AZURE_SUBSCRIPTION: e105e38a-7820-4c7e-b1da-de05227d6355
     steps:

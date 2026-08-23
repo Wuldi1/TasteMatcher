@@ -1,0 +1,10 @@
+.git
+.github
+.azure
+**/node_modules
+**/build
+**/coverage
+**/*.log
+webapi/.env*
+functions/local.settings.json
+

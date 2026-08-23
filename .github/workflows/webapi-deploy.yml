@@ -35,6 +35,9 @@ concurrency:
 env:
   NODE_VERSION: "24.x"
   WEBAPI_DIR: webapi
+  AZURE_CONTAINERAPP_NAME: tastematcher-prd-api-ca
+  AZURE_CONTAINER_REGISTRY: tastematcherprdacr
+  AZURE_RESOURCE_GROUP: tastematcher-prd-rg
 
 jobs:
   build-test:
@@ -66,28 +69,8 @@ jobs:
         run: |
           pnpm --filter @tastematcher/common test
           pnpm --filter @tastematcher/webapi exec jest --runInBand
-      - name: Build common and Web API packages
-        run: pnpm run build:webapi
-      - name: Prepare deployment package
-        run: |
-          cd ${{ env.WEBAPI_DIR }}
-          cp package.json build/
-          sed -i 's|build/main.js|main.js|g' build/package.json
-          mkdir -p build/node_modules
-          rsync -a node_modules/ ../node_modules/ build/node_modules/
-          rm -rf build/node_modules/@tastematcher/common
-          mkdir -p build/node_modules/@tastematcher/common
-          rsync -a ../common/build/ build/node_modules/@tastematcher/common
-          cd build
-          zip -r ../webapi-build.zip . >/dev/null
       - name: Validate repository and build artifact
         run: pnpm run validate:static
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: webapi-build
-          path: ${{ env.WEBAPI_DIR }}/webapi-build.zip
-          retention-days: 1
 
   deploy:
     name: Deploy Web API to Production
@@ -96,28 +79,20 @@ jobs:
     needs: build-test
     environment:
       name: prd
-      url: https://api.tastematcher.art
+      url: https://tastematcher-prd-api-ca.lemonwave-6134900c.centralus.azurecontainerapps.io
     env:
-      AZURE_WEBAPP_NAME: tastematcher-prd-api
-      AZURE_RESOURCE_GROUP: tastematcher-prd-rg
+      IMAGE_TAG: ${{ github.sha }}
     steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: webapi-build
       - name: Login to Azure
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS_PRD }}
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
-          package: webapi-build.zip
-          startup-command: "npm start"
-      - name: Verify production API health
-        run: curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-all-errors https://api.tastematcher.art/health >/dev/null
+      - name: Build and publish API image
+        run: az acr build --registry "$AZURE_CONTAINER_REGISTRY" --image "tastematcher-api:$IMAGE_TAG" --file webapi/Dockerfile .
+      - name: Deploy API revision to Container Apps
+        run: az containerapp update --name "$AZURE_CONTAINERAPP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --image "$AZURE_CONTAINER_REGISTRY.azurecr.io/tastematcher-api:$IMAGE_TAG" --target-port 8080
+      - name: Verify replacement API health
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-all-errors "https://$(az containerapp show --name \"$AZURE_CONTAINERAPP_NAME\" --resource-group \"$AZURE_RESOURCE_GROUP\" --query properties.configuration.ingress.fqdn -o tsv)/health" >/dev/null
       - name: Azure logout
         if: always()
         run: az logout

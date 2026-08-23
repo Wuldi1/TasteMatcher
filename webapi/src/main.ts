@@ -18,6 +18,9 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
   });
+  // Azure Container Apps terminates TLS at its ingress proxy. Trust the first
+  // proxy so forwarded protocol and client-address information remain correct.
+  app.set("trust proxy", 1);
   configureHttpBodyParsers(app);
 
   // Enable CORS
@@ -38,8 +41,8 @@ async function bootstrap() {
     }),
   );
 
-  const port = 8080;
-  await app.listen(port);
+  const port = Number.parseInt(process.env.PORT || "8080", 10);
+  await app.listen(port, "0.0.0.0");
 
   console.log(`Application is running on: http://localhost:${port}`);
 }

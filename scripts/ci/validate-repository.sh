@@ -55,11 +55,11 @@ done
 
 grep -q '"quality:fast": "pnpm run build:common' package.json
 
-grep -q 'AZURE_WEBAPP_NAME: "tastematcher-prd-web"' \
+grep -q 'AZURE_STATIC_WEB_APP: "tastematcher-prd-static"' \
   .github/workflows/frontend-deploy.yml
-grep -q 'AZURE_WEBAPP_NAME: tastematcher-prd-api' \
+grep -q 'AZURE_CONTAINERAPP_NAME: tastematcher-prd-api-ca' \
   .github/workflows/webapi-deploy.yml
-grep -q 'AZURE_FUNCTIONAPP_NAME: tastematcher-prd-func' \
+grep -q 'AZURE_FUNCTIONAPP_NAME: tastematcher-prd-flex' \
   .github/workflows/functions-deploy.yml
 grep -q 'secrets.AZURE_CREDENTIALS_PRD' \
   .github/workflows/webapi-deploy.yml
