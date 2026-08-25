@@ -87,7 +87,7 @@ jobs:
     needs: build-test
     environment:
       name: prd
-      url: https://tastematcher-prd-static.azurestaticapps.net
+      url: https://tastematcher.art
     steps:
       - name: Download build artifact
         uses: actions/download-artifact@v4
@@ -113,7 +113,7 @@ jobs:
           export npm_config_cache
           npx --yes @azure/static-web-apps-cli deploy build --env production --no-use-keychain
       - name: Verify replacement frontend
-        run: curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-all-errors https://tastematcher-prd-static.azurestaticapps.net/ >/dev/null
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-all-errors https://tastematcher.art/ >/dev/null
       - name: Azure logout
         if: always()
         run: az logout
