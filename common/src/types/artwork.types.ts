@@ -2,6 +2,15 @@ import type { Comment, Proposal, ProposalItem } from "./sales.types";
 
 export type ArtworkMetadata = Record<string, unknown>;
 
+export interface RecommendationScoreDetails {
+  imageSimilarity: number;
+  intentScore: number;
+  metadataScore: number;
+  behaviorScore: number;
+  finalScore: number;
+  reasons: string[];
+}
+
 export interface Artwork {
   id: string; // UUID
   domainId: string; // UUID
@@ -29,6 +38,7 @@ export interface Artwork {
   vectorModel: string; // model used for vectorization
   thumbnails?: ThumbnailInfo[];
   probabilityMatch?: number; // confidence score for AI-generated tags
+  recommendationScore?: RecommendationScoreDetails;
   createdAt?: number; // timestamp
   metadata?: ArtworkMetadata; // allow additional metadata fields
   likedStatus?: LikedStatus; // customer's like/dislike status for the artwork

@@ -123,6 +123,34 @@ az staticwebapp show \
   --query defaultHostname -o tsv
 ```
 
+## Production logs and product activity
+
+Open **Monitor → Workbooks → TasteMatcher Production Logs** in the Azure portal
+to view shared API and Function logs. The workbook is backed by
+`tastematcher-prd-logs`, which retains logs for 30 days and has a 0.25 GB/day
+ingestion cap.
+
+The product-activity panels report successful logins; galleries and invited
+users; manual artwork additions and auction-import batches; likes/dislikes;
+artwork and user comments; and proposal creation, status changes (including
+approval or decline), and comments. Events are compact structured API stdout
+records: they deliberately exclude emails, names, titles, URLs, comment text,
+and all record identifiers. They appear only after an API build containing the
+activity logger is deployed.
+
+For a focused investigation, run this query against the workspace:
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where ContainerAppName_s == "tastematcher-prd-api-ca"
+| extend activity = parse_json(extract(@"(\\{.*\\})", 1, Log_s))
+| where tostring(activity.event) == "product_activity"
+| project TimeGenerated, eventName=tostring(activity.eventName),
+          proposalStatus=tostring(activity.proposalStatus),
+          source=tostring(activity.source), count=tolong(activity.count)
+| order by TimeGenerated desc
+```
+
 For Functions trigger or timeout failures, inspect Application Insights and
 confirm bindings, queue names, and `host.json` settings without printing
 connection strings or app-setting values.

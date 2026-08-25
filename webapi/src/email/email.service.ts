@@ -24,6 +24,32 @@ export interface SendVerificationEmailPayload {
   expiresAt: number;
 }
 
+type ProposalEmailAction = "created" | "updated" | "deleted" | "ping";
+
+type ProposalEmailSummary = {
+  title: string;
+  introNote: string;
+  itemCount: number;
+  pendingCount: number;
+  approvedCount: number;
+  rejectedCount: number;
+  itemCommentCount: number;
+  generalCommentCount: number;
+  statusLabel: string;
+};
+
+type BrandedEmailParams = {
+  eyebrow: string;
+  heading: string;
+  intro: string;
+  contentHtml: string;
+  cta?: {
+    label: string;
+    href: string;
+  };
+  footerNote?: string;
+};
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -47,6 +73,258 @@ export class EmailService {
     }
 
     this.emailClient = new EmailClient(this.connectionString);
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  private formatProposalStatus(status: string | undefined): string {
+    if (!status) return "Draft";
+    return status
+      .replace(/[-_]/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  private getFrontendBaseUrl(): string {
+    return (process.env.FRONTEND_URL ?? "").replace(/\/+$/, "");
+  }
+
+  private getEmailIconUrl(): string | undefined {
+    const baseUrl = this.getFrontendBaseUrl();
+    if (!baseUrl) return undefined;
+    return `${baseUrl}/tastematcher_icon_icon_128.png`;
+  }
+
+  private buildBrandedEmailHtml(params: BrandedEmailParams): string {
+    const iconUrl = this.getEmailIconUrl();
+    const escapedIconUrl = iconUrl ? this.escapeHtml(iconUrl) : undefined;
+    const ctaHtml = params.cta
+      ? `<div style="margin-top:24px;">
+          <a href="${this.escapeHtml(params.cta.href)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:12px;padding:14px 22px;font-size:15px;font-weight:800;">${this.escapeHtml(params.cta.label)}</a>
+        </div>
+        <p style="margin:18px 0 0;font-size:12px;line-height:1.5;color:#6b7280;">If the button does not work, copy this link:<br><span style="word-break:break-all;color:#374151;">${this.escapeHtml(params.cta.href)}</span></p>`
+      : "";
+    const footerNote =
+      params.footerNote ??
+      "TasteMatcher helps galleries and advisors curate art around a collector's real preferences.";
+
+    return `
+      <div style="margin:0;padding:0;background:#f5f7fb;color:#111827;font-family:Arial,Helvetica,sans-serif;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f7fb;margin:0;padding:32px 12px;">
+          <tr>
+            <td align="center">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(15,23,42,0.10);">
+                <tr>
+                  <td style="padding:26px 28px 22px;background:#111827;color:#ffffff;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td style="vertical-align:middle;">
+                          <div style="display:inline-block;vertical-align:middle;">
+                            ${
+                              escapedIconUrl
+                                ? `<img src="${escapedIconUrl}" width="38" height="38" alt="TasteMatcher" style="display:inline-block;border:0;border-radius:10px;vertical-align:middle;margin-right:10px;background:#ffffff;" />`
+                                : `<span style="display:inline-block;width:38px;height:38px;line-height:38px;text-align:center;border-radius:10px;background:#2563eb;color:#ffffff;font-weight:800;margin-right:10px;vertical-align:middle;">TM</span>`
+                            }
+                            <span style="display:inline-block;vertical-align:middle;font-size:18px;font-weight:800;letter-spacing:0.01em;color:#ffffff;">TasteMatcher</span>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+                    <div style="margin-top:24px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#bfdbfe;font-weight:700;">${this.escapeHtml(params.eyebrow)}</div>
+                    <h1 style="margin:12px 0 0;font-size:28px;line-height:1.2;font-weight:800;color:#ffffff;">${this.escapeHtml(params.heading)}</h1>
+                    <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:#d1d5db;">${this.escapeHtml(params.intro)}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:28px;">
+                    ${params.contentHtml}
+                    ${ctaHtml}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:18px 28px;background:#f9fafb;border-top:1px solid #e5e7eb;">
+                    <div style="font-size:12px;color:#6b7280;line-height:1.5;">${this.escapeHtml(footerNote)}</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `;
+  }
+
+  private getViewingRoomMetadata(proposal: Proposal): {
+    title?: string;
+    introNote?: string;
+  } {
+    const viewingRoom = proposal.metadata?.viewingRoom;
+    if (!viewingRoom || typeof viewingRoom !== "object") {
+      return {};
+    }
+
+    const metadata = viewingRoom as Record<string, unknown>;
+    return {
+      title:
+        typeof metadata.title === "string" && metadata.title.trim()
+          ? metadata.title.trim()
+          : undefined,
+      introNote:
+        typeof metadata.introNote === "string" && metadata.introNote.trim()
+          ? metadata.introNote.trim()
+          : undefined,
+    };
+  }
+
+  private summarizeProposal(proposal: Proposal): ProposalEmailSummary {
+    const viewingRoom = this.getViewingRoomMetadata(proposal);
+    const statusCounts =
+      proposal.items?.reduce(
+        (acc, item) => {
+          acc[item.status] = (acc[item.status] ?? 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
+      ) ?? {};
+
+    return {
+      title: viewingRoom.title ?? "Your TasteMatcher proposal",
+      introNote:
+        viewingRoom.introNote ??
+        "A curated selection is ready for review in your private TasteMatcher workspace.",
+      itemCount: proposal.items?.length ?? 0,
+      pendingCount: statusCounts.pending ?? 0,
+      approvedCount: statusCounts.approved ?? 0,
+      rejectedCount: statusCounts.rejected ?? 0,
+      itemCommentCount:
+        proposal.items?.reduce(
+          (acc, item) => acc + (item.comments?.length ?? 0),
+          0,
+        ) ?? 0,
+      generalCommentCount: proposal.generalComments?.length ?? 0,
+      statusLabel: this.formatProposalStatus(proposal.status),
+    };
+  }
+
+  private getProposalActionCopy(action: ProposalEmailAction): {
+    subject: string;
+    eyebrow: string;
+    heading: string;
+    body: string;
+    cta: string;
+  } {
+    switch (action) {
+      case "created":
+        return {
+          subject: "Your private art proposal is ready",
+          eyebrow: "New private selection",
+          heading: "Your private viewing room is ready",
+          body: "A new curated selection has been prepared for you.",
+          cta: "View proposal",
+        };
+      case "updated":
+        return {
+          subject: "Your art proposal has been updated",
+          eyebrow: "Proposal updated",
+          heading: "Your proposal has new updates",
+          body: "The latest version includes recent changes, comments, or artwork decisions.",
+          cta: "Review updates",
+        };
+      case "deleted":
+        return {
+          subject: "A TasteMatcher proposal was removed",
+          eyebrow: "Proposal removed",
+          heading: "This proposal is no longer active",
+          body: "The proposal was removed by the gallery team. Contact them directly if you have questions.",
+          cta: "Open TasteMatcher",
+        };
+      case "ping":
+        return {
+          subject: "Reminder: review your private art proposal",
+          eyebrow: "Review reminder",
+          heading: "Your proposal is waiting for review",
+          body: "Please review the selection and share your feedback when ready.",
+          cta: "Review proposal",
+        };
+    }
+  }
+
+  private buildProposalEmailHtml(params: {
+    proposal: Proposal;
+    action: ProposalEmailAction;
+    portalLink: string;
+    recipientContext: "customer" | "team";
+    actorLine?: string;
+  }): string {
+    const copy = this.getProposalActionCopy(params.action);
+    const summary = this.summarizeProposal(params.proposal);
+    const escapedTitle = this.escapeHtml(summary.title);
+    const escapedIntro = this.escapeHtml(summary.introNote);
+    const escapedActorLine = params.actorLine
+      ? this.escapeHtml(params.actorLine)
+      : "";
+    const contextLine =
+      params.recipientContext === "team"
+        ? "Open the customer workspace to adjust the selection, respond to comments, or publish the next version."
+        : "Open the proposal to respond to each artwork and leave comments for the gallery team.";
+
+    const contentHtml = `
+      <div style="border:1px solid #e5e7eb;border-radius:14px;padding:20px;background:#ffffff;">
+        <div style="font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Private Viewing Room</div>
+        <h2 style="margin:8px 0 8px;font-size:22px;line-height:1.3;color:#111827;">${escapedTitle}</h2>
+        <p style="margin:0;font-size:15px;line-height:1.6;color:#4b5563;">${escapedIntro}</p>
+      </div>
+
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:18px;">
+        <tr>
+          <td width="50%" style="padding:0 6px 12px 0;">
+            <div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px;background:#f9fafb;">
+              <div style="font-size:12px;color:#6b7280;font-weight:700;text-transform:uppercase;">Artworks</div>
+              <div style="margin-top:4px;font-size:24px;font-weight:800;color:#111827;">${summary.itemCount}</div>
+            </div>
+          </td>
+          <td width="50%" style="padding:0 0 12px 6px;">
+            <div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px;background:#f9fafb;">
+              <div style="font-size:12px;color:#6b7280;font-weight:700;text-transform:uppercase;">Status</div>
+              <div style="margin-top:4px;font-size:20px;font-weight:800;color:#111827;">${this.escapeHtml(summary.statusLabel)}</div>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <div style="border:1px solid #dbeafe;border-radius:14px;background:#eff6ff;padding:16px;margin-top:6px;">
+        <div style="font-size:14px;line-height:1.7;color:#1f2937;">
+          <strong>Current responses:</strong>
+          ${summary.approvedCount} accepted,
+          ${summary.pendingCount} pending,
+          ${summary.rejectedCount} declined.
+        </div>
+        <div style="font-size:14px;line-height:1.7;color:#1f2937;">
+          <strong>Comments:</strong>
+          ${summary.itemCommentCount} artwork comments and
+          ${summary.generalCommentCount} general comments.
+        </div>
+      </div>
+
+      <p style="margin:22px 0 0;font-size:15px;line-height:1.6;color:#4b5563;">${this.escapeHtml(contextLine)}</p>
+    `;
+
+    return this.buildBrandedEmailHtml({
+      eyebrow: copy.eyebrow,
+      heading: copy.heading,
+      intro: `${copy.body}${escapedActorLine ? ` ${params.actorLine}` : ""}`,
+      contentHtml,
+      cta: {
+        label: copy.cta,
+        href: params.portalLink,
+      },
+    });
   }
 
   /**
@@ -77,12 +355,21 @@ export class EmailService {
       "If you did not request this code, please ignore this email.",
     ].join("\n");
 
-    const htmlBody = [
-      "<p>Hi,</p>",
-      `<p>Your verification code for <strong>${payload.domainName}</strong> is <strong>${payload.code}</strong>.</p>`,
-      `<p>This code expires at ${new Date(payload.expiresAt).toLocaleString()}.</p>`,
-      "<p>If you did not request this code, please ignore this email.</p>",
-    ].join("");
+    const htmlBody = this.buildBrandedEmailHtml({
+      eyebrow: "Secure sign in",
+      heading: "Your verification code",
+      intro: `Use this code to continue signing in to ${payload.domainName}.`,
+      contentHtml: `
+        <div style="border:1px solid #dbeafe;border-radius:16px;background:#eff6ff;padding:22px;text-align:center;">
+          <div style="font-size:12px;color:#1d4ed8;font-weight:800;text-transform:uppercase;letter-spacing:0.12em;">Verification Code</div>
+          <div style="margin-top:12px;font-size:34px;line-height:1.1;font-weight:900;letter-spacing:0.22em;color:#111827;">${this.escapeHtml(payload.code)}</div>
+          <p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#4b5563;">This code expires at ${this.escapeHtml(new Date(payload.expiresAt).toLocaleString())}.</p>
+        </div>
+        <p style="margin:22px 0 0;font-size:14px;line-height:1.6;color:#6b7280;">If you did not request this code, you can safely ignore this email.</p>
+      `,
+      footerNote:
+        "TasteMatcher sends verification codes to protect gallery and collector accounts.",
+    });
 
     if (!this.emailClient || !this.senderAddress) {
       this.logger.log({
@@ -146,7 +433,8 @@ export class EmailService {
       throw new Error("Invalid recipient email address");
     }
 
-    const inviteLink = `${process.env.FRONTEND_URL}/login?email=${encodeURIComponent(email)}`;
+    const baseUrl = this.getFrontendBaseUrl();
+    const inviteLink = `${baseUrl}/login?email=${encodeURIComponent(email)}`;
 
     const subject = "You've been invited to TasteMatcher";
     const textBody = [
@@ -160,15 +448,22 @@ export class EmailService {
       "Welcome to TasteMatcher!",
     ].join("\n");
 
-    const htmlBody = [
-      `<h2>Hello ${name},</h2>`,
-      `<p>You've been invited to join TasteMatcher as a <strong>${role}</strong>.</p>`,
-      "<p>Click the link below to log in and get started:</p>",
-      `<p><a href="${inviteLink}" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 8px; font-weight: 600;">Join TasteMatcher</a></p>`,
-      `<p style="color: #666; font-size: 14px;">Or copy this link: ${inviteLink}</p>`,
-      "<br>",
-      "<p>Welcome to TasteMatcher!</p>",
-    ].join("");
+    const htmlBody = this.buildBrandedEmailHtml({
+      eyebrow: "Gallery invitation",
+      heading: "You have been invited to TasteMatcher",
+      intro: `${name}, your gallery team invited you to join their TasteMatcher workspace.`,
+      contentHtml: `
+        <div style="border:1px solid #e5e7eb;border-radius:16px;background:#ffffff;padding:20px;">
+          <div style="font-size:13px;color:#6b7280;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;">Your role</div>
+          <div style="margin-top:8px;font-size:22px;font-weight:900;color:#111827;text-transform:capitalize;">${this.escapeHtml(role.replace(/_/g, " "))}</div>
+          <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:#4b5563;">Use TasteMatcher to review art, share preferences, and collaborate on curated proposals.</p>
+        </div>
+      `,
+      cta: {
+        label: "Join TasteMatcher",
+        href: inviteLink,
+      },
+    });
 
     if (!this.emailClient || !this.senderAddress) {
       this.logger.log({
@@ -239,38 +534,35 @@ export class EmailService {
     }
 
     const baseUrl = process.env.FRONTEND_URL ?? "";
-    const proposalLink = `${baseUrl}/sales/proposals/${proposal.id}`;
-
-    let subject = "Proposal update from TasteMatcher";
-    let textBody = "";
-    let htmlBody = "";
-
-    switch (action) {
-      case "created":
-        subject = "A new proposal has been created for you";
-        textBody = `Hello,\n\nA new proposal has been created for you. View it here: ${proposalLink}\n\nThank you,\nTasteMatcher`;
-        htmlBody = `<p>Hello,</p><p>A new proposal has been created for you. <a href="${proposalLink}">View proposal</a></p><p>Thank you,<br/>TasteMatcher</p>`;
-        break;
-      case "updated":
-        subject = "Your proposal has been updated";
-        textBody = `Hello,\n\nYour proposal has been updated. View the latest version here: ${proposalLink}\n\nThank you,\nTasteMatcher`;
-        htmlBody = `<p>Hello,</p><p>Your proposal has been updated. <a href="${proposalLink}">View proposal</a></p><p>Thank you,<br/>TasteMatcher</p>`;
-        break;
-      case "deleted":
-        subject = "A proposal has been removed";
-        textBody = `Hello,\n\nA proposal for you was deleted by the dealer. If you have questions, contact support.\n\nThank you,\nTasteMatcher`;
-        htmlBody = `<p>Hello,</p><p>A proposal for you was deleted by the dealer. If you have questions, contact support.</p><p>Thank you,<br/>TasteMatcher</p>`;
-        break;
-      case "ping":
-        subject = "Reminder: please review your proposal";
-        textBody = `Hello,\n\nThis is a reminder to review your proposal: ${proposalLink}\n\nThank you,\nTasteMatcher`;
-        htmlBody = `<p>Hello,</p><p>This is a reminder to review your proposal: <a href="${proposalLink}">View proposal</a></p><p>Thank you,<br/>TasteMatcher</p>`;
-        break;
-      default:
-        subject = "Proposal notification";
-        textBody = `Hello,\n\nThere is an update regarding your proposal. View it here: ${proposalLink}\n\nThank you,\nTasteMatcher`;
-        htmlBody = `<p>Hello,</p><p>There is an update regarding your proposal. <a href="${proposalLink}">View proposal</a></p><p>Thank you,<br/>TasteMatcher</p>`;
-    }
+    const proposalLink = `${baseUrl}/buying-proposal`;
+    const copy = this.getProposalActionCopy(action);
+    const summary = this.summarizeProposal(proposal);
+    const subject = copy.subject;
+    const textBody = [
+      "Hello,",
+      "",
+      copy.body,
+      "",
+      summary.title,
+      summary.introNote,
+      "",
+      `Artworks: ${summary.itemCount}`,
+      `Status: ${summary.statusLabel}`,
+      `Responses: ${summary.approvedCount} accepted, ${summary.pendingCount} pending, ${summary.rejectedCount} declined`,
+      `Comments: ${summary.itemCommentCount} artwork comments, ${summary.generalCommentCount} general comments`,
+      "",
+      action === "deleted" ? "Open TasteMatcher:" : "View proposal:",
+      proposalLink,
+      "",
+      "Thank you,",
+      "TasteMatcher",
+    ].join("\n");
+    const htmlBody = this.buildProposalEmailHtml({
+      proposal,
+      action,
+      portalLink: proposalLink,
+      recipientContext: "customer",
+    });
 
     if (!this.emailClient || !this.senderAddress) {
       this.logger.log({
@@ -357,63 +649,41 @@ export class EmailService {
 
     const subject =
       params.action === "created"
-        ? "New proposal shared with you"
-        : "Proposal updated";
+        ? "New TasteMatcher proposal activity"
+        : "TasteMatcher proposal updated";
 
     const actorLine =
       params.actorEmail || params.actorRole
         ? ` by ${params.actorEmail ?? params.actorRole}`
         : "";
-
-    const totalArtworks = params.proposal.items?.length ?? 0;
-    const statusCounts =
-      params.proposal.items?.reduce(
-        (acc, item) => {
-          acc[item.status] = (acc[item.status] ?? 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>,
-      ) ?? {};
-
-    const totalItemComments =
-      params.proposal.items?.reduce(
-        (acc, item) => acc + (item.comments?.length ?? 0),
-        0,
-      ) ?? 0;
-    const totalGeneralComments = params.proposal.generalComments?.length ?? 0;
-
-    const statusSummary = ["approved", "pending", "rejected"]
-      .map((key) => `${key}: ${statusCounts[key] ?? 0}`)
-      .join(", ");
+    const summary = this.summarizeProposal(params.proposal);
 
     const textBody = [
       `Hello,`,
       ``,
       `Proposal ${params.proposal.id} was ${params.action}${actorLine}.`,
-      `Status: ${params.proposal.status}`,
+      ``,
+      summary.title,
+      summary.introNote,
       ``,
       `View in portal: ${proposalLink}`,
       ``,
-      `Artworks: ${totalArtworks}`,
-      `Statuses -> ${statusSummary}`,
-      `Artwork comments: ${totalItemComments}`,
-      `General comments: ${totalGeneralComments}`,
+      `Artworks: ${summary.itemCount}`,
+      `Status: ${summary.statusLabel}`,
+      `Responses: ${summary.approvedCount} accepted, ${summary.pendingCount} pending, ${summary.rejectedCount} declined`,
+      `Comments: ${summary.itemCommentCount} artwork comments, ${summary.generalCommentCount} general comments`,
       ``,
       `Thank you,`,
       `TasteMatcher`,
     ].join("\n");
 
-    const htmlBody = [
-      `<p>Hello,</p>`,
-      `<p>Proposal <strong>${params.proposal.id}</strong> was <strong>${params.action}</strong>${actorLine ? `<span>${actorLine}</span>` : ""}.</p>`,
-      `<p>Status: <strong>${params.proposal.status}</strong></p>`,
-      `<p><a href="${proposalLink}">View in portal</a></p>`,
-      `<p><strong>Artworks:</strong> ${totalArtworks}</p>`,
-      `<p><strong>Statuses:</strong> ${statusSummary}</p>`,
-      `<p><strong>Artwork comments:</strong> ${totalItemComments}</p>`,
-      `<p><strong>General comments:</strong> ${totalGeneralComments}</p>`,
-      `<p>Thank you,<br/>TasteMatcher</p>`,
-    ].join("");
+    const htmlBody = this.buildProposalEmailHtml({
+      proposal: params.proposal,
+      action: params.action,
+      portalLink: proposalLink,
+      recipientContext: "team",
+      actorLine,
+    });
 
     if (!this.emailClient || !this.senderAddress) {
       this.logger.log({

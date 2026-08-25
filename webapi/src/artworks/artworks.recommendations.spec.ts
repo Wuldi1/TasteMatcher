@@ -1,7 +1,12 @@
 import { Artwork } from "@tastematcher/common";
 import { ArtworksService } from "./artworks.service";
 
-const buildVector = (): number[] => Array.from({ length: 1024 }, () => 1);
+const buildVector = (firstValue: number = 1, secondValue: number = 0): number[] => {
+  const vector = new Array(1024).fill(0);
+  vector[0] = firstValue;
+  vector[1] = secondValue;
+  return vector;
+};
 
 const buildArtwork = (id: string): Artwork => ({
   id,
@@ -31,6 +36,12 @@ type CandidateResource = {
   endDate?: string;
 };
 
+type PreferenceResource = {
+  artworkId: string;
+  liked?: boolean;
+  comment?: string;
+};
+
 const setupService = ({
   primaryCandidateResources = [
     {
@@ -50,6 +61,10 @@ const setupService = ({
   ] as CandidateResource[],
   expiredAuctionCandidateResources = [] as CandidateResource[],
   pageResources = [buildArtwork("rated-art"), buildArtwork("fresh-art")],
+  preferencesResources = [
+    { artworkId: "rated-art", liked: true, comment: "seen" },
+  ] as PreferenceResource[],
+  userOverrides = {},
 } = {}) => {
   const service = new ArtworksService({} as never);
 
@@ -91,6 +106,20 @@ const setupService = ({
             (resource) => !resource.id || !excludedIdSet.has(resource.id),
           );
 
+        if (query.query.includes("ARRAY_CONTAINS(@ids, c.id)")) {
+          const ids =
+            query.parameters?.find((parameter) => parameter.name === "@ids")
+              ?.value ?? [];
+          const idSet = new Set(Array.isArray(ids) ? ids : []);
+          return {
+            fetchAll: jest.fn().mockResolvedValue({
+              resources: pageResources.filter((resource) =>
+                idSet.has(resource.id),
+              ),
+            }),
+          };
+        }
+
         if (
           query.query.includes("c.endDate > @activeAuctionAfter") ||
           query.query.includes("c.isAuction != true") ||
@@ -114,7 +143,7 @@ const setupService = ({
     items: {
       query: jest.fn().mockReturnValue({
         fetchAll: jest.fn().mockResolvedValue({
-          resources: [{ artworkId: "rated-art", liked: true, comment: "seen" }],
+          resources: preferencesResources,
         }),
       }),
     },
@@ -129,6 +158,7 @@ const setupService = ({
       swipeCount: 30,
       preferenceVector: buildVector(),
       name: "Customer",
+      ...userOverrides,
     }),
     getArtworksContainer: jest.fn().mockResolvedValue(artworksContainer),
     getArtworkPreferencesContainer: jest
@@ -173,7 +203,7 @@ describe("ArtworksService includeRated behavior", () => {
     );
 
     expect(results.map((artwork) => artwork.id)).toEqual(["fresh-art"]);
-    expect(results[0]?.probabilityMatch).toBeCloseTo(1);
+    expect(results[0]?.probabilityMatch).toBeCloseTo(0.845);
 
     const cosmosService = (
       service as unknown as { cosmosService: { getArtworksContainer: jest.Mock } }
@@ -208,7 +238,7 @@ describe("ArtworksService includeRated behavior", () => {
     expect(results.map((artwork) => artwork.id)).toEqual(
       expect.arrayContaining(["rated-art", "fresh-art"]),
     );
-    expect(results[0]?.probabilityMatch).toBeCloseTo(1);
+    expect(results[0]?.probabilityMatch).toBeCloseTo(0.845);
 
     const cosmosService = (
       service as unknown as { cosmosService: { getArtworksContainer: jest.Mock } }
@@ -222,6 +252,196 @@ describe("ArtworksService includeRated behavior", () => {
       expect.arrayContaining([
         expect.objectContaining({ name: "@excludedArtworkIds" }),
       ]),
+    );
+    expect(results[0]?.recommendationScore).toEqual(
+      expect.objectContaining({
+        finalScore: expect.any(Number),
+        imageSimilarity: expect.any(Number),
+        intentScore: expect.any(Number),
+        metadataScore: expect.any(Number),
+        behaviorScore: expect.any(Number),
+        reasons: expect.any(Array),
+      }),
+    );
+  });
+
+  it("does not expose recommendation score details to customers", async () => {
+    const service = setupService();
+
+    const results = await service.getRecommendationsForUser(
+      "domain-1",
+      { id: "customer-1", role: "customer" },
+      undefined,
+      20,
+      0,
+      true,
+    );
+
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]).not.toHaveProperty("recommendationScore");
+  });
+
+  it("reranks recalled candidates using questionnaire metadata", async () => {
+    const service = setupService({
+      primaryCandidateResources: [
+        {
+          id: "photo-art",
+          isPrivate: false,
+          uploadedBy: "owner-1",
+          isAuction: false,
+        },
+        {
+          id: "painting-art",
+          isPrivate: false,
+          uploadedBy: "owner-1",
+          isAuction: false,
+        },
+      ],
+      pageResources: [
+        {
+          ...buildArtwork("photo-art"),
+          medium: "Gelatin silver print",
+          tags: ["photography"],
+        },
+        {
+          ...buildArtwork("painting-art"),
+          medium: "Oil on canvas",
+          tags: ["painting"],
+        },
+      ],
+      preferencesResources: [],
+      userOverrides: {
+        personalQuestionnaire: { mostInterestedInBuying: "Paintings" },
+      },
+    });
+
+    const results = await service.getRecommendationsForUser(
+      "domain-1",
+      { id: "owner-1", role: "domain_owner" },
+      "customer-1",
+      2,
+      0,
+      true,
+    );
+
+    expect(results.map((artwork) => artwork.id)).toEqual([
+      "painting-art",
+      "photo-art",
+    ]);
+    expect(results[0]?.probabilityMatch).toBeGreaterThan(
+      results[1]?.probabilityMatch ?? 0,
+    );
+  });
+
+  it("applies hybrid reranking before pagination", async () => {
+    const service = setupService({
+      primaryCandidateResources: [
+        {
+          id: "photo-art",
+          isPrivate: false,
+          uploadedBy: "owner-1",
+          isAuction: false,
+        },
+        {
+          id: "painting-art",
+          isPrivate: false,
+          uploadedBy: "owner-1",
+          isAuction: false,
+        },
+      ],
+      pageResources: [
+        {
+          ...buildArtwork("photo-art"),
+          medium: "Gelatin silver print",
+          tags: ["photography"],
+        },
+        {
+          ...buildArtwork("painting-art"),
+          medium: "Oil on canvas",
+          tags: ["painting"],
+        },
+      ],
+      preferencesResources: [],
+      userOverrides: {
+        personalQuestionnaire: { mostInterestedInBuying: "Paintings" },
+      },
+    });
+
+    const results = await service.getRecommendationsForUser(
+      "domain-1",
+      { id: "owner-1", role: "domain_owner" },
+      "customer-1",
+      1,
+      1,
+      true,
+    );
+
+    expect(results.map((artwork) => artwork.id)).toEqual(["photo-art"]);
+  });
+
+  it("uses liked and disliked artwork history as reranking signals", async () => {
+    const service = setupService({
+      primaryCandidateResources: [
+        {
+          id: "disliked-similar-art",
+          isPrivate: false,
+          uploadedBy: "owner-1",
+          isAuction: false,
+        },
+        {
+          id: "liked-similar-art",
+          isPrivate: false,
+          uploadedBy: "owner-1",
+          isAuction: false,
+        },
+      ],
+      pageResources: [
+        {
+          ...buildArtwork("liked-history-art"),
+          artist: "Ada Artist",
+          medium: "Bronze sculpture",
+          tags: ["modern"],
+        },
+        {
+          ...buildArtwork("disliked-history-art"),
+          artist: "Bad Fit",
+          medium: "Ink on paper",
+          tags: ["works on paper"],
+        },
+        {
+          ...buildArtwork("disliked-similar-art"),
+          artist: "Bad Fit",
+          medium: "Ink on paper",
+          tags: ["works on paper"],
+        },
+        {
+          ...buildArtwork("liked-similar-art"),
+          artist: "Ada Artist",
+          medium: "Bronze sculpture",
+          tags: ["modern"],
+        },
+      ],
+      preferencesResources: [
+        { artworkId: "liked-history-art", liked: true },
+        { artworkId: "disliked-history-art", liked: false },
+      ],
+    });
+
+    const results = await service.getRecommendationsForUser(
+      "domain-1",
+      { id: "owner-1", role: "domain_owner" },
+      "customer-1",
+      2,
+      0,
+      false,
+    );
+
+    expect(results.map((artwork) => artwork.id)).toEqual([
+      "liked-similar-art",
+      "disliked-similar-art",
+    ]);
+    expect(results[0]?.probabilityMatch).toBeGreaterThan(
+      results[1]?.probabilityMatch ?? 0,
     );
   });
 

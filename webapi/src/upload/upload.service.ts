@@ -15,6 +15,7 @@ import {
   getOriginalBlobPath,
 } from "@tastematcher/common";
 import { v4 as uuidv4 } from "uuid";
+import { ProductActivityLoggerService } from "../activity/product-activity-logger.service";
 
 export interface ArtworkUploadFile {
   buffer: Buffer;
@@ -61,6 +62,7 @@ export class UploadService {
     private readonly blobService: BlobService,
     private readonly cosmosService: CosmosService,
     private readonly vectorizationService: VectorizationService,
+    private readonly productActivityLogger?: ProductActivityLoggerService,
   ) {}
 
   async uploadManualArtwork(
@@ -70,7 +72,7 @@ export class UploadService {
     actor: UploadActor,
   ): Promise<Artwork> {
     const artwork = this.parseArtworkPayload(body, domainId);
-    return this.ingestArtwork(domainId, file, artwork, actor);
+    return this.ingestArtwork(domainId, file, artwork, actor, "manual");
   }
 
   async uploadAutomaticArtwork(
@@ -85,6 +87,7 @@ export class UploadService {
       file,
       this.buildArtwork(domainId, artworkInput, forcedArtworkId),
       actor,
+      "automatic",
     );
   }
 
@@ -168,6 +171,7 @@ export class UploadService {
     file: ArtworkUploadFile,
     artwork: Artwork,
     actor: UploadActor,
+    source: "manual" | "automatic",
   ): Promise<Artwork> {
     try {
       this.blobService.validateImageFile(
@@ -237,6 +241,9 @@ export class UploadService {
       artworkId: artwork.id,
       domainId,
     });
+    if (source === "manual") {
+      this.productActivityLogger?.log("artwork.created", { source });
+    }
     const disabledMessage: ImageProcessingQueueMessage = {
       messageId: uuidv4(),
       artworkId: artwork.id,

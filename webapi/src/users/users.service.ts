@@ -22,6 +22,7 @@ import { InviteUserDto } from "./dto/invite-user.dto";
 import { SendBulkEmailDto } from "./dto/send-bulk-email.dto";
 import { UpdateQuestionnaireDto } from "./dto/update-questionnaire.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
+import { ProductActivityLoggerService } from "../activity/product-activity-logger.service";
 
 // Helper interface until common package is updated
 interface ExtendedPersonalQuestionnaire {
@@ -42,6 +43,7 @@ export class UsersService {
   constructor(
     private readonly emailService: EmailService,
     private readonly artworksService: ArtworksService,
+    private readonly productActivityLogger?: ProductActivityLoggerService,
   ) {
     this.cosmosService = new CosmosService();
     this.vectorizationService = new VectorizationService();
@@ -329,6 +331,9 @@ export class UsersService {
       ]);
 
       this.logger.log(`Added comment to user ${userId}`);
+      this.productActivityLogger?.log("user.comment_added", {
+        actorRole: authorUser.role,
+      });
       return resource as User;
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -485,6 +490,8 @@ export class UsersService {
         onboardingStatus: "not_started",
         invitedBy: invitedById,
         preferenceVector: new Array(1024).fill(0), // Initialize with zero vector
+        likedPreferenceVector: new Array(1024).fill(0),
+        dislikedPreferenceVector: new Array(1024).fill(0),
         comments: [],
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -505,6 +512,10 @@ export class UsersService {
       );
 
       this.logger.log(`Sent invitation email to ${inviteDto.email}`);
+
+      this.productActivityLogger?.log("user.invited", {
+        actorRole: inviteDto.role,
+      });
 
       return resource as User;
     } catch (error) {
@@ -956,6 +967,8 @@ export class UsersService {
       const updatedUser: User = {
         ...user,
         preferenceVector: normalizedVector,
+        likedPreferenceVector: normalizedVector,
+        dislikedPreferenceVector: new Array(vectorDimensions).fill(0),
         tempPreferenceVectors: undefined, // Clear temporary vectors
         updatedAt: Date.now(),
       };

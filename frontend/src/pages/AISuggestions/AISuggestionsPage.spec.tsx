@@ -51,6 +51,18 @@ const buildArtwork = (id: number): Artwork => ({
 const buildArtworks = (count: number, startAt: number = 1): Artwork[] =>
   Array.from({ length: count }, (_, index) => buildArtwork(startAt + index));
 
+const buildArtworkWithRecommendationScore = (): Artwork => ({
+  ...buildArtwork(1),
+  recommendationScore: {
+    finalScore: 0.89,
+    imageSimilarity: 0.92,
+    intentScore: 0.95,
+    metadataScore: 0.75,
+    behaviorScore: 0.6,
+    reasons: ["matches Paintings interest", "artist previously liked"],
+  },
+});
+
 let latestIntersectionCallback:
   | ((entries: Array<{ isIntersecting: boolean }>) => void)
   | null = null;
@@ -93,12 +105,15 @@ const originalIntersectionObserver = window.IntersectionObserver;
 const renderPage = ({
   role,
   showOwnerRatedFilter = true,
-  selectedUserId = "customer-1",
+  selectedUserId,
 }: {
   role: "customer" | "dealer" | "domain_owner" | "global_admin";
   showOwnerRatedFilter?: boolean;
   selectedUserId?: string;
 }) => {
+  const effectiveSelectedUserId =
+    selectedUserId ?? (role === "customer" ? undefined : "customer-1");
+
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -132,7 +147,7 @@ const renderPage = ({
           <ViewerPreferencesProvider>
             <AISuggestionsPage
               domainId="domain-1"
-              userId={selectedUserId}
+              userId={effectiveSelectedUserId}
               showOwnerRatedFilter={showOwnerRatedFilter}
             />
           </ViewerPreferencesProvider>
@@ -264,5 +279,40 @@ describe("AISuggestionsPage owner includeRated filter", () => {
         true,
       );
     });
+  });
+
+  it("shows recommendation reasoning for owners", async () => {
+    mockGetRecommendations.mockResolvedValueOnce([
+      buildArtworkWithRecommendationScore(),
+    ]);
+
+    renderPage({ role: "domain_owner", showOwnerRatedFilter: true });
+
+    expect(
+      await screen.findByLabelText("Recommendation reasoning for Artwork 1"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Image")).toBeInTheDocument();
+    expect(screen.getByText("Intent")).toBeInTheDocument();
+    expect(screen.getByText("matches Paintings interest")).toBeInTheDocument();
+    expect(screen.getByText("artist previously liked")).toBeInTheDocument();
+  });
+
+  it("hides recommendation reasoning for customers", async () => {
+    mockGetRecommendations.mockResolvedValueOnce([
+      buildArtworkWithRecommendationScore(),
+    ]);
+
+    renderPage({
+      role: "customer",
+      showOwnerRatedFilter: false,
+    });
+
+    await screen.findByText("Artwork 1");
+    expect(
+      screen.queryByLabelText("Recommendation reasoning for Artwork 1"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("matches Paintings interest"),
+    ).not.toBeInTheDocument();
   });
 });

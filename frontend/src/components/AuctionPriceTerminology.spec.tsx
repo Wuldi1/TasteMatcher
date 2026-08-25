@@ -14,6 +14,7 @@ jest.mock("../utils/api", () => ({
     getArtwork: jest.fn(),
     getDomainById: jest.fn(),
     getUser: jest.fn(),
+    createProposal: jest.fn(),
     replaceArtworkImage: jest.fn(),
     updateArtwork: jest.fn(),
   },
@@ -115,5 +116,62 @@ describe("auction price terminology", () => {
     expect(
       screen.getByText("High price must be greater than or equal to low price"),
     ).toBeInTheDocument();
+  });
+
+  it("saves viewing-room metadata with proposal drafts", async () => {
+    const item: ProposalItem = {
+      artworkId: artwork.id,
+      comments: [],
+      status: "pending",
+      askedPrice: 200,
+    };
+    const viewingRoom = {
+      title: "Works selected for Avery",
+      introNote: "A focused group based on recent likes.",
+      priceVisibility: "show",
+    };
+    jest.mocked(apiClient.getArtwork).mockResolvedValue(artwork);
+    jest.mocked(apiClient.getDomainById).mockResolvedValue({
+      id: "domain-1",
+      name: "Gallery",
+    } as never);
+    jest.mocked(apiClient.getUser).mockResolvedValue({} as never);
+    jest.mocked(apiClient.createProposal).mockResolvedValue({
+      id: "proposal-1",
+      type: "proposal",
+      domainId: "domain-1",
+      userId: "customer-1",
+      items: [item],
+      generalComments: [],
+      metadata: { viewingRoom },
+      status: "draft",
+      createdAt: Date.now(),
+    } as never);
+    const user = userEvent.setup();
+
+    render(
+      <ViewerPreferencesProvider>
+        <SaleProposal
+          domainId="domain-1"
+          userId="customer-1"
+          userName="Customer"
+          draftItems={[item]}
+          proposalMetadata={{ viewingRoom }}
+        />
+      </ViewerPreferencesProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save Draft" }));
+    await user.click(screen.getByRole("button", { name: "Create Draft" }));
+
+    await waitFor(() => {
+      expect(apiClient.createProposal).toHaveBeenCalledWith(
+        "domain-1",
+        expect.objectContaining({
+          metadata: { viewingRoom },
+          status: "draft",
+        }),
+      );
+    });
   });
 });

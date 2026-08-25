@@ -107,6 +107,7 @@ export default function SaleProposal({
   proposalId,
   onProposalSave,
   onProposalDelete,
+  proposalMetadata,
 }: {
   dealerEmail?: string;
   domainId: string;
@@ -117,6 +118,7 @@ export default function SaleProposal({
   proposalId?: string;
   onProposalSave?: (proposal: Proposal) => void;
   onProposalDelete?: () => void;
+  proposalMetadata?: Proposal["metadata"];
 }) {
   const { currency, dimensionUnit } = useViewerPreferences();
   // Use the passed draftItems as the source of truth; keep local copy for editing convenience
@@ -462,6 +464,7 @@ export default function SaleProposal({
           askedMaxPrice: item.askedMaxPrice,
         })) as any,
         generalComments: updatedGeneralComments,
+        metadata: proposalMetadata,
         status: saveMode === "publish" ? "submitted" : "draft",
       };
 

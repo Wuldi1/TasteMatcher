@@ -1,0 +1,152 @@
+{
+  "version": "Notebook/1.0",
+  "isLocked": false,
+  "fallbackResourceIds": [
+    "/subscriptions/e105e38a-7820-4c7e-b1da-de05227d6355/resourceGroups/tastematcher-prd-rg/providers/Microsoft.OperationalInsights/workspaces/tastematcher-prd-logs"
+  ],
+  "items": [
+    {
+      "type": 1,
+      "name": "title",
+      "content": {
+        "json": "# TasteMatcher Production\nPrivacy-safe product activity plus API and Function observability. Data is retained for 30 days with a 0.25 GB/day ingestion cap. Product panels contain event types, counts, roles, sources, and statuses only—never emails, names, titles, comments, or record IDs.",
+        "style": "h1"
+      }
+    },
+    {
+      "type": 3,
+      "name": "activity-summary",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL\n| where ContainerAppName_s == 'tastematcher-prd-api-ca' and TimeGenerated > ago(24h)\n| extend activity = parse_json(extract(@'(\\{.*\\})', 1, Log_s))\n| where tostring(activity.event) == 'product_activity'\n| extend eventName = tostring(activity.eventName), eventCount = tolong(activity.count)\n| summarize Events = count(), Total = sum(coalesce(eventCount, 1)) by eventName\n| order by Total desc",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "activity-timeline",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL\n| where ContainerAppName_s == 'tastematcher-prd-api-ca' and TimeGenerated > ago(24h)\n| extend activity = parse_json(extract(@'(\\{.*\\})', 1, Log_s))\n| where tostring(activity.event) == 'product_activity'\n| summarize Events = count() by bin(TimeGenerated, 1h), eventName = tostring(activity.eventName)\n| order by TimeGenerated asc",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "name": "proposal-lifecycle",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL\n| where ContainerAppName_s == 'tastematcher-prd-api-ca' and TimeGenerated > ago(24h)\n| extend activity = parse_json(extract(@'(\\{.*\\})', 1, Log_s))\n| where tostring(activity.event) == 'product_activity' and tostring(activity.eventName) in ('proposal.created', 'proposal.status_changed', 'proposal.comment_added')\n| project TimeGenerated, eventName = tostring(activity.eventName), previousStatus = tostring(activity.previousProposalStatus), status = tostring(activity.proposalStatus), actorRole = tostring(activity.actorRole)\n| order by TimeGenerated desc",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "artwork-and-auction-ingestion",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL\n| where ContainerAppName_s == 'tastematcher-prd-api-ca' and TimeGenerated > ago(24h)\n| extend activity = parse_json(extract(@'(\\{.*\\})', 1, Log_s))\n| where tostring(activity.event) == 'product_activity' and tostring(activity.eventName) in ('artwork.created', 'auction.import_completed')\n| project TimeGenerated, eventName = tostring(activity.eventName), source = tostring(activity.source), provider = tostring(activity.provider), created = tolong(activity.count), skipped = tolong(activity.skippedCount), failed = tolong(activity.failedCount)\n| order by TimeGenerated desc",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "recent-product-activity",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL\n| where ContainerAppName_s == 'tastematcher-prd-api-ca' and TimeGenerated > ago(24h)\n| extend activity = parse_json(extract(@'(\\{.*\\})', 1, Log_s))\n| where tostring(activity.event) == 'product_activity'\n| project TimeGenerated, eventName = tostring(activity.eventName), actorRole = tostring(activity.actorRole), source = tostring(activity.source), provider = tostring(activity.provider), count = tolong(activity.count)\n| order by TimeGenerated desc\n| take 100",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "api-logs",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL\n| where ContainerAppName_s == 'tastematcher-prd-api-ca'\n| where TimeGenerated > ago(24h)\n| project TimeGenerated, Log_s\n| order by TimeGenerated desc\n| take 100",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "api-errors",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL\n| where ContainerAppName_s == 'tastematcher-prd-api-ca'\n| where TimeGenerated > ago(24h)\n| where Log_s has_any ('error', 'exception', 'fatal')\n| project TimeGenerated, Log_s\n| order by TimeGenerated desc\n| take 100",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "function-traces",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppTraces\n| where TimeGenerated > ago(24h)\n| project TimeGenerated, SeverityLevel, Message\n| order by TimeGenerated desc\n| take 100",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "ingestion",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Usage\n| where TimeGenerated > ago(24h)\n| summarize IngestedGB = round(sum(Quantity) / 1024, 4) by bin(TimeGenerated, 1h), DataType\n| order by TimeGenerated asc",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      }
+    }
+  ]
+}

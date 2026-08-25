@@ -18,7 +18,13 @@ import {
 } from "@tastematcher/common";
 import {
   Activity,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  CheckCircle,
   Database,
+  Eye,
   FileText,
   Layers,
   Mail,
@@ -26,6 +32,8 @@ import {
   Paperclip,
   Send,
   Shield,
+  Sparkles,
+  Trash2,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -45,8 +53,46 @@ import { apiClient } from "../utils/api";
 import { AISuggestionsPage } from "./AISuggestions/AISuggestionsPage";
 
 type UserItem = { id: string; name?: string; email?: string };
+type ProposalWizardStep =
+  | "customer"
+  | "works"
+  | "curate"
+  | "presentation"
+  | "review";
+type ProposalWizardSource = "ai" | "catalog";
+type ViewingRoomPriceVisibility = "show" | "hide" | "per_item";
+type ViewingRoomMetadata = {
+  title: string;
+  introNote: string;
+  expiresAt: string;
+  priceVisibility: ViewingRoomPriceVisibility;
+};
+type ExtendedProposalItem = ProposalItem & {
+  title?: string;
+  filename?: string;
+  taggedAt?: number;
+};
+
 const compareByLabel = (left: string, right: string) =>
   left.localeCompare(right, undefined, { sensitivity: "base", numeric: true });
+
+const PROPOSAL_WIZARD_STEPS: Array<{
+  id: ProposalWizardStep;
+  label: string;
+}> = [
+  { id: "customer", label: "Customer" },
+  { id: "works", label: "Select Works" },
+  { id: "curate", label: "Curate" },
+  { id: "presentation", label: "Presentation" },
+  { id: "review", label: "Review & Share" },
+];
+
+const DEFAULT_VIEWING_ROOM_METADATA: ViewingRoomMetadata = {
+  title: "",
+  introNote: "",
+  expiresAt: "",
+  priceVisibility: "show",
+};
 
 // Helper component for image slideshow
 const ImageSlideshow = ({
@@ -156,6 +202,13 @@ export default function SalesPage() {
   // New: proposal draft state
   const [proposalItem, setProposalItem] = useState<ProposalItem[]>([]);
   const [proposalDetails, setProposalDetails] = useState<Proposal | null>(null); // Store proposal metadata
+  const [isProposalWizardOpen, setIsProposalWizardOpen] = useState(false);
+  const [proposalWizardStep, setProposalWizardStep] =
+    useState<ProposalWizardStep>("customer");
+  const [proposalWizardSource, setProposalWizardSource] =
+    useState<ProposalWizardSource>("ai");
+  const [viewingRoomMetadata, setViewingRoomMetadata] =
+    useState<ViewingRoomMetadata>(DEFAULT_VIEWING_ROOM_METADATA);
   const queryDomainId = searchParams.get("domainId") || undefined;
   const queryUserId = searchParams.get("userId") || undefined;
 
@@ -203,11 +256,120 @@ export default function SalesPage() {
     [isGlobalAdmin, searchParams, setSearchParams],
   );
 
+  const proposalMetadataPayload = useMemo<Proposal["metadata"]>(() => {
+    const existing = proposalDetails?.metadata ?? {};
+    return {
+      ...existing,
+      viewingRoom: {
+        title: viewingRoomMetadata.title.trim(),
+        introNote: viewingRoomMetadata.introNote.trim(),
+        expiresAt: viewingRoomMetadata.expiresAt
+          ? new Date(viewingRoomMetadata.expiresAt).getTime()
+          : undefined,
+        priceVisibility: viewingRoomMetadata.priceVisibility,
+      },
+    };
+  }, [proposalDetails?.metadata, viewingRoomMetadata]);
+
+  const selectedCustomerLabel = useMemo(() => {
+    const selected = userOptions.find(
+      (option) => option.value === selectedUserId,
+    );
+    return selected?.label ?? userDetails?.name ?? userDetails?.email ?? "";
+  }, [selectedUserId, userDetails?.email, userDetails?.name, userOptions]);
+
+  const currentWizardStepIndex = PROPOSAL_WIZARD_STEPS.findIndex(
+    (step) => step.id === proposalWizardStep,
+  );
+
+  const canAdvanceProposalWizard = useMemo(() => {
+    if (proposalWizardStep === "customer") {
+      return Boolean(effectiveDomainId && selectedUserId);
+    }
+    if (proposalWizardStep === "works" || proposalWizardStep === "curate") {
+      return proposalItem.length > 0;
+    }
+    if (proposalWizardStep === "presentation") {
+      return viewingRoomMetadata.title.trim().length > 0;
+    }
+    return true;
+  }, [
+    effectiveDomainId,
+    proposalItem.length,
+    proposalWizardStep,
+    selectedUserId,
+    viewingRoomMetadata.title,
+  ]);
+
+  const startProposalWizard = () => {
+    setProposalWizardStep(selectedUserId ? "works" : "customer");
+    setIsProposalWizardOpen(true);
+  };
+
+  const closeProposalWizard = () => {
+    setIsProposalWizardOpen(false);
+  };
+
+  const goToNextProposalWizardStep = () => {
+    if (!canAdvanceProposalWizard) return;
+    const nextStep = PROPOSAL_WIZARD_STEPS[currentWizardStepIndex + 1];
+    if (nextStep) {
+      setProposalWizardStep(nextStep.id);
+    }
+  };
+
+  const goToPreviousProposalWizardStep = () => {
+    const previousStep = PROPOSAL_WIZARD_STEPS[currentWizardStepIndex - 1];
+    if (previousStep) {
+      setProposalWizardStep(previousStep.id);
+    }
+  };
+
+  const updateViewingRoomMetadata = <Key extends keyof ViewingRoomMetadata>(
+    key: Key,
+    value: ViewingRoomMetadata[Key],
+  ) => {
+    setViewingRoomMetadata((current) => ({ ...current, [key]: value }));
+  };
+
+  const getProposalItemTitle = (item: ProposalItem) =>
+    (item as ExtendedProposalItem).title ?? item.artworkId;
+
+  const getProposalItemImage = (item: ProposalItem) =>
+    (item as ExtendedProposalItem).filename;
+
+  const removeProposalItem = (artworkId: string) => {
+    setProposalItem((currentDraft) =>
+      currentDraft.filter((item) => item.artworkId !== artworkId),
+    );
+  };
+
+  const moveProposalItem = (artworkId: string, direction: -1 | 1) => {
+    setProposalItem((currentDraft) => {
+      const currentIndex = currentDraft.findIndex(
+        (item) => item.artworkId === artworkId,
+      );
+      const nextIndex = currentIndex + direction;
+      if (
+        currentIndex < 0 ||
+        nextIndex < 0 ||
+        nextIndex >= currentDraft.length
+      ) {
+        return currentDraft;
+      }
+      const nextDraft = [...currentDraft];
+      const [item] = nextDraft.splice(currentIndex, 1);
+      nextDraft.splice(nextIndex, 0, item);
+      return nextDraft;
+    });
+  };
+
   // Load the correct proposal for the selected user
   useEffect(() => {
     if (!effectiveDomainId || !selectedUserId) {
       setProposalDetails(null);
       setProposalItem([]);
+      setViewingRoomMetadata(DEFAULT_VIEWING_ROOM_METADATA);
       return;
     }
 
@@ -222,6 +384,22 @@ export default function SalesPage() {
 
           if (proposal) {
             setProposalDetails(proposal);
+            const viewingRoom = proposal.metadata?.viewingRoom as
+              | Partial<{
+                  title: string;
+                  introNote: string;
+                  expiresAt: number;
+                  priceVisibility: ViewingRoomPriceVisibility;
+                }>
+              | undefined;
+            setViewingRoomMetadata({
+              title: viewingRoom?.title ?? "",
+              introNote: viewingRoom?.introNote ?? "",
+              expiresAt: viewingRoom?.expiresAt
+                ? new Date(viewingRoom.expiresAt).toISOString().slice(0, 10)
+                : "",
+              priceVisibility: viewingRoom?.priceVisibility ?? "show",
+            });
             setProposalItem(
               proposal.items.map((item) => ({
                 artworkId: item.artworkId,
@@ -234,15 +412,18 @@ export default function SalesPage() {
           } else {
             setProposalDetails(null);
             setProposalItem([]);
+            setViewingRoomMetadata(DEFAULT_VIEWING_ROOM_METADATA);
           }
         } else {
           setProposalDetails(null);
           setProposalItem([]);
+          setViewingRoomMetadata(DEFAULT_VIEWING_ROOM_METADATA);
         }
       } catch (err) {
         console.error("Failed to load proposals", err);
         setProposalDetails(null);
         setProposalItem([]);
+        setViewingRoomMetadata(DEFAULT_VIEWING_ROOM_METADATA);
       }
     })();
   }, [effectiveDomainId, selectedUserId]);
@@ -638,11 +819,529 @@ export default function SalesPage() {
         </div>
       )}
 
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Sales Management</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Create proposals, browse catalog, and view AI suggestions.
-        </p>
+      {isProposalWizardOpen && (
+        <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-gray-950/70 p-3 backdrop-blur-sm sm:p-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="proposal-wizard-title"
+            className="my-2 flex w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:my-6"
+          >
+            <div className="border-b border-gray-200 bg-white px-5 py-4 sm:px-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2
+                    id="proposal-wizard-title"
+                    className="text-xl font-bold text-gray-900"
+                  >
+                    Proposal Wizard
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Build a private viewing room in a guided sales flow.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeProposalWizard}
+                  className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                  aria-label="Close proposal wizard"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <ol className="mt-5 grid grid-cols-2 gap-2 md:grid-cols-5">
+                {PROPOSAL_WIZARD_STEPS.map((step, index) => {
+                  const isActive = step.id === proposalWizardStep;
+                  const isComplete = index < currentWizardStepIndex;
+                  return (
+                    <li key={step.id}>
+                      <button
+                        type="button"
+                        onClick={() => setProposalWizardStep(step.id)}
+                        className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition-colors ${
+                          isActive
+                            ? "border-blue-600 bg-blue-50 text-blue-700"
+                            : isComplete
+                              ? "border-green-200 bg-green-50 text-green-700"
+                              : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${
+                            isActive
+                              ? "bg-blue-600 text-white"
+                              : isComplete
+                                ? "bg-green-600 text-white"
+                                : "bg-gray-100 text-gray-500"
+                          }`}
+                        >
+                          {isComplete ? (
+                            <CheckCircle className="h-3.5 w-3.5" />
+                          ) : (
+                            index + 1
+                          )}
+                        </span>
+                        <span className="truncate">{step.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+
+            <div className="max-h-[calc(100dvh-15rem)] flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+              {proposalWizardStep === "customer" && (
+                <div className="mx-auto max-w-3xl space-y-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">
+                      Choose the collector
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      The proposal will use this customer&apos;s taste profile,
+                      feedback, and existing draft.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {isGlobalAdmin && (
+                      <div>
+                        <label
+                          htmlFor="wizard-sales-domain"
+                          className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-500"
+                        >
+                          Domain
+                        </label>
+                        <SearchableSelect
+                          id="wizard-sales-domain"
+                          ariaLabel="Select proposal domain"
+                          value={selectedDomainId}
+                          onChange={setSelectedDomainId}
+                          options={domainOptions}
+                          placeholder={
+                            domainsLoading ? "Loading..." : "Select a domain..."
+                          }
+                          disabled={domainsLoading}
+                          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 leading-tight text-gray-900 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label
+                        htmlFor="wizard-sales-user"
+                        className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-500"
+                      >
+                        Customer
+                      </label>
+                      <SearchableSelect
+                        id="wizard-sales-user"
+                        ariaLabel="Select proposal customer"
+                        disabled={selectedDomainId === undefined}
+                        value={selectedUserId}
+                        onChange={setSelectedUserId}
+                        options={userOptions}
+                        placeholder="Select a customer..."
+                        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 leading-tight text-gray-900 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </div>
+                  </div>
+
+                  {selectedUserId && userDetails && (
+                    <div className="grid grid-cols-1 gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-4">
+                      <div>
+                        <div className="text-xs font-semibold uppercase text-gray-500">
+                          Swipes
+                        </div>
+                        <div className="text-lg font-bold text-gray-900">
+                          {totalSwiped}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold uppercase text-gray-500">
+                          Like Rate
+                        </div>
+                        <div className="text-lg font-bold text-gray-900">
+                          {formatPercent(likeRate)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold uppercase text-gray-500">
+                          Taste Vector
+                        </div>
+                        <div className="text-lg font-bold text-gray-900">
+                          {preferenceVectorReady ? "Ready" : "Not Ready"}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold uppercase text-gray-500">
+                          Feedback
+                        </div>
+                        <div className="text-lg font-bold text-gray-900">
+                          {feedbackCount}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {proposalWizardStep === "works" && (
+                <div className="space-y-5">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">
+                        Select works
+                      </h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Add artworks from AI Suggestions or the full catalog.
+                        Selected works are carried into the proposal draft.
+                      </p>
+                    </div>
+                    <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
+                      {(["ai", "catalog"] as const).map((source) => (
+                        <button
+                          key={source}
+                          type="button"
+                          onClick={() => setProposalWizardSource(source)}
+                          className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                            proposalWizardSource === source
+                              ? "bg-white text-blue-700 shadow-sm"
+                              : "text-gray-600 hover:text-gray-900"
+                          }`}
+                        >
+                          {source === "ai" ? "AI Suggestions" : "Catalog"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-900">
+                    {proposalItem.length} works selected for{" "}
+                    {selectedCustomerLabel || "this customer"}.
+                  </div>
+
+                  {proposalWizardSource === "ai" ? (
+                    <AISuggestionsPage
+                      domainId={effectiveDomainId}
+                      userId={selectedUserId}
+                      proposalItems={proposalArtworkIds}
+                      onAddToProposal={handleProposalToggle}
+                      readonlyThumbs={true}
+                      showOwnerRatedFilter={true}
+                    />
+                  ) : (
+                    <CatalogForUser
+                      domainId={effectiveDomainId ?? domainId}
+                      userId={selectedUserId ?? ""}
+                      preferenceFilter={
+                        preferenceFilter === "all"
+                          ? undefined
+                          : preferenceFilter
+                      }
+                      onAddToDraft={handleProposalToggle}
+                      showPreferenceButtons={false}
+                      ownersExperience={true}
+                      isInProposal={(artworkId) =>
+                        proposalItem.some(
+                          (draftItem) => draftItem.artworkId === artworkId,
+                        )
+                      }
+                    />
+                  )}
+                </div>
+              )}
+
+              {proposalWizardStep === "curate" && (
+                <div className="mx-auto max-w-4xl space-y-5">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">
+                      Curate the order
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Put the strongest works first and remove anything that
+                      weakens the room.
+                    </p>
+                  </div>
+
+                  {proposalItem.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-12 text-center text-gray-500">
+                      Add at least one artwork before curating.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {proposalItem.map((item, index) => (
+                        <div
+                          key={item.artworkId}
+                          className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-3 shadow-sm"
+                        >
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100 text-sm font-semibold text-gray-500">
+                            {getProposalItemImage(item) ? (
+                              <img
+                                src={getProposalItemImage(item)}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              index + 1
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-semibold text-gray-900">
+                              {getProposalItemTitle(item)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Position {index + 1}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                moveProposalItem(item.artworkId, -1)
+                              }
+                              disabled={index === 0}
+                              className="rounded-lg border border-gray-200 p-2 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                              aria-label="Move artwork up"
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                moveProposalItem(item.artworkId, 1)
+                              }
+                              disabled={index === proposalItem.length - 1}
+                              className="rounded-lg border border-gray-200 p-2 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                              aria-label="Move artwork down"
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeProposalItem(item.artworkId)}
+                              className="rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50"
+                              aria-label="Remove artwork"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {proposalWizardStep === "presentation" && (
+                <div className="mx-auto max-w-3xl space-y-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">
+                      Shape the viewing room
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      These details travel with the proposal and will power the
+                      private viewing-room presentation.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label
+                        htmlFor="viewing-room-title"
+                        className="mb-1.5 block text-sm font-semibold text-gray-700"
+                      >
+                        Proposal title
+                      </label>
+                      <input
+                        id="viewing-room-title"
+                        type="text"
+                        value={viewingRoomMetadata.title}
+                        onChange={(event) =>
+                          updateViewingRoomMetadata(
+                            "title",
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Works selected for you"
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="viewing-room-intro"
+                        className="mb-1.5 block text-sm font-semibold text-gray-700"
+                      >
+                        Intro note
+                      </label>
+                      <textarea
+                        id="viewing-room-intro"
+                        value={viewingRoomMetadata.introNote}
+                        onChange={(event) =>
+                          updateViewingRoomMetadata(
+                            "introNote",
+                            event.target.value,
+                          )
+                        }
+                        rows={5}
+                        placeholder="A short advisor note for the collector."
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div>
+                        <label
+                          htmlFor="viewing-room-expiry"
+                          className="mb-1.5 block text-sm font-semibold text-gray-700"
+                        >
+                          Expiry date
+                        </label>
+                        <input
+                          id="viewing-room-expiry"
+                          type="date"
+                          value={viewingRoomMetadata.expiresAt}
+                          onChange={(event) =>
+                            updateViewingRoomMetadata(
+                              "expiresAt",
+                              event.target.value,
+                            )
+                          }
+                          className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="viewing-room-price-visibility"
+                          className="mb-1.5 block text-sm font-semibold text-gray-700"
+                        >
+                          Price visibility
+                        </label>
+                        <select
+                          id="viewing-room-price-visibility"
+                          value={viewingRoomMetadata.priceVisibility}
+                          onChange={(event) =>
+                            updateViewingRoomMetadata(
+                              "priceVisibility",
+                              event.target.value as ViewingRoomPriceVisibility,
+                            )
+                          }
+                          className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        >
+                          <option value="show">Show prices</option>
+                          <option value="hide">Hide prices</option>
+                          <option value="per_item">Use per-item settings</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {proposalWizardStep === "review" && selectedUserId && (
+                <div className="space-y-5">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900">
+                          Review & share
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                          Finalize prices and notes, then save as draft or
+                          publish for the collector.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                        <Eye className="h-4 w-4 text-blue-600" />
+                        {viewingRoomMetadata.title || "Untitled proposal"}
+                      </div>
+                    </div>
+                  </div>
+                  <SaleProposal
+                    domainId={effectiveDomainId ?? domainId}
+                    dealerEmail={user?.email}
+                    userId={selectedUserId}
+                    userName={
+                      userDetails?.name ?? userDetails?.email ?? "Specialist"
+                    }
+                    draftItems={proposalItem}
+                    onDraftChange={(items: ProposalItem[]) =>
+                      setProposalItem(items)
+                    }
+                    proposalId={proposalDetails?.id}
+                    proposalMetadata={proposalMetadataPayload}
+                    onProposalSave={(proposal) => {
+                      setProposalDetails(proposal);
+                      setIsProposalWizardOpen(false);
+                      setActiveTab("proposal");
+                    }}
+                    onProposalDelete={() => {
+                      setProposalDetails(null);
+                      setProposalItem([]);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-gray-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <div className="text-sm text-gray-500">
+                {proposalItem.length} selected works
+                {selectedCustomerLabel ? ` for ${selectedCustomerLabel}` : ""}
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={goToPreviousProposalWizardStep}
+                  disabled={currentWizardStepIndex <= 0}
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-40"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </button>
+                {proposalWizardStep !== "review" ? (
+                  <button
+                    type="button"
+                    onClick={goToNextProposalWizardStep}
+                    disabled={!canAdvanceProposalWizard}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={closeProposalWizard}
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                  >
+                    Continue Editing
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Sales Management
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Create proposals, browse catalog, and view AI suggestions.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={startProposalWizard}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+        >
+          <Sparkles className="h-4 w-4" />
+          Create Proposal
+        </button>
       </header>
 
       <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
@@ -1302,6 +2001,7 @@ export default function SalesPage() {
                     setProposalItem(items)
                   }
                   proposalId={proposalDetails?.id}
+                  proposalMetadata={proposalMetadataPayload}
                   onProposalSave={(proposal) => setProposalDetails(proposal)}
                   onProposalDelete={() => {
                     setProposalDetails(null);

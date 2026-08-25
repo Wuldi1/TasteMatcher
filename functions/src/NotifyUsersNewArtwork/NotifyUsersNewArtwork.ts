@@ -218,7 +218,7 @@ export async function notifyUsersNewArtwork(
 
     const usersQuery = {
       query:
-        "SELECT c.id, c.email, c.name, c.preferenceVector, c.role, c.status, c.swipeCount, c.onboardingStatus FROM c WHERE c.type = 'user' AND c.domainId = @domainId AND c.role = 'customer' AND c.status = 'active'",
+        "SELECT c.id, c.email, c.name, c.preferenceVector, c.likedPreferenceVector, c.role, c.status, c.swipeCount, c.onboardingStatus FROM c WHERE c.type = 'user' AND c.domainId = @domainId AND c.role = 'customer' AND c.status = 'active'",
       parameters: [{ name: "@domainId", value: message.domainId }],
     };
 
@@ -238,8 +238,14 @@ export async function notifyUsersNewArtwork(
         continue;
       }
 
+      const notificationVector =
+        Array.isArray(user.likedPreferenceVector) &&
+        user.likedPreferenceVector.length === 1024 &&
+        user.likedPreferenceVector.some((value) => value !== 0)
+          ? user.likedPreferenceVector
+          : user.preferenceVector;
       const similarity = cosineSimilarity(
-        normalizeVector(user.preferenceVector),
+        normalizeVector(notificationVector),
         normalizedArtworkVector,
       );
       if (!Number.isFinite(similarity) || similarity < MIN_SIMILARITY) {

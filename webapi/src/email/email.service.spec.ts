@@ -11,6 +11,7 @@
 // -----------------------------------------------------------
 import { Logger } from "@nestjs/common";
 import { EmailClient } from "@azure/communication-email";
+import type { Proposal } from "@tastematcher/common";
 import { EmailService, SendVerificationEmailPayload } from "./email.service";
 
 jest.mock("@azure/communication-email", () => {
@@ -30,6 +31,39 @@ jest.mock("@azure/communication-email", () => {
 const MockedEmailClient = EmailClient as unknown as jest.Mock;
 const getMockedBeginSend = () =>
   MockedEmailClient.mock.results[0].value.beginSend as jest.Mock;
+
+const buildProposal = (): Proposal => ({
+  id: "proposal-1",
+  type: "proposal",
+  domainId: "domain-1",
+  userId: "customer-1",
+  dealerId: "dealer-1",
+  items: [
+    {
+      artworkId: "artwork-1",
+      comments: [{ author: "Customer", text: "Can I see more?", createdAt: 1 }],
+      status: "pending",
+      askedPrice: 12000,
+    },
+    {
+      artworkId: "artwork-2",
+      comments: [],
+      status: "approved",
+      askedPrice: 18000,
+    },
+  ],
+  status: "submitted",
+  generalComments: [
+    { author: "Specialist", text: "Curated for the living room.", createdAt: 1 },
+  ],
+  createdAt: 1,
+  metadata: {
+    viewingRoom: {
+      title: "Works selected for Avery",
+      introNote: "A focused group based on recent likes.",
+    },
+  },
+});
 
 describe("EmailService", () => {
   const originalEnv = process.env;
@@ -67,9 +101,12 @@ describe("EmailService", () => {
       senderAddress: "no-reply@example.com",
       content: expect.objectContaining({
         subject: "Your TasteMatcher verification code",
+        html: expect.stringContaining("TasteMatcher"),
       }),
       recipients: { to: [{ address: payload.recipient }] },
     });
+    const sentMessage = getMockedBeginSend().mock.calls[0][0];
+    expect(sentMessage.content.html).toContain("Verification Code");
   });
 
   it("logs a warning and skips sending when configuration is missing", async () => {
@@ -123,5 +160,109 @@ describe("EmailService", () => {
     );
 
     expect(getMockedBeginSend()).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a branded invitation email with the TasteMatcher icon", async () => {
+    process.env.NODE_ENV = "prd";
+    process.env.FRONTEND_URL = "https://app.tastematcher.art";
+    process.env.AZURE_COMMUNICATION_CONNECTION_STRING =
+      "endpoint=https://unit-test/;accessKey=abc";
+    process.env.AZURE_EMAIL_SENDER = "no-reply@example.com";
+
+    const service = new EmailService();
+
+    await service.sendUserInvitation(
+      "invitee@example.com",
+      "Invitee",
+      "domain-1",
+      "customer",
+    );
+
+    expect(getMockedBeginSend()).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.objectContaining({
+          subject: "You've been invited to TasteMatcher",
+          html: expect.stringContaining(
+            "https://app.tastematcher.art/tastematcher_icon_icon_128.png",
+          ),
+          plainText: expect.stringContaining("Welcome to TasteMatcher"),
+        }),
+        recipients: { to: [{ address: "invitee@example.com" }] },
+      }),
+    );
+    const sentMessage = getMockedBeginSend().mock.calls[0][0];
+    expect(sentMessage.content.html).toContain("Join TasteMatcher");
+    expect(sentMessage.content.html).toContain("Your role");
+  });
+
+  it("sends a styled proposal notification with viewing-room details", async () => {
+    process.env.NODE_ENV = "prd";
+    process.env.FRONTEND_URL = "https://app.tastematcher.art";
+    process.env.AZURE_COMMUNICATION_CONNECTION_STRING =
+      "endpoint=https://unit-test/;accessKey=abc";
+    process.env.AZURE_EMAIL_SENDER = "no-reply@example.com";
+
+    const service = new EmailService();
+
+    await service.sendProposalNotification(
+      "collector@example.com",
+      buildProposal(),
+      "updated",
+    );
+
+    expect(getMockedBeginSend()).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.objectContaining({
+          subject: "Your art proposal has been updated",
+          html: expect.stringContaining("Works selected for Avery"),
+          plainText: expect.stringContaining("A focused group based on recent likes."),
+        }),
+        recipients: { to: [{ address: "collector@example.com" }] },
+      }),
+    );
+    const sentMessage = getMockedBeginSend().mock.calls[0][0];
+    expect(sentMessage.content.html).toContain(
+      "https://app.tastematcher.art/tastematcher_icon_icon_128.png",
+    );
+    expect(sentMessage.content.html).toContain("Review updates");
+    expect(sentMessage.content.html).toContain(
+      "https://app.tastematcher.art/buying-proposal",
+    );
+    expect(sentMessage.content.html).toContain("1 accepted");
+  });
+
+  it("sends a styled proposal digest back to the sales workspace", async () => {
+    process.env.NODE_ENV = "prd";
+    process.env.AZURE_COMMUNICATION_CONNECTION_STRING =
+      "endpoint=https://unit-test/;accessKey=abc";
+    process.env.AZURE_EMAIL_SENDER = "no-reply@example.com";
+
+    const service = new EmailService();
+
+    await service.sendProposalDigest({
+      recipients: ["dealer@example.com"],
+      proposal: buildProposal(),
+      action: "updated",
+      actorEmail: "collector@example.com",
+      actorRole: "customer",
+      portalLink:
+        "https://app.tastematcher.art/sales?domainId=domain-1&userId=customer-1",
+    });
+
+    expect(getMockedBeginSend()).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.objectContaining({
+          subject: "TasteMatcher proposal updated",
+          html: expect.stringContaining("Open the customer workspace"),
+          plainText: expect.stringContaining("collector@example.com"),
+        }),
+        recipients: { to: [{ address: "dealer@example.com" }] },
+      }),
+    );
+    const sentMessage = getMockedBeginSend().mock.calls[0][0];
+    expect(sentMessage.content.html).toContain(
+      "https://app.tastematcher.art/sales?domainId=domain-1&amp;userId=customer-1",
+    );
+    expect(sentMessage.content.html).toContain("1 artwork comments");
   });
 });

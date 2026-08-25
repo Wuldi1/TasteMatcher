@@ -1,5 +1,6 @@
 import {
   calculateUpdatedPreferenceVector,
+  calculateUpdatedDirectionalPreferenceVector,
   cosineDistanceToSimilarity,
   cosineSimilarity,
   normalizeVector,
@@ -43,6 +44,29 @@ describe("vector.utils", () => {
       learningRate: 1,
       dislikeWeight: 1,
     });
+
+    expect(updated).toEqual([1, 0]);
+  });
+
+  it("updates directional preference vectors toward images", () => {
+    const updated = calculateUpdatedDirectionalPreferenceVector(
+      [1, 0],
+      [0, 1],
+      "toward",
+      { learningRate: 1 },
+    );
+
+    expect(updated[0]).toBeCloseTo(Math.SQRT1_2);
+    expect(updated[1]).toBeCloseTo(Math.SQRT1_2);
+  });
+
+  it("updates directional preference vectors away from images", () => {
+    const updated = calculateUpdatedDirectionalPreferenceVector(
+      [1, 0],
+      [1, 0],
+      "away",
+      { learningRate: 1 },
+    );
 
     expect(updated).toEqual([1, 0]);
   });

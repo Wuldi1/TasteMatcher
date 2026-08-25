@@ -15,6 +15,7 @@ import { LoginRequestDto } from "./dto/login-request.dto";
 import { LoginVerifyDto } from "./dto/login-verify.dto";
 import { EmailService } from "../email/email.service";
 import { DomainActivityService } from "../activity/domain-activity.service";
+import { ProductActivityLoggerService } from "../activity/product-activity-logger.service";
 import { shouldUseSecureAuthCodes } from "../config/runtime-profile";
 
 const VERIFICATION_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -28,6 +29,7 @@ export class AuthService {
   constructor(
     private readonly emailService: EmailService,
     private readonly domainActivityService: DomainActivityService,
+    private readonly productActivityLogger?: ProductActivityLoggerService,
   ) {
     this.cosmosService = new CosmosService();
     this.jwtSecret = process.env.JWT_SECRET ?? "";
@@ -189,6 +191,9 @@ export class AuthService {
       activityType: "user_login",
       userId: updatedUser.id,
       userEmail: updatedUser.email,
+    });
+    this.productActivityLogger?.log("user.login_succeeded", {
+      actorRole: updatedUser.role,
     });
 
     this.logger.log(`User ${user.id} logged in successfully`);

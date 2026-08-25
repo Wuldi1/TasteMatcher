@@ -55,6 +55,9 @@ const readStoredIncludeRated = (): boolean => {
   }
 };
 
+const formatScoreComponent = (value: number | undefined): string =>
+  `${Math.round((value ?? 0) * 100)}%`;
+
 export const AISuggestionsPage = ({
   domainId,
   userId,
@@ -598,7 +601,7 @@ export const AISuggestionsPage = ({
                   </div>
 
                   {/* Info */}
-                  <div className="p-4 flex flex-col gap-1">
+                  <div className="p-4 flex flex-col gap-2">
                     <h3
                       className="font-bold text-lg text-gray-900 line-clamp-1"
                       title={item.title}
@@ -611,6 +614,48 @@ export const AISuggestionsPage = ({
                     >
                       {item.artist}
                     </p>
+                    {isDomainOwner && item.recommendationScore && (
+                      <div
+                        className="mt-2 rounded-lg border border-purple-100 bg-purple-50/70 p-3 text-xs text-purple-950"
+                        aria-label={`Recommendation reasoning for ${item.title}`}
+                      >
+                        <div className="mb-2 grid grid-cols-2 gap-x-3 gap-y-1">
+                          <div>
+                            <span className="font-semibold">Image</span>{" "}
+                            {formatScoreComponent(
+                              item.recommendationScore.imageSimilarity,
+                            )}
+                          </div>
+                          <div>
+                            <span className="font-semibold">Intent</span>{" "}
+                            {formatScoreComponent(
+                              item.recommendationScore.intentScore,
+                            )}
+                          </div>
+                          <div>
+                            <span className="font-semibold">Metadata</span>{" "}
+                            {formatScoreComponent(
+                              item.recommendationScore.metadataScore,
+                            )}
+                          </div>
+                          <div>
+                            <span className="font-semibold">Behavior</span>{" "}
+                            {formatScoreComponent(
+                              item.recommendationScore.behaviorScore,
+                            )}
+                          </div>
+                        </div>
+                        {item.recommendationScore.reasons.length > 0 && (
+                          <ul className="list-disc space-y-0.5 pl-4">
+                            {item.recommendationScore.reasons
+                              .slice(0, 3)
+                              .map((reason) => (
+                                <li key={reason}>{reason}</li>
+                              ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions Footer */}

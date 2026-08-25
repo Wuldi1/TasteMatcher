@@ -8,9 +8,10 @@ import {
 } from "./providers/automatic-upload-provider.registry";
 import { PhillipsProvider } from "./providers/phillips.provider";
 import { SafeRemoteFetcher } from "./safe-remote-fetcher";
+import { ActivityModule } from "../activity/activity.module";
 
 @Module({
-  imports: [UploadModule],
+  imports: [UploadModule, ActivityModule],
   controllers: [AutomaticUploadsController],
   providers: [
     AutomaticUploadsService,

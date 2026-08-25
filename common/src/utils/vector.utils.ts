@@ -86,3 +86,37 @@ export function calculateUpdatedPreferenceVector(
 
   return liked ? normalizeVector(imageVector) : normalizeVector(userVector);
 }
+
+/**
+ * Updates one directional preference vector.
+ * Positive updates move toward an image; negative updates move away from it.
+ */
+export function calculateUpdatedDirectionalPreferenceVector(
+  userVector: number[],
+  imageVector: number[],
+  direction: "toward" | "away",
+  options?: {
+    learningRate?: number;
+  },
+): number[] {
+  if (userVector.length !== imageVector.length) {
+    throw new Error(
+      `Vector length mismatch: ${userVector.length} !== ${imageVector.length}`,
+    );
+  }
+
+  const learningRate = options?.learningRate ?? 0.2;
+  const multiplier = direction === "toward" ? 1 : -1;
+  const nextVector = userVector.map(
+    (value, index) => value + imageVector[index] * learningRate * multiplier,
+  );
+  const normalized = normalizeVector(nextVector);
+
+  if (normalized.some((value) => value !== 0)) {
+    return normalized;
+  }
+
+  return direction === "toward"
+    ? normalizeVector(imageVector)
+    : normalizeVector(userVector);
+}

@@ -20,6 +20,7 @@ import {
 } from "./automatic-upload.validation";
 import { AutomaticUploadProviderAdapter } from "./providers/automatic-upload-provider.interface";
 import { AutomaticUploadProviderRegistry } from "./providers/automatic-upload-provider.registry";
+import { ProductActivityLoggerService } from "../activity/product-activity-logger.service";
 
 interface AutomaticUploadActor {
   id: string;
@@ -40,6 +41,7 @@ export class AutomaticUploadsService {
     private readonly fetcher: SafeRemoteFetcher,
     private readonly providerRegistry: AutomaticUploadProviderRegistry,
     private readonly uploadService: UploadService,
+    private readonly productActivityLogger?: ProductActivityLoggerService,
   ) {}
 
   async preview(
@@ -300,6 +302,12 @@ export class AutomaticUploadsService {
       failedCount: response.failed.length,
       durationMs: Date.now() - startedAt,
       ...logSource,
+    });
+    this.productActivityLogger?.log("auction.import_completed", {
+      provider: provider.provider,
+      count: response.created.length,
+      skippedCount: response.skipped.length,
+      failedCount: response.failed.length,
     });
     return response;
   }

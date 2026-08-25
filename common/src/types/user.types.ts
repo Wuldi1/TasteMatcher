@@ -192,6 +192,18 @@ export interface User {
   preferenceVector: number[];
 
   /**
+   * Positive taste vector learned from artworks the user liked.
+   * Optional for backward compatibility with older user records.
+   */
+  likedPreferenceVector?: number[];
+
+  /**
+   * Negative taste vector learned from artworks the user disliked.
+   * Optional for backward compatibility with older user records.
+   */
+  dislikedPreferenceVector?: number[];
+
+  /**
    * Timestamp of when the user was created (Unix epoch in milliseconds).
    */
   createdAt: number;

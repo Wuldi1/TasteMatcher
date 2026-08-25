@@ -12,6 +12,7 @@ import { UsersService } from "../users/users.service";
 import { AuthenticatedUser } from "../auth/types/authenticated-request.interface";
 import { DomainsService } from "../domains/domains.service";
 import { DomainActivityService } from "../activity/domain-activity.service";
+import { ProductActivityLoggerService } from "../activity/product-activity-logger.service";
 
 @Injectable()
 export class SalesService {
@@ -23,6 +24,7 @@ export class SalesService {
     private readonly usersService: UsersService,
     private readonly domainsService: DomainsService,
     private readonly domainActivityService: DomainActivityService,
+    private readonly productActivityLogger?: ProductActivityLoggerService,
   ) {
     this.cosmosService = new CosmosService();
   }
@@ -69,6 +71,9 @@ export class SalesService {
         "created",
       );
     }
+    this.productActivityLogger?.log("proposal.created", {
+      proposalStatus: String((resource as Proposal).status ?? "draft"),
+    });
 
     this.logger.log(
       `Created proposal ${resource?.id} for user ${resource?.userId}`,
@@ -192,8 +197,29 @@ export class SalesService {
       metadata: { proposalId },
     });
 
+    const savedProposal = resource as Proposal;
+    if (savedProposal.status !== existing.status) {
+      this.productActivityLogger?.log("proposal.status_changed", {
+        previousProposalStatus: String(existing.status ?? "draft"),
+        proposalStatus: String(savedProposal.status ?? "draft"),
+      });
+    }
+    if (this.countComments(savedProposal) > this.countComments(existing)) {
+      this.productActivityLogger?.log("proposal.comment_added");
+    }
+
     this.logger.log(`Updated proposal ${proposalId}`);
     return resource as Proposal;
+  }
+
+  private countComments(proposal: Proposal): number {
+    return (
+      (proposal.generalComments?.length ?? 0) +
+      (proposal.items ?? []).reduce(
+        (total, item) => total + (item.comments?.length ?? 0),
+        0,
+      )
+    );
   }
 
   /**

@@ -10,8 +10,9 @@ import {
   ArtworkFeedback,
   ArtworkPreference,
   ArtworkStats,
+  buildRecommendationBehaviorProfile,
+  calculateUpdatedDirectionalPreferenceVector,
   calculateUpdatedPreferenceVector,
-  cosineSimilarity,
   CosmosService,
   executeCosmosQuery,
   generatePreferenceId,
@@ -24,9 +25,11 @@ import {
   Proposal,
   QueryParams,
   Role,
+  scoreRecommendationCandidate,
   UntastedArtworksResponse,
 } from "@tastematcher/common";
 import { DomainActivityService } from "../activity/domain-activity.service";
+import { ProductActivityLoggerService } from "../activity/product-activity-logger.service";
 import { SavePreferenceDto } from "./dto/save-preference.dto";
 import { UpdateArtworkDto } from "./dto/update-artwork.dto";
 
@@ -35,15 +38,20 @@ export class ArtworksService {
   private readonly logger = new Logger(ArtworksService.name);
   private readonly cosmosService: CosmosService;
   private readonly domainActivityService: DomainActivityService;
+  private readonly productActivityLogger?: ProductActivityLoggerService;
   private readonly userCache = new Map<
     string,
     { name?: string; email?: string; cachedAt: number }
   >();
   private readonly userCacheTtlMs = 10 * 60 * 1000;
 
-  constructor(domainActivityService: DomainActivityService) {
+  constructor(
+    domainActivityService: DomainActivityService,
+    productActivityLogger?: ProductActivityLoggerService,
+  ) {
     this.cosmosService = new CosmosService();
     this.domainActivityService = domainActivityService;
+    this.productActivityLogger = productActivityLogger;
   }
 
   /**
@@ -696,6 +704,20 @@ export class ArtworksService {
       }
       const userPartitionKey = userRecord.domainId ?? domainId;
       const userPreferenceVector = userRecord.preferenceVector;
+      const likedPreferenceVector = Array.isArray(
+        userRecord.likedPreferenceVector,
+      )
+        ? userRecord.likedPreferenceVector
+        : Array.isArray(userPreferenceVector)
+          ? userPreferenceVector
+          : undefined;
+      const dislikedPreferenceVector = Array.isArray(
+        userRecord.dislikedPreferenceVector,
+      )
+        ? userRecord.dislikedPreferenceVector
+        : Array.isArray(userPreferenceVector)
+          ? new Array(userPreferenceVector.length).fill(0)
+          : undefined;
       const existingLiked =
         typeof existingPreference?.liked === "boolean"
           ? existingPreference.liked
@@ -780,6 +802,11 @@ export class ArtworksService {
           userEmail: userRecord.email,
           metadata: { artworkId },
         });
+        this.productActivityLogger?.log(
+          incomingLiked
+            ? "artwork.preference_liked"
+            : "artwork.preference_unliked",
+        );
       }
 
       if (commentAddedOrUpdated) {
@@ -790,9 +817,9 @@ export class ArtworksService {
           userEmail: userRecord.email,
           metadata: { artworkId },
         });
+        this.productActivityLogger?.log("artwork.comment_added");
       }
 
-      // if preferenceVector exists and is valid, update it using the new preference
       if (
         typeof incomingLiked === "boolean" &&
         (isNewSwipe || likedChanged) &&
@@ -801,9 +828,6 @@ export class ArtworksService {
         imageVector &&
         imageVector.length === 1024
       ) {
-        // Here you would implement the logic to update the user's preference vector
-        // based on the new preference. This could involve calling an external service
-        // or running a local algorithm to adjust the vector.
         const baseLearningRate = 0.2;
         const effectiveLearningRate =
           baseLearningRate / Math.sqrt(1 + swipeCountBefore);
@@ -813,9 +837,35 @@ export class ArtworksService {
           incomingLiked,
           { learningRate: effectiveLearningRate, dislikeWeight: 0.6 },
         );
+        const updatedLikedPreferenceVector =
+          likedPreferenceVector &&
+          likedPreferenceVector.length === imageVector.length
+            ? calculateUpdatedDirectionalPreferenceVector(
+                likedPreferenceVector,
+                imageVector,
+                incomingLiked ? "toward" : "away",
+                { learningRate: effectiveLearningRate },
+              )
+            : undefined;
+        const updatedDislikedPreferenceVector =
+          dislikedPreferenceVector &&
+          dislikedPreferenceVector.length === imageVector.length
+            ? calculateUpdatedDirectionalPreferenceVector(
+                dislikedPreferenceVector,
+                imageVector,
+                incomingLiked ? "away" : "toward",
+                { learningRate: effectiveLearningRate },
+              )
+            : undefined;
 
         // store updated preference vector back to user record
         userRecord.preferenceVector = updatedPreferenceVector;
+        if (updatedLikedPreferenceVector) {
+          userRecord.likedPreferenceVector = updatedLikedPreferenceVector;
+        }
+        if (updatedDislikedPreferenceVector) {
+          userRecord.dislikedPreferenceVector = updatedDislikedPreferenceVector;
+        }
         userRecordUpdated = true;
       }
 
@@ -895,6 +945,16 @@ export class ArtworksService {
       const preferenceVector = Array.isArray(userRecord.preferenceVector)
         ? userRecord.preferenceVector
         : undefined;
+      const likedPreferenceVector = Array.isArray(
+        userRecord.likedPreferenceVector,
+      )
+        ? userRecord.likedPreferenceVector
+        : undefined;
+      const dislikedPreferenceVector = Array.isArray(
+        userRecord.dislikedPreferenceVector,
+      )
+        ? userRecord.dislikedPreferenceVector
+        : undefined;
 
       this.logger.debug({
         msg: "Recommendation user state",
@@ -904,6 +964,12 @@ export class ArtworksService {
         onboardingStatus: userRecord.onboardingStatus,
         preferenceVectorLength: Array.isArray(preferenceVector)
           ? preferenceVector.length
+          : 0,
+        likedPreferenceVectorLength: Array.isArray(likedPreferenceVector)
+          ? likedPreferenceVector.length
+          : 0,
+        dislikedPreferenceVectorLength: Array.isArray(dislikedPreferenceVector)
+          ? dislikedPreferenceVector.length
           : 0,
       });
 
@@ -928,8 +994,20 @@ export class ArtworksService {
       const preferencesContainer =
         await this.cosmosService.getArtworkPreferencesContainer();
       const recommendedArtworks: Artwork[] = [];
+      const canViewRecommendationScore =
+        requester.role === "dealer" ||
+        requester.role === "domain_owner" ||
+        requester.role === "global_admin";
 
       const normalizedPreference = normalizeVector(preferenceVector);
+      const normalizedLikedPreference =
+        likedPreferenceVector && likedPreferenceVector.length === 1024
+          ? normalizeVector(likedPreferenceVector)
+          : undefined;
+      const normalizedDislikedPreference =
+        dislikedPreferenceVector && dislikedPreferenceVector.length === 1024
+          ? normalizeVector(dislikedPreferenceVector)
+          : undefined;
 
       // Fetch preferences for the user
       const preferencesQuery = {
@@ -968,10 +1046,12 @@ export class ArtworksService {
 
       type CandidateScore = {
         artworkId: string;
+        vectorRank: number;
       };
 
       const requestedCount = offset + limit;
-      const pageSize = Math.max(requestedCount + 20, 50);
+      const rerankPoolSize = Math.max(requestedCount + 50, 100);
+      const pageSize = Math.max(rerankPoolSize + 20, 100);
       const visibleCandidates: CandidateScore[] = [];
       const visibleCandidateIds = new Set<string>();
       let scannedCount = 0;
@@ -1045,7 +1125,7 @@ export class ArtworksService {
 
         while (
           candidateIterator.hasMoreResults() &&
-          visibleCandidates.length < requestedCount
+          visibleCandidates.length < rerankPoolSize
         ) {
           const { resources } = await candidateIterator.fetchNext();
           this.logger.debug({
@@ -1087,9 +1167,10 @@ export class ArtworksService {
             visibleCandidateIds.add(candidateArtwork.id);
             visibleCandidates.push({
               artworkId: candidateArtwork.id,
+              vectorRank: visibleCandidates.length,
             });
 
-            if (visibleCandidates.length >= requestedCount) {
+            if (visibleCandidates.length >= rerankPoolSize) {
               break;
             }
           }
@@ -1110,8 +1191,7 @@ export class ArtworksService {
         candidateIds: visibleCandidates.map((candidate) => candidate.artworkId),
       });
 
-      const pageCandidates = visibleCandidates.slice(offset, offset + limit);
-      if (pageCandidates.length === 0) {
+      if (visibleCandidates.length === 0) {
         this.logger.warn({
           msg: "Recommendation page candidates empty",
           domainId,
@@ -1123,29 +1203,118 @@ export class ArtworksService {
         return [];
       }
 
-      const pageIds = pageCandidates.map((candidate) => candidate.artworkId);
-      const pageQuery = {
+      const candidateIds = visibleCandidates.map(
+        (candidate) => candidate.artworkId,
+      );
+      const candidateResourceQuery = {
         query:
           "SELECT * FROM c WHERE c.domainId = @domainId AND ARRAY_CONTAINS(@ids, c.id)",
         parameters: [
           { name: "@domainId", value: domainId },
-          { name: "@ids", value: pageIds },
+          { name: "@ids", value: candidateIds },
         ],
       };
-      const { resources: pageResources } = await artworksContainer.items
-        .query(pageQuery, { partitionKey: domainId })
+      const { resources: candidateResources } = await artworksContainer.items
+        .query(candidateResourceQuery, { partitionKey: domainId })
         .fetchAll();
       this.logger.debug({
-        msg: "Recommendation page resource fetch",
+        msg: "Recommendation candidate resource fetch",
         domainId,
         targetUserId: resolvedUserId,
-        pageIds,
-        fetchedIds: (pageResources ?? []).map((artwork) => artwork.id),
+        candidateIds,
+        fetchedIds: (candidateResources ?? []).map((artwork) => artwork.id),
       });
       const artworkById = new Map<string, Artwork>();
-      (pageResources ?? []).forEach((artwork) => {
+      (candidateResources ?? []).forEach((artwork) => {
         artworkById.set(artwork.id, artwork);
       });
+
+      const preferenceSignalArtworkIds = Array.from(reactedArtworkIds)
+        .filter((artworkId) => !artworkById.has(artworkId))
+        .slice(0, 200);
+      const preferenceSignalArtworks: Artwork[] =
+        preferenceSignalArtworkIds.length > 0
+          ? (
+              await artworksContainer.items
+                .query(
+                  {
+                    query:
+                      "SELECT * FROM c WHERE c.domainId = @domainId AND ARRAY_CONTAINS(@ids, c.id)",
+                    parameters: [
+                      { name: "@domainId", value: domainId },
+                      { name: "@ids", value: preferenceSignalArtworkIds },
+                    ],
+                  },
+                  { partitionKey: domainId },
+                )
+                .fetchAll()
+            ).resources
+          : [];
+      const behaviorProfile = buildRecommendationBehaviorProfile(preferences, [
+        ...(candidateResources ?? []),
+        ...preferenceSignalArtworks,
+      ]);
+
+      const rankedCandidates = visibleCandidates
+        .map((candidate) => {
+          const artwork = artworkById.get(candidate.artworkId);
+          if (!artwork) {
+            return undefined;
+          }
+          const score = scoreRecommendationCandidate({
+            artwork,
+            normalizedPreferenceVector: normalizedPreference,
+            normalizedLikedPreferenceVector: normalizedLikedPreference,
+            normalizedDislikedPreferenceVector: normalizedDislikedPreference,
+            user: userRecord,
+            behaviorProfile,
+          });
+          return { ...candidate, score };
+        })
+        .filter(
+          (
+            candidate,
+          ): candidate is CandidateScore & {
+            score: ReturnType<typeof scoreRecommendationCandidate>;
+          } => candidate !== undefined,
+        )
+        .sort((left, right) => {
+          const scoreDelta = right.score.finalScore - left.score.finalScore;
+          if (Math.abs(scoreDelta) > 1e-9) {
+            return scoreDelta;
+          }
+          return left.vectorRank - right.vectorRank;
+        });
+
+      this.logger.debug({
+        msg: "Recommendation hybrid rerank complete",
+        domainId,
+        targetUserId: resolvedUserId,
+        topScores: rankedCandidates
+          .slice(0, Math.min(10, rankedCandidates.length))
+          .map((candidate) => ({
+            artworkId: candidate.artworkId,
+            score: candidate.score.finalScore,
+            imageSimilarity: candidate.score.imageSimilarity,
+            intentScore: candidate.score.intentScore,
+            metadataScore: candidate.score.metadataScore,
+            behaviorScore: candidate.score.behaviorScore,
+            reasons: candidate.score.reasons,
+          })),
+      });
+
+      const pageCandidates = rankedCandidates.slice(offset, offset + limit);
+      if (pageCandidates.length === 0) {
+        this.logger.warn({
+          msg: "Recommendation page candidates empty after rerank",
+          domainId,
+          targetUserId: resolvedUserId,
+          offset,
+          limit,
+          rankedCandidatesCount: rankedCandidates.length,
+        });
+        return [];
+      }
 
       for (const candidate of pageCandidates) {
         const artwork = artworkById.get(candidate.artworkId);
@@ -1157,9 +1326,19 @@ export class ArtworksService {
         const liked = prefEntry?.liked;
         const comment = prefEntry?.comment;
 
-        artwork.probabilityMatch = Array.isArray(artwork.vector)
-          ? cosineSimilarity(normalizedPreference, artwork.vector)
-          : 0;
+        artwork.probabilityMatch = candidate.score.finalScore;
+        if (canViewRecommendationScore) {
+          artwork.recommendationScore = {
+            imageSimilarity: candidate.score.imageSimilarity,
+            intentScore: candidate.score.intentScore,
+            metadataScore: candidate.score.metadataScore,
+            behaviorScore: candidate.score.behaviorScore,
+            finalScore: candidate.score.finalScore,
+            reasons: candidate.score.reasons,
+          };
+        } else {
+          delete artwork.recommendationScore;
+        }
 
         // Attach liked status/comment to the artwork
         if (liked === undefined) {

@@ -19,6 +19,7 @@ import { EmailService } from "../email/email.service";
 import { CreateDomainRequestDto } from "./dto/create-domain-request.dto";
 import { UpdateDomainDto } from "./dto/update-domain.dto";
 import { shouldUseSecureAuthCodes } from "../config/runtime-profile";
+import { ProductActivityLoggerService } from "../activity/product-activity-logger.service";
 
 const VERIFICATION_TTL_MS = 10 * 60 * 1000;
 const VECTOR_DIMENSIONS = 1024;
@@ -29,7 +30,10 @@ export class DomainsService {
   private cosmosService: CosmosService;
   private readonly jwtSecret: string;
 
-  constructor(private readonly emailService: EmailService) {
+  constructor(
+    private readonly emailService: EmailService,
+    private readonly productActivityLogger?: ProductActivityLoggerService,
+  ) {
     this.cosmosService = new CosmosService();
     this.jwtSecret = process.env.JWT_SECRET ?? "";
     if (!this.jwtSecret) {
@@ -82,6 +86,7 @@ export class DomainsService {
     );
 
     this.logger.log(`Created domain ${domainId} with owner ${normalizedEmail}`);
+    this.productActivityLogger?.log("gallery.created");
 
     return createdDomain as Domain;
   }
@@ -377,6 +382,8 @@ export class DomainsService {
       status: "active", // Set as active immediately for testing
       onboardingStatus: "not_started",
       preferenceVector: new Array(VECTOR_DIMENSIONS).fill(0),
+      likedPreferenceVector: new Array(VECTOR_DIMENSIONS).fill(0),
+      dislikedPreferenceVector: new Array(VECTOR_DIMENSIONS).fill(0),
       createdAt: now,
       updatedAt: now,
     };
@@ -452,6 +459,8 @@ export class DomainsService {
       status: "pending_verification",
       onboardingStatus: "not_started",
       preferenceVector: new Array(VECTOR_DIMENSIONS).fill(0),
+      likedPreferenceVector: new Array(VECTOR_DIMENSIONS).fill(0),
+      dislikedPreferenceVector: new Array(VECTOR_DIMENSIONS).fill(0),
       createdAt: timestamp,
       updatedAt: timestamp,
     };

@@ -26,6 +26,7 @@
     "build:webapi": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/webapi build && cp ./webapi/package.json ./webapi/build/package.json",
     "build:frontend": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/frontend build",
     "build:functions": "pnpm --filter @tastematcher/common build && pnpm --filter @tastematcher/functions build",
+    "eval:recommendations": "pnpm --filter @tastematcher/common build && node scripts/evaluate_recommendations.js",
     "sync:local:production": "./scripts/azure/sync-local-production-config.sh",
     "start:local:webapi": "pnpm --filter @tastematcher/webapi start:local:production",
     "start:local:production:webapi": "pnpm --filter @tastematcher/webapi start:local:production",

@@ -114,7 +114,8 @@ describe("NotifyUsersNewArtwork", () => {
             status: "active",
             onboardingStatus: "completed",
             swipeCount: 30,
-            preferenceVector: buildVector(1),
+            preferenceVector: buildVector(0, 1),
+            likedPreferenceVector: buildVector(1),
           },
           {
             id: "user-2",

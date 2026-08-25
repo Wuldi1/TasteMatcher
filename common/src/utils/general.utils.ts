@@ -18,15 +18,20 @@ export const cleanupArtworkBeforeResponseToClient = (
   role: Role
 ): Partial<Artwork> => {
   // create a shallow copy excluding vector and vectorModel via destructuring
-  const { vector, vectorModel, ...base } = artwork;
+  const { vector, vectorModel, recommendationScore, ...base } = artwork;
+  const canViewRecommendationScore =
+    role === "dealer" || role === "domain_owner" || role === "global_admin";
+  const response = canViewRecommendationScore && recommendationScore
+    ? { ...base, recommendationScore }
+    : base;
 
   // Conditionally omit price if shouldDisplayPrice is falsy or role is not customer
   if (!artwork.shouldDisplayPrice && role === "customer") {
-    const { price, ...withoutPrice } = base;
+    const { price, ...withoutPrice } = response;
     return withoutPrice as Partial<Artwork>;
   }
 
-  return base as Partial<Artwork>;
+  return response as Partial<Artwork>;
 };
 
 export const isAuctionEnded = (
