@@ -32,8 +32,10 @@ jest.mock("../../utils/api", () => ({
 }));
 
 const mockGetHealth = jest.mocked(apiClient.getHealth);
+const originalUiVersion = process.env.REACT_APP_UI_VERSION;
 
 beforeEach(() => {
+  process.env.REACT_APP_UI_VERSION = "";
   mockGetHealth.mockResolvedValue({
     status: "healthy",
     version: "1.0.0",
@@ -46,6 +48,10 @@ beforeEach(() => {
       storage: "ok",
     },
   });
+});
+
+afterEach(() => {
+  process.env.REACT_APP_UI_VERSION = originalUiVersion;
 });
 
 const queryClient = new QueryClient({
