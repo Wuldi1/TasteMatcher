@@ -13,6 +13,8 @@ import { BlobService, CosmosService } from "@tastematcher/common";
 interface HealthStatus {
   status: "healthy" | "unhealthy";
   version: string;
+  deploymentVersion?: string;
+  commit?: string;
   environment: string;
   timestamp: string;
   checks: {
@@ -51,6 +53,8 @@ export class HealthController {
           ? "healthy"
           : "unhealthy",
       version: process.env.npm_package_version || "1.0.0",
+      deploymentVersion: process.env.APP_VERSION,
+      commit: process.env.APP_COMMIT?.slice(0, 12),
       environment: process.env.NODE_ENV || "development",
       timestamp: new Date().toISOString(),
       checks,

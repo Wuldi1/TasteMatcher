@@ -46,6 +46,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
@@ -57,6 +59,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build shared package for dependent checks
         run: pnpm run build:common
+      - name: Compute frontend deployment version
+        run: echo "REACT_APP_UI_VERSION=$(./scripts/ci/compute-deployment-version.sh frontend common package.json pnpm-lock.yaml .github/workflows/frontend-deploy.yml)" >> "$GITHUB_ENV"
       - name: Lint shared and frontend code
         run: |
           pnpm --filter @tastematcher/common lint

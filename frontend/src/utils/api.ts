@@ -32,6 +32,19 @@ import {
   UserStatsResponse,
 } from "@tastematcher/common";
 
+export interface HealthStatus {
+  status: "healthy" | "unhealthy";
+  version: string;
+  deploymentVersion?: string;
+  commit?: string;
+  environment: string;
+  timestamp: string;
+  checks: {
+    database: "ok" | "error";
+    storage: "ok" | "error";
+  };
+}
+
 /**
  * Custom API Error with status code and optional error code
  */
@@ -969,6 +982,10 @@ class ApiClient extends BaseApiClient {
       `/domains/${domainId}/sales/proposals/${proposalId}/ping`,
       { method: "POST" }
     );
+  }
+
+  async getHealth(): Promise<HealthStatus> {
+    return this.request<HealthStatus>("/health", { method: "GET" });
   }
 
   // ========== Authentication Endpoints (Public) ==========

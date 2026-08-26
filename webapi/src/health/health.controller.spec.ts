@@ -27,6 +27,8 @@ describe("HealthController", () => {
       AZURE_STORAGE_ACCOUNT: "storage",
       AZURE_STORAGE_ACCOUNT_KEY: "storage-key",
       IMAGE_PROCESSING_QUEUE_NAME: "queue",
+      APP_VERSION: "v0.8.26",
+      APP_COMMIT: "abcdef1234567890",
     };
     controller = new HealthController();
     (
@@ -59,6 +61,8 @@ describe("HealthController", () => {
     await expect(controller.checkHealth()).resolves.toEqual(
       expect.objectContaining({
         status: "healthy",
+        deploymentVersion: "v0.8.26",
+        commit: "abcdef123456",
         checks: {
           database: "ok",
           storage: "ok",

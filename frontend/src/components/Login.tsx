@@ -1,7 +1,11 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { apiClient, ApiError } from "../utils/api";
+import {
+  formatCombinedDeploymentVersion,
+  getUiDeploymentVersion,
+} from "../utils/deploymentVersion";
 
 type Phase =
   | "email"
@@ -38,6 +42,39 @@ export function Login() {
   const [buyerName, setBuyerName] = useState("");
   const [buyerMessage, setBuyerMessage] = useState("");
   const logoSrc = `${process.env.PUBLIC_URL}/tastematcher_icon_icon_128.png`;
+  const uiVersion = getUiDeploymentVersion();
+  const [apiVersion, setApiVersion] = useState<string | undefined>();
+  const [apiCommit, setApiCommit] = useState<string | undefined>();
+  const deploymentVersion = useMemo(
+    () => formatCombinedDeploymentVersion(uiVersion, apiVersion),
+    [apiVersion, uiVersion],
+  );
+  const deploymentVersionTitle = [
+    `UI ${uiVersion}`,
+    `API ${apiVersion ?? "unknown"}`,
+    apiCommit ? `API commit ${apiCommit}` : undefined,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    apiClient
+      .getHealth()
+      .then((health) => {
+        if (!isMounted) return;
+        setApiVersion(health.deploymentVersion);
+        setApiCommit(health.commit);
+      })
+      .catch((err) => {
+        console.warn("Unable to load API deployment version", err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleEmailSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -165,8 +202,15 @@ export function Login() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl p-6 sm:p-8 w-full max-w-md">
-        <div className="flex justify-center mb-4">
+        <div className="mb-4 flex flex-col items-center gap-2">
           <img src={logoSrc} alt="TasteMatcher logo" className="h-12 w-12" />
+          <p
+            className="font-mono text-[11px] font-medium leading-none text-gray-400"
+            aria-label={`Deployment versions ${deploymentVersion}`}
+            title={deploymentVersionTitle}
+          >
+            UI/API {deploymentVersion}
+          </p>
         </div>
         <div className="text-center mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">

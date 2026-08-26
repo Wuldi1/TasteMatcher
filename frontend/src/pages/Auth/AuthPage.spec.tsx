@@ -4,6 +4,49 @@ import { BrowserRouter } from "react-router-dom";
 import { AuthPage } from "./AuthPage";
 import { AuthContext } from "../../contexts/AuthContext";
 import { createMockAuthContext } from "../../test/mocks/authContext";
+import { apiClient } from "../../utils/api";
+
+jest.mock("../../utils/api", () => ({
+  ApiError: class ApiError extends Error {
+    status: number;
+    errorCode?: string;
+
+    constructor(
+      message: string,
+      status: number,
+      errorCode?: string,
+    ) {
+      super(message);
+      this.name = "ApiError";
+      this.status = status;
+      this.errorCode = errorCode;
+    }
+  },
+  apiClient: {
+    getHealth: jest.fn(),
+    requestLoginCode: jest.fn(),
+    verifyLoginCode: jest.fn(),
+    createDomainRequest: jest.fn(),
+    createCustomerRequest: jest.fn(),
+  },
+}));
+
+const mockGetHealth = jest.mocked(apiClient.getHealth);
+
+beforeEach(() => {
+  mockGetHealth.mockResolvedValue({
+    status: "healthy",
+    version: "1.0.0",
+    deploymentVersion: "v0.8.24",
+    commit: "abcdef123456",
+    environment: "test",
+    timestamp: "2026-08-26T00:00:00.000Z",
+    checks: {
+      database: "ok",
+      storage: "ok",
+    },
+  });
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,7 +66,7 @@ const renderWithProviders = (component: React.ReactElement) => {
 };
 
 describe("AuthPage", () => {
-  it("renders the login form", () => {
+  it("renders the login form", async () => {
     renderWithProviders(<AuthPage />);
 
     expect(
@@ -31,5 +74,16 @@ describe("AuthPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Email Address")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+    expect(
+      await screen.findByText("UI/API v0.local..8.24"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows UI and API deployment versions below the logo", async () => {
+    renderWithProviders(<AuthPage />);
+
+    expect(
+      await screen.findByText("UI/API v0.local..8.24"),
+    ).toBeInTheDocument();
   });
 });

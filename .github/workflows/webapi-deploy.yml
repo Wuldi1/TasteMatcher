@@ -46,6 +46,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
@@ -85,14 +87,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Login to Azure
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS_PRD }}
+      - name: Compute API deployment version
+        run: echo "APP_VERSION=$(./scripts/ci/compute-deployment-version.sh webapi common package.json pnpm-lock.yaml .github/workflows/webapi-deploy.yml)" >> "$GITHUB_ENV"
       - name: Build and publish API image
         run: az acr build --registry "$AZURE_CONTAINER_REGISTRY" --image "tastematcher-api:$IMAGE_TAG" --file webapi/Dockerfile .
       - name: Deploy API revision to Container Apps
-        run: az containerapp update --name "$AZURE_CONTAINERAPP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --image "$AZURE_CONTAINER_REGISTRY.azurecr.io/tastematcher-api:$IMAGE_TAG"
+        run: |
+          az containerapp update \
+            --name "$AZURE_CONTAINERAPP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "$AZURE_CONTAINER_REGISTRY.azurecr.io/tastematcher-api:$IMAGE_TAG" \
+            --set-env-vars "APP_VERSION=$APP_VERSION" "APP_COMMIT=${GITHUB_SHA}"
       - name: Verify replacement API health
         run: |
           api_fqdn="$(az containerapp show --name "$AZURE_CONTAINERAPP_NAME" --resource-group "$AZURE_RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)"
