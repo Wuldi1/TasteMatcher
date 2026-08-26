@@ -36,6 +36,7 @@ import {
   formatPriceRangeForViewer,
 } from "../../utils/viewFormatting";
 import { AppLoadingState } from "../../components/Loading/AppLoadingState";
+import { InfoTooltip } from "../../components/common/InfoTooltip";
 
 interface DomainUserOption {
   id: string;
@@ -57,6 +58,9 @@ const readStoredIncludeRated = (): boolean => {
 
 const formatScoreComponent = (value: number | undefined): string =>
   `${Math.round((value ?? 0) * 100)}%`;
+
+const RECOMMENDATION_SCORE_TOOLTIP =
+  "Image: visual similarity to the customer taste vectors. Intent: match to questionnaire buying interest. Metadata: overlap with artists, mediums, and tags from prior likes/dislikes. Behavior: small recency and auction-status adjustments.";
 
 export const AISuggestionsPage = ({
   domainId,
@@ -619,6 +623,15 @@ export const AISuggestionsPage = ({
                         className="mt-2 rounded-lg border border-purple-100 bg-purple-50/70 p-3 text-xs text-purple-950"
                         aria-label={`Recommendation reasoning for ${item.title}`}
                       >
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <span className="font-semibold">Score breakdown</span>
+                          <InfoTooltip
+                            ariaLabel="Explain AI recommendation score categories"
+                            message={RECOMMENDATION_SCORE_TOOLTIP}
+                            buttonClassName="inline-flex h-4 w-4 items-center justify-center rounded-full border border-purple-300 text-[10px] font-semibold text-purple-700 transition-colors hover:border-purple-500 hover:text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-1"
+                            tooltipClassName="pointer-events-none absolute right-0 top-full z-30 mt-1 w-72 rounded-md bg-gray-900 px-3 py-2 text-[11px] leading-snug text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+                          />
+                        </div>
                         <div className="mb-2 grid grid-cols-2 gap-x-3 gap-y-1">
                           <div>
                             <span className="font-semibold">Image</span>{" "}

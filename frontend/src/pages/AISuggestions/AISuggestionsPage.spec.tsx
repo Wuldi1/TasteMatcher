@@ -293,6 +293,12 @@ describe("AISuggestionsPage owner includeRated filter", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Image")).toBeInTheDocument();
     expect(screen.getByText("Intent")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Explain AI recommendation score categories"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Image: visual similarity to the customer taste vectors/),
+    ).toBeInTheDocument();
     expect(screen.getByText("matches Paintings interest")).toBeInTheDocument();
     expect(screen.getByText("artist previously liked")).toBeInTheDocument();
   });
@@ -310,6 +316,9 @@ describe("AISuggestionsPage owner includeRated filter", () => {
     await screen.findByText("Artwork 1");
     expect(
       screen.queryByLabelText("Recommendation reasoning for Artwork 1"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Explain AI recommendation score categories"),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText("matches Paintings interest"),
