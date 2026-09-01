@@ -45,7 +45,10 @@ containerapp_id="$(az containerapp show \
   --name "${CONTAINER_APP_NAME}" \
   --query id \
   --output tsv)"
-if [[ "${containerapp_id}" != "/subscriptions/${EXPECTED_SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.App/containerApps/${CONTAINER_APP_NAME}" ]]; then
+expected_containerapp_id="/subscriptions/${EXPECTED_SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.App/containerApps/${CONTAINER_APP_NAME}"
+containerapp_id_lower="$(printf '%s' "${containerapp_id}" | tr '[:upper:]' '[:lower:]')"
+expected_containerapp_id_lower="$(printf '%s' "${expected_containerapp_id}" | tr '[:upper:]' '[:lower:]')"
+if [[ "${containerapp_id_lower}" != "${expected_containerapp_id_lower}" ]]; then
   echo "Production Container App identity did not match the expected resource." >&2
   exit 1
 fi
@@ -56,7 +59,10 @@ functionapp_id="$(az functionapp show \
   --name "${FUNCTIONAPP_NAME}" \
   --query id \
   --output tsv)"
-if [[ "${functionapp_id}" != "/subscriptions/${EXPECTED_SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTIONAPP_NAME}" ]]; then
+expected_functionapp_id="/subscriptions/${EXPECTED_SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Web/sites/${FUNCTIONAPP_NAME}"
+functionapp_id_lower="$(printf '%s' "${functionapp_id}" | tr '[:upper:]' '[:lower:]')"
+expected_functionapp_id_lower="$(printf '%s' "${expected_functionapp_id}" | tr '[:upper:]' '[:lower:]')"
+if [[ "${functionapp_id_lower}" != "${expected_functionapp_id_lower}" ]]; then
   echo "Production Function App identity did not match the expected resource." >&2
   exit 1
 fi
@@ -97,7 +103,7 @@ jq -s '
   [$environment[] | . as $entry | {
     name: $entry.name,
     value: (if $entry.secretRef then
-      ($secrets[] | select(.name == $entry.secretRef) | .value)
+      (([$secrets[] | select(.name == $entry.secretRef) | .value | select(type == "string" and length > 0)] | first) // $entry.value)
     else $entry.value end)
   }]
 ' "${webapi_environment_file}" "${webapi_secrets_file}" >"${webapi_settings_file}"
@@ -139,14 +145,33 @@ readonly REQUIRED_SETTINGS=(
 } >"${generated_webapi_file}"
 
 for setting_name in "${REQUIRED_SETTINGS[@]}"; do
-  setting_value="$(
-    jq -er --arg name "${setting_name}" \
-      '[.[] | select(.name == $name) | .value] | if length == 1 and (.[0] | type) == "string" and (.[0] | length) > 0 then .[0] else error("missing") end' \
-      "${webapi_settings_file}"
+  setting_entry="$(
+    jq -cer --arg name "${setting_name}" \
+      '[.[] | select(.name == $name)] | if length == 1 then .[0] else error("missing") end' \
+      "${webapi_environment_file}"
   )" || {
     echo "Required production app setting '${setting_name}' is missing or ambiguous." >&2
     exit 1
   }
+  secret_ref="$(printf '%s' "${setting_entry}" | jq -r '.secretRef // empty')"
+  if [[ -n "${secret_ref}" ]]; then
+    setting_value="$(az containerapp secret show \
+      --subscription "${EXPECTED_SUBSCRIPTION_ID}" \
+      --resource-group "${RESOURCE_GROUP}" \
+      --name "${CONTAINER_APP_NAME}" \
+      --secret-name "${secret_ref}" \
+      --query value \
+      --output tsv)"
+  else
+    setting_value="$(
+      printf '%s' "${setting_entry}" |
+        jq -er '.value | select(type == "string" and length > 0)'
+    )"
+  fi
+  if [[ -z "${setting_value}" ]]; then
+    echo "Required production app setting '${setting_name}' is empty." >&2
+    exit 1
+  fi
   printf '%s=%s\n' "${setting_name}" "$(printf '%s' "${setting_value}" | jq -Rs .)" >>"${generated_webapi_file}"
 done
 

@@ -42,7 +42,8 @@ async function bootstrap() {
   );
 
   const port = Number.parseInt(process.env.PORT || "8080", 10);
-  await app.listen(port, "0.0.0.0");
+  const host = isLocalProductionRuntime() ? "127.0.0.1" : "0.0.0.0";
+  await app.listen(port, host);
 
   console.log(`Application is running on: http://localhost:${port}`);
 }

@@ -13,7 +13,12 @@ import {
   Artwork,
   ArtworkStats,
   Proposal,
+  ProposalEngagement,
+  ProposalGenerationEligibility,
   ProposalItem,
+  ProposalSalesWorkflow,
+  ProposalTemplateId,
+  ProposalWorkflowStage,
   User,
 } from "@tastematcher/common";
 import {
@@ -23,6 +28,9 @@ import {
   ArrowRight,
   ArrowUp,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
+  CircleAlert,
   Database,
   Eye,
   FileText,
@@ -30,6 +38,8 @@ import {
   Mail,
   MessageSquare,
   Paperclip,
+  Pencil,
+  Search,
   Send,
   Shield,
   Sparkles,
@@ -37,7 +47,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import CatalogForUser from "../components/Catalog/CatalogForUser";
 import SaleProposal from "../components/SaleProposal";
 import {
@@ -51,6 +61,10 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { apiClient } from "../utils/api";
 import { AISuggestionsPage } from "./AISuggestions/AISuggestionsPage";
+import {
+  buildSalesCustomerList,
+  type SalesCustomerProposalStatus,
+} from "./salesCustomerList";
 
 type UserItem = { id: string; name?: string; email?: string };
 type ProposalWizardStep =
@@ -60,12 +74,19 @@ type ProposalWizardStep =
   | "presentation"
   | "review";
 type ProposalWizardSource = "ai" | "catalog";
+type SalesTab = "details" | "proposal";
 type ViewingRoomPriceVisibility = "show" | "hide" | "per_item";
 type ViewingRoomMetadata = {
   title: string;
   introNote: string;
   expiresAt: string;
   priceVisibility: ViewingRoomPriceVisibility;
+};
+type ProposalTemplate = {
+  id: ProposalTemplateId;
+  label: string;
+  title: string;
+  introNote: string;
 };
 type ExtendedProposalItem = ProposalItem & {
   title?: string;
@@ -92,6 +113,51 @@ const DEFAULT_VIEWING_ROOM_METADATA: ViewingRoomMetadata = {
   introNote: "",
   expiresAt: "",
   priceVisibility: "show",
+};
+const OPEN_PROPOSAL_STATUSES = new Set<Proposal["status"]>([
+  "draft",
+  "submitted",
+]);
+const PROPOSAL_TEMPLATES: ProposalTemplate[] = [
+  {
+    id: "first_introduction",
+    label: "Collector introduction",
+    title: "A considered selection for you",
+    introNote:
+      "I selected these works around the themes and visual language that best match your taste profile.",
+  },
+  {
+    id: "auction_opportunity",
+    label: "Auction opportunity",
+    title: "Auction works selected for you",
+    introNote:
+      "These active auction works are particularly aligned with your preferences. I recommend reviewing them before the sale closes.",
+  },
+  {
+    id: "budget_shortlist",
+    label: "Budget shortlist",
+    title: "A focused shortlist",
+    introNote:
+      "I narrowed this selection to works that offer the strongest fit within the intended acquisition range.",
+  },
+  {
+    id: "follow_up",
+    label: "Viewing follow-up",
+    title: "A closer look at these works",
+    introNote:
+      "Based on the works that stood out, I prepared a more focused selection for your consideration.",
+  },
+];
+const DEFAULT_PROPOSAL_WORKFLOW: ProposalSalesWorkflow = {
+  stage: "drafting",
+};
+const SALES_CUSTOMERS_PER_PAGE = 20;
+const PROPOSAL_STATUS_LABELS: Record<SalesCustomerProposalStatus, string> = {
+  submitted: "Sent",
+  draft: "Draft",
+  accepted: "Accepted",
+  rejected: "Rejected",
+  none: "No proposal",
 };
 
 // Helper component for image slideshow
@@ -130,7 +196,10 @@ export default function SalesPage() {
   const { user } = useAuth();
   const domainId = user?.domainId ?? "default";
   const isGlobalAdmin = user?.role === "global_admin";
+  const { userId: routeUserId } = useParams<{ userId: string }>();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const isSaleWorkspace = Boolean(routeUserId);
 
   // Domains (only used for global_admin)
   const [domains, setDomains] = useState<
@@ -167,17 +236,12 @@ export default function SalesPage() {
           value: account.id,
           label: account.email
             ? `${account.name ?? account.email} (${account.email})`
-            : account.name ?? account.id,
+            : (account.name ?? account.id),
         }))
         .sort((a, b) => compareByLabel(a.label, b.label)),
     [users],
   );
-  const [activeTab, setActiveTab] = useState<
-    "details" | "catalog" | "ai" | "proposal"
-  >("details");
-  const [preferenceFilter, setPreferenceFilter] = useState<
-    "all" | "liked" | "disliked"
-  >("all");
+  const [activeTab, setActiveTab] = useState<SalesTab>("details");
 
   // New: fetched user details + stats
   const [userDetails, setUserDetails] = useState<User | null>(null);
@@ -201,14 +265,46 @@ export default function SalesPage() {
 
   // New: proposal draft state
   const [proposalItem, setProposalItem] = useState<ProposalItem[]>([]);
+  const [proposalGeneralComments, setProposalGeneralComments] = useState<
+    Proposal["generalComments"]
+  >([]);
   const [proposalDetails, setProposalDetails] = useState<Proposal | null>(null); // Store proposal metadata
+  const [generatingAIProposal, setGeneratingAIProposal] = useState(false);
+  const [aiProposalGenerationPending, setAIProposalGenerationPending] =
+    useState(false);
+  const [aiProposalError, setAIProposalError] = useState<string | null>(null);
+  const [aiProposalEligibility, setAIProposalEligibility] =
+    useState<ProposalGenerationEligibility | null>(null);
+  const [aiProposalEligibilityLoading, setAIProposalEligibilityLoading] =
+    useState(false);
   const [isProposalWizardOpen, setIsProposalWizardOpen] = useState(false);
   const [proposalWizardStep, setProposalWizardStep] =
     useState<ProposalWizardStep>("customer");
   const [proposalWizardSource, setProposalWizardSource] =
     useState<ProposalWizardSource>("ai");
+  const [wizardProposalId, setWizardProposalId] = useState<string>();
+  const [generatedProposalMetadata, setGeneratedProposalMetadata] =
+    useState<Proposal["metadata"]>({});
   const [viewingRoomMetadata, setViewingRoomMetadata] =
     useState<ViewingRoomMetadata>(DEFAULT_VIEWING_ROOM_METADATA);
+  const [proposalWorkflow, setProposalWorkflow] =
+    useState<ProposalSalesWorkflow>(DEFAULT_PROPOSAL_WORKFLOW);
+  const [domainProposals, setDomainProposals] = useState<Proposal[]>([]);
+  const [domainProposalsLoading, setDomainProposalsLoading] = useState(false);
+  const [salesCustomerPage, setSalesCustomerPage] = useState(1);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [proposalQueueTargetUserId, setProposalQueueTargetUserId] = useState<
+    string | undefined
+  >();
+  const salesTabs = useMemo<Array<{ id: SalesTab; label: string }>>(
+    () => [
+      { id: "details", label: "Collector record" },
+      ...(proposalDetails
+        ? [{ id: "proposal" as const, label: "Proposal" }]
+        : []),
+    ],
+    [proposalDetails],
+  );
   const queryDomainId = searchParams.get("domainId") || undefined;
   const queryUserId = searchParams.get("userId") || undefined;
 
@@ -245,7 +341,7 @@ export default function SalesPage() {
       const nextParams = new URLSearchParams();
       if (isGlobalAdmin && nextDomainId)
         nextParams.set("domainId", nextDomainId);
-      if (nextUserId) nextParams.set("userId", nextUserId);
+      if (!isSaleWorkspace && nextUserId) nextParams.set("userId", nextUserId);
 
       const currentString = searchParams.toString();
       const nextString = nextParams.toString();
@@ -253,11 +349,15 @@ export default function SalesPage() {
         setSearchParams(nextParams);
       }
     },
-    [isGlobalAdmin, searchParams, setSearchParams],
+    [isGlobalAdmin, isSaleWorkspace, searchParams, setSearchParams],
   );
 
   const proposalMetadataPayload = useMemo<Proposal["metadata"]>(() => {
-    const existing = proposalDetails?.metadata ?? {};
+    // A new AI draft must not carry engagement or workflow metadata from the
+    // customer’s currently open proposal.
+    const existing = wizardProposalId
+      ? (proposalDetails?.metadata ?? {})
+      : generatedProposalMetadata ?? {};
     return {
       ...existing,
       viewingRoom: {
@@ -268,8 +368,15 @@ export default function SalesPage() {
           : undefined,
         priceVisibility: viewingRoomMetadata.priceVisibility,
       },
+      salesWorkflow: proposalWorkflow,
     };
-  }, [proposalDetails?.metadata, viewingRoomMetadata]);
+  }, [
+    proposalDetails?.metadata,
+    proposalWorkflow,
+    viewingRoomMetadata,
+    wizardProposalId,
+    generatedProposalMetadata,
+  ]);
 
   const selectedCustomerLabel = useMemo(() => {
     const selected = userOptions.find(
@@ -277,6 +384,43 @@ export default function SalesPage() {
     );
     return selected?.label ?? userDetails?.name ?? userDetails?.email ?? "";
   }, [selectedUserId, userDetails?.email, userDetails?.name, userOptions]);
+
+  const selectedProposalEngagement = useMemo(
+    () =>
+      (proposalDetails?.metadata?.engagement ??
+        {}) as Partial<ProposalEngagement>,
+    [proposalDetails?.metadata],
+  );
+
+  const salesCustomerRows = useMemo(
+    () => buildSalesCustomerList(users, domainProposals),
+    [domainProposals, users],
+  );
+  const filteredSalesCustomerRows = useMemo(() => {
+    const normalizedQuery = customerSearch.trim().toLowerCase();
+    if (!normalizedQuery) return salesCustomerRows;
+
+    return salesCustomerRows.filter((row) =>
+      [
+        row.customer.name,
+        row.customer.email,
+        PROPOSAL_STATUS_LABELS[row.proposalStatus],
+      ].some((value) => value?.toLowerCase().includes(normalizedQuery)),
+    );
+  }, [customerSearch, salesCustomerRows]);
+  const salesCustomerPageCount = Math.max(
+    1,
+    Math.ceil(filteredSalesCustomerRows.length / SALES_CUSTOMERS_PER_PAGE),
+  );
+  const visibleSalesCustomers = useMemo(() => {
+    const pageStart =
+      (Math.min(salesCustomerPage, salesCustomerPageCount) - 1) *
+      SALES_CUSTOMERS_PER_PAGE;
+    return filteredSalesCustomerRows.slice(
+      pageStart,
+      pageStart + SALES_CUSTOMERS_PER_PAGE,
+    );
+  }, [filteredSalesCustomerRows, salesCustomerPage, salesCustomerPageCount]);
 
   const currentWizardStepIndex = PROPOSAL_WIZARD_STEPS.findIndex(
     (step) => step.id === proposalWizardStep,
@@ -302,11 +446,23 @@ export default function SalesPage() {
   ]);
 
   const startProposalWizard = () => {
+    setAIProposalGenerationPending(false);
+    setGeneratedProposalMetadata({});
+    setWizardProposalId(proposalDetails?.id);
     setProposalWizardStep(selectedUserId ? "works" : "customer");
     setIsProposalWizardOpen(true);
   };
 
+  const openProposalWizardForEditing = () => {
+    setAIProposalGenerationPending(false);
+    setGeneratedProposalMetadata({});
+    setWizardProposalId(proposalDetails?.id);
+    setProposalWizardStep(selectedUserId ? "review" : "customer");
+    setIsProposalWizardOpen(true);
+  };
+
   const closeProposalWizard = () => {
+    setAIProposalGenerationPending(false);
     setIsProposalWizardOpen(false);
   };
 
@@ -330,6 +486,57 @@ export default function SalesPage() {
     value: ViewingRoomMetadata[Key],
   ) => {
     setViewingRoomMetadata((current) => ({ ...current, [key]: value }));
+  };
+
+  const applyViewingRoomMetadata = useCallback(
+    (
+      viewingRoom:
+        | Partial<{
+            title: string;
+            introNote: string;
+            expiresAt: number;
+            priceVisibility: ViewingRoomPriceVisibility;
+          }>
+        | undefined,
+    ) => {
+      setViewingRoomMetadata({
+        title: viewingRoom?.title ?? "",
+        introNote: viewingRoom?.introNote ?? "",
+        expiresAt: viewingRoom?.expiresAt
+          ? new Date(viewingRoom.expiresAt).toISOString().slice(0, 10)
+          : "",
+        priceVisibility: viewingRoom?.priceVisibility ?? "show",
+      });
+    },
+    [],
+  );
+
+  const applyProposalWorkflow = useCallback(
+    (workflow: Partial<ProposalSalesWorkflow> | undefined) => {
+      setProposalWorkflow({
+        stage: workflow?.stage ?? "drafting",
+        templateId: workflow?.templateId,
+        budgetMinimum: workflow?.budgetMinimum,
+        budgetMaximum: workflow?.budgetMaximum,
+        priorityArtworkIds: workflow?.priorityArtworkIds ?? [],
+        nextFollowUpAt: workflow?.nextFollowUpAt,
+        lastCustomerActivityAt: workflow?.lastCustomerActivityAt,
+      });
+    },
+    [],
+  );
+
+  const applyProposalTemplate = (templateId: ProposalTemplateId) => {
+    const template = PROPOSAL_TEMPLATES.find(
+      (candidate) => candidate.id === templateId,
+    );
+    if (!template) return;
+    setProposalWorkflow((current) => ({ ...current, templateId }));
+    setViewingRoomMetadata((current) => ({
+      ...current,
+      title: template.title,
+      introNote: template.introNote,
+    }));
   };
 
   const getProposalItemTitle = (item: ProposalItem) =>
@@ -369,7 +576,10 @@ export default function SalesPage() {
     if (!effectiveDomainId || !selectedUserId) {
       setProposalDetails(null);
       setProposalItem([]);
+      setProposalGeneralComments([]);
+      setGeneratedProposalMetadata({});
       setViewingRoomMetadata(DEFAULT_VIEWING_ROOM_METADATA);
+      setProposalWorkflow(DEFAULT_PROPOSAL_WORKFLOW);
       return;
     }
 
@@ -380,10 +590,15 @@ export default function SalesPage() {
           selectedUserId,
         );
         if (proposals.length > 0) {
-          const proposal = proposals.find((p) => p.userId === selectedUserId);
+          const proposal = proposals.find(
+            (p) =>
+              p.userId === selectedUserId &&
+              OPEN_PROPOSAL_STATUSES.has(p.status),
+          );
 
           if (proposal) {
             setProposalDetails(proposal);
+            setProposalGeneralComments(proposal.generalComments ?? []);
             const viewingRoom = proposal.metadata?.viewingRoom as
               | Partial<{
                   title: string;
@@ -392,14 +607,12 @@ export default function SalesPage() {
                   priceVisibility: ViewingRoomPriceVisibility;
                 }>
               | undefined;
-            setViewingRoomMetadata({
-              title: viewingRoom?.title ?? "",
-              introNote: viewingRoom?.introNote ?? "",
-              expiresAt: viewingRoom?.expiresAt
-                ? new Date(viewingRoom.expiresAt).toISOString().slice(0, 10)
-                : "",
-              priceVisibility: viewingRoom?.priceVisibility ?? "show",
-            });
+            applyViewingRoomMetadata(viewingRoom);
+            applyProposalWorkflow(
+              proposal.metadata?.salesWorkflow as
+                | Partial<ProposalSalesWorkflow>
+                | undefined,
+            );
             setProposalItem(
               proposal.items.map((item) => ({
                 artworkId: item.artworkId,
@@ -412,21 +625,35 @@ export default function SalesPage() {
           } else {
             setProposalDetails(null);
             setProposalItem([]);
+            setProposalGeneralComments([]);
+            setGeneratedProposalMetadata({});
             setViewingRoomMetadata(DEFAULT_VIEWING_ROOM_METADATA);
+            setProposalWorkflow(DEFAULT_PROPOSAL_WORKFLOW);
           }
         } else {
           setProposalDetails(null);
           setProposalItem([]);
+          setProposalGeneralComments([]);
+          setGeneratedProposalMetadata({});
           setViewingRoomMetadata(DEFAULT_VIEWING_ROOM_METADATA);
+          setProposalWorkflow(DEFAULT_PROPOSAL_WORKFLOW);
         }
       } catch (err) {
         console.error("Failed to load proposals", err);
         setProposalDetails(null);
         setProposalItem([]);
+        setProposalGeneralComments([]);
+        setGeneratedProposalMetadata({});
         setViewingRoomMetadata(DEFAULT_VIEWING_ROOM_METADATA);
+        setProposalWorkflow(DEFAULT_PROPOSAL_WORKFLOW);
       }
     })();
-  }, [effectiveDomainId, selectedUserId]);
+  }, [
+    applyProposalWorkflow,
+    applyViewingRoomMetadata,
+    effectiveDomainId,
+    selectedUserId,
+  ]);
 
   useEffect(() => {
     if (!isGlobalAdmin) return;
@@ -505,18 +732,120 @@ export default function SalesPage() {
   useEffect(() => {
     setSelectedUserId(undefined);
     setProposalItem([]);
+    setProposalGeneralComments([]);
   }, [selectedDomainId]);
 
   // Deep link support: populate state from query params
   useEffect(() => {
     if (queryUserId) {
       setSelectedUserId(queryUserId);
-      setActiveTab("proposal");
     }
     if (isGlobalAdmin && queryDomainId) {
       setSelectedDomainId(queryDomainId);
     }
   }, [queryUserId, queryDomainId, isGlobalAdmin]);
+
+  useEffect(() => {
+    if (!effectiveDomainId || !selectedUserId) {
+      setAIProposalEligibility(null);
+      setAIProposalEligibilityLoading(false);
+      return;
+    }
+
+    let isCurrentRequest = true;
+    setAIProposalEligibilityLoading(true);
+    apiClient
+      .getAIProposalEligibility(effectiveDomainId, selectedUserId)
+      .then((eligibility) => {
+        if (isCurrentRequest) setAIProposalEligibility(eligibility);
+      })
+      .catch((error) => {
+        console.error("Failed to check AI proposal eligibility", error);
+        if (isCurrentRequest) {
+          setAIProposalEligibility({
+            userId: selectedUserId,
+            isEligible: false,
+            reasons: ["Customer readiness could not be checked. Try again."],
+            onboardingCompleted: false,
+            swipeCount: 0,
+            minimumSwipeCount: 20,
+            preferenceVectorReady: false,
+            activeAuctionRecommendationCount: 0,
+          });
+        }
+      })
+      .finally(() => {
+        if (isCurrentRequest) setAIProposalEligibilityLoading(false);
+      });
+
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [effectiveDomainId, selectedUserId]);
+
+  useEffect(() => {
+    if (!effectiveDomainId) {
+      setDomainProposals([]);
+      return;
+    }
+
+    let isCurrentRequest = true;
+    setDomainProposalsLoading(true);
+    apiClient
+      .listProposals(effectiveDomainId)
+      .then((proposals) => {
+        if (isCurrentRequest) {
+          setDomainProposals(proposals);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load sales proposals", error);
+        if (isCurrentRequest) setDomainProposals([]);
+      })
+      .finally(() => {
+        if (isCurrentRequest) setDomainProposalsLoading(false);
+      });
+
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [effectiveDomainId]);
+
+  useEffect(() => {
+    setSalesCustomerPage(1);
+  }, [customerSearch, effectiveDomainId]);
+
+  useEffect(() => {
+    setSalesCustomerPage((currentPage) =>
+      Math.min(currentPage, salesCustomerPageCount),
+    );
+  }, [salesCustomerPageCount]);
+
+  useEffect(() => {
+    if (routeUserId && effectiveDomainId) setSelectedUserId(routeUserId);
+  }, [effectiveDomainId, routeUserId]);
+
+  useEffect(() => {
+    if (activeTab === "proposal" && !proposalDetails) {
+      setActiveTab("details");
+    }
+  }, [activeTab, proposalDetails]);
+
+  useEffect(() => {
+    if (queryUserId && proposalDetails?.userId === queryUserId) {
+      setActiveTab("proposal");
+    }
+  }, [proposalDetails, queryUserId]);
+
+  useEffect(() => {
+    if (
+      proposalQueueTargetUserId &&
+      proposalDetails?.userId === proposalQueueTargetUserId
+    ) {
+      setActiveTab("proposal");
+      setProposalQueueTargetUserId(undefined);
+    }
+  }, [proposalDetails, proposalQueueTargetUserId]);
 
   // Keep query params in sync with selections
   useEffect(() => {
@@ -795,9 +1124,116 @@ export default function SalesPage() {
     });
   };
 
+  const generateAIProposal = useCallback(
+    async (domainId: string, userId: string) => {
+      setAIProposalError(null);
+      setAIProposalGenerationPending(false);
+      setWizardProposalId(undefined);
+      setGeneratedProposalMetadata({});
+      setProposalWizardStep("review");
+      setIsProposalWizardOpen(true);
+      setGeneratingAIProposal(true);
+      try {
+        const draft = await apiClient.generateAIProposalDraft(domainId, {
+          userId,
+          limit: 8,
+        });
+        const viewingRoom = draft.metadata?.viewingRoom as
+          | Partial<{
+              title: string;
+              introNote: string;
+              expiresAt: number;
+              priceVisibility: ViewingRoomPriceVisibility;
+            }>
+          | undefined;
+        setProposalItem(draft.items);
+        setProposalGeneralComments(draft.generalComments);
+        setGeneratedProposalMetadata(draft.metadata);
+        applyViewingRoomMetadata(viewingRoom);
+        applyProposalWorkflow(
+          draft.metadata?.salesWorkflow as
+            | Partial<ProposalSalesWorkflow>
+            | undefined,
+        );
+        setProposalWizardSource("ai");
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unable to generate an AI proposal.";
+        setAIProposalError(message);
+      } finally {
+        setGeneratingAIProposal(false);
+      }
+    },
+    [applyProposalWorkflow, applyViewingRoomMetadata],
+  );
+
+  const handleGenerateAIProposal = () => {
+    setAIProposalError(null);
+    if (!effectiveDomainId || !selectedUserId) {
+      setAIProposalGenerationPending(true);
+      setProposalWizardStep("customer");
+      setIsProposalWizardOpen(true);
+      return;
+    }
+
+    if (!aiProposalEligibility?.isEligible) {
+      setProposalWizardStep("customer");
+      setIsProposalWizardOpen(true);
+      return;
+    }
+
+    void generateAIProposal(effectiveDomainId, selectedUserId);
+  };
+
+  useEffect(() => {
+    if (
+      !aiProposalGenerationPending ||
+      !isProposalWizardOpen ||
+      !effectiveDomainId ||
+      !selectedUserId ||
+      !aiProposalEligibility?.isEligible ||
+      generatingAIProposal
+    ) {
+      return;
+    }
+
+    void generateAIProposal(effectiveDomainId, selectedUserId);
+  }, [
+    aiProposalGenerationPending,
+    aiProposalEligibility?.isEligible,
+    effectiveDomainId,
+    generateAIProposal,
+    generatingAIProposal,
+    isProposalWizardOpen,
+    selectedUserId,
+  ]);
+
   // --- New styled tab bar and enhanced Details panel UI ---
+  const isAIProposalActionDisabled =
+    generatingAIProposal ||
+    aiProposalEligibilityLoading ||
+    !aiProposalEligibility?.isEligible;
+
+  const renderAIProposalAction = (label: string) => (
+    <button
+      type="button"
+      onClick={handleGenerateAIProposal}
+      disabled={isAIProposalActionDisabled}
+      className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45"
+    >
+      {generatingAIProposal || aiProposalEligibilityLoading ? (
+        <AppInlineLoader size="sm" theme="light" />
+      ) : (
+        <Sparkles className="h-4 w-4" />
+      )}
+      {label}
+    </button>
+  );
+
   return (
-    <div className="px-8">
+    <div className="min-h-full bg-gray-50 px-5 py-6 sm:px-8 lg:px-10">
       {/* Lightbox Modal */}
       {lightboxImage && (
         <div
@@ -820,12 +1256,12 @@ export default function SalesPage() {
       )}
 
       {isProposalWizardOpen && (
-        <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-gray-950/70 p-3 backdrop-blur-sm sm:p-6">
+        <div className="fixed inset-0 z-[90] bg-white">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="proposal-wizard-title"
-            className="my-2 flex w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:my-6"
+            className="flex h-[100dvh] w-full flex-col bg-white"
           >
             <div className="border-b border-gray-200 bg-white px-5 py-4 sm:px-6">
               <div className="flex items-start justify-between gap-4">
@@ -890,7 +1326,7 @@ export default function SalesPage() {
               </ol>
             </div>
 
-            <div className="max-h-[calc(100dvh-15rem)] flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 lg:px-12">
               {proposalWizardStep === "customer" && (
                 <div className="mx-auto max-w-3xl space-y-6">
                   <div>
@@ -937,7 +1373,10 @@ export default function SalesPage() {
                       <SearchableSelect
                         id="wizard-sales-user"
                         ariaLabel="Select proposal customer"
-                        disabled={selectedDomainId === undefined}
+                        disabled={
+                          !effectiveDomainId ||
+                          (isGlobalAdmin && !selectedDomainId)
+                        }
                         value={selectedUserId}
                         onChange={setSelectedUserId}
                         options={userOptions}
@@ -983,6 +1422,33 @@ export default function SalesPage() {
                       </div>
                     </div>
                   )}
+
+                  {selectedUserId && aiProposalEligibilityLoading && (
+                    <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                      <AppInlineLoader size="sm" />
+                      Checking AI proposal readiness...
+                    </div>
+                  )}
+
+                  {selectedUserId &&
+                    aiProposalEligibility &&
+                    !aiProposalEligibility.isEligible && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                        <div className="flex items-center gap-2 text-sm font-bold text-amber-950">
+                          <CircleAlert className="h-4 w-4" />
+                          AI generated proposal is unavailable for this customer
+                        </div>
+                        <ul className="mt-3 space-y-1.5 text-sm text-amber-900">
+                          {aiProposalEligibility.reasons.map((reason) => (
+                            <li key={reason}>{reason}</li>
+                          ))}
+                        </ul>
+                        <p className="mt-3 text-xs text-amber-800">
+                          You can still create a manual proposal from the
+                          catalog.
+                        </p>
+                      </div>
+                    )}
                 </div>
               )}
 
@@ -1029,16 +1495,12 @@ export default function SalesPage() {
                       onAddToProposal={handleProposalToggle}
                       readonlyThumbs={true}
                       showOwnerRatedFilter={true}
+                      defaultIncludeRated={true}
                     />
                   ) : (
                     <CatalogForUser
                       domainId={effectiveDomainId ?? domainId}
                       userId={selectedUserId ?? ""}
-                      preferenceFilter={
-                        preferenceFilter === "all"
-                          ? undefined
-                          : preferenceFilter
-                      }
                       onAddToDraft={handleProposalToggle}
                       showPreferenceButtons={false}
                       ownersExperience={true}
@@ -1158,10 +1620,7 @@ export default function SalesPage() {
                         type="text"
                         value={viewingRoomMetadata.title}
                         onChange={(event) =>
-                          updateViewingRoomMetadata(
-                            "title",
-                            event.target.value,
-                          )
+                          updateViewingRoomMetadata("title", event.target.value)
                         }
                         placeholder="Works selected for you"
                         className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
@@ -1231,58 +1690,271 @@ export default function SalesPage() {
                         >
                           <option value="show">Show prices</option>
                           <option value="hide">Hide prices</option>
-                          <option value="per_item">Use per-item settings</option>
+                          <option value="per_item">
+                            Use per-item settings
+                          </option>
                         </select>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-gray-200 pt-5">
+                      <h4 className="text-sm font-bold text-gray-900">
+                        Sales plan
+                      </h4>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Set the proposal&apos;s commercial context and the next
+                        seller action.
+                      </p>
+                      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                          <label
+                            htmlFor="proposal-template"
+                            className="mb-1.5 block text-sm font-semibold text-gray-700"
+                          >
+                            Proposal template
+                          </label>
+                          <select
+                            id="proposal-template"
+                            value={proposalWorkflow.templateId ?? ""}
+                            onChange={(event) =>
+                              applyProposalTemplate(
+                                event.target.value as ProposalTemplateId,
+                              )
+                            }
+                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                          >
+                            <option value="">Custom proposal</option>
+                            {PROPOSAL_TEMPLATES.map((template) => (
+                              <option key={template.id} value={template.id}>
+                                {template.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="proposal-workflow-stage"
+                            className="mb-1.5 block text-sm font-semibold text-gray-700"
+                          >
+                            Sales stage
+                          </label>
+                          <select
+                            id="proposal-workflow-stage"
+                            value={proposalWorkflow.stage}
+                            onChange={(event) =>
+                              setProposalWorkflow((current) => ({
+                                ...current,
+                                stage: event.target
+                                  .value as ProposalWorkflowStage,
+                              }))
+                            }
+                            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                          >
+                            <option value="drafting">Drafting</option>
+                            <option value="ready_to_review">
+                              Ready to review
+                            </option>
+                            <option value="sent">Sent</option>
+                            <option value="viewed">Viewed</option>
+                            <option value="responded">
+                              Customer responded
+                            </option>
+                            <option value="negotiating">Negotiating</option>
+                            <option value="won">Won</option>
+                            <option value="lost">Lost</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="proposal-budget-minimum"
+                            className="mb-1.5 block text-sm font-semibold text-gray-700"
+                          >
+                            Budget minimum
+                          </label>
+                          <input
+                            id="proposal-budget-minimum"
+                            type="number"
+                            min="0"
+                            value={proposalWorkflow.budgetMinimum ?? ""}
+                            onChange={(event) =>
+                              setProposalWorkflow((current) => ({
+                                ...current,
+                                budgetMinimum: event.target.value
+                                  ? Number(event.target.value)
+                                  : undefined,
+                              }))
+                            }
+                            className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                          />
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="proposal-budget-maximum"
+                            className="mb-1.5 block text-sm font-semibold text-gray-700"
+                          >
+                            Budget maximum
+                          </label>
+                          <input
+                            id="proposal-budget-maximum"
+                            type="number"
+                            min="0"
+                            value={proposalWorkflow.budgetMaximum ?? ""}
+                            onChange={(event) =>
+                              setProposalWorkflow((current) => ({
+                                ...current,
+                                budgetMaximum: event.target.value
+                                  ? Number(event.target.value)
+                                  : undefined,
+                              }))
+                            }
+                            className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                          />
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="proposal-follow-up"
+                            className="mb-1.5 block text-sm font-semibold text-gray-700"
+                          >
+                            Next follow-up
+                          </label>
+                          <input
+                            id="proposal-follow-up"
+                            type="date"
+                            value={
+                              proposalWorkflow.nextFollowUpAt
+                                ? new Date(proposalWorkflow.nextFollowUpAt)
+                                    .toISOString()
+                                    .slice(0, 10)
+                                : ""
+                            }
+                            onChange={(event) =>
+                              setProposalWorkflow((current) => ({
+                                ...current,
+                                nextFollowUpAt: event.target.value
+                                  ? new Date(event.target.value).getTime()
+                                  : undefined,
+                              }))
+                            }
+                            className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {proposalWizardStep === "review" && selectedUserId && (
-                <div className="space-y-5">
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <h3 className="text-lg font-bold text-gray-900">
-                          Review & share
-                        </h3>
-                        <p className="mt-1 text-sm text-gray-500">
-                          Finalize prices and notes, then save as draft or
-                          publish for the collector.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                        <Eye className="h-4 w-4 text-blue-600" />
-                        {viewingRoomMetadata.title || "Untitled proposal"}
-                      </div>
+              {proposalWizardStep === "review" &&
+                selectedUserId &&
+                (generatingAIProposal ? (
+                  <div className="flex min-h-80 flex-col items-center justify-center gap-4 text-center">
+                    <AppInlineLoader size="lg" />
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">
+                        Building the proposal
+                      </h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Selecting active auction works and preparing the viewing
+                        room.
+                      </p>
                     </div>
                   </div>
-                  <SaleProposal
-                    domainId={effectiveDomainId ?? domainId}
-                    dealerEmail={user?.email}
-                    userId={selectedUserId}
-                    userName={
-                      userDetails?.name ?? userDetails?.email ?? "Specialist"
-                    }
-                    draftItems={proposalItem}
-                    onDraftChange={(items: ProposalItem[]) =>
-                      setProposalItem(items)
-                    }
-                    proposalId={proposalDetails?.id}
-                    proposalMetadata={proposalMetadataPayload}
-                    onProposalSave={(proposal) => {
-                      setProposalDetails(proposal);
-                      setIsProposalWizardOpen(false);
-                      setActiveTab("proposal");
-                    }}
-                    onProposalDelete={() => {
-                      setProposalDetails(null);
-                      setProposalItem([]);
-                    }}
-                  />
-                </div>
-              )}
+                ) : (
+                  <div className="space-y-5">
+                    {aiProposalError && (
+                      <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between">
+                        <span>{aiProposalError}</span>
+                        <button
+                          type="button"
+                          onClick={handleGenerateAIProposal}
+                          className="inline-flex shrink-0 items-center justify-center rounded-lg border border-red-300 bg-white px-3 py-2 font-semibold text-red-700 transition-colors hover:bg-red-100"
+                        >
+                          Try again
+                        </button>
+                      </div>
+                    )}
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900">
+                            Review & share
+                          </h3>
+                          <p className="mt-1 text-sm text-gray-500">
+                            Finalize prices and notes, then save as draft or
+                            publish for the collector.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                          <Eye className="h-4 w-4 text-blue-600" />
+                          {viewingRoomMetadata.title || "Untitled proposal"}
+                        </div>
+                      </div>
+                      <div className="mt-4 grid grid-cols-1 gap-3 border-t border-gray-200 pt-4 text-sm sm:grid-cols-3">
+                        <div>
+                          <div className="text-xs font-medium uppercase text-gray-500">
+                            Sales stage
+                          </div>
+                          <div className="mt-1 font-semibold capitalize text-gray-900">
+                            {proposalWorkflow.stage.replaceAll("_", " ")}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-medium uppercase text-gray-500">
+                            Budget range
+                          </div>
+                          <div className="mt-1 font-semibold text-gray-900">
+                            {proposalWorkflow.budgetMinimum !== undefined ||
+                            proposalWorkflow.budgetMaximum !== undefined
+                              ? `${proposalWorkflow.budgetMinimum ?? "-"} - ${proposalWorkflow.budgetMaximum ?? "-"}`
+                              : "Not set"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-medium uppercase text-gray-500">
+                            Next follow-up
+                          </div>
+                          <div className="mt-1 font-semibold text-gray-900">
+                            {proposalWorkflow.nextFollowUpAt
+                              ? new Date(
+                                  proposalWorkflow.nextFollowUpAt,
+                                ).toLocaleDateString()
+                              : "Not scheduled"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <SaleProposal
+                      domainId={effectiveDomainId ?? domainId}
+                      dealerEmail={user?.email}
+                      userId={selectedUserId}
+                      userName={
+                        userDetails?.name ?? userDetails?.email ?? "Specialist"
+                      }
+                      draftItems={proposalItem}
+                      draftGeneralComments={proposalGeneralComments}
+                      onDraftChange={(items: ProposalItem[]) =>
+                        setProposalItem(items)
+                      }
+                      proposalId={wizardProposalId}
+                      proposalMetadata={proposalMetadataPayload}
+                      onProposalSave={(proposal) => {
+                        setProposalDetails(proposal);
+                        setProposalGeneralComments(
+                          proposal.generalComments ?? [],
+                        );
+                        setWizardProposalId(proposal.id);
+                        setIsProposalWizardOpen(false);
+                        setActiveTab("proposal");
+                      }}
+                      onProposalDelete={() => {
+                        setProposalDetails(null);
+                        setProposalItem([]);
+                        setProposalGeneralComments([]);
+                      }}
+                      embedded={true}
+                    />
+                  </div>
+                ))}
             </div>
 
             <div className="flex flex-col gap-3 border-t border-gray-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
@@ -1325,87 +1997,365 @@ export default function SalesPage() {
         </div>
       )}
 
-      <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      {isSaleWorkspace && (
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Sales Management
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Create proposals, browse catalog, and view AI suggestions.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={startProposalWizard}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
-        >
-          <Sparkles className="h-4 w-4" />
-          Create Proposal
-        </button>
-      </header>
-
-      <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
-        {/* If global admin, allow choosing domain first */}
-        {isGlobalAdmin && (
-          <div>
-            <label
-              htmlFor="sales-domain"
-              className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5"
+          <header className="mb-6 flex flex-col gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
+                Sale
+              </p>
+              <h1 className="mt-1 text-3xl font-bold text-gray-900">
+                Customer sale
+              </h1>
+              <p className="mt-2 text-sm text-gray-600">
+                Review the customer context, chat, and proposal in one place.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  `/sales${
+                    isGlobalAdmin && selectedDomainId
+                      ? `?domainId=${selectedDomainId}`
+                      : ""
+                  }`,
+                )
+              }
+              className="inline-flex items-center gap-2 self-start rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 md:self-auto"
             >
-              Domain
-            </label>
-            <SearchableSelect
-              id="sales-domain"
-              ariaLabel="Select domain"
-              value={selectedDomainId}
-              onChange={setSelectedDomainId}
-              options={domainOptions}
-              placeholder={domainsLoading ? "Loading..." : "Select a domain..."}
-              disabled={domainsLoading}
-              className="w-full bg-white border border-gray-200 text-gray-900 py-3 px-4 rounded-xl leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-            />
+              <ArrowLeft className="h-4 w-4" />
+              All customers
+            </button>
+          </header>
+
+          {selectedUserId && (
+            <section className="mb-6 border border-gray-200 bg-white">
+              <div className="flex flex-col gap-5 px-5 py-5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">
+                    {(userDetails?.name ?? userDetails?.email ?? "C")
+                      .split(" ")
+                      .map((part) => part[0])
+                      .slice(0, 2)
+                      .join("")
+                      .toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                      Selected collector
+                    </p>
+                    <h2 className="truncate text-xl font-bold text-gray-950">
+                      {userDetails?.name ??
+                        selectedCustomerLabel ??
+                        "Loading collector..."}
+                    </h2>
+                    <p className="truncate text-sm text-gray-600">
+                      {userDetails?.email ?? "Loading customer details..."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 divide-x divide-gray-200 border-y border-gray-200 sm:grid-cols-4 lg:border-y-0">
+                  <div className="px-4 py-2">
+                    <div className="text-xs font-medium text-gray-500">
+                      AI readiness
+                    </div>
+                    <div className="mt-1 text-sm font-bold text-gray-900">
+                      {aiProposalEligibilityLoading
+                        ? "Checking"
+                        : aiProposalEligibility?.isEligible
+                          ? "Ready"
+                          : "Blocked"}
+                    </div>
+                  </div>
+                  <div className="px-4 py-2">
+                    <div className="text-xs font-medium text-gray-500">
+                      Proposal
+                    </div>
+                    <div className="mt-1 text-sm font-bold capitalize text-gray-900">
+                      {proposalDetails?.status ?? "None"}
+                    </div>
+                  </div>
+                  <div className="px-4 py-2">
+                    <div className="text-xs font-medium text-gray-500">
+                      Engagement
+                    </div>
+                    <div className="mt-1 text-sm font-bold text-gray-900">
+                      {selectedProposalEngagement.viewCount ?? 0} views
+                    </div>
+                  </div>
+                  <div className="px-4 py-2">
+                    <div className="text-xs font-medium text-gray-500">
+                      Follow-up
+                    </div>
+                    <div className="mt-1 text-sm font-bold text-gray-900">
+                      {proposalWorkflow.nextFollowUpAt
+                        ? new Date(
+                            proposalWorkflow.nextFollowUpAt,
+                          ).toLocaleDateString()
+                        : "Not set"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  {proposalDetails ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={openProposalWizardForEditing}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
+                      >
+                        Continue proposal
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                      {renderAIProposalAction("New AI proposal")}
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={startProposalWizard}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+                      >
+                        <FileText className="h-4 w-4" />
+                        Manual proposal
+                      </button>
+                      {renderAIProposalAction("AI generated proposal")}
+                    </>
+                  )}
+                </div>
+              </div>
+              {aiProposalEligibility && !aiProposalEligibility.isEligible && (
+                <div className="border-t border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-950 lg:px-6">
+                  <span className="font-semibold">
+                    AI proposal unavailable:
+                  </span>{" "}
+                  {aiProposalEligibility.reasons.join(" ")}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+      )}
+
+      {!isSaleWorkspace && (
+        <section className="mb-6 border-y border-gray-200 bg-white py-5">
+          <header className="border-b border-gray-100 px-5 pb-5 lg:px-6">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
+              Sales
+            </p>
+            <h1 className="mt-1 text-3xl font-bold text-gray-900">Customers</h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Find a customer to open their sale workspace.
+            </p>
+            <div
+              className={`mt-5 grid gap-3 ${
+                isGlobalAdmin
+                  ? "md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]"
+                  : ""
+              }`}
+            >
+              {isGlobalAdmin && (
+                <SearchableSelect
+                  id="sales-list-domain"
+                  ariaLabel="Select sales domain"
+                  value={selectedDomainId}
+                  onChange={setSelectedDomainId}
+                  options={domainOptions}
+                  placeholder={
+                    domainsLoading ? "Loading domains..." : "Select a domain..."
+                  }
+                  disabled={domainsLoading}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              )}
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="search"
+                  value={customerSearch}
+                  onChange={(event) => setCustomerSearch(event.target.value)}
+                  placeholder="Search by name, email, or proposal status"
+                  aria-label="Search customers"
+                  className="w-full rounded-lg border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+            </div>
+          </header>
+          <div className="flex items-center justify-between gap-4 px-5 pt-5 lg:px-6">
+            <p className="text-sm text-gray-500">
+              {filteredSalesCustomerRows.length} of {salesCustomerRows.length}{" "}
+              customers
+            </p>
+            {domainProposalsLoading && <AppInlineLoader size="sm" />}
+          </div>
+          {filteredSalesCustomerRows.length === 0 && !domainProposalsLoading ? (
+            <p className="px-5 pt-4 text-sm text-gray-500 lg:px-6">
+              {customerSearch
+                ? "No customers match this search."
+                : "No customers are available in this domain."}
+            </p>
+          ) : (
+            <>
+              <div className="mt-4 overflow-hidden border-y border-gray-100">
+                <div className="hidden grid-cols-[minmax(18rem,1fr)_8rem_minmax(9rem,1fr)_auto] gap-5 border-b border-gray-100 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 lg:grid">
+                  <span>Customer</span>
+                  <span>Proposal</span>
+                  <span>Activity</span>
+                  <span className="text-right">Open</span>
+                </div>
+                {visibleSalesCustomers.map((row) => {
+                  const proposal = row.proposal;
+                  const workflow = (proposal?.metadata?.salesWorkflow ??
+                    {}) as Partial<ProposalSalesWorkflow>;
+                  const engagement = (proposal?.metadata?.engagement ??
+                    {}) as Partial<ProposalEngagement>;
+                  const followUpIsDue = Boolean(
+                    workflow.nextFollowUpAt &&
+                      workflow.nextFollowUpAt <= Date.now(),
+                  );
+                  return (
+                    <button
+                      key={row.customer.id}
+                      type="button"
+                      onClick={() => {
+                        const nextParams = new URLSearchParams();
+                        if (isGlobalAdmin && selectedDomainId) {
+                          nextParams.set("domainId", selectedDomainId);
+                        }
+                        navigate(
+                          `/sales/${row.customer.id}${
+                            nextParams.size ? `?${nextParams.toString()}` : ""
+                          }`,
+                        );
+                      }}
+                      className="grid w-full grid-cols-1 gap-3 px-4 py-4 text-left transition-colors hover:bg-gray-50 lg:grid-cols-[minmax(18rem,1fr)_8rem_minmax(9rem,1fr)_auto] lg:items-center lg:gap-5"
+                    >
+                      <div className="min-w-0">
+                        <div className="break-words font-semibold text-gray-900">
+                          {row.customer.name ??
+                            row.customer.email ??
+                            row.customer.id}
+                        </div>
+                        <div className="mt-1 break-all text-sm text-gray-600">
+                          {row.customer.email ?? "No email address"}
+                        </div>
+                      </div>
+                      <div>
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            row.proposalStatus === "submitted"
+                              ? "bg-blue-50 text-blue-700"
+                              : row.proposalStatus === "draft"
+                                ? "bg-amber-50 text-amber-800"
+                                : row.proposalStatus === "accepted"
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : row.proposalStatus === "rejected"
+                                    ? "bg-red-50 text-red-700"
+                                    : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {PROPOSAL_STATUS_LABELS[row.proposalStatus]}
+                        </span>
+                      </div>
+                      <div className="min-w-0 text-sm text-gray-600">
+                        {proposal ? (
+                          <>
+                            <div>
+                              {proposal.items.length} works ·{" "}
+                              {engagement.viewCount ?? 0} views
+                            </div>
+                            <div
+                              className={`mt-1 text-xs font-medium ${
+                                followUpIsDue
+                                  ? "text-amber-700"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              {workflow.nextFollowUpAt
+                                ? followUpIsDue
+                                  ? "Follow-up due"
+                                  : `Follow up ${new Date(workflow.nextFollowUpAt).toLocaleDateString()}`
+                                : "No follow-up scheduled"}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-gray-500">
+                            Ready for a new proposal
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex justify-end">
+                        <ChevronRight className="h-5 w-5 text-gray-400" />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {filteredSalesCustomerRows.length > SALES_CUSTOMERS_PER_PAGE && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-gray-500">
+                    Page {Math.min(salesCustomerPage, salesCustomerPageCount)}{" "}
+                    of {salesCustomerPageCount}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSalesCustomerPage((currentPage) =>
+                          Math.max(1, currentPage - 1),
+                        )
+                      }
+                      disabled={salesCustomerPage <= 1}
+                      className="rounded-lg border border-gray-200 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Previous customers page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSalesCustomerPage((currentPage) =>
+                          Math.min(salesCustomerPageCount, currentPage + 1),
+                        )
+                      }
+                      disabled={salesCustomerPage >= salesCustomerPageCount}
+                      className="rounded-lg border border-gray-200 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Next customers page"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      <div hidden={!isSaleWorkspace}>
+        {aiProposalError && (
+          <div className="mb-6 border-l-4 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {aiProposalError}
           </div>
         )}
 
-        <div>
-          <label
-            htmlFor="sales-user"
-            className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5"
-          >
-            Customer
-          </label>
-          <SearchableSelect
-            id="sales-user"
-            ariaLabel="Select user"
-            disabled={selectedDomainId === undefined}
-            value={selectedUserId}
-            onChange={setSelectedUserId}
-            options={userOptions}
-            placeholder="Select a customer..."
-            className="w-full bg-white border border-gray-200 text-gray-900 py-3 px-4 rounded-xl leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-          />
-        </div>
-      </div>
-
-      {/* Tab bar */}
-      <div className="mb-6">
-        <div className="border-b border-gray-200">
-          <nav
-            className="-mb-px flex space-x-8 overflow-x-auto scrollbar-hide"
-            aria-label="Tabs"
-          >
-            {[
-              { id: "details", label: "Overview" },
-              { id: "catalog", label: "Catalog" },
-              { id: "ai", label: "AI Suggestions" },
-              { id: "proposal", label: "Proposal" },
-            ].map((t) => {
-              const active = activeTab === (t.id as any);
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveTab(t.id as any)}
-                  className={`
+        {/* Tab bar */}
+        <div className="mb-6">
+          <div className="border-b border-gray-200">
+            <nav
+              className="-mb-px flex space-x-8 overflow-x-auto scrollbar-hide"
+              aria-label="Tabs"
+            >
+              {salesTabs.map((t) => {
+                const active = activeTab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveTab(t.id)}
+                    className={`
                                         whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
                                         ${
                                           active
@@ -1413,603 +2363,529 @@ export default function SalesPage() {
                                             : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                                         }
                                     `}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
 
-        <div className="mt-6">
-          {/* Details Panel */}
-          <div
-            role="tabpanel"
-            id="panel-details"
-            aria-labelledby="tab-details"
-            hidden={activeTab !== "details"}
-            className="animate-in fade-in duration-300"
-          >
-            {!selectedUserId && (
-              <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                <p className="text-gray-500">
-                  Please select a customer above to view their details.
-                </p>
-              </div>
-            )}
-
-            {selectedUserId && userDetailsLoading && (
-              <AppLoadingState
-                message="Loading customer details..."
-                iconSize="sm"
-              />
-            )}
-
-            {selectedUserId && userDetailsError && (
-              <div className="text-sm text-red-600">{userDetailsError}</div>
-            )}
-
-            {selectedUserId && userDetails && (
-              <div className="space-y-8">
-                {/* Profile Header Card */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col md:flex-row items-start md:items-center gap-6">
-                  <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center text-3xl font-bold text-blue-600 shrink-0">
-                    {userDetails.name
-                      ? userDetails.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .slice(0, 2)
-                          .join("")
-                      : (userDetails.email?.[0] ?? "U").toUpperCase()}
-                  </div>
-                  <div className="flex-1">
-                    <h2 className="text-2xl font-bold text-gray-900">
-                      {userDetails.name ?? "Unnamed User"}
-                    </h2>
-                    <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-gray-500">
-                      <div className="flex items-center gap-1.5">
-                        <Mail className="w-4 h-4" />
-                        {userDetails.email}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Shield className="w-4 h-4" />
-                        <span className="capitalize">{userDetails.role}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="px-4 py-2 bg-gray-50 rounded-xl border border-gray-100">
-                    <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold">
-                      Onboarding
-                    </div>
-                    <div className="text-sm font-medium text-gray-900 mt-1 capitalize">
-                      {(userDetails as any).onboardingStatus ?? "Unknown"}
-                    </div>
-                  </div>
+          <div className="mt-6">
+            {/* Details Panel */}
+            <div
+              role="tabpanel"
+              id="panel-details"
+              aria-labelledby="tab-details"
+              hidden={activeTab !== "details"}
+              className="animate-in fade-in duration-300"
+            >
+              {!selectedUserId && (
+                <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                  <p className="text-gray-500">
+                    Please select a customer above to view their details.
+                  </p>
                 </div>
+              )}
 
-                {/* Stats Grid */}
-                {statsLoading && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {[...Array(4)].map((_, i) => (
-                      <div
-                        key={i}
-                        className="bg-gray-50 h-24 rounded-xl border border-gray-100 animate-pulse"
-                      />
-                    ))}
-                  </div>
-                )}
+              {selectedUserId && userDetailsLoading && (
+                <AppLoadingState
+                  message="Loading customer details..."
+                  iconSize="sm"
+                />
+              )}
 
-                {statsError && (
-                  <div className="p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">
-                    {statsError}
-                  </div>
-                )}
+              {selectedUserId && userDetailsError && (
+                <div className="text-sm text-red-600">{userDetailsError}</div>
+              )}
 
-                {stats && !statsLoading && (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
-                      <div className="p-3 bg-purple-50 rounded-lg text-purple-600">
-                        <Layers className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 font-medium uppercase">
-                          Total Artworks
+              {selectedUserId && userDetails && (
+                <div className="space-y-8">
+                  {/* Profile Header Card */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col md:flex-row items-start md:items-center gap-6">
+                    <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center text-3xl font-bold text-blue-600 shrink-0">
+                      {userDetails.name
+                        ? userDetails.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .slice(0, 2)
+                            .join("")
+                        : (userDetails.email?.[0] ?? "U").toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        {userDetails.name ?? "Unnamed User"}
+                      </h2>
+                      <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-gray-500">
+                        <div className="flex items-center gap-1.5">
+                          <Mail className="w-4 h-4" />
+                          {userDetails.email}
                         </div>
-                        <div className="text-xl font-bold text-gray-900">
-                          {totalArtworks || "—"}
+                        <div className="flex items-center gap-1.5">
+                          <Shield className="w-4 h-4" />
+                          <span className="capitalize">{userDetails.role}</span>
                         </div>
                       </div>
                     </div>
-                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
-                      <div className="p-3 bg-blue-50 rounded-lg text-blue-600">
-                        <Activity className="w-6 h-6" />
+                    <div className="px-4 py-2 bg-gray-50 rounded-xl border border-gray-100">
+                      <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold">
+                        Onboarding
                       </div>
-                      <div>
-                        <div className="text-xs text-gray-500 font-medium uppercase">
-                          Total Swipes
-                        </div>
-                        <div className="text-xl font-bold text-gray-900">
-                          {totalSwiped || "—"}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
-                      <div className="p-3 bg-green-50 rounded-lg text-green-600">
-                        <Database className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 font-medium uppercase">
-                          Like Rate
-                        </div>
-                        <div className="text-xl font-bold text-gray-900">
-                          {formatPercent(likeRate)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
-                      <div className="p-3 bg-orange-50 rounded-lg text-orange-600">
-                        <MessageSquare className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 font-medium uppercase">
-                          Feedback
-                        </div>
-                        <div className="text-xl font-bold text-gray-900">
-                          {feedbackCount || "—"}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
-                      <div className="p-3 bg-cyan-50 rounded-lg text-cyan-600">
-                        <Paperclip className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 font-medium uppercase">
-                          Preference Images
-                        </div>
-                        <div className="text-xl font-bold text-gray-900">
-                          {preferenceImages || "—"}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
-                      <div className="p-3 bg-emerald-50 rounded-lg text-emerald-600">
-                        <Database className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 font-medium uppercase">
-                          Taste Vector
-                        </div>
-                        <div className="text-xl font-bold text-gray-900">
-                          {preferenceVectorReady ? "Ready" : "Not Ready"}
-                        </div>
+                      <div className="text-sm font-medium text-gray-900 mt-1 capitalize">
+                        {(userDetails as any).onboardingStatus ?? "Unknown"}
                       </div>
                     </div>
                   </div>
-                )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Questionnaire Section */}
-                  <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                    <div className="flex items-center gap-2 mb-6 pb-4 border-b border-gray-100">
-                      <FileText className="w-5 h-5 text-gray-400" />
-                      <h3 className="text-lg font-bold text-gray-900">
-                        Onboarding Questionnaire
-                      </h3>
-                    </div>
-                    <div className="space-y-6">
-                      {(userDetails as any).personalQuestionnaire ? (
-                        renderQuestionnaire(
-                          (userDetails as any).personalQuestionnaire as Record<
-                            string,
-                            unknown
-                          >,
-                        )
-                      ) : (
-                        <div className="text-gray-500 italic">
-                          No questionnaire data available.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Technical / Raw Stats Section */}
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 h-fit">
-                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
-                      System Data
-                    </h3>
-                    <div className="space-y-3">
-                      {[
-                        { label: "User ID", value: userDetails?.id },
-                        { label: "Domain ID", value: userDetails?.domainId },
-                        { label: "Role", value: userDetails?.role },
-                        { label: "Status", value: userDetails?.status },
-                        {
-                          label: "Onboarding Status",
-                          value: userDetails?.onboardingStatus,
-                        },
-                        {
-                          label: "User Created",
-                          value: userDetails?.createdAt
-                            ? new Date(userDetails.createdAt).toLocaleString()
-                            : "—",
-                        },
-                        {
-                          label: "User Updated",
-                          value: userDetails?.updatedAt
-                            ? new Date(userDetails.updatedAt).toLocaleString()
-                            : "—",
-                        },
-                        {
-                          label: "Questionnaire Completed",
-                          value: userDetails?.personalQuestionnaire?.completedAt
-                            ? new Date(
-                                userDetails.personalQuestionnaire.completedAt,
-                              ).toLocaleString()
-                            : "—",
-                        },
-                        {
-                          label: "Total Artworks",
-                          value: totalArtworks,
-                        },
-                        {
-                          label: "Total Swiped",
-                          value: totalSwiped,
-                        },
-                        {
-                          label: "Total Likes",
-                          value: totalLikes,
-                        },
-                        {
-                          label: "Total Dislikes",
-                          value: totalDislikes,
-                        },
-                        {
-                          label: "Like Rate",
-                          value: formatPercent(likeRate),
-                        },
-                        {
-                          label: "Dislike Rate",
-                          value: formatPercent(dislikeRate),
-                        },
-                        {
-                          label: "Swipe Coverage",
-                          value: formatPercent(swipeCoverage),
-                        },
-                        {
-                          label: "Preference Images",
-                          value: preferenceImages,
-                        },
-                        {
-                          label: "Feedback Comments",
-                          value: feedbackCount,
-                        },
-                        {
-                          label: "Last Comment",
-                          value: lastCommentAt
-                            ? new Date(lastCommentAt).toLocaleString()
-                            : "—",
-                        },
-                        {
-                          label: "Taste Vector",
-                          value: preferenceVectorReady ? "Ready" : "Not Ready",
-                        },
-                      ].map(({ label, value }) => (
+                  {/* Stats Grid */}
+                  {statsLoading && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[...Array(4)].map((_, i) => (
                         <div
-                          key={label}
-                          className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0"
-                        >
-                          <span className="text-xs text-gray-500 font-medium">
-                            {label}
-                          </span>
-                          <span className="text-sm font-mono text-gray-700">
-                            {formatValue(value)}
-                          </span>
-                        </div>
+                          key={i}
+                          className="bg-gray-50 h-24 rounded-xl border border-gray-100 animate-pulse"
+                        />
                       ))}
                     </div>
-                  </div>
-                </div>
+                  )}
 
-                {/* Chat Section */}
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-[500px]">
-                  <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-blue-500" />
-                    <span className="font-medium text-gray-700">
-                      Chat with Customer
-                    </span>
-                  </div>
+                  {statsError && (
+                    <div className="p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">
+                      {statsError}
+                    </div>
+                  )}
 
-                  <div
-                    ref={chatScrollRef}
-                    className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/30"
-                  >
-                    {!userDetails.comments ||
-                    userDetails.comments.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center text-gray-400">
-                        <MessageSquare className="w-12 h-12 mb-2 opacity-20" />
-                        <p>No messages yet.</p>
+                  {stats && !statsLoading && (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
+                        <div className="p-3 bg-purple-50 rounded-lg text-purple-600">
+                          <Layers className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 font-medium uppercase">
+                            Total Artworks
+                          </div>
+                          <div className="text-xl font-bold text-gray-900">
+                            {totalArtworks || "—"}
+                          </div>
+                        </div>
                       </div>
-                    ) : (
-                      userDetails.comments.map((comment, idx) => {
-                        const isCustomer =
-                          comment.author === userDetails.name ||
-                          comment.author === userDetails.email;
-                        const trimmedText = comment.text?.trim() || "";
-                        const isImageMessage = /^https?:\/\//i.test(
-                          trimmedText,
-                        );
+                      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
+                        <div className="p-3 bg-blue-50 rounded-lg text-blue-600">
+                          <Activity className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 font-medium uppercase">
+                            Total Swipes
+                          </div>
+                          <div className="text-xl font-bold text-gray-900">
+                            {totalSwiped || "—"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
+                        <div className="p-3 bg-green-50 rounded-lg text-green-600">
+                          <Database className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 font-medium uppercase">
+                            Like Rate
+                          </div>
+                          <div className="text-xl font-bold text-gray-900">
+                            {formatPercent(likeRate)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
+                        <div className="p-3 bg-orange-50 rounded-lg text-orange-600">
+                          <MessageSquare className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 font-medium uppercase">
+                            Feedback
+                          </div>
+                          <div className="text-xl font-bold text-gray-900">
+                            {feedbackCount || "—"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
+                        <div className="p-3 bg-cyan-50 rounded-lg text-cyan-600">
+                          <Paperclip className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 font-medium uppercase">
+                            Preference Images
+                          </div>
+                          <div className="text-xl font-bold text-gray-900">
+                            {preferenceImages || "—"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
+                        <div className="p-3 bg-emerald-50 rounded-lg text-emerald-600">
+                          <Database className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 font-medium uppercase">
+                            Taste Vector
+                          </div>
+                          <div className="text-xl font-bold text-gray-900">
+                            {preferenceVectorReady ? "Ready" : "Not Ready"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-                        return (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Questionnaire Section */}
+                    <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                      <div className="flex items-center gap-2 mb-6 pb-4 border-b border-gray-100">
+                        <FileText className="w-5 h-5 text-gray-400" />
+                        <h3 className="text-lg font-bold text-gray-900">
+                          Onboarding Questionnaire
+                        </h3>
+                      </div>
+                      <div className="space-y-6">
+                        {(userDetails as any).personalQuestionnaire ? (
+                          renderQuestionnaire(
+                            (userDetails as any)
+                              .personalQuestionnaire as Record<string, unknown>,
+                          )
+                        ) : (
+                          <div className="text-gray-500 italic">
+                            No questionnaire data available.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Technical / Raw Stats Section */}
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 h-fit">
+                      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
+                        System Data
+                      </h3>
+                      <div className="space-y-3">
+                        {[
+                          { label: "User ID", value: userDetails?.id },
+                          { label: "Domain ID", value: userDetails?.domainId },
+                          { label: "Role", value: userDetails?.role },
+                          { label: "Status", value: userDetails?.status },
+                          {
+                            label: "Onboarding Status",
+                            value: userDetails?.onboardingStatus,
+                          },
+                          {
+                            label: "User Created",
+                            value: userDetails?.createdAt
+                              ? new Date(userDetails.createdAt).toLocaleString()
+                              : "—",
+                          },
+                          {
+                            label: "User Updated",
+                            value: userDetails?.updatedAt
+                              ? new Date(userDetails.updatedAt).toLocaleString()
+                              : "—",
+                          },
+                          {
+                            label: "Questionnaire Completed",
+                            value: userDetails?.personalQuestionnaire
+                              ?.completedAt
+                              ? new Date(
+                                  userDetails.personalQuestionnaire.completedAt,
+                                ).toLocaleString()
+                              : "—",
+                          },
+                          {
+                            label: "Total Artworks",
+                            value: totalArtworks,
+                          },
+                          {
+                            label: "Total Swiped",
+                            value: totalSwiped,
+                          },
+                          {
+                            label: "Total Likes",
+                            value: totalLikes,
+                          },
+                          {
+                            label: "Total Dislikes",
+                            value: totalDislikes,
+                          },
+                          {
+                            label: "Like Rate",
+                            value: formatPercent(likeRate),
+                          },
+                          {
+                            label: "Dislike Rate",
+                            value: formatPercent(dislikeRate),
+                          },
+                          {
+                            label: "Swipe Coverage",
+                            value: formatPercent(swipeCoverage),
+                          },
+                          {
+                            label: "Preference Images",
+                            value: preferenceImages,
+                          },
+                          {
+                            label: "Feedback Comments",
+                            value: feedbackCount,
+                          },
+                          {
+                            label: "Last Comment",
+                            value: lastCommentAt
+                              ? new Date(lastCommentAt).toLocaleString()
+                              : "—",
+                          },
+                          {
+                            label: "Taste Vector",
+                            value: preferenceVectorReady
+                              ? "Ready"
+                              : "Not Ready",
+                          },
+                        ].map(({ label, value }) => (
                           <div
-                            key={idx}
-                            className={`flex ${!isCustomer ? "justify-end" : "justify-start"}`}
+                            key={label}
+                            className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0"
                           >
+                            <span className="text-xs text-gray-500 font-medium">
+                              {label}
+                            </span>
+                            <span className="text-sm font-mono text-gray-700">
+                              {formatValue(value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Chat Section */}
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-[500px]">
+                    <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5 text-blue-500" />
+                      <span className="font-medium text-gray-700">
+                        Chat with Customer
+                      </span>
+                    </div>
+
+                    <div
+                      ref={chatScrollRef}
+                      className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/30"
+                    >
+                      {!userDetails.comments ||
+                      userDetails.comments.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                          <MessageSquare className="w-12 h-12 mb-2 opacity-20" />
+                          <p>No messages yet.</p>
+                        </div>
+                      ) : (
+                        userDetails.comments.map((comment, idx) => {
+                          const isCustomer =
+                            comment.author === userDetails.name ||
+                            comment.author === userDetails.email;
+                          const trimmedText = comment.text?.trim() || "";
+                          const isImageMessage = /^https?:\/\//i.test(
+                            trimmedText,
+                          );
+
+                          return (
                             <div
-                              className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                                !isCustomer
-                                  ? "bg-blue-600 text-white rounded-br-none"
-                                  : "bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm"
-                              }`}
+                              key={idx}
+                              className={`flex ${!isCustomer ? "justify-end" : "justify-start"}`}
                             >
                               <div
-                                className={`text-xs mb-1 ${!isCustomer ? "text-blue-100" : "text-gray-500"}`}
+                                className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                                  !isCustomer
+                                    ? "bg-blue-600 text-white rounded-br-none"
+                                    : "bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm"
+                                }`}
                               >
-                                {!isCustomer ? "You" : comment.author} •{" "}
-                                {new Date(
-                                  comment.createdAt,
-                                ).toLocaleDateString()}
-                              </div>
-                              {isImageMessage ? (
-                                <a
-                                  href={trimmedText}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="block"
+                                <div
+                                  className={`text-xs mb-1 ${!isCustomer ? "text-blue-100" : "text-gray-500"}`}
                                 >
-                                  <div
-                                    className={`rounded-xl overflow-hidden border ${!isCustomer ? "border-white/30 bg-white/10" : "border-gray-200 bg-gray-50"}`}
+                                  {!isCustomer ? "You" : comment.author} •{" "}
+                                  {new Date(
+                                    comment.createdAt,
+                                  ).toLocaleDateString()}
+                                </div>
+                                {isImageMessage ? (
+                                  <a
+                                    href={trimmedText}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="block"
                                   >
-                                    <img
-                                      src={trimmedText}
-                                      alt="Shared attachment"
-                                      className="w-full max-w-[220px] h-36 object-cover"
-                                    />
-                                  </div>
-                                  <span
-                                    className={`mt-1 block text-[10px] uppercase tracking-wide ${!isCustomer ? "text-blue-100" : "text-gray-400"}`}
-                                  >
-                                    Tap to open full size
-                                  </span>
-                                </a>
-                              ) : (
-                                <p className="text-sm whitespace-pre-wrap break-words">
-                                  {comment.text}
-                                </p>
-                              )}
+                                    <div
+                                      className={`rounded-xl overflow-hidden border ${!isCustomer ? "border-white/30 bg-white/10" : "border-gray-200 bg-gray-50"}`}
+                                    >
+                                      <img
+                                        src={trimmedText}
+                                        alt="Shared attachment"
+                                        className="w-full max-w-[220px] h-36 object-cover"
+                                      />
+                                    </div>
+                                    <span
+                                      className={`mt-1 block text-[10px] uppercase tracking-wide ${!isCustomer ? "text-blue-100" : "text-gray-400"}`}
+                                    >
+                                      Tap to open full size
+                                    </span>
+                                  </a>
+                                ) : (
+                                  <p className="text-sm whitespace-pre-wrap break-words">
+                                    {comment.text}
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-
-                  <div className="p-4 bg-white border-t border-gray-100">
-                    <form
-                      onSubmit={handleSendChat}
-                      className="flex gap-2 items-center"
-                    >
-                      <input
-                        ref={chatFileInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        className="hidden"
-                        onChange={handleChatFileChange}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => chatFileInputRef.current?.click()}
-                        className="text-gray-500 hover:text-blue-600 transition-colors p-2 rounded-full hover:bg-blue-50"
-                        title="Attach an image"
-                        disabled={isSendingChat || isUploadingChatAttachment}
-                      >
-                        <Paperclip className="w-5 h-5" />
-                      </button>
-                      <input
-                        type="text"
-                        value={newChatComment}
-                        onChange={(e) => setNewChatComment(e.target.value)}
-                        placeholder="Type a message to the customer..."
-                        className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        disabled={isSendingChat || isUploadingChatAttachment}
-                        onPaste={handleChatPaste}
-                      />
-                      <button
-                        type="submit"
-                        disabled={
-                          !newChatComment.trim() ||
-                          isSendingChat ||
-                          isUploadingChatAttachment
-                        }
-                        className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {isSendingChat ? (
-                          <AppInlineLoader size="sm" theme="light" />
-                        ) : (
-                          <Send className="w-5 h-5" />
-                        )}
-                      </button>
-                      {isUploadingChatAttachment && (
-                        <span className="text-xs text-gray-500 flex items-center gap-1">
-                          <AppInlineLoader size="xs" label="Uploading..." />
-                        </span>
+                          );
+                        })
                       )}
-                    </form>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+                    </div>
 
-          {/* Catalog Panel */}
-          <div
-            role="tabpanel"
-            id="panel-catalog"
-            aria-labelledby="tab-catalog"
-            hidden={activeTab !== "catalog"}
-          >
-            {!selectedUserId && (
-              <div>Please select a user to view the catalog.</div>
-            )}
-            {selectedUserId && (
-              <div>
-                <div className="mb-4">
-                  <span className="text-sm font-medium text-gray-700 mr-3">
-                    Filter by feedback
-                  </span>
-                  <div className="inline-flex items-center gap-2">
-                    {(["all", "liked", "disliked"] as const).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => setPreferenceFilter(option)}
-                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                          preferenceFilter === option
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                        }`}
+                    <div className="p-4 bg-white border-t border-gray-100">
+                      <form
+                        onSubmit={handleSendChat}
+                        className="flex gap-2 items-center"
                       >
-                        {option === "all"
-                          ? "All"
-                          : option === "liked"
-                            ? "Liked"
-                            : "Disliked"}
-                      </button>
-                    ))}
+                        <input
+                          ref={chatFileInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={handleChatFileChange}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => chatFileInputRef.current?.click()}
+                          className="text-gray-500 hover:text-blue-600 transition-colors p-2 rounded-full hover:bg-blue-50"
+                          title="Attach an image"
+                          disabled={isSendingChat || isUploadingChatAttachment}
+                        >
+                          <Paperclip className="w-5 h-5" />
+                        </button>
+                        <input
+                          type="text"
+                          value={newChatComment}
+                          onChange={(e) => setNewChatComment(e.target.value)}
+                          placeholder="Type a message to the customer..."
+                          className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          disabled={isSendingChat || isUploadingChatAttachment}
+                          onPaste={handleChatPaste}
+                        />
+                        <button
+                          type="submit"
+                          disabled={
+                            !newChatComment.trim() ||
+                            isSendingChat ||
+                            isUploadingChatAttachment
+                          }
+                          className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {isSendingChat ? (
+                            <AppInlineLoader size="sm" theme="light" />
+                          ) : (
+                            <Send className="w-5 h-5" />
+                          )}
+                        </button>
+                        {isUploadingChatAttachment && (
+                          <span className="text-xs text-gray-500 flex items-center gap-1">
+                            <AppInlineLoader size="xs" label="Uploading..." />
+                          </span>
+                        )}
+                      </form>
+                    </div>
                   </div>
                 </div>
+              )}
+            </div>
 
-                <CatalogForUser
-                  domainId={effectiveDomainId ?? domainId}
-                  userId={selectedUserId}
-                  preferenceFilter={
-                    preferenceFilter === "all" ? undefined : preferenceFilter
-                  }
-                  onAddToDraft={(artwork) => {
-                    setProposalItem((currentDraft) => {
-                      const isAlreadyInProposal = currentDraft.some(
-                        (draftItem) => draftItem.artworkId === artwork.id,
-                      );
-
-                      if (isAlreadyInProposal) {
-                        // Remove from proposal
-                        return currentDraft.filter(
-                          (draftItem) => draftItem.artworkId !== artwork.id,
-                        );
-                      } else {
-                        // Add to proposal
-                        return [
-                          {
-                            artworkId: artwork.id,
-                            comments: [],
-                            status: "pending",
-                            taggedAt: Date.now(),
-                            title: artwork.title,
-                            filename: artwork.filename,
-                            askedPrice: 0,
-                            askedMaxPrice: undefined,
-                          },
-                          ...currentDraft,
-                        ];
-                      }
-                    });
-                  }}
-                  showPreferenceButtons={false}
-                  ownersExperience={true}
-                  isInProposal={(artworkId) =>
-                    proposalItem.some(
-                      (draftItem) => draftItem.artworkId === artworkId,
-                    )
-                  }
-                />
-              </div>
-            )}
-          </div>
-
-          {/* AI Panel (unchanged) */}
-          <div
-            role="tabpanel"
-            id="panel-ai"
-            aria-labelledby="tab-ai"
-            hidden={activeTab !== "ai"}
-          >
-            {!selectedUserId && (
-              <div>Please select a user to see AI suggestions.</div>
-            )}
-            {selectedUserId && (
-              <AISuggestionsPage
-                domainId={effectiveDomainId}
-                userId={selectedUserId}
-                proposalItems={proposalArtworkIds}
-                onAddToProposal={handleProposalToggle}
-                readonlyThumbs={true}
-                showOwnerRatedFilter={true}
-              />
-            )}
-          </div>
-
-          {/* Proposal Panel */}
-          <div
-            role="tabpanel"
-            id="panel-proposal"
-            aria-labelledby="tab-proposal"
-            hidden={activeTab !== "proposal"}
-          >
-            {!selectedUserId && (
-              <div>Please select a user to manage proposals.</div>
-            )}
-            {selectedUserId && (
-              <div>
-                {proposalDetails && (
-                  <div className="mb-4 p-4 bg-gray-50 border rounded shadow-sm">
-                    <h3 className="text-lg font-semibold">Proposal Details</h3>
-                    <p className="text-sm text-gray-600">
-                      <strong>Status:</strong> {proposalDetails.status}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <strong>Created At:</strong>{" "}
-                      {new Date(proposalDetails.createdAt).toLocaleString()}
-                    </p>
-                    {proposalDetails.updatedAt && (
+            {/* Proposal Panel */}
+            <div
+              role="tabpanel"
+              id="panel-proposal"
+              aria-labelledby="tab-proposal"
+              hidden={activeTab !== "proposal"}
+            >
+              {(!selectedUserId || !proposalDetails) && (
+                <div>Please select a user to manage proposals.</div>
+              )}
+              {selectedUserId && proposalDetails && (
+                <div>
+                  <div className="mb-4 flex flex-col gap-3 rounded border bg-gray-50 p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold">
+                        Proposal Details
+                      </h3>
                       <p className="text-sm text-gray-600">
-                        <strong>Last Updated:</strong>{" "}
-                        {new Date(proposalDetails.updatedAt).toLocaleString()}
+                        <strong>Status:</strong> {proposalDetails.status}
                       </p>
-                    )}
+                      <p className="text-sm text-gray-600">
+                        <strong>Created At:</strong>{" "}
+                        {new Date(proposalDetails.createdAt).toLocaleString()}
+                      </p>
+                      {proposalDetails.updatedAt && (
+                        <p className="text-sm text-gray-600">
+                          <strong>Last Updated:</strong>{" "}
+                          {new Date(proposalDetails.updatedAt).toLocaleString()}
+                        </p>
+                      )}
+                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
+                        <span>
+                          <strong>Sales stage:</strong>{" "}
+                          {proposalWorkflow.stage.replaceAll("_", " ")}
+                        </span>
+                        <span>
+                          <strong>Follow-up:</strong>{" "}
+                          {proposalWorkflow.nextFollowUpAt
+                            ? new Date(
+                                proposalWorkflow.nextFollowUpAt,
+                              ).toLocaleDateString()
+                            : "Not scheduled"}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={openProposalWizardForEditing}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Edit in Wizard
+                    </button>
                   </div>
-                )}
 
-                <SaleProposal
-                  domainId={effectiveDomainId ?? domainId}
-                  dealerEmail={user?.email}
-                  userId={selectedUserId}
-                  userName={
-                    userDetails?.name ?? userDetails?.email ?? "Specialist"
-                  }
-                  draftItems={proposalItem}
-                  onDraftChange={(items: ProposalItem[]) =>
-                    setProposalItem(items)
-                  }
-                  proposalId={proposalDetails?.id}
-                  proposalMetadata={proposalMetadataPayload}
-                  onProposalSave={(proposal) => setProposalDetails(proposal)}
-                  onProposalDelete={() => {
-                    setProposalDetails(null);
-                    setProposalItem([]);
-                  }}
-                />
-              </div>
-            )}
+                  <SaleProposal
+                    domainId={effectiveDomainId ?? domainId}
+                    dealerEmail={user?.email}
+                    userId={selectedUserId}
+                    userName={
+                      userDetails?.name ?? userDetails?.email ?? "Specialist"
+                    }
+                    draftItems={proposalItem}
+                    draftGeneralComments={proposalGeneralComments}
+                    onDraftChange={(items: ProposalItem[]) =>
+                      setProposalItem(items)
+                    }
+                    proposalId={proposalDetails?.id}
+                    proposalMetadata={proposalMetadataPayload}
+                    onProposalSave={(proposal) => {
+                      setProposalDetails(proposal);
+                      setProposalGeneralComments(
+                        proposal.generalComments ?? [],
+                      );
+                    }}
+                    onProposalDelete={() => {
+                      setProposalDetails(null);
+                      setProposalItem([]);
+                      setProposalGeneralComments([]);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

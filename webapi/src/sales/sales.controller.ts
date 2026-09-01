@@ -19,7 +19,13 @@ import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
 import { RolesGuard } from "../auth/utils/roles.guard";
 import { Roles } from "../auth/utils/roles.decorator";
 import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
-import { Proposal } from "@tastematcher/common";
+import {
+  GeneratedProposalDraft,
+  GenerateProposalDraftRequest,
+  Proposal,
+  RecordProposalEngagementRequest,
+  ProposalGenerationEligibility,
+} from "@tastematcher/common";
 
 @ApiTags("sales")
 @Controller("domains/:domainId/sales")
@@ -80,6 +86,22 @@ export class SalesController {
     );
   }
 
+  @Get("proposals/ai-generation-eligibility")
+  @Roles("dealer", "domain_owner", "global_admin")
+  @ApiOperation({ summary: "Check customer readiness for an AI proposal" })
+  async getAIProposalEligibility(
+    @Request() req: AuthenticatedRequest,
+    @Param("domainId") domainId: string,
+    @Query("userId") userId: string,
+  ): Promise<ProposalGenerationEligibility> {
+    if (req.user.domainId !== domainId && req.user.role !== "global_admin") {
+      throw new ForbiddenException(
+        "You are not authorized to access this domain.",
+      );
+    }
+    return this.salesService.getAIDraftEligibility(domainId, userId, req.user);
+  }
+
   @Get("proposals/:proposalId")
   @Roles("customer", "dealer", "domain_owner", "global_admin")
   async getProposal(
@@ -99,7 +121,9 @@ export class SalesController {
       );
     }
     if (req.user.role === "customer" && proposal.status === "draft") {
-      throw new ForbiddenException("Draft proposals are not visible to customers.");
+      throw new ForbiddenException(
+        "Draft proposals are not visible to customers.",
+      );
     }
     return proposal;
   }
@@ -119,6 +143,49 @@ export class SalesController {
       );
     }
     return this.salesService.createProposal(domainId, proposal, req.user);
+  }
+
+  @Post("proposals/ai-generated-draft")
+  @Roles("dealer", "domain_owner", "global_admin")
+  @ApiOperation({ summary: "Generate editable AI proposal draft" })
+  async generateAIProposalDraft(
+    @Request() req: AuthenticatedRequest,
+    @Param("domainId") domainId: string,
+    @Body() body: GenerateProposalDraftRequest,
+  ): Promise<GeneratedProposalDraft> {
+    if (req.user.domainId !== domainId && req.user.role !== "global_admin") {
+      throw new ForbiddenException(
+        "You are not authorized to access this domain.",
+      );
+    }
+    return this.salesService.generateAIDraft(
+      domainId,
+      body.userId,
+      req.user,
+      body.limit,
+    );
+  }
+
+  @Post("proposals/:proposalId/engagement")
+  @Roles("customer")
+  @ApiOperation({ summary: "Record customer engagement with a proposal" })
+  async recordProposalEngagement(
+    @Request() req: AuthenticatedRequest,
+    @Param("domainId") domainId: string,
+    @Param("proposalId") proposalId: string,
+    @Body() body: RecordProposalEngagementRequest,
+  ): Promise<Proposal> {
+    if (req.user.domainId !== domainId) {
+      throw new ForbiddenException(
+        "You are not authorized to access this domain.",
+      );
+    }
+    return this.salesService.recordCustomerEngagement(
+      domainId,
+      proposalId,
+      req.user,
+      body,
+    );
   }
 
   @Patch("proposals/:proposalId")
@@ -143,7 +210,9 @@ export class SalesController {
       );
     }
     if (req.user.role === "customer" && proposal.status === "draft") {
-      throw new ForbiddenException("Draft proposals cannot be updated by customers.");
+      throw new ForbiddenException(
+        "Draft proposals cannot be updated by customers.",
+      );
     }
 
     return this.salesService.updateProposal(

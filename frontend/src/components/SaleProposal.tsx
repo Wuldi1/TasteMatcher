@@ -28,6 +28,9 @@ import {
   formatPriceRangeForViewer,
 } from "../utils/viewFormatting";
 
+const EMPTY_PROPOSAL_ITEMS: ProposalItem[] = [];
+const EMPTY_GENERAL_COMMENTS: Comment[] = [];
+
 // Helper component for price input with comma formatting
 const FormattedPriceInput = ({
   value,
@@ -102,23 +105,27 @@ export default function SaleProposal({
   domainId,
   userId,
   userName,
-  draftItems = [],
+  draftItems = EMPTY_PROPOSAL_ITEMS,
+  draftGeneralComments = EMPTY_GENERAL_COMMENTS,
   onDraftChange,
   proposalId,
   onProposalSave,
   onProposalDelete,
   proposalMetadata,
+  embedded = false,
 }: {
   dealerEmail?: string;
   domainId: string;
   userId: string;
   userName?: string;
   draftItems?: ProposalItem[];
+  draftGeneralComments?: Comment[];
   onDraftChange?: (items: ProposalItem[]) => void;
   proposalId?: string;
   onProposalSave?: (proposal: Proposal) => void;
   onProposalDelete?: () => void;
   proposalMetadata?: Proposal["metadata"];
+  embedded?: boolean;
 }) {
   const { currency, dimensionUnit } = useViewerPreferences();
   // Use the passed draftItems as the source of truth; keep local copy for editing convenience
@@ -213,8 +220,9 @@ export default function SaleProposal({
       setIsDirty(true);
     } else {
       setProposalStatus(undefined);
+      setGeneralComments(draftGeneralComments);
     }
-  }, [draftItems, proposalId]);
+  }, [draftGeneralComments, draftItems, proposalId]);
 
   useEffect(() => {
     if (!domainId) {
@@ -1415,25 +1423,36 @@ export default function SaleProposal({
         )}
       </div>
 
-      {/* Sticky Bottom Actions — stays within the page container */}
-      <div className="sticky bottom-0 bg-white/90 backdrop-blur-md border-t border-gray-200 p-4 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <div
+        className={
+          embedded
+            ? "mt-6 rounded-xl border border-gray-200 bg-white p-4"
+            : "sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] backdrop-blur-md"
+        }
+      >
         <div className="max-w-7xl mx-auto flex flex-wrap justify-end gap-3">
-          <button
-            onClick={handleDeleteProposal}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-700 rounded-xl font-medium hover:bg-red-50 transition-colors disabled:opacity-50"
-            disabled={!proposalId}
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete
-          </button>
-          <button
-            onClick={handlePingProposal}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-yellow-200 text-yellow-700 rounded-xl font-medium hover:bg-yellow-50 transition-colors disabled:opacity-50"
-            disabled={!proposalId || isReadOnly || proposalStatus === "draft"}
-          >
-            <Bell className="w-4 h-4" />
-            Ping
-          </button>
+          {!embedded && (
+            <>
+              <button
+                onClick={handleDeleteProposal}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-700 rounded-xl font-medium hover:bg-red-50 transition-colors disabled:opacity-50"
+                disabled={!proposalId}
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+              <button
+                onClick={handlePingProposal}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-yellow-200 text-yellow-700 rounded-xl font-medium hover:bg-yellow-50 transition-colors disabled:opacity-50"
+                disabled={
+                  !proposalId || isReadOnly || proposalStatus === "draft"
+                }
+              >
+                <Bell className="w-4 h-4" />
+                Ping
+              </button>
+            </>
+          )}
           <button
             onClick={handleSaveDraftClick}
             className="flex items-center gap-2 px-6 py-2 bg-gray-700 text-white rounded-xl font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-800"

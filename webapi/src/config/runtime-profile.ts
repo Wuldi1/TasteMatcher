@@ -15,6 +15,43 @@ export function shouldUseSecureAuthCodes(): boolean {
   return process.env.NODE_ENV === "prd" || isProductionDataTarget();
 }
 
+/**
+ * Allows one explicitly configured account to use a fixed verification code on
+ * a developer machine connected to production data. This is intentionally
+ * unavailable in deployed production, regardless of configuration.
+ */
+export function isConfiguredLocalLoginOverrideFor(email: string): boolean {
+  if (
+    !isLocalProductionRuntime() ||
+    process.env.NODE_ENV === "prd" ||
+    process.env.NODE_ENV === "production" ||
+    process.env.LOCAL_TEST_LOGIN_ENABLED !== "true"
+  ) {
+    return false;
+  }
+
+  const configuredEmail =
+    process.env.LOCAL_TEST_LOGIN_EMAIL?.trim().toLowerCase();
+  const configuredCode = process.env.LOCAL_TEST_LOGIN_CODE?.trim();
+
+  return Boolean(
+    configuredEmail &&
+      configuredCode &&
+      email.trim().toLowerCase() === configuredEmail,
+  );
+}
+
+/** Accepts the configured code only for the configured local override account. */
+export function shouldAcceptConfiguredLocalLoginCode(
+  email: string,
+  code: string,
+): boolean {
+  return (
+    isConfiguredLocalLoginOverrideFor(email) &&
+    code.trim() === process.env.LOCAL_TEST_LOGIN_CODE?.trim()
+  );
+}
+
 /** Real email delivery is limited to the deployed production behavior mode. */
 export function shouldSendRealEmail(): boolean {
   return (

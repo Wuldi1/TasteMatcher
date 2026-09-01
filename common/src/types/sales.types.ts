@@ -28,6 +28,72 @@ export type ProposalItem = {
   askedMaxPrice?: number;
 };
 
+export interface GenerateProposalDraftRequest {
+  userId: string;
+  limit?: number;
+  includeLikedOnly?: boolean;
+}
+
+export interface GeneratedProposalDraft {
+  userId: string;
+  items: ProposalItem[];
+  metadata: Record<string, unknown>;
+  generalComments: Comment[];
+  status: "draft";
+}
+
+export interface ProposalGenerationEligibility {
+  userId: string;
+  isEligible: boolean;
+  reasons: string[];
+  onboardingCompleted: boolean;
+  swipeCount: number;
+  minimumSwipeCount: number;
+  preferenceVectorReady: boolean;
+  activeAuctionRecommendationCount: number;
+}
+
+export type ProposalWorkflowStage =
+  | "drafting"
+  | "ready_to_review"
+  | "sent"
+  | "viewed"
+  | "responded"
+  | "negotiating"
+  | "won"
+  | "lost";
+
+export type ProposalTemplateId =
+  | "first_introduction"
+  | "auction_opportunity"
+  | "budget_shortlist"
+  | "follow_up";
+
+export interface ProposalSalesWorkflow {
+  stage: ProposalWorkflowStage;
+  templateId?: ProposalTemplateId;
+  budgetMinimum?: number;
+  budgetMaximum?: number;
+  priorityArtworkIds?: string[];
+  nextFollowUpAt?: number;
+  lastCustomerActivityAt?: number;
+}
+
+export type ProposalEngagementEventType = "opened" | "artwork_viewed";
+
+export interface RecordProposalEngagementRequest {
+  event: ProposalEngagementEventType;
+  artworkId?: string;
+}
+
+export interface ProposalEngagement {
+  viewCount: number;
+  firstViewedAt?: number;
+  lastViewedAt?: number;
+  viewedArtworkIds: string[];
+  lastCustomerActivityAt?: number;
+}
+
 export interface Proposal {
   id: string;
   type: "proposal";

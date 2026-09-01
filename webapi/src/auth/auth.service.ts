@@ -16,7 +16,11 @@ import { LoginVerifyDto } from "./dto/login-verify.dto";
 import { EmailService } from "../email/email.service";
 import { DomainActivityService } from "../activity/domain-activity.service";
 import { ProductActivityLoggerService } from "../activity/product-activity-logger.service";
-import { shouldUseSecureAuthCodes } from "../config/runtime-profile";
+import {
+  isConfiguredLocalLoginOverrideFor,
+  shouldAcceptConfiguredLocalLoginCode,
+  shouldUseSecureAuthCodes,
+} from "../config/runtime-profile";
 
 const VERIFICATION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -69,6 +73,11 @@ export class AuthService {
 
     const user = users[0];
     console.log("Found user for login request:", user);
+
+    if (isConfiguredLocalLoginOverrideFor(normalizedEmail)) {
+      this.logger.log(`Using configured local login override for ${user.id}`);
+      return { message: "Verification code ready" };
+    }
 
     // Generate verification code
     const code = this.generateVerificationCode();
@@ -139,20 +148,27 @@ export class AuthService {
 
     const user = users[0];
 
-    // Validate verification code
-    if (!user.verificationCodeHash || !user.verificationCodeExpiresAt) {
-      throw new BadRequestException(
-        "No verification code requested for this account",
-      );
-    }
+    const acceptsLocalTestCode = shouldAcceptConfiguredLocalLoginCode(
+      normalizedEmail,
+      verifyDto.code,
+    );
 
-    if (user.verificationCodeExpiresAt < Date.now()) {
-      throw new BadRequestException("Verification code expired");
-    }
+    // Validate normally unless this is the exact local-only override.
+    if (!acceptsLocalTestCode) {
+      if (!user.verificationCodeHash || !user.verificationCodeExpiresAt) {
+        throw new BadRequestException(
+          "No verification code requested for this account",
+        );
+      }
 
-    const submittedHash = this.hashCode(verifyDto.code);
-    if (submittedHash !== user.verificationCodeHash) {
-      throw new BadRequestException("Invalid verification code");
+      if (user.verificationCodeExpiresAt < Date.now()) {
+        throw new BadRequestException("Verification code expired");
+      }
+
+      const submittedHash = this.hashCode(verifyDto.code);
+      if (submittedHash !== user.verificationCodeHash) {
+        throw new BadRequestException("Invalid verification code");
+      }
     }
 
     // Update user status to active and clear verification code

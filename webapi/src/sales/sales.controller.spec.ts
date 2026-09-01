@@ -6,6 +6,9 @@ describe("SalesController", () => {
     findAll: jest.fn(),
     getProposal: jest.fn(),
     createProposal: jest.fn(),
+    generateAIDraft: jest.fn(),
+    getAIDraftEligibility: jest.fn(),
+    recordCustomerEngagement: jest.fn(),
     updateProposal: jest.fn(),
     removeProposal: jest.fn(),
     pingCustomer: jest.fn(),
@@ -88,5 +91,86 @@ describe("SalesController", () => {
         "proposal-1",
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("generates AI proposal drafts for authorized sellers", async () => {
+    mockSalesService.generateAIDraft.mockResolvedValue({
+      userId: "customer-1",
+      items: [],
+      metadata: {},
+      generalComments: [],
+      status: "draft",
+    });
+
+    await controller.generateAIProposalDraft(
+      {
+        user: {
+          id: "dealer-1",
+          role: "dealer",
+          domainId: "domain-1",
+        },
+      } as never,
+      "domain-1",
+      { userId: "customer-1", limit: 8 },
+    );
+
+    expect(mockSalesService.generateAIDraft).toHaveBeenCalledWith(
+      "domain-1",
+      "customer-1",
+      expect.objectContaining({ id: "dealer-1" }),
+      8,
+    );
+  });
+
+  it("returns AI proposal readiness for authorized sellers", async () => {
+    mockSalesService.getAIDraftEligibility.mockResolvedValue({
+      userId: "customer-1",
+      isEligible: false,
+      reasons: ["No active auction matches"],
+    });
+
+    await controller.getAIProposalEligibility(
+      {
+        user: {
+          id: "dealer-1",
+          role: "dealer",
+          domainId: "domain-1",
+        },
+      } as never,
+      "domain-1",
+      "customer-1",
+    );
+
+    expect(mockSalesService.getAIDraftEligibility).toHaveBeenCalledWith(
+      "domain-1",
+      "customer-1",
+      expect.objectContaining({ id: "dealer-1" }),
+    );
+  });
+
+  it("records customer engagement for their submitted proposal", async () => {
+    mockSalesService.recordCustomerEngagement.mockResolvedValue({
+      id: "proposal-1",
+    });
+
+    await controller.recordProposalEngagement(
+      {
+        user: {
+          id: "customer-1",
+          role: "customer",
+          domainId: "domain-1",
+        },
+      } as never,
+      "domain-1",
+      "proposal-1",
+      { event: "opened" },
+    );
+
+    expect(mockSalesService.recordCustomerEngagement).toHaveBeenCalledWith(
+      "domain-1",
+      "proposal-1",
+      expect.objectContaining({ id: "customer-1" }),
+      { event: "opened" },
+    );
   });
 });

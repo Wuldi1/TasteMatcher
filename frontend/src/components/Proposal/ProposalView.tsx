@@ -29,9 +29,11 @@ import {
 export default function ProposalView({
   proposal,
   onStatusChange,
+  onArtworkViewed,
 }: {
   proposal: Proposal;
   onStatusChange?: (status: "accepted" | "rejected" | "submitted") => void;
+  onArtworkViewed?: (artworkId: string) => void;
 }) {
   const { currency, dimensionUnit } = useViewerPreferences();
   const {
@@ -397,6 +399,7 @@ export default function ProposalView({
             return (
               <article
                 key={item.artworkId}
+                onClick={() => onArtworkViewed?.(item.artworkId)}
                 className={`bg-white border ${borderColor} rounded-2xl overflow-hidden shadow-sm transition-shadow hover:shadow-md flex flex-col lg:flex-row`}
               >
                 {/* Image Section */}
@@ -489,7 +492,12 @@ export default function ProposalView({
                       {priceDisplay}
                       {artwork?.isAuction && (
                         <div className="text-xs text-gray-500 mt-0.5">
-                          List {formatPriceRangeForViewer(artwork.price, artwork.maxPrice, currency)}
+                          List{" "}
+                          {formatPriceRangeForViewer(
+                            artwork.price,
+                            artwork.maxPrice,
+                            currency,
+                          )}
                         </div>
                       )}
                       {artwork?.isAuction && artwork.endDate && (

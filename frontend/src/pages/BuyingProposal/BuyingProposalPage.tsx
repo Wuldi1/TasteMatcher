@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiClient } from "../../utils/api";
 import ProposalView from "../../components/Proposal/ProposalView";
@@ -9,6 +9,7 @@ export function BuyingProposalPage() {
   const { user } = useAuth();
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [loading, setLoading] = useState(true);
+  const recordedProposalOpenRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const fetchProposal = async () => {
@@ -32,6 +33,18 @@ export function BuyingProposalPage() {
       fetchProposal();
     }
   }, [user?.id, user?.domainId]);
+
+  useEffect(() => {
+    if (!proposal) return;
+    if (recordedProposalOpenRef.current === proposal.id) return;
+    recordedProposalOpenRef.current = proposal.id;
+    void apiClient
+      .recordProposalEngagement(proposal.domainId, proposal.id, {
+        event: "opened",
+      })
+      .then((updated) => setProposal(updated))
+      .catch((error) => console.error("Failed to record proposal open", error));
+  }, [proposal]);
 
   const handleStatusChange = async (
     status: "accepted" | "rejected" | "submitted",
@@ -69,6 +82,16 @@ export function BuyingProposalPage() {
         proposal={proposal}
         // isDealerView={false} // TODO : Is this a mistake?
         onStatusChange={handleStatusChange}
+        onArtworkViewed={(artworkId) => {
+          void apiClient
+            .recordProposalEngagement(proposal.domainId, proposal.id, {
+              event: "artwork_viewed",
+              artworkId,
+            })
+            .catch((error) =>
+              console.error("Failed to record artwork view", error),
+            );
+        }}
       />
     </div>
   );

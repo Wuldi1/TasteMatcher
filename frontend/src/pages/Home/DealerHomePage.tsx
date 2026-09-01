@@ -77,7 +77,8 @@ export function DealerHomePage() {
     setActivityError(null);
     (async () => {
       try {
-        const summary = await apiClient.getDomainActivitySummary(activityDomainId);
+        const summary =
+          await apiClient.getDomainActivitySummary(activityDomainId);
         setActivitySummary(summary);
       } catch (err) {
         console.error("Failed to load domain activity summary", err);
@@ -238,7 +239,7 @@ export function DealerHomePage() {
                       </p>
                     </div>
                     <Link
-                      to={`/sales/${proposal.id}`}
+                      to={`/sales/${proposal.userId}`}
                       className="text-blue-500 text-sm hover:underline"
                     >
                       View
@@ -273,7 +274,9 @@ export function DealerHomePage() {
 
           <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
             {activityLoading && (
-              <div className="p-4 text-sm text-gray-600">Loading summary...</div>
+              <div className="p-4 text-sm text-gray-600">
+                Loading summary...
+              </div>
             )}
             {!activityLoading && activityError && (
               <div className="p-4 text-sm text-red-600">{activityError}</div>
@@ -329,7 +332,10 @@ export function DealerHomePage() {
                           row.loginTimestamps.length - loginPreview.length,
                         );
                         return (
-                          <tr key={row.userId} className="border-b border-gray-100">
+                          <tr
+                            key={row.userId}
+                            className="border-b border-gray-100"
+                          >
                             <td className="px-4 py-2 align-top">
                               <div className="font-medium text-gray-800">
                                 {row.userName || row.userEmail || row.userId}
@@ -344,7 +350,9 @@ export function DealerHomePage() {
                               ) : (
                                 <div className="space-y-1">
                                   {loginPreview.map((value) => (
-                                    <div key={`${row.userId}-${value}`}>{value}</div>
+                                    <div key={`${row.userId}-${value}`}>
+                                      {value}
+                                    </div>
                                   ))}
                                   {remainingLogins > 0 && (
                                     <div className="text-xs text-gray-500">

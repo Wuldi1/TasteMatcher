@@ -151,9 +151,7 @@ export function AppRoutes() {
         path="/automatic-uploads"
         element={
           <ProtectedRoute>
-            <RoleProtectedRoute
-              allowedRoles={["domain_owner", "global_admin"]}
-            >
+            <RoleProtectedRoute allowedRoles={["domain_owner", "global_admin"]}>
               <AppLayout>
                 <AutomaticUploadsPage />
               </AppLayout>
@@ -186,6 +184,17 @@ export function AppRoutes() {
 
       <Route
         path="/sales"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <SalesPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/sales/:userId"
         element={
           <ProtectedRoute>
             <AppLayout>

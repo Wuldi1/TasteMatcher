@@ -47,12 +47,13 @@ interface DomainUserOption {
 
 const INCLUDE_RATED_STORAGE_KEY = "tm.aiSuggestions.includeRated";
 
-const readStoredIncludeRated = (): boolean => {
+const readStoredIncludeRated = (defaultValue = false): boolean => {
   try {
     const raw = localStorage.getItem(INCLUDE_RATED_STORAGE_KEY);
+    if (raw === null) return defaultValue;
     return raw === "true";
   } catch {
-    return false;
+    return defaultValue;
   }
 };
 
@@ -70,6 +71,7 @@ export const AISuggestionsPage = ({
   onArtworkClick,
   readonlyThumbs = false,
   showOwnerRatedFilter = false,
+  defaultIncludeRated = false,
 }: {
   domainId?: string;
   userId?: string;
@@ -78,6 +80,7 @@ export const AISuggestionsPage = ({
   onArtworkClick?: (artwork: Artwork) => void; // Callback to open artwork details
   readonlyThumbs?: boolean;
   showOwnerRatedFilter?: boolean;
+  defaultIncludeRated?: boolean;
 } = {}) => {
   const { user, stats } = useAuth();
   const { currency, dimensionUnit } = useViewerPreferences();
@@ -93,8 +96,9 @@ export const AISuggestionsPage = ({
     {},
   );
   const [savingCommentId, setSavingCommentId] = useState<string | null>(null);
-  const [includeRated, setIncludeRated] =
-    useState<boolean>(readStoredIncludeRated);
+  const [includeRated, setIncludeRated] = useState<boolean>(() =>
+    defaultIncludeRated ? true : readStoredIncludeRated(false),
+  );
   const observerTarget = useRef<HTMLDivElement>(null);
   const LIMIT = 20;
 
@@ -801,11 +805,11 @@ export const AISuggestionsPage = ({
         recommendations.length === 0 &&
         !loading &&
         !shouldShowEligibilityCta && (
-        <p className="py-12 text-center text-gray-600">
-          No AI suggestions yet. Encourage additional tasting activity to enrich
-          personalization.
-        </p>
-      )}
+          <p className="py-12 text-center text-gray-600">
+            No AI suggestions yet. Encourage additional tasting activity to
+            enrich personalization.
+          </p>
+        )}
 
       {/* Modal for artwork details */}
       {selectedArtwork && (

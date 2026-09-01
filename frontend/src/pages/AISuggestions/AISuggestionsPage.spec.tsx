@@ -106,10 +106,12 @@ const renderPage = ({
   role,
   showOwnerRatedFilter = true,
   selectedUserId,
+  defaultIncludeRated,
 }: {
   role: "customer" | "dealer" | "domain_owner" | "global_admin";
   showOwnerRatedFilter?: boolean;
   selectedUserId?: string;
+  defaultIncludeRated?: boolean;
 }) => {
   const effectiveSelectedUserId =
     selectedUserId ?? (role === "customer" ? undefined : "customer-1");
@@ -149,6 +151,7 @@ const renderPage = ({
               domainId="domain-1"
               userId={effectiveSelectedUserId}
               showOwnerRatedFilter={showOwnerRatedFilter}
+              defaultIncludeRated={defaultIncludeRated}
             />
           </ViewerPreferencesProvider>
         </MemoryRouter>
@@ -198,6 +201,30 @@ describe("AISuggestionsPage owner includeRated filter", () => {
       0,
       false,
     );
+  });
+
+  it("defaults include-rated on when requested by proposal context", async () => {
+    localStorage.setItem(STORAGE_KEY, "false");
+
+    renderPage({
+      role: "domain_owner",
+      showOwnerRatedFilter: true,
+      defaultIncludeRated: true,
+    });
+
+    await waitFor(() => {
+      expect(mockGetRecommendations).toHaveBeenCalledWith(
+        "domain-1",
+        "customer-1",
+        20,
+        0,
+        true,
+      );
+    });
+
+    const toggle = await screen.findByLabelText("Include rated artworks");
+    expect(toggle).toBeInstanceOf(HTMLInputElement);
+    expect((toggle as HTMLInputElement).checked).toBe(true);
   });
 
   it("hides the include-rated toggle for customers", async () => {
@@ -297,7 +324,9 @@ describe("AISuggestionsPage owner includeRated filter", () => {
       screen.getByLabelText("Explain AI recommendation score categories"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Image: visual similarity to the customer taste vectors/),
+      screen.getByText(
+        /Image: visual similarity to the customer taste vectors/,
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("matches Paintings interest")).toBeInTheDocument();
     expect(screen.getByText("artist previously liked")).toBeInTheDocument();

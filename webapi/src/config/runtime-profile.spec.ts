@@ -1,6 +1,8 @@
 import {
   assertSafeRuntimeProfile,
+  isConfiguredLocalLoginOverrideFor,
   isProductionDataTarget,
+  shouldAcceptConfiguredLocalLoginCode,
   shouldUseSecureAuthCodes,
 } from "./runtime-profile";
 
@@ -13,6 +15,9 @@ describe("runtime profile", () => {
     delete process.env.TASTEMATCHER_DATA_ENV;
     delete process.env.TASTEMATCHER_LOCAL_PROD_ACK;
     delete process.env.TASTEMATCHER_EMAIL_MODE;
+    delete process.env.LOCAL_TEST_LOGIN_ENABLED;
+    delete process.env.LOCAL_TEST_LOGIN_EMAIL;
+    delete process.env.LOCAL_TEST_LOGIN_CODE;
   });
 
   afterAll(() => {
@@ -74,5 +79,37 @@ describe("runtime profile", () => {
     expect(() => assertSafeRuntimeProfile()).toThrow(
       "Unsafe local-production runtime configuration",
     );
+  });
+
+  it("accepts only the configured account and code in local-production", () => {
+    process.env.NODE_ENV = "development";
+    process.env.TASTEMATCHER_RUNTIME_MODE = "local-production";
+    process.env.LOCAL_TEST_LOGIN_ENABLED = "true";
+    process.env.LOCAL_TEST_LOGIN_EMAIL = "seller@example.com";
+    process.env.LOCAL_TEST_LOGIN_CODE = "123456";
+
+    expect(
+      shouldAcceptConfiguredLocalLoginCode(" Seller@Example.com ", "123456"),
+    ).toBe(true);
+    expect(isConfiguredLocalLoginOverrideFor("seller@example.com")).toBe(true);
+    expect(
+      shouldAcceptConfiguredLocalLoginCode("other@example.com", "123456"),
+    ).toBe(false);
+    expect(
+      shouldAcceptConfiguredLocalLoginCode("seller@example.com", "000000"),
+    ).toBe(false);
+  });
+
+  it("rejects the fixed-code override in deployed production", () => {
+    process.env.NODE_ENV = "production";
+    process.env.TASTEMATCHER_RUNTIME_MODE = "local-production";
+    process.env.LOCAL_TEST_LOGIN_ENABLED = "true";
+    process.env.LOCAL_TEST_LOGIN_EMAIL = "seller@example.com";
+    process.env.LOCAL_TEST_LOGIN_CODE = "123456";
+
+    expect(
+      shouldAcceptConfiguredLocalLoginCode("seller@example.com", "123456"),
+    ).toBe(false);
+    expect(isConfiguredLocalLoginOverrideFor("seller@example.com")).toBe(false);
   });
 });
