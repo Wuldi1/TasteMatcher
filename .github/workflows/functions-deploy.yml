@@ -150,7 +150,7 @@ jobs:
           package: deploy
       - name: Verify production Functions
         run: |
-          test "$(az functionapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_FUNCTIONAPP_NAME" --query state -o tsv)" = "Running"
+          test "$(az functionapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_FUNCTIONAPP_NAME" --query properties.state -o tsv)" = "Running"
           test "$(az functionapp function list --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_FUNCTIONAPP_NAME" --query 'length(@)' -o tsv)" -gt 0
       - name: Azure logout
         if: always()
