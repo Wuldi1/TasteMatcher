@@ -417,6 +417,18 @@ class ApiClient extends BaseApiClient {
     );
   }
 
+  /** Fetch provisional artwork drafts from a generated import package. */
+  async previewAutomaticUploadImportFile(
+    domainId: string,
+    file: File,
+  ): Promise<AutomaticUploadPreviewResponse> {
+    this.validateRequired(domainId, "Domain ID");
+    return this.uploadFile<AutomaticUploadPreviewResponse>(
+      `/domains/${encodeURIComponent(domainId)}/automatic-uploads/preview-import-file`,
+      file,
+    );
+  }
+
   /** Approve selected provisional drafts into the target gallery. */
   async approveAutomaticUploads(
     domainId: string,

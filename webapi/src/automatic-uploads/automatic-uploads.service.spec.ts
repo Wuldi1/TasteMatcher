@@ -1,6 +1,9 @@
 import { BadRequestException } from "@nestjs/common";
+import { readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import {
   ApprovedPhillipsAutomaticUploadDraft,
+  PhillipsAutomaticUploadDraft,
   AutomaticUploadPreviewResponse,
 } from "@tastematcher/common";
 import { ArtworkIngestionError } from "../upload/upload.service";
@@ -575,6 +578,156 @@ describe("AutomaticUploadsService", () => {
     ]);
   });
 
+  it("previews generated import files as editable drafts", () => {
+    const result = service.previewImportFile("domain-1", actor, {
+      originalname: "auction-import.json",
+      mimetype: "application/json",
+      size: Buffer.byteLength(JSON.stringify(importFile())),
+      buffer: Buffer.from(JSON.stringify(importFile())),
+    } as Express.Multer.File);
+
+    expect(result).toMatchObject({
+      provider: "import_file",
+      source: {
+        provider: "import_file",
+        sourceAuctionUrl: "import-file:example-sale",
+        auctionTitle: "Example PDF Sale",
+      },
+      drafts: [
+        expect.objectContaining({
+          draftId: "import-draft-1",
+          included: true,
+          source: expect.objectContaining({
+            identity: expect.objectContaining({
+              provider: "import_file",
+              sourceAuctionUrl: "import-file:example-sale",
+              sourceLotNumber: "1",
+            }),
+            sourceImageDataUrl: importImageDataUrl,
+          }),
+        }),
+      ],
+    });
+  });
+
+  it("keeps the Summer Wave PDF sample and generated import package aligned", () => {
+    const pdf = readFileSync(summerWavePdfFixture);
+    const parsedImport = JSON.parse(
+      readFileSync(summerWaveImportFixture, "utf8"),
+    ) as { drafts: Array<{ included: boolean; artwork: { title: string } }> };
+
+    expect(pdf.subarray(0, 4).toString("ascii")).toBe("%PDF");
+    expect(statSync(summerWaveImportFixture).size).toBeLessThanOrEqual(
+      2_000_000,
+    );
+    expect(parsedImport.drafts).toHaveLength(34);
+    expect(parsedImport.drafts.filter((draft) => draft.included)).toHaveLength(
+      32,
+    );
+  });
+
+  it("previews the full Summer Wave PDF-derived import package", () => {
+    const buffer = readFileSync(summerWaveImportFixture);
+    const result = service.previewImportFile("domain-1", actor, {
+      originalname: "summer-wave-auction-import.json",
+      mimetype: "application/json",
+      size: buffer.length,
+      buffer,
+    });
+
+    expect(result.provider).toBe("import_file");
+    expect(result.source).toMatchObject({
+      provider: "import_file",
+      sourceAuctionUrl: "import-file:phillipsx-summer-wave-2026",
+      auctionCode: "EX010926",
+      auctionTitle: "Summer Wave: Knokke-Heist Selling Exhibition",
+      location: "Knokke-Heist, Belgium",
+    });
+    expect(result.drafts).toHaveLength(34);
+    expect(result.drafts[0]).toMatchObject({
+      draftId: "phillipsx-summer-wave-2026-lot-001",
+      source: {
+        identity: {
+          provider: "import_file",
+          sourceAuctionUrl: "import-file:phillipsx-summer-wave-2026",
+          sourceLotNumber: "1",
+        },
+        originalEstimateText: "320,000€ + VAT ♠",
+        pricingConversionStatus: "converted",
+      },
+      artwork: {
+        artist: "Carl André",
+        title: "15 Ace Zinc Corner",
+        price: 347826,
+        tags: ["pdf-import", "phillipsx", "summer-wave"],
+      },
+      included: true,
+    });
+    expect(result.drafts[19]).toMatchObject({
+      artwork: { artist: "Panamarenko", title: "Umbilly" },
+      included: false,
+      issues: [expect.objectContaining({ code: "not_available_for_purchase" })],
+    });
+    expect(result.drafts[28]).toMatchObject({
+      artwork: { artist: "Léon Spilliaert", title: "Les baigneurs" },
+      included: false,
+      issues: [expect.objectContaining({ code: "not_available_for_purchase" })],
+    });
+    expect(result.drafts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: expect.objectContaining({
+            sourceImageDataUrl: expect.stringMatching(
+              /^data:image\/jpeg;base64,/,
+            ),
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("approves import file drafts without fetching remote HTML or images", async () => {
+    const parsed = service.previewImportFile("domain-1", actor, {
+      originalname: "auction-import.json",
+      mimetype: "application/json",
+      size: Buffer.byteLength(JSON.stringify(importFile())),
+      buffer: Buffer.from(JSON.stringify(importFile())),
+    } as Express.Multer.File);
+
+    const result = await service.approve("domain-1", actor, {
+      provider: "import_file",
+      sourceUrl: parsed.source.sourceAuctionUrl,
+      drafts: parsed.drafts.map(({ draftId, source, artwork }) => ({
+        draftId,
+        source,
+        artwork,
+      })),
+    });
+
+    expect(result.created).toHaveLength(1);
+    expect(fetcher.fetchHtml).not.toHaveBeenCalled();
+    expect(fetcher.fetchImage).not.toHaveBeenCalled();
+    expect(uploadService.uploadAutomaticArtwork).toHaveBeenCalledWith(
+      "domain-1",
+      expect.objectContaining({
+        buffer: Buffer.from("image"),
+        mimetype: "image/jpeg",
+        size: Buffer.byteLength("image"),
+      }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          automaticUpload: expect.objectContaining({
+            provider: "import_file",
+            sourceAuctionUrl: "import-file:example-sale",
+            sourceLotNumber: "1",
+          }),
+        }),
+      }),
+      actor,
+      expect.any(String),
+    );
+  });
+
   it("keeps approval batch-size errors envelope-level", async () => {
     await expect(
       service.approve("domain-1", actor, {
@@ -610,8 +763,10 @@ describe("AutomaticUploadsService", () => {
     };
   }
 
-  function trustedDraft(lotNumber: string) {
-    return previewResponse(3).drafts[Number(lotNumber) - 1];
+  function trustedDraft(lotNumber: string): PhillipsAutomaticUploadDraft {
+    return previewResponse(3).drafts[
+      Number(lotNumber) - 1
+    ] as PhillipsAutomaticUploadDraft;
   }
 
   function previewResponse(count: number): AutomaticUploadPreviewResponse {
@@ -660,6 +815,56 @@ describe("AutomaticUploadsService", () => {
       issues: [],
     };
   }
+
+  function importFile() {
+    return {
+      version: 1,
+      source: {
+        sourceAuctionUrl: "import-file:example-sale",
+        auctionTitle: "Example PDF Sale",
+      },
+      drafts: [
+        {
+          draftId: "import-draft-1",
+          included: true,
+          source: {
+            identity: {
+              provider: "import_file",
+              sourceAuctionUrl: "ignored",
+              sourceLotNumber: "1",
+            },
+            sourceImageDataUrl: importImageDataUrl,
+            originalEstimateText: "$100 - $200",
+            originalEstimateCurrency: "USD",
+            originalEstimateLow: 100,
+            originalEstimateHigh: 200,
+            pricingConversionStatus: "not_required",
+          },
+          artwork: {
+            title: "PDF work",
+            description: "",
+            artist: "PDF artist",
+            isAuction: true,
+            price: 100,
+            maxPrice: 200,
+            shouldDisplayPrice: false,
+            useForTaster: true,
+            isPrivate: false,
+            endDate: "2026-05-01T00:00:00Z",
+            tags: ["pdf-import"],
+          },
+          issues: [],
+        },
+      ],
+    };
+  }
 });
 
 const auctionUrl = "https://www.phillips.com/auction/NY030826";
+const importImageDataUrl = `data:image/jpeg;base64,${Buffer.from("image").toString("base64")}`;
+const fixtureDir = join(__dirname, "__fixtures__");
+const summerWavePdfFixture = join(fixtureDir, "summer-wave-price-list.pdf");
+const summerWaveImportFixture = join(
+  fixtureDir,
+  "summer-wave-auction-import.json",
+);

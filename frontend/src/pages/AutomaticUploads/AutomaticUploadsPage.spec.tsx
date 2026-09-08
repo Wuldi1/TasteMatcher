@@ -22,6 +22,7 @@ jest.mock("../../utils/api", () => ({
   apiClient: {
     getAllDomains: jest.fn(),
     previewAutomaticUploads: jest.fn(),
+    previewAutomaticUploadImportFile: jest.fn(),
     approveAutomaticUploads: jest.fn(),
   },
   ApiError: class ApiError extends Error {},
@@ -106,6 +107,47 @@ const previewResponse: AutomaticUploadPreviewResponse = {
         useForTaster: true,
         isPrivate: false,
         tags: [],
+      },
+      issues: [],
+    },
+  ],
+};
+
+const importPreviewResponse: AutomaticUploadPreviewResponse = {
+  provider: "import_file",
+  source: {
+    provider: "import_file",
+    sourceAuctionUrl: "import-file:example-sale",
+    auctionTitle: "Example PDF Sale",
+    endsAt: "2026-09-30T18:00:00.000Z",
+  },
+  issues: [],
+  drafts: [
+    {
+      draftId: "import-draft-1",
+      included: true,
+      source: {
+        identity: {
+          provider: "import_file",
+          sourceAuctionUrl: "import-file:example-sale",
+          sourceLotNumber: "1",
+        },
+        sourceImageDataUrl: "data:image/jpeg;base64,aW1hZ2U=",
+        originalEstimateText: "$1,000 - $2,000",
+        pricingConversionStatus: "not_required",
+      },
+      artwork: {
+        title: "Imported work",
+        artist: "Imported Artist",
+        description: "",
+        isAuction: true,
+        price: 1000,
+        maxPrice: 2000,
+        endDate: "2026-09-30T18:00:00.000Z",
+        shouldDisplayPrice: false,
+        useForTaster: true,
+        isPrivate: false,
+        tags: ["pdf-import"],
       },
       issues: [],
     },
@@ -226,10 +268,14 @@ describe("AutomaticUploadsPage", () => {
   beforeEach(() => {
     jest.mocked(apiClient.getAllDomains).mockReset();
     jest.mocked(apiClient.previewAutomaticUploads).mockReset();
+    jest.mocked(apiClient.previewAutomaticUploadImportFile).mockReset();
     jest.mocked(apiClient.approveAutomaticUploads).mockReset();
     jest
       .mocked(apiClient.previewAutomaticUploads)
       .mockResolvedValue(previewResponse);
+    jest
+      .mocked(apiClient.previewAutomaticUploadImportFile)
+      .mockResolvedValue(importPreviewResponse);
   });
 
   it("identifies supported and unsupported auction provider domains", async () => {
@@ -265,6 +311,25 @@ describe("AutomaticUploadsPage", () => {
       screen.getByText("Supported provider: Phillips"),
     ).toBeInTheDocument();
     expect(reviewButton).toBeEnabled();
+  });
+
+  it("previews generated import files from the import tab", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("tab", { name: "Import file" }));
+    const file = new File(["{}"], "auction-import.json", {
+      type: "application/json",
+    });
+    await user.upload(screen.getByLabelText("Import file"), file);
+    await user.click(screen.getByRole("button", { name: "Review file" }));
+
+    expect(await screen.findByText("Example PDF Sale")).toBeInTheDocument();
+    expect(screen.getByText("Imported work")).toBeInTheDocument();
+    expect(apiClient.previewAutomaticUploadImportFile).toHaveBeenCalledWith(
+      "domain-1",
+      file,
+    );
   });
 
   it("shows the TasteMatcher loading state while preparing a preview", async () => {

@@ -16,24 +16,28 @@ No new Azure infrastructure or Functions changes are required.
 ## User Flow
 
 1. Open `/automatic-uploads` from the `Automatic Uploads` navigation item.
-2. Enter an auction URL. The page identifies its provider and shows whether the
+2. Choose `Auction URL` or `Import file`.
+3. For `Auction URL`, enter an auction URL. The page identifies its provider and shows whether the
    domain is supported before enabling preview. A `global_admin` must also
    select the target gallery; a `domain_owner` uses their own domain.
-3. Select `Review content`. The API returns provisional drafts held in frontend
+4. For `Import file`, upload a generated JSON import package. This temporary
+   path is intended for PDFs processed outside the application, such as
+   email-assisted catalog imports.
+5. Select `Review content` or `Review file`. The API returns provisional drafts held in frontend
    state only.
-4. Review images and issues, edit artwork fields, and include or exclude lots.
+6. Review images and issues, edit artwork fields, and include or exclude lots.
    Title, artist, source image, and an auction end date are blocking requirements.
-5. Use the bulk editor to set auction end date, price visibility, Taster usage,
+7. Use the bulk editor to set auction end date, price visibility, Taster usage,
    privacy, or append comma-separated tags for all currently included drafts.
    Tags are deduplicated case-insensitively and retain the API limits of 50 tags
    per artwork and 100 characters per tag. Each property is applied only when
    its own Apply action is selected; excluded drafts are unchanged. Values from
    `datetime-local` controls are normalized to explicit ISO UTC timestamps before
    approval.
-6. Select `Upload <count> selected` after all included drafts are valid. The
+8. Select `Upload <count> selected` after all included drafts are valid. The
    frontend automatically sends selections over 20 as sequential requests of
    at most 20 drafts.
-7. Review the per-item result. Created and already-imported drafts leave the
+9. Review the per-item result. Created and already-imported drafts leave the
    review list. Failed drafts remain available for correction or retry.
 
 Leaving or refreshing the page discards the current preview. There is no saved
@@ -78,6 +82,115 @@ The response contains:
 - `issues`: batch warnings such as no lots found or preview truncation.
 
 The preview response is provisional and is not persisted server-side.
+
+### Import File Preview
+
+`POST /domains/:domainId/automatic-uploads/preview-import-file`
+
+This multipart endpoint accepts a JSON file under the `file` field. It is for
+generated import packages, not raw PDFs. Raw PDFs are processed outside the app
+into the package format below, then uploaded in the `Import file` tab.
+
+The current temporary package format embeds images as JPEG or PNG data URLs and
+is limited to 2 MiB total:
+
+```json
+{
+  "version": 1,
+  "source": {
+    "sourceAuctionUrl": "import-file:example-sale",
+    "auctionTitle": "Example PDF Sale",
+    "auctionCode": "PDF-001",
+    "location": "New York",
+    "endsAt": "2026-09-30T18:00:00.000Z"
+  },
+  "drafts": [
+    {
+      "draftId": "pdf-example-sale-1",
+      "source": {
+        "identity": {
+          "provider": "import_file",
+          "sourceAuctionUrl": "import-file:example-sale",
+          "sourceLotNumber": "1"
+        },
+        "sourceImageDataUrl": "data:image/jpeg;base64,...",
+        "originalEstimateText": "$1,000 - $2,000",
+        "originalEstimateCurrency": "USD",
+        "originalEstimateLow": 1000,
+        "originalEstimateHigh": 2000,
+        "pricingConversionStatus": "not_required"
+      },
+      "artwork": {
+        "title": "Blue Work",
+        "description": "",
+        "artist": "Ada Artist",
+        "isAuction": true,
+        "price": 1000,
+        "maxPrice": 2000,
+        "shouldDisplayPrice": false,
+        "useForTaster": true,
+        "isPrivate": false,
+        "endDate": "2026-09-30T18:00:00.000Z",
+        "tags": ["pdf-import"]
+      },
+      "included": true,
+      "issues": []
+    }
+  ]
+}
+```
+
+If `source.sourceAuctionUrl` is missing, the server assigns a deterministic
+`import-file:<hash>` source ID for the uploaded file. During approval, import
+file images are decoded from `sourceImageDataUrl` and passed through the same
+artwork upload, image validation, Blob Storage, vectorization, duplicate check,
+and persistence path as remote auction imports.
+
+### Gmail PDF Intake Automation
+
+`scripts/automatic-uploads/gmail_pdf_intake.py` polls Gmail directly and replies
+to the original thread with the generated JSON file attached. This is separate
+from the Codex Gmail connector because the connector does not attach local files
+by path.
+
+Run once:
+
+```bash
+GMAIL_CLIENT_SECRET_JSON=/path/to/client_secret.json \
+GMAIL_TOKEN_JSON=/path/to/token.json \
+python3 scripts/automatic-uploads/gmail_pdf_intake.py
+```
+
+Run continuously every 30 minutes:
+
+```bash
+GMAIL_CLIENT_SECRET_JSON=/path/to/client_secret.json \
+GMAIL_TOKEN_JSON=/path/to/token.json \
+python3 scripts/automatic-uploads/gmail_pdf_intake.py --loop --interval-minutes 30
+```
+
+Required Python packages:
+
+```bash
+python3 -m pip install -r scripts/automatic-uploads/requirements.txt
+```
+
+The script:
+
+- Creates or reuses the Gmail label `Alfred/Auction PDF Processed`.
+- Searches only `galrubin15@gmail.com` and `jaclynlavy@gmail.com`.
+- Ignores spam, trash, already processed messages, non-PDF attachments, and PDFs
+  that do not look like auction or price-list files.
+- Saves PDFs and generated JSON files under `/private/tmp`.
+- Runs `pdf_price_list_to_import_json.py`.
+- Sends an HTML reply that starts with `<strong>[Alfred]</strong>`.
+- Attaches the generated JSON import file to successful replies.
+- Labels the source message only after a reply is sent.
+
+The local OAuth files must not be committed. The Gmail token needs
+`gmail.modify` and `gmail.send` scopes so Alfred can read matching messages,
+download attachments, reply with the generated JSON file, and label processed
+messages.
 
 ### Approval
 

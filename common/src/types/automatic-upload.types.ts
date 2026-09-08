@@ -7,6 +7,13 @@ export const AUTOMATIC_UPLOAD_PROVIDER_DEFINITIONS = [
     imageHosts: ["assets.phillips.com", "dist.phillips.com"],
     exampleUrl: "https://www.phillips.com/auction/NY030826",
   },
+  {
+    provider: "import_file",
+    displayName: "Import file",
+    sourceHosts: [],
+    imageHosts: [],
+    exampleUrl: "auction-import.json",
+  },
 ] as const;
 
 export type AutomaticUploadProvider =
@@ -58,6 +65,11 @@ export interface PhillipsAutomaticUploadSourceIdentity
   readonly provider: "phillips";
 }
 
+export interface ImportFileAutomaticUploadSourceIdentity
+  extends AutomaticUploadSourceIdentity {
+  readonly provider: "import_file";
+}
+
 /**
  * Immutable source values retained for approval-time verification and artwork
  * audit metadata. These values are never treated as editable artwork fields.
@@ -65,6 +77,7 @@ export interface PhillipsAutomaticUploadSourceIdentity
 export interface AutomaticUploadDraftSource {
   readonly identity: AutomaticUploadSourceIdentity;
   readonly sourceImageUrl?: string;
+  readonly sourceImageDataUrl?: string;
   readonly originalEstimateText?: string;
   readonly originalEstimateCurrency?: string;
   readonly originalEstimateLow?: number;
@@ -80,6 +93,12 @@ export interface PhillipsAutomaticUploadDraftSource
   readonly identity: PhillipsAutomaticUploadSourceIdentity;
 }
 
+export interface ImportFileAutomaticUploadDraftSource
+  extends AutomaticUploadDraftSource {
+  readonly identity: ImportFileAutomaticUploadSourceIdentity;
+  readonly sourceImageDataUrl: string;
+}
+
 export interface AutomaticUploadSourceSummary {
   readonly provider: AutomaticUploadProvider;
   readonly sourceAuctionUrl: string;
@@ -93,6 +112,11 @@ export interface AutomaticUploadSourceSummary {
 export interface PhillipsAutomaticUploadSourceSummary
   extends AutomaticUploadSourceSummary {
   readonly provider: "phillips";
+}
+
+export interface ImportFileAutomaticUploadSourceSummary
+  extends AutomaticUploadSourceSummary {
+  readonly provider: "import_file";
 }
 
 /**
@@ -181,6 +205,22 @@ export interface PhillipsAutomaticUploadPreviewResponse
   provider: "phillips";
   source: PhillipsAutomaticUploadSourceSummary;
   drafts: PhillipsAutomaticUploadDraft[];
+}
+
+export interface ImportFileAutomaticUploadPreviewResponse
+  extends AutomaticUploadPreviewResponse {
+  provider: "import_file";
+  source: ImportFileAutomaticUploadSourceSummary;
+  drafts: AutomaticUploadDraft[];
+}
+
+export interface AutomaticUploadImportFile {
+  version: 1;
+  source: Omit<
+    ImportFileAutomaticUploadSourceSummary,
+    "provider" | "sourceAuctionUrl"
+  > & { sourceAuctionUrl?: string };
+  drafts: AutomaticUploadDraft[];
 }
 
 /** Only included drafts are sent for approval; inclusion remains frontend UI state. */

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import {
   ApprovedAutomaticUploadDraft,
+  AutomaticUploadImportFile,
   Artwork,
   AutomaticUploadApprovalResponse,
   AutomaticUploadArtworkDraftIssue,
@@ -27,10 +28,19 @@ interface AutomaticUploadActor {
   role: Role;
 }
 
+export interface AutomaticUploadImportUpload {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+}
+
 const MAX_PREVIEW_DRAFTS = 200;
 const PREVIEW_DETAIL_CONCURRENCY = 6;
 export const PREVIEW_DETAIL_BUDGET_MS = 30_000;
 const APPROVAL_CONCURRENCY = 3;
+const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_IMPORT_IMAGE_BYTES = 10 * 1024 * 1024;
 const AUTOMATIC_ARTWORK_NAMESPACE = "7dfbe954-b517-5c87-98d6-c647a16a9f73";
 
 @Injectable()
@@ -112,6 +122,37 @@ export class AutomaticUploadsService {
       });
       throw error;
     }
+  }
+
+  previewImportFile(
+    domainId: string,
+    actor: AutomaticUploadActor,
+    file: AutomaticUploadImportUpload | undefined,
+  ): AutomaticUploadPreviewResponse {
+    const startedAt = Date.now();
+    if (!file) {
+      throw new BadRequestException("Import file is required.");
+    }
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      throw new BadRequestException("Import file must be 2 MiB or smaller.");
+    }
+    if (
+      file.mimetype !== "application/json" &&
+      !file.originalname.toLowerCase().endsWith(".json")
+    ) {
+      throw new BadRequestException("Import file must be a JSON file.");
+    }
+
+    const parsed = this.parseImportFile(file.buffer);
+    this.logger.log({
+      action: "automaticUploads.importFile.preview.success",
+      provider: parsed.provider,
+      domainId,
+      actorId: actor.id,
+      lotCount: parsed.drafts.length,
+      durationMs: Date.now() - startedAt,
+    });
+    return parsed;
   }
 
   private async enrichPreviewDrafts(
@@ -213,6 +254,9 @@ export class AutomaticUploadsService {
   ): Promise<AutomaticUploadApprovalResponse> {
     const startedAt = Date.now();
     const request = parseApprovalRequest(body);
+    if (request.provider === "import_file") {
+      return this.approveImportFile(domainId, actor, request, startedAt);
+    }
     const sourceUrl = this.fetcher.validateSourceUrl(request.sourceUrl);
     const provider = this.providerRegistry.findForUrl(sourceUrl);
     if (!provider || provider.provider !== request.provider) {
@@ -312,6 +356,98 @@ export class AutomaticUploadsService {
     return response;
   }
 
+  private async approveImportFile(
+    domainId: string,
+    actor: AutomaticUploadActor,
+    request: ReturnType<typeof parseApprovalRequest>,
+    startedAt: number,
+  ): Promise<AutomaticUploadApprovalResponse> {
+    if (!request.sourceUrl.startsWith("import-file:")) {
+      throw new BadRequestException("Import file sourceUrl is invalid.");
+    }
+    this.logger.log({
+      action: "automaticUploads.importFile.approve.start",
+      provider: request.provider,
+      domainId,
+      actorId: actor.id,
+      lotCount: request.drafts.length,
+    });
+
+    const seen = new Set<string>();
+    const results = await this.mapWithConcurrency(
+      request.drafts,
+      APPROVAL_CONCURRENCY,
+      async (rawDraft, index) => {
+        const parsed = parseApprovalDraft(
+          rawDraft,
+          index,
+          request.sourceUrl,
+          request.provider,
+        );
+        if (!parsed.valid) {
+          return this.failedResult(
+            parsed.draftId,
+            parsed.sourceIdentity,
+            "validation_failed",
+            parsed.message,
+            false,
+          );
+        }
+        if (
+          parsed.draft.source.identity.sourceAuctionUrl !== request.sourceUrl
+        ) {
+          return this.failedDraft(
+            parsed.draft,
+            "source_validation_failed",
+            "The draft source does not match the selected import file.",
+            false,
+          );
+        }
+        if (!parsed.draft.source.sourceImageDataUrl) {
+          return this.failedDraft(
+            parsed.draft,
+            "source_validation_failed",
+            "The draft has no embedded import image.",
+            false,
+          );
+        }
+        const key = this.identityKey(parsed.draft);
+        if (seen.has(key)) {
+          return this.failedDraft(
+            parsed.draft,
+            "validation_failed",
+            "This source lot appears more than once in the approval batch.",
+            false,
+          );
+        }
+        seen.add(key);
+        return this.approveDraft(domainId, actor, parsed.draft);
+      },
+    );
+    const response: AutomaticUploadApprovalResponse = {
+      created: results.filter((result) => result.status === "created"),
+      skipped: results.filter((result) => result.status === "skipped"),
+      failed: results.filter((result) => result.status === "failed"),
+    };
+    this.logger.log({
+      action: "automaticUploads.importFile.approve.complete",
+      provider: request.provider,
+      domainId,
+      actorId: actor.id,
+      createdCount: response.created.length,
+      skippedCount: response.skipped.length,
+      failedCount: response.failed.length,
+      durationMs: Date.now() - startedAt,
+    });
+    this.productActivityLogger?.log("auction.import_completed", {
+      provider: request.provider,
+      count: response.created.length,
+      skippedCount: response.skipped.length,
+      failedCount: response.failed.length,
+    });
+    return response;
+  }
+
   private async approveDraft(
     domainId: string,
     actor: AutomaticUploadActor,
@@ -348,7 +484,10 @@ export class AutomaticUploadsService {
 
     let image;
     try {
-      image = await this.fetcher.fetchImage(draft.source.sourceImageUrl!);
+      image =
+        draft.source.identity.provider === "import_file"
+          ? this.decodeImportImage(draft.source.sourceImageDataUrl)
+          : await this.fetcher.fetchImage(draft.source.sourceImageUrl!);
     } catch (error) {
       return this.failedDraft(
         draft,
@@ -380,7 +519,11 @@ export class AutomaticUploadsService {
               sourceAuctionUrl: draft.source.identity.sourceAuctionUrl,
               sourceLotNumber: draft.source.identity.sourceLotNumber,
               sourceLotUrl: draft.source.identity.sourceLotUrl,
-              sourceImageUrl: draft.source.sourceImageUrl,
+              sourceImageUrl:
+                draft.source.identity.provider === "import_file"
+                  ? (draft.source.sourceImageUrl ??
+                    `${draft.source.identity.sourceAuctionUrl}#lot-${draft.source.identity.sourceLotNumber}`)
+                  : draft.source.sourceImageUrl,
               originalEstimateText: draft.source.originalEstimateText,
               originalEstimateCurrency: draft.source.originalEstimateCurrency,
               originalEstimateLow: draft.source.originalEstimateLow,
@@ -472,6 +615,166 @@ export class AutomaticUploadsService {
       );
     }
     return issues;
+  }
+
+  private parseImportFile(buffer: Buffer): AutomaticUploadPreviewResponse {
+    let value: unknown;
+    try {
+      value = JSON.parse(buffer.toString("utf8"));
+    } catch {
+      throw new BadRequestException("Import file contains invalid JSON.");
+    }
+    if (!this.isRecord(value)) {
+      throw new BadRequestException("Import file must contain an object.");
+    }
+    const record = value as Partial<AutomaticUploadImportFile>;
+    if (record.version !== 1) {
+      throw new BadRequestException("Import file version is not supported.");
+    }
+    if (!this.isRecord(record.source)) {
+      throw new BadRequestException("Import file source is required.");
+    }
+    if (!Array.isArray(record.drafts) || record.drafts.length === 0) {
+      throw new BadRequestException("Import file must contain drafts.");
+    }
+    if (record.drafts.length > MAX_PREVIEW_DRAFTS) {
+      throw new BadRequestException(
+        `Import file cannot contain more than ${MAX_PREVIEW_DRAFTS} drafts.`,
+      );
+    }
+
+    const sourceRecord = record.source as Record<string, unknown>;
+    const sourceAuctionUrl =
+      typeof sourceRecord.sourceAuctionUrl === "string" &&
+      sourceRecord.sourceAuctionUrl.startsWith("import-file:")
+        ? sourceRecord.sourceAuctionUrl
+        : `import-file:${this.shortHash(buffer)}`;
+    const response: AutomaticUploadPreviewResponse = {
+      provider: "import_file",
+      source: {
+        provider: "import_file",
+        sourceAuctionUrl,
+        auctionCode: this.optionalImportString(sourceRecord.auctionCode),
+        auctionTitle: this.optionalImportString(sourceRecord.auctionTitle),
+        location: this.optionalImportString(sourceRecord.location),
+        startsAt: this.optionalImportString(sourceRecord.startsAt),
+        endsAt: this.optionalImportString(sourceRecord.endsAt),
+      },
+      drafts: record.drafts.map((draft, index) =>
+        this.parseImportDraft(draft, index, sourceAuctionUrl),
+      ),
+      issues: [],
+    };
+    return response;
+  }
+
+  private parseImportDraft(
+    value: unknown,
+    index: number,
+    sourceAuctionUrl: string,
+  ): AutomaticUploadDraft {
+    if (!this.isRecord(value)) {
+      throw new BadRequestException(`drafts[${index}] must be an object.`);
+    }
+    const draft = value as unknown as AutomaticUploadDraft;
+    if (
+      !this.isRecord(draft.source) ||
+      !this.isRecord(draft.source.identity) ||
+      !this.isRecord(draft.artwork)
+    ) {
+      throw new BadRequestException(
+        `drafts[${index}] must include source, source identity, and artwork objects.`,
+      );
+    }
+    const sourceImageDataUrl =
+      typeof draft.source?.sourceImageDataUrl === "string"
+        ? draft.source.sourceImageDataUrl
+        : undefined;
+    this.decodeImportImage(sourceImageDataUrl);
+    const lotNumber =
+      typeof draft.source?.identity?.sourceLotNumber === "string" &&
+      draft.source.identity.sourceLotNumber.trim()
+        ? draft.source.identity.sourceLotNumber.trim()
+        : String(index + 1);
+    return {
+      ...draft,
+      draftId:
+        typeof draft.draftId === "string" && draft.draftId.trim()
+          ? draft.draftId
+          : `import-file-lot-${lotNumber}`,
+      included: draft.included !== false,
+      source: {
+        ...draft.source,
+        identity: {
+          ...draft.source.identity,
+          provider: "import_file",
+          sourceAuctionUrl,
+          sourceLotNumber: lotNumber,
+        },
+        sourceImageDataUrl,
+        pricingConversionStatus:
+          draft.source.pricingConversionStatus ?? "not_attempted",
+      },
+      artwork: {
+        ...draft.artwork,
+        title:
+          typeof draft.artwork.title === "string" ? draft.artwork.title : "",
+        description:
+          typeof draft.artwork.description === "string"
+            ? draft.artwork.description
+            : "",
+        artist:
+          typeof draft.artwork.artist === "string" ? draft.artwork.artist : "",
+        date: this.optionalImportString(draft.artwork.date),
+        signature: this.optionalImportString(draft.artwork.signature),
+        medium: this.optionalImportString(draft.artwork.medium),
+        isAuction: draft.artwork.isAuction !== false,
+        shouldDisplayPrice: draft.artwork.shouldDisplayPrice === true,
+        useForTaster: draft.artwork.useForTaster !== false,
+        isPrivate: draft.artwork.isPrivate === true,
+        tags: Array.isArray(draft.artwork.tags)
+          ? draft.artwork.tags.filter(
+              (tag): tag is string => typeof tag === "string",
+            )
+          : [],
+      },
+      issues: Array.isArray(draft.issues) ? draft.issues : [],
+    };
+  }
+
+  private decodeImportImage(
+    dataUrl: string | undefined,
+  ): { body: Buffer; contentType: "image/jpeg" | "image/png" } {
+    if (!dataUrl) {
+      throw new BadRequestException("Embedded import image is required.");
+    }
+    const match = dataUrl.match(
+      /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/u,
+    );
+    if (!match) {
+      throw new BadRequestException(
+        "Embedded import image must be a JPEG or PNG data URL.",
+      );
+    }
+    const body = Buffer.from(match[2], "base64");
+    if (body.length === 0 || body.length > MAX_IMPORT_IMAGE_BYTES) {
+      throw new BadRequestException("Embedded import image size is invalid.");
+    }
+    return {
+      body,
+      contentType: match[1] as "image/jpeg" | "image/png",
+    };
+  }
+
+  private optionalImportString(value: unknown): string | undefined {
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  }
+
+  private shortHash(buffer: Buffer): string {
+    return uuidv5(buffer.toString("base64"), AUTOMATIC_ARTWORK_NAMESPACE).slice(
+      0,
+      12,
+    );
   }
 
   private indexTrustedLots(

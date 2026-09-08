@@ -15,6 +15,7 @@ import SalesPage from "../pages/SalesPage";
 import { BuyingProposalPage } from "../pages/BuyingProposal/BuyingProposalPage";
 import { OnboardingPage } from "../pages/Onboarding/OnboardingPage";
 import { AutomaticUploadsPage } from "../pages/AutomaticUploads/AutomaticUploadsPage";
+import { LegalPage } from "../pages/Legal/LegalPage";
 import { RoleProtectedRoute } from "./RoleProtectedRoute";
 
 /**
@@ -74,6 +75,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 export function AppRoutes() {
   return (
     <Routes>
+      <Route path="/privacy-policy" element={<LegalPage kind="privacy" />} />
+      <Route path="/terms-of-service" element={<LegalPage kind="terms" />} />
+
       {/* Public routes - redirect to /home if authenticated */}
       <Route
         path="/"

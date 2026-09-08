@@ -119,6 +119,7 @@ function parseSource(
     [
       "identity",
       "sourceImageUrl",
+      "sourceImageDataUrl",
       "originalEstimateText",
       "originalEstimateCurrency",
       "originalEstimateLow",
@@ -145,6 +146,11 @@ function parseSource(
       record.sourceImageUrl,
       `${label}.sourceImageUrl`,
       2_000,
+    ),
+    sourceImageDataUrl: optionalString(
+      record.sourceImageDataUrl,
+      `${label}.sourceImageDataUrl`,
+      2_000_000,
     ),
     originalEstimateText: optionalString(
       record.originalEstimateText,

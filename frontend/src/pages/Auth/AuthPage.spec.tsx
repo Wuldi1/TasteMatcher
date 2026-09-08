@@ -92,4 +92,17 @@ describe("AuthPage", () => {
       await screen.findByText("UI/API v0.local..8.24"),
     ).toBeInTheDocument();
   });
+
+  it("links to public legal pages from the login form", () => {
+    renderWithProviders(<AuthPage />);
+
+    expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute(
+      "href",
+      "/terms-of-service",
+    );
+    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
+      "href",
+      "/privacy-policy",
+    );
+  });
 });

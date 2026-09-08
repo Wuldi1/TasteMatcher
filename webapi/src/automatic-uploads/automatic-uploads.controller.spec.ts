@@ -5,6 +5,7 @@ import { AutomaticUploadsController } from "./automatic-uploads.controller";
 describe("AutomaticUploadsController", () => {
   const service = {
     preview: jest.fn().mockResolvedValue({ drafts: [] }),
+    previewImportFile: jest.fn().mockReturnValue({ drafts: [] }),
     approve: jest
       .fn()
       .mockResolvedValue({ created: [], skipped: [], failed: [] }),
@@ -53,6 +54,27 @@ describe("AutomaticUploadsController", () => {
       "domain-2",
       req.user,
       expect.any(Object),
+    );
+  });
+
+  it("passes import files through the same domain access check", () => {
+    const req = {
+      user: {
+        id: "owner-1",
+        email: "owner@example.test",
+        role: "domain_owner",
+        domainId: "domain-1",
+      },
+    };
+
+    controller.previewImportFile(req as never, "domain-1", {
+      originalname: "auction-import.json",
+    } as Express.Multer.File);
+
+    expect(service.previewImportFile).toHaveBeenCalledWith(
+      "domain-1",
+      req.user,
+      expect.objectContaining({ originalname: "auction-import.json" }),
     );
   });
 });

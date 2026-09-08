@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { apiClient, ApiError } from "../utils/api";
 import {
@@ -710,7 +710,20 @@ export function Login() {
 
         <div className="mt-6 text-center">
           <p className="text-xs sm:text-sm text-gray-500">
-            By continuing, you agree to our terms of service
+            By continuing, you agree to our{" "}
+            <Link
+              to="/terms-of-service"
+              className="font-medium text-blue-700 hover:text-blue-900"
+            >
+              Terms of Service
+            </Link>{" "}
+            and acknowledge our{" "}
+            <Link
+              to="/privacy-policy"
+              className="font-medium text-blue-700 hover:text-blue-900"
+            >
+              Privacy Policy
+            </Link>
           </p>
         </div>
       </div>

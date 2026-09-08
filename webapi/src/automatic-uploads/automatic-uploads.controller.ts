@@ -5,8 +5,11 @@ import {
   Param,
   Post,
   Request,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import {
   AutomaticUploadApprovalResponse,
   AutomaticUploadPreviewResponse,
@@ -15,7 +18,10 @@ import { RolesGuard } from "../auth/roles.guard";
 import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
 import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
 import { Roles } from "../auth/utils/roles.decorator";
-import { AutomaticUploadsService } from "./automatic-uploads.service";
+import {
+  AutomaticUploadImportUpload,
+  AutomaticUploadsService,
+} from "./automatic-uploads.service";
 
 @Controller("domains/:domainId/automatic-uploads")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -31,6 +37,17 @@ export class AutomaticUploadsController {
   ): Promise<AutomaticUploadPreviewResponse> {
     this.assertDomainAccess(req, domainId);
     return this.service.preview(domainId, req.user, body);
+  }
+
+  @Post("preview-import-file")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 2_000_000 } }))
+  previewImportFile(
+    @Request() req: AuthenticatedRequest,
+    @Param("domainId") domainId: string,
+    @UploadedFile() file?: AutomaticUploadImportUpload,
+  ): AutomaticUploadPreviewResponse {
+    this.assertDomainAccess(req, domainId);
+    return this.service.previewImportFile(domainId, req.user, file);
   }
 
   @Post("approve")
