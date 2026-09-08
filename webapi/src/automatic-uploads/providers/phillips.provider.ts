@@ -3,9 +3,9 @@ import {
   AutomaticUploadArtworkDraftIssue,
   AutomaticUploadBatchIssue,
   AutomaticUploadEditableArtworkInput,
-  AutomaticUploadPreviewResponse,
   AutomaticUploadPricingConversionStatus,
   PhillipsAutomaticUploadDraft,
+  PhillipsAutomaticUploadPreviewResponse,
 } from "@tastematcher/common";
 import { load } from "cheerio";
 import {
@@ -58,7 +58,7 @@ export class PhillipsProvider implements AutomaticUploadProviderAdapter {
   parse(
     html: string,
     context: AutomaticUploadParseContext,
-  ): AutomaticUploadPreviewResponse {
+  ): PhillipsAutomaticUploadPreviewResponse {
     const $ = load(html);
     const schemaEvent = this.extractSchemaEvent($);
     const canonical =
