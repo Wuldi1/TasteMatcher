@@ -23,7 +23,10 @@ from typing import Any, Protocol
 
 
 PROCESSED_LABEL = "Alfred/Auction PDF Processed"
-DEFAULT_ALLOWED_SENDERS = ("jaclynlavy@gmail.com",)
+DEFAULT_ALLOWED_SENDERS = (
+    "galrubin15@gmail.com",
+    "jaclynlavy@gmail.com",
+)
 DEFAULT_INTERVAL_MINUTES = 30
 DEFAULT_CONVERTER = (
     Path(__file__).resolve().parents[2]

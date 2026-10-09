@@ -19,12 +19,12 @@ The Web API also requires:
 ```sh
 AUTOMATIC_UPLOAD_INTAKE_API_KEY=
 AUTOMATIC_UPLOAD_INTAKE_DOMAIN_ID=
-AUTOMATIC_UPLOAD_INTAKE_SENDER=jaclynlavy@gmail.com
+AUTOMATIC_UPLOAD_INTAKE_SENDER=galrubin15@gmail.com,jaclynlavy@gmail.com
 ```
 
-The API key should be a high-entropy secret. The configured domain and sender
-are authoritative: the Gmail worker cannot select another domain through form
-fields. Source PDFs and generated artifacts are stored in the private
+The API key should be a high-entropy secret. The configured domain and
+comma-separated sender allowlist are authoritative: the Gmail worker cannot
+select another domain through form fields. Source PDFs and generated artifacts are stored in the private
 `automatic-upload-pdf-intakes` container under the domain prefix.
 
 ## Run once

@@ -194,81 +194,88 @@ describe("AutomaticUploadPdfIntakesService approval", () => {
 });
 
 describe("AutomaticUploadPdfIntakesService ingestion", () => {
-  it("stores private artifacts under the configured domain and persists metadata", async () => {
-    process.env.AUTOMATIC_UPLOAD_INTAKE_DOMAIN_ID = "domain-1";
-    process.env.AUTOMATIC_UPLOAD_INTAKE_SENDER = "jaclynlavy@gmail.com";
-    const create = jest.fn().mockResolvedValue({});
-    const container = {
-      items: {
-        query: jest.fn().mockReturnValue({
-          fetchAll: jest.fn().mockResolvedValue({ resources: [] }),
-        }),
-        create,
-      },
-    };
-    const blobService = {
-      uploadPrivateBlob: jest.fn().mockResolvedValue("stored"),
-    };
-    const automaticUploads = {
-      previewImportFile: jest.fn().mockReturnValue(preview),
-    };
-    const service = new AutomaticUploadPdfIntakesService(
-      automaticUploads as never,
-      blobService as never,
-      { getContainer: jest.fn().mockResolvedValue(container) } as never,
-    );
-    const importBuffer = Buffer.from('{"version":1}', "utf8");
+  it.each(["galrubin15@gmail.com", "jaclynlavy@gmail.com"])(
+    "stores private artifacts for allowlisted sender %s",
+    async (senderEmail) => {
+      process.env.AUTOMATIC_UPLOAD_INTAKE_DOMAIN_ID = "domain-1";
+      process.env.AUTOMATIC_UPLOAD_INTAKE_SENDER =
+        "galrubin15@gmail.com,jaclynlavy@gmail.com";
+      const create = jest.fn().mockResolvedValue({});
+      const container = {
+        items: {
+          query: jest.fn().mockReturnValue({
+            fetchAll: jest.fn().mockResolvedValue({ resources: [] }),
+          }),
+          create,
+        },
+      };
+      const blobService = {
+        uploadPrivateBlob: jest.fn().mockResolvedValue("stored"),
+      };
+      const automaticUploads = {
+        previewImportFile: jest.fn().mockReturnValue(preview),
+      };
+      const service = new AutomaticUploadPdfIntakesService(
+        automaticUploads as never,
+        blobService as never,
+        { getContainer: jest.fn().mockResolvedValue(container) } as never,
+      );
+      const importBuffer = Buffer.from('{"version":1}', "utf8");
 
-    const result = await service.ingest(
-      {
-        senderEmail: "jaclynlavy@gmail.com",
-        gmailMessageId: "message-1",
-        gmailThreadId: "thread-1",
-        originalFilename: "auction.pdf",
-        summary: JSON.stringify({
-          artworkCount: 1,
-          includedCount: 1,
-          excludedCount: 0,
-          warningCount: 0,
-          missing: {},
-        }),
-      },
-      {
-        originalname: "auction.pdf",
-        mimetype: "application/pdf",
-        size: 4,
-        buffer: Buffer.from("%PDF"),
-      },
-      {
-        originalname: "auction.json",
-        mimetype: "application/json",
-        size: importBuffer.length,
-        buffer: importBuffer,
-      },
-    );
-
-    expect(result).toEqual(
-      expect.objectContaining({ status: "ready_for_review", duplicate: false }),
-    );
-    expect(blobService.uploadPrivateBlob).toHaveBeenCalledTimes(3);
-    expect(blobService.uploadPrivateBlob).toHaveBeenCalledWith(
-      "automatic-upload-pdf-intakes",
-      expect.stringMatching(
-        /^domains\/domain-1\/pdf-intakes\/.+\/source\.pdf$/u,
-      ),
-      expect.any(Buffer),
-      "application/pdf",
-      expect.objectContaining({ domainId: "domain-1" }),
-    );
-    expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        domainId: "domain-1",
-        status: "ready_for_review",
-        source: expect.objectContaining({
-          senderEmail: "jaclynlavy@gmail.com",
+      const result = await service.ingest(
+        {
+          senderEmail,
           gmailMessageId: "message-1",
+          gmailThreadId: "thread-1",
+          originalFilename: "auction.pdf",
+          summary: JSON.stringify({
+            artworkCount: 1,
+            includedCount: 1,
+            excludedCount: 0,
+            warningCount: 0,
+            missing: {},
+          }),
+        },
+        {
+          originalname: "auction.pdf",
+          mimetype: "application/pdf",
+          size: 4,
+          buffer: Buffer.from("%PDF"),
+        },
+        {
+          originalname: "auction.json",
+          mimetype: "application/json",
+          size: importBuffer.length,
+          buffer: importBuffer,
+        },
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          status: "ready_for_review",
+          duplicate: false,
         }),
-      }),
-    );
-  });
+      );
+      expect(blobService.uploadPrivateBlob).toHaveBeenCalledTimes(3);
+      expect(blobService.uploadPrivateBlob).toHaveBeenCalledWith(
+        "automatic-upload-pdf-intakes",
+        expect.stringMatching(
+          /^domains\/domain-1\/pdf-intakes\/.+\/source\.pdf$/u,
+        ),
+        expect.any(Buffer),
+        "application/pdf",
+        expect.objectContaining({ domainId: "domain-1" }),
+      );
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          domainId: "domain-1",
+          status: "ready_for_review",
+          source: expect.objectContaining({
+            senderEmail,
+            gmailMessageId: "message-1",
+          }),
+        }),
+      );
+    },
+  );
 });

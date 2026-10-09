@@ -126,6 +126,12 @@ def raw_gmail_message(
 
 
 class GmailPdfIntakeTests(unittest.TestCase):
+    def test_default_allowlist_includes_gal_and_jaclyn(self):
+        self.assertEqual(
+            set(gmail_pdf_intake.DEFAULT_ALLOWED_SENDERS),
+            {"galrubin15@gmail.com", "jaclynlavy@gmail.com"},
+        )
+
     def test_operational_replies_use_premium_shell_and_escape_content(self):
         success = gmail_pdf_intake.build_success_html(
             "auction & notes.pdf",

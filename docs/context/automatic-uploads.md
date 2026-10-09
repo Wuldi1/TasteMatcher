@@ -184,12 +184,13 @@ The script:
 - Saves PDFs and generated JSON files under `/private/tmp`.
 - Runs `pdf_price_list_to_import_json.py`.
 - Sends an HTML reply that starts with `<strong>[Alfred]</strong>`.
-- Attaches the generated JSON import file to successful replies.
+- Uploads the source PDF and generated JSON to the private PDF inventory.
+- Replies without attachments and directs the sender to Automatic Uploads > PDFs.
 - Labels the source message only after a reply is sent.
 
 The local OAuth files must not be committed. The Gmail token needs
 `gmail.modify` and `gmail.send` scopes so Alfred can read matching messages,
-download attachments, reply with the generated JSON file, and label processed
+download attachments, reply with the processing result, and label processed
 messages.
 
 ### Approval

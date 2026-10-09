@@ -68,14 +68,17 @@ export class AutomaticUploadPdfIntakesService {
     importFile: PdfIntakeUpload | undefined,
   ): Promise<AutomaticUploadPdfIntakeIngestResponse> {
     const domainId = this.requiredConfig("AUTOMATIC_UPLOAD_INTAKE_DOMAIN_ID");
-    const expectedSender = this.requiredConfig(
-      "AUTOMATIC_UPLOAD_INTAKE_SENDER",
-    ).toLowerCase();
+    const allowedSenders = new Set(
+      this.requiredConfig("AUTOMATIC_UPLOAD_INTAKE_SENDER")
+        .split(",")
+        .map((sender) => sender.trim().toLowerCase())
+        .filter(Boolean),
+    );
     const senderEmail = this.requiredField(
       fields.senderEmail,
       "senderEmail",
     ).toLowerCase();
-    if (senderEmail !== expectedSender) {
+    if (!allowedSenders.has(senderEmail)) {
       throw new BadRequestException("Sender is not allowed for PDF intake.");
     }
     const gmailMessageId = this.requiredField(
