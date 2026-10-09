@@ -228,6 +228,7 @@ export class AuthService {
         domainId: user.domainId,
         role: user.role,
         name: user.name,
+        invitedBy: user.invitedBy,
       },
       this.jwtSecret,
       { expiresIn: "7d" },

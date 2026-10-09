@@ -26,7 +26,9 @@ const SUMMARY_CRON = process.env.DOMAIN_DAILY_SUMMARY_CRON || "0 0 8 * * *";
 const EMAIL_CONNECTION_STRING =
   process.env.AZURE_COMMUNICATION_CONNECTION_STRING;
 const EMAIL_SENDER = process.env.AZURE_EMAIL_SENDER;
-const FRONTEND_URL = process.env.FRONTEND_URL || "";
+const FRONTEND_URL = (
+  process.env.FRONTEND_URL || "https://tastematcher.art"
+).replace(/\/+$/, "");
 const IS_PRD = process.env.NODE_ENV === "prd";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -75,6 +77,15 @@ function formatCount(value: number): string {
   return value === 1 ? "1" : value.toString();
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function summarizeComments(comments: Comment[] | undefined, since: number) {
   if (!comments || comments.length === 0) {
     return { total: 0, recent: 0 };
@@ -83,7 +94,7 @@ function summarizeComments(comments: Comment[] | undefined, since: number) {
   return { total: comments.length, recent };
 }
 
-function buildEmailContent(input: {
+export function buildEmailContent(input: {
   domain: Domain;
   owner: User;
   users: User[];
@@ -233,22 +244,24 @@ function buildEmailContent(input: {
         .join(", ");
 
       return `
-        <div style="border:1px solid #e5e7eb; border-radius: 12px; padding: 12px; margin: 12px 0;">
-          <strong>${user.name || user.email}</strong> <span style="color:#6b7280;">(${user.email})</span><br />
-          <span style="color:#374151;">Role:</span> ${user.role} |
-          <span style="color:#374151;">Status:</span> ${user.status} |
-          <span style="color:#374151;">Onboarding:</span> ${user.onboardingStatus}<br />
-          <span style="color:#374151;">Swipes:</span> ${pref.totalSwiped} (last 24h: ${pref.recentSwiped})<br />
-          <span style="color:#374151;">Likes:</span> ${pref.totalLikes} |
-          <span style="color:#374151;">Dislikes:</span> ${pref.totalDislikes}<br />
-          <span style="color:#374151;">Comments:</span> ${totalComments} (last 24h: ${recentComments})<br />
-          <span style="color:#374151;">AI Suggestions:</span> ${eligibilityLabel}<br />
-          <span style="color:#374151;">Proposals:</span> ${proposal.totalProposals} ${
-            proposalStatusSummary ? `| ${proposalStatusSummary}` : ""
-          } | last update ${formatDate(proposal.lastUpdatedAt)}<br />
+        <div style="border:1px solid #d9d5ca; border-radius: 12px; padding: 12px; margin: 12px 0;">
+          <strong>${escapeHtml(user.name || user.email)}</strong> <span style="color:#666a61;">(${escapeHtml(user.email)})</span><br />
+          <span style="color:#666a61;">Role:</span> ${escapeHtml(user.role)} |
+          <span style="color:#666a61;">Status:</span> ${escapeHtml(user.status)} |
+          <span style="color:#666a61;">Onboarding:</span> ${escapeHtml(user.onboardingStatus)}<br />
+          <span style="color:#666a61;">Swipes:</span> ${pref.totalSwiped} (last 24h: ${pref.recentSwiped})<br />
+          <span style="color:#666a61;">Likes:</span> ${pref.totalLikes} |
+          <span style="color:#666a61;">Dislikes:</span> ${pref.totalDislikes}<br />
+          <span style="color:#666a61;">Comments:</span> ${totalComments} (last 24h: ${recentComments})<br />
+          <span style="color:#666a61;">AI Suggestions:</span> ${escapeHtml(eligibilityLabel)}<br />
+          <span style="color:#666a61;">Proposals:</span> ${proposal.totalProposals} ${
+            proposalStatusSummary
+              ? `| ${escapeHtml(proposalStatusSummary)}`
+              : ""
+          } | last update ${escapeHtml(formatDate(proposal.lastUpdatedAt))}<br />
           ${
             itemStatusSummary
-              ? `<span style="color:#374151;">Proposal items:</span> ${itemStatusSummary}<br />`
+              ? `<span style="color:#666a61;">Proposal items:</span> ${escapeHtml(itemStatusSummary)}<br />`
               : ""
           }
         </div>
@@ -267,7 +280,7 @@ function buildEmailContent(input: {
             const updatedAt = formatDate(
               proposal.updatedAt || proposal.createdAt,
             );
-            return `<li>${userLabel}: proposal ${proposal.id} ${statusLabel} (${updatedAt})</li>`;
+            return `<li>${escapeHtml(userLabel)}: proposal ${escapeHtml(proposal.id)} ${escapeHtml(statusLabel)} (${escapeHtml(updatedAt)})</li>`;
           })
           .join("");
 
@@ -276,61 +289,51 @@ function buildEmailContent(input: {
       ? "<li>None</li>"
       : users
           .filter((u) => nowEligibleUserIds.has(u.id))
-          .map((u) => `<li>${u.name || u.email} (${u.email})</li>`)
+          .map(
+            (u) =>
+              `<li>${escapeHtml(u.name || u.email)} (${escapeHtml(u.email)})</li>`,
+          )
           .join("");
 
-  const viewLink = FRONTEND_URL ? `${FRONTEND_URL}/management` : undefined;
+  const viewLink = `${FRONTEND_URL}/management`;
 
-  const html = `
-    <div style="margin:0; background:#f8fafc; padding:24px;">
-      <div style="max-width:680px; margin:0 auto; font-family: Arial, sans-serif; color:#0f172a;">
-        <div style="background:linear-gradient(135deg,#0ea5e9,#22c55e); border-radius:16px; padding:20px; color:#ffffff;">
-          <div style="font-size:14px; opacity:0.9;">Daily summary</div>
-          <div style="font-size:24px; font-weight:700; margin-top:6px;">
-            ${domain.name || domain.id}
-          </div>
-          <div style="margin-top:8px; font-size:14px; opacity:0.9;">${greeting}</div>
-        </div>
-
-        <div style="margin-top:16px; background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:16px;">
-          <h3 style="margin:0 0 12px; font-size:16px; color:#0f172a;">Recap (last 24 hours)</h3>
-          <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
-            <div style="flex:1; min-width:180px; background:#eff6ff; border-radius:12px; padding:12px; border:1px solid #bfdbfe;">
-              <div style="font-size:12px; color:#1d4ed8; font-weight:600;">Proposal updates</div>
-              <div style="font-size:20px; font-weight:700; color:#1e40af;">${recentProposalUpdates.length}</div>
-            </div>
-            <div style="flex:1; min-width:180px; background:#f0fdf4; border-radius:12px; padding:12px; border:1px solid #bbf7d0;">
-              <div style="font-size:12px; color:#15803d; font-weight:600;">Newly AI eligible</div>
-              <div style="font-size:20px; font-weight:700; color:#166534;">${nowEligibleUserIds.size}</div>
-            </div>
-          </div>
-          <div style="margin-bottom:8px; font-weight:600; color:#0f172a;">Proposal changes</div>
-          <ul style="margin:0 0 12px; padding-left:18px; color:#334155;">
-            ${htmlProposalUpdates}
-          </ul>
-          <div style="margin-bottom:8px; font-weight:600; color:#0f172a;">New AI eligible users</div>
-          <ul style="margin:0; padding-left:18px; color:#334155;">
-            ${htmlEligibility}
-          </ul>
-        </div>
-
-        <div style="margin-top:16px;">
-          <h3 style="margin:0 0 8px; font-size:16px; color:#0f172a;">User details</h3>
-          ${htmlUserCards}
-        </div>
-
-        ${
-          viewLink
-            ? `<div style="margin-top:16px;">
-                <a href="${viewLink}" style="display:inline-block; background:#0ea5e9; color:#ffffff; text-decoration:none; padding:10px 16px; border-radius:10px; font-weight:600;">
-                  Open Management
-                </a>
-              </div>`
-            : ""
-        }
-      </div>
-    </div>
-  `;
+  const html = `<!doctype html>
+    <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+    <body style="margin:0;background:#f6f4ef;color:#242a25;font-family:Arial,Helvetica,sans-serif;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;background:#f6f4ef;padding:28px 12px;"><tr><td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;max-width:680px;background:#fffefa;border:1px solid #d9d5ca;">
+          <tr><td style="padding:26px 28px;background:#23372d;color:#fffefa;">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#d6c19d;">Private advisory · Daily brief</div>
+            <h1 style="margin:12px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.2;font-weight:400;color:#fffefa;">${escapeHtml(domain.name || domain.id)}</h1>
+            <div style="margin-top:10px;font-size:14px;line-height:1.7;color:#e7ece8;">${escapeHtml(greeting)}</div>
+          </td></tr>
+          <tr><td style="padding:28px;">
+            <h2 style="margin:0 0 14px;font-family:Georgia,'Times New Roman',serif;font-size:23px;font-weight:400;color:#242a25;">The last 24 hours</h2>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin-bottom:18px;"><tr>
+              <td width="50%" style="padding:14px;background:#f0eee8;border:1px solid #d9d5ca;">
+                <div style="font-size:11px;color:#8a6c3e;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Proposal updates</div>
+                <div style="margin-top:4px;font-size:24px;color:#242a25;">${recentProposalUpdates.length}</div>
+              </td>
+              <td width="50%" style="padding:14px;background:#e7ece8;border:1px solid #d9d5ca;">
+                <div style="font-size:11px;color:#344d40;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Newly AI eligible</div>
+                <div style="margin-top:4px;font-size:24px;color:#242a25;">${nowEligibleUserIds.size}</div>
+              </td>
+            </tr></table>
+            <div style="margin-bottom:8px;font-weight:700;color:#242a25;">Proposal changes</div>
+            <ul style="margin:0 0 16px;padding-left:18px;color:#666a61;line-height:1.7;">${htmlProposalUpdates}</ul>
+            <div style="margin-bottom:8px;font-weight:700;color:#242a25;">New AI eligible users</div>
+            <ul style="margin:0 0 22px;padding-left:18px;color:#666a61;line-height:1.7;">${htmlEligibility}</ul>
+            <h2 style="margin:0 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:23px;font-weight:400;color:#242a25;">Collector details</h2>
+            ${htmlUserCards}
+            <div style="margin-top:24px;"><a href="${escapeHtml(viewLink)}" style="display:inline-block;background:#344d40;color:#fffefa;text-decoration:none;padding:14px 24px;font-size:14px;font-weight:700;">Open Management</a></div>
+          </td></tr>
+          <tr><td style="padding:20px 28px;background:#f0eee8;border-top:1px solid #d9d5ca;font-size:12px;line-height:1.6;color:#666a61;">
+            TasteMatcher · Private art advisory<br>
+            <a href="${FRONTEND_URL}/privacy-policy" style="color:#344d40;">Privacy Policy</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="${FRONTEND_URL}/terms-of-service" style="color:#344d40;">Terms of Service</a>
+          </td></tr>
+        </table>
+      </td></tr></table>
+    </body></html>`;
 
   return { subject, text, html };
 }

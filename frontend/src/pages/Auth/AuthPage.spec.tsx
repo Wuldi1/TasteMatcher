@@ -11,11 +11,7 @@ jest.mock("../../utils/api", () => ({
     status: number;
     errorCode?: string;
 
-    constructor(
-      message: string,
-      status: number,
-      errorCode?: string,
-    ) {
+    constructor(message: string, status: number, errorCode?: string) {
       super(message);
       this.name = "ApiError";
       this.status = status;
@@ -52,6 +48,7 @@ beforeEach(() => {
 
 afterEach(() => {
   process.env.REACT_APP_UI_VERSION = originalUiVersion;
+  window.history.replaceState({}, "", "/");
 });
 
 const queryClient = new QueryClient({
@@ -76,7 +73,7 @@ describe("AuthPage", () => {
     renderWithProviders(<AuthPage />);
 
     expect(
-      screen.getByRole("heading", { name: "TasteMatcher" }),
+      screen.getByRole("heading", { name: "Art, considered." }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Email Address")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
@@ -96,13 +93,20 @@ describe("AuthPage", () => {
   it("links to public legal pages from the login form", () => {
     renderWithProviders(<AuthPage />);
 
-    expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute(
-      "href",
-      "/terms-of-service",
-    );
-    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
-      "href",
-      "/privacy-policy",
+    expect(
+      screen.getByRole("link", { name: "Terms of Service" }),
+    ).toHaveAttribute("href", "/terms-of-service");
+    expect(
+      screen.getByRole("link", { name: "Privacy Policy" }),
+    ).toHaveAttribute("href", "/privacy-policy");
+  });
+
+  it("prefills the email from an invitation link", () => {
+    window.history.replaceState({}, "", "/login?email=invited%40example.com");
+    renderWithProviders(<AuthPage />);
+
+    expect(screen.getByLabelText("Email Address")).toHaveValue(
+      "invited@example.com",
     );
   });
 });

@@ -35,38 +35,32 @@ export function AppInlineLoader({
         : size === "md"
           ? "relative h-6 w-6 flex items-center justify-center"
           : "relative h-12 w-12 flex items-center justify-center";
-  const iconClasses =
-    size === "xs"
-      ? "h-2.5 w-2.5"
-      : size === "sm"
-        ? "h-3 w-3"
-        : size === "md"
-          ? "h-3.5 w-3.5"
-          : "h-7 w-7";
-  const ringClasses =
-    theme === "light"
-      ? "absolute inset-0 animate-spin rounded-full border-2 border-white/35 border-t-white"
-      : "absolute inset-0 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600";
-  const iconShellClasses =
-    theme === "light"
-      ? "relative overflow-hidden rounded-full bg-white/15 ring-1 ring-white/30"
-      : "relative overflow-hidden rounded-full bg-white ring-1 ring-blue-100";
+  const ringClasses = joinClasses(
+    "app-loading-ring absolute inset-0 animate-spin rounded-full border-2",
+    theme === "light" && "app-loading-ring--light",
+  );
   const textClasses = theme === "light" ? "text-white/90" : "text-gray-600";
 
   return (
     <span
       role="status"
       aria-live="polite"
-      className={joinClasses("inline-flex items-center gap-2", textClasses, className)}
+      className={joinClasses(
+        "inline-flex items-center gap-2",
+        textClasses,
+        className,
+      )}
     >
       <span className={spinnerBoxClasses}>
         <span className={ringClasses} aria-hidden="true" />
-        <span className={joinClasses(iconClasses, iconShellClasses)} aria-hidden="true">
+        <span
+          className="app-loading-mark app-loading-mark--inline"
+          aria-hidden="true"
+        >
           <img
             src={APP_ICON_SRC}
             alt=""
-            aria-hidden="true"
-            className="h-full w-full animate-pulse object-cover"
+            className="h-full w-full object-cover"
           />
         </span>
       </span>
@@ -93,37 +87,32 @@ export function AppLoadingState({
     iconSize === "sm"
       ? "relative h-12 w-12 flex items-center justify-center"
       : "relative h-16 w-16 flex items-center justify-center";
-  const iconClasses = iconSize === "sm" ? "h-7 w-7" : "h-10 w-10";
-
   return (
     <div
       role="status"
       aria-live="polite"
       className={joinClasses(
-        "flex items-center justify-center text-gray-600",
+        "app-loading-state flex items-center justify-center text-gray-600",
         wrapperClasses,
         className,
       )}
     >
-      <div className="flex flex-col items-center gap-3">
+      <div className="app-loading-state__content flex flex-col items-center gap-3">
         <div className={iconBoxClasses}>
           <span
-            className="absolute inset-0 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"
+            className="app-loading-ring absolute inset-0 animate-spin rounded-full border-2"
             aria-hidden="true"
           />
           <span
-            className={joinClasses(
-              iconClasses,
-              "relative overflow-hidden rounded-full bg-white ring-1 ring-blue-100",
-            )}
+            className="app-loading-mark"
             aria-hidden="true"
+            data-testid="tastematcher-loading-mark"
           >
             <img
               src={APP_ICON_SRC}
               alt=""
-              aria-hidden="true"
               data-testid="tastematcher-loading-logo"
-              className="h-full w-full animate-pulse object-cover"
+              className="h-full w-full object-cover"
             />
           </span>
         </div>

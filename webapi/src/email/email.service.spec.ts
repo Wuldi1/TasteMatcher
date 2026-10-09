@@ -54,7 +54,11 @@ const buildProposal = (): Proposal => ({
   ],
   status: "submitted",
   generalComments: [
-    { author: "Specialist", text: "Curated for the living room.", createdAt: 1 },
+    {
+      author: "Specialist",
+      text: "Curated for the living room.",
+      createdAt: 1,
+    },
   ],
   createdAt: 1,
   metadata: {
@@ -107,6 +111,10 @@ describe("EmailService", () => {
     });
     const sentMessage = getMockedBeginSend().mock.calls[0][0];
     expect(sentMessage.content.html).toContain("Verification Code");
+    expect(sentMessage.content.html).toContain("background:#f6f4ef");
+    expect(sentMessage.content.html).toContain("background:#23372d");
+    expect(sentMessage.content.html).toContain("/privacy-policy");
+    expect(sentMessage.content.html).toContain("/terms-of-service");
   });
 
   it("logs a warning and skips sending when configuration is missing", async () => {
@@ -215,7 +223,9 @@ describe("EmailService", () => {
         content: expect.objectContaining({
           subject: "Your art proposal has been updated",
           html: expect.stringContaining("Works selected for Avery"),
-          plainText: expect.stringContaining("A focused group based on recent likes."),
+          plainText: expect.stringContaining(
+            "A focused group based on recent likes.",
+          ),
         }),
         recipients: { to: [{ address: "collector@example.com" }] },
       }),
@@ -230,6 +240,33 @@ describe("EmailService", () => {
     );
     expect(sentMessage.content.html).toContain("1 accepted");
   });
+
+  it.each([
+    ["created", "Your private art proposal is ready", "View proposal"],
+    ["deleted", "A TasteMatcher proposal was removed", "Open TasteMatcher"],
+    ["ping", "Reminder: review your private art proposal", "Review proposal"],
+  ] as const)(
+    "renders the %s customer proposal variant",
+    async (action, expectedSubject, expectedCta) => {
+      process.env.NODE_ENV = "prd";
+      process.env.FRONTEND_URL = "https://tastematcher.art";
+      process.env.AZURE_COMMUNICATION_CONNECTION_STRING =
+        "endpoint=https://unit-test/;accessKey=abc";
+      process.env.AZURE_EMAIL_SENDER = "no-reply@example.com";
+
+      const service = new EmailService();
+      await service.sendProposalNotification(
+        "collector@example.com",
+        buildProposal(),
+        action,
+      );
+
+      const sentMessage = getMockedBeginSend().mock.calls[0][0];
+      expect(sentMessage.content.subject).toBe(expectedSubject);
+      expect(sentMessage.content.html).toContain(expectedCta);
+      expect(sentMessage.content.html).toContain("background:#23372d");
+    },
+  );
 
   it("sends a styled proposal digest back to the sales workspace", async () => {
     process.env.NODE_ENV = "prd";
@@ -264,5 +301,75 @@ describe("EmailService", () => {
       "https://app.tastematcher.art/sales?domainId=domain-1&amp;userId=customer-1",
     );
     expect(sentMessage.content.html).toContain("1 artwork comments");
+  });
+
+  it("uses collector copy when a staff member updates a proposal", async () => {
+    process.env.NODE_ENV = "prd";
+    process.env.FRONTEND_URL = "https://tastematcher.art";
+    process.env.AZURE_COMMUNICATION_CONNECTION_STRING =
+      "endpoint=https://unit-test/;accessKey=abc";
+    process.env.AZURE_EMAIL_SENDER = "no-reply@example.com";
+
+    const service = new EmailService();
+    await service.sendProposalDigest({
+      recipients: ["collector@example.com"],
+      proposal: buildProposal(),
+      action: "updated",
+      actorEmail: "advisor@example.com",
+      actorRole: "dealer",
+      portalLink: "https://tastematcher.art/buying-proposal",
+    });
+
+    const sentMessage = getMockedBeginSend().mock.calls[0][0];
+    expect(sentMessage.content.html).toContain(
+      "Open the proposal to respond to each artwork",
+    );
+    expect(sentMessage.content.html).not.toContain(
+      "Open the customer workspace",
+    );
+  });
+
+  it("uses the canonical public site when FRONTEND_URL is missing", async () => {
+    process.env.NODE_ENV = "prd";
+    delete process.env.FRONTEND_URL;
+    process.env.AZURE_COMMUNICATION_CONNECTION_STRING =
+      "endpoint=https://unit-test/;accessKey=abc";
+    process.env.AZURE_EMAIL_SENDER = "no-reply@example.com";
+
+    const service = new EmailService();
+    await service.sendUserInvitation(
+      "invitee@example.com",
+      "Invitee",
+      "domain-1",
+      "customer",
+    );
+
+    const sentMessage = getMockedBeginSend().mock.calls[0][0];
+    expect(sentMessage.content.html).toContain(
+      "https://tastematcher.art/login?email=invitee%40example.com",
+    );
+  });
+
+  it("sends a bulk campaign to each unique recipient", async () => {
+    process.env.NODE_ENV = "prd";
+    process.env.AZURE_COMMUNICATION_CONNECTION_STRING =
+      "endpoint=https://unit-test/;accessKey=abc";
+    process.env.AZURE_EMAIL_SENDER = "no-reply@example.com";
+
+    const service = new EmailService();
+    const result = await service.sendBulkCustomEmail({
+      recipients: ["one@example.com", "one@example.com", "two@example.com"],
+      subject: "A private selection",
+      htmlBody: "<p>Prepared for you.</p>",
+      textBody: "Prepared for you.",
+    });
+
+    expect(result).toEqual({
+      requested: 2,
+      sent: 2,
+      failed: 0,
+      failedRecipients: [],
+    });
+    expect(getMockedBeginSend()).toHaveBeenCalledTimes(2);
   });
 });

@@ -28,11 +28,9 @@ import {
 
 export default function ProposalView({
   proposal,
-  onStatusChange,
   onArtworkViewed,
 }: {
   proposal: Proposal;
-  onStatusChange?: (status: "accepted" | "rejected" | "submitted") => void;
   onArtworkViewed?: (artworkId: string) => void;
 }) {
   const { currency, dimensionUnit } = useViewerPreferences();
@@ -185,20 +183,6 @@ export default function ProposalView({
     }
   };
 
-  // const handleStatusUpdate = async (status: "accepted" | "rejected") => {
-  //   setSaving(true);
-  //   try {
-  //     await apiClient.updateProposal(domainId, id, { status });
-  //     showAlert("Success", `Proposal ${status}!`);
-  //     onStatusChange?.(status);
-  //   } catch (err) {
-  //     console.error(`Failed to ${status} proposal`, err);
-  //     showAlert("Error", `Failed to ${status} proposal`);
-  //   } finally {
-  //     setSaving(false);
-  //   }
-  // };
-
   // Calculate summary stats
   const approvedCount = localItems.filter(
     (item) => item.status === "approved",
@@ -215,12 +199,14 @@ export default function ProposalView({
     : new Date(proposal.createdAt).toLocaleDateString();
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 px-4 sm:px-6">
+    <div className="proposal-view max-w-6xl mx-auto space-y-8 px-4 sm:px-6">
       {/* Header */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-6">
+      <div className="proposal-view__summary bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Proposal Offer</h1>
+            <h2 className="text-2xl font-normal text-gray-900">
+              Your considered selection
+            </h2>
             <p className="text-gray-500 mt-1">
               Review the curated selection below
             </p>
@@ -239,7 +225,9 @@ export default function ProposalView({
             )}
             {proposal.status === "rejected" && <XCircle className="w-4 h-4" />}
             {proposal.status === "submitted" && <Clock className="w-4 h-4" />}
-            {proposal.status}
+            {proposal.status === "submitted"
+              ? "Ready for review"
+              : proposal.status}
           </div>
         </div>
 

@@ -8,6 +8,7 @@ import {
   ShoppingCart,
   FileText,
   RefreshCw,
+  Settings,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -102,5 +103,14 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
     roles: ["customer"],
     ariaLabel: "Navigate to Proposal page",
     bubbleText: "Review your proposal and accept or reject items.",
+  },
+  {
+    id: "settings",
+    name: "Settings",
+    href: "/settings",
+    icon: Settings,
+    roles: ["customer", "dealer", "domain_owner", "global_admin"],
+    ariaLabel: "Navigate to account and display settings",
+    bubbleText: "Review your account, display preferences, and support links.",
   },
 ];

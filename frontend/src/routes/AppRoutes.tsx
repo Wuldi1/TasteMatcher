@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, Link } from "react-router-dom";
 import { AuthPage } from "../pages/Auth/AuthPage";
 import { HomePage } from "../pages/Home/HomePage";
 import ProtectedRoute from "./ProtectedRoute";
@@ -17,6 +17,8 @@ import { OnboardingPage } from "../pages/Onboarding/OnboardingPage";
 import { AutomaticUploadsPage } from "../pages/AutomaticUploads/AutomaticUploadsPage";
 import { LegalPage } from "../pages/Legal/LegalPage";
 import { RoleProtectedRoute } from "./RoleProtectedRoute";
+import { AppLoadingState } from "../components/Loading/AppLoadingState";
+import { SettingsPage } from "../pages/Settings/SettingsPage";
 
 /**
  * Wrapper component that redirects authenticated users away from auth pages
@@ -26,7 +28,14 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
   // If auth is still initializing, don't decide routing yet (prevents spurious redirects on refresh).
   if (isInitializing) {
-    return null; // or a small spinner component if you prefer
+    return (
+      <div className="route-state route-state--fullscreen">
+        <AppLoadingState
+          message="Preparing your private gallery..."
+          fullScreen
+        />
+      </div>
+    );
   }
 
   // If we already have a user, redirect away from public auth pages to the app home.
@@ -35,6 +44,21 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>;
+}
+
+function NotFoundPage() {
+  return (
+    <main className="route-state route-state--fullscreen">
+      <div className="route-state__panel">
+        <p className="route-state__eyebrow">TasteMatcher</p>
+        <h1>This room is not in the collection.</h1>
+        <p>The page may have moved, or the address may be incomplete.</p>
+        <Link to="/" className="route-state__action">
+          Return to TasteMatcher
+        </Link>
+      </div>
+    </main>
+  );
 }
 
 /**
@@ -56,13 +80,13 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="app-shell">
       {/* Render only one nav shell to avoid duplicate effects/network requests */}
       {isDesktop ? <Sidebar /> : <MobileSidebar />}
 
       {/* Main content area */}
-      <main className="flex-1 overflow-y-auto bg-gray-50 pb-20 md:pb-0 p-4 sm:p-6 md:p-8">
-        {children}
+      <main className="app-main" id="main-content">
+        <div className="app-main__inner">{children}</div>
       </main>
     </div>
   );
@@ -101,7 +125,20 @@ export function AppRoutes() {
         path="/onboarding"
         element={
           <ProtectedRoute>
-            <OnboardingPage />
+            <RoleProtectedRoute allowedRoles={["customer"]}>
+              <OnboardingPage />
+            </RoleProtectedRoute>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <SettingsPage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -122,9 +159,18 @@ export function AppRoutes() {
         path="/catalog"
         element={
           <ProtectedRoute>
-            <AppLayout>
-              <CatalogPage />
-            </AppLayout>
+            <RoleProtectedRoute
+              allowedRoles={[
+                "customer",
+                "dealer",
+                "domain_owner",
+                "global_admin",
+              ]}
+            >
+              <AppLayout>
+                <CatalogPage />
+              </AppLayout>
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       />
@@ -133,9 +179,11 @@ export function AppRoutes() {
         path="/taster"
         element={
           <ProtectedRoute>
-            <AppLayout>
-              <TasterPage />
-            </AppLayout>
+            <RoleProtectedRoute allowedRoles={["customer"]}>
+              <AppLayout>
+                <TasterPage />
+              </AppLayout>
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       />
@@ -144,9 +192,13 @@ export function AppRoutes() {
         path="/upload"
         element={
           <ProtectedRoute>
-            <AppLayout>
-              <UploadPage />
-            </AppLayout>
+            <RoleProtectedRoute
+              allowedRoles={["dealer", "domain_owner", "global_admin"]}
+            >
+              <AppLayout>
+                <UploadPage />
+              </AppLayout>
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       />
@@ -168,9 +220,13 @@ export function AppRoutes() {
         path="/management"
         element={
           <ProtectedRoute>
-            <AppLayout>
-              <Management />
-            </AppLayout>
+            <RoleProtectedRoute
+              allowedRoles={["dealer", "domain_owner", "global_admin"]}
+            >
+              <AppLayout>
+                <Management />
+              </AppLayout>
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       />
@@ -179,9 +235,11 @@ export function AppRoutes() {
         path="/ai-suggestions"
         element={
           <ProtectedRoute>
-            <AppLayout>
-              <AISuggestionsPage />
-            </AppLayout>
+            <RoleProtectedRoute allowedRoles={["customer"]}>
+              <AppLayout>
+                <AISuggestionsPage />
+              </AppLayout>
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       />
@@ -190,9 +248,13 @@ export function AppRoutes() {
         path="/sales"
         element={
           <ProtectedRoute>
-            <AppLayout>
-              <SalesPage />
-            </AppLayout>
+            <RoleProtectedRoute
+              allowedRoles={["dealer", "domain_owner", "global_admin"]}
+            >
+              <AppLayout>
+                <SalesPage />
+              </AppLayout>
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       />
@@ -201,9 +263,13 @@ export function AppRoutes() {
         path="/sales/:userId"
         element={
           <ProtectedRoute>
-            <AppLayout>
-              <SalesPage />
-            </AppLayout>
+            <RoleProtectedRoute
+              allowedRoles={["dealer", "domain_owner", "global_admin"]}
+            >
+              <AppLayout>
+                <SalesPage />
+              </AppLayout>
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       />
@@ -212,15 +278,16 @@ export function AppRoutes() {
         path="/buying-proposal"
         element={
           <ProtectedRoute>
-            <AppLayout>
-              <BuyingProposalPage />
-            </AppLayout>
+            <RoleProtectedRoute allowedRoles={["customer"]}>
+              <AppLayout>
+                <BuyingProposalPage />
+              </AppLayout>
+            </RoleProtectedRoute>
           </ProtectedRoute>
         }
       />
 
-      {/* Catch-all redirect to home or login */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

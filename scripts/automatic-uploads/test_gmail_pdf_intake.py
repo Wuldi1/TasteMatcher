@@ -126,6 +126,31 @@ def raw_gmail_message(
 
 
 class GmailPdfIntakeTests(unittest.TestCase):
+    def test_operational_replies_use_premium_shell_and_escape_content(self):
+        success = gmail_pdf_intake.build_success_html(
+            "auction & notes.pdf",
+            {
+                "artworkCount": 2,
+                "includedCount": 1,
+                "excludedCount": 1,
+                "missing": {},
+                "warningCount": 0,
+            },
+        )
+        failure = gmail_pdf_intake.build_failure_html(
+            "<auction>.pdf", "Invalid <script>"
+        )
+
+        for html in (success, failure):
+            self.assertTrue(html.startswith("<strong>[Alfred]</strong>"))
+            self.assertIn("background:#f6f4ef", html)
+            self.assertIn("background:#23372d", html)
+            self.assertIn("/privacy-policy", html)
+            self.assertIn("/terms-of-service", html)
+        self.assertIn("auction &amp; notes.pdf", success)
+        self.assertIn("&lt;auction&gt;.pdf", failure)
+        self.assertNotIn("<script>", failure)
+
     def test_parse_message_extracts_sender_rfc_id_and_pdf_attachments(self):
         parsed = gmail_pdf_intake.parse_message(raw_gmail_message())
 
@@ -154,29 +179,39 @@ class GmailPdfIntakeTests(unittest.TestCase):
 
         self.assertFalse(gmail_pdf_intake.looks_like_auction_pdf(message, attachment))
 
-    def test_send_reply_builds_mime_message_with_json_attachment(self):
+    def test_send_reply_builds_mime_message_without_attachment(self):
         service = FakeService(raw_gmail_message())
-        with tempfile.TemporaryDirectory() as tmp:
-            attachment = Path(tmp) / "auction-import.json"
-            attachment.write_text('{"version":1}', encoding="utf-8")
-
-            sent_id = gmail_pdf_intake.send_reply(
-                service=service,
-                to="galrubin15@gmail.com",
-                subject="Re: TasteMatcher - Auction",
-                thread_id="thread-1",
-                in_reply_to="<source-message@example.com>",
-                html="<strong>[Alfred]</strong><br>Processed.",
-                attachment=attachment,
-            )
+        sent_id = gmail_pdf_intake.send_reply(
+            service=service,
+            to="galrubin15@gmail.com",
+            subject="Re: TasteMatcher - Auction",
+            thread_id="thread-1",
+            in_reply_to="<source-message@example.com>",
+            html="<strong>[Alfred]</strong><br>Processed.",
+        )
 
         self.assertEqual(sent_id, "sent-message-id")
         self.assertEqual(service.messages.sent[0]["threadId"], "thread-1")
         raw = base64.urlsafe_b64decode(service.messages.sent[0]["raw"])
         parsed = email.message_from_bytes(raw)
         filenames = [part.get_filename() for part in parsed.walk()]
-        self.assertIn("auction-import.json", filenames)
+        self.assertEqual([name for name in filenames if name], [])
         self.assertEqual(parsed["In-Reply-To"], "<source-message@example.com>")
+
+    def test_multipart_intake_contains_source_import_and_metadata(self):
+        body = gmail_pdf_intake.build_multipart_body(
+            "boundary",
+            {"senderEmail": "jaclynlavy@gmail.com", "gmailMessageId": "msg-1"},
+            {
+                "pdf": ("auction.pdf", "application/pdf", b"%PDF"),
+                "importFile": ("auction.json", "application/json", b'{"version":1}'),
+            },
+        )
+
+        self.assertIn(b'name="senderEmail"', body)
+        self.assertIn(b"jaclynlavy@gmail.com", body)
+        self.assertIn(b'name="pdf"; filename="auction.pdf"', body)
+        self.assertIn(b'name="importFile"; filename="auction.json"', body)
 
     def test_process_mailbox_sends_reply_and_labels_after_success(self):
         service = FakeService(raw_gmail_message())
@@ -184,6 +219,8 @@ class GmailPdfIntakeTests(unittest.TestCase):
             temp_dir = Path(tmp)
             output_path = temp_dir / "generated.json"
             output_path.write_text(json.dumps({"version": 1}), encoding="utf-8")
+            pdf_path = temp_dir / "source.pdf"
+            pdf_path.write_bytes(b"%PDF-1.4")
             summary = {
                 "artworkCount": 2,
                 "includedCount": 2,
@@ -206,16 +243,29 @@ class GmailPdfIntakeTests(unittest.TestCase):
                 with mock.patch.object(
                     gmail_pdf_intake,
                     "process_attachment",
-                    return_value=gmail_pdf_intake.ConverterResult(output_path, summary),
+                    return_value=gmail_pdf_intake.ConverterResult(
+                        pdf_path, output_path, summary
+                    ),
                 ):
-                    processed = gmail_pdf_intake.process_mailbox(
-                        service=service,
-                        allowed_senders={"galrubin15@gmail.com", "jaclynlavy@gmail.com"},
-                        converter=Path("converter.py"),
-                        temp_dir=temp_dir,
-                    )
+                    with mock.patch.object(
+                        gmail_pdf_intake,
+                        "upload_pdf_intake",
+                        return_value={"intakeId": "pdf-intake-1"},
+                    ) as upload:
+                        processed = gmail_pdf_intake.process_mailbox(
+                            service=service,
+                            allowed_senders={
+                                "galrubin15@gmail.com",
+                                "jaclynlavy@gmail.com",
+                            },
+                            converter=Path("converter.py"),
+                            temp_dir=temp_dir,
+                            api_url="https://api.tastematcher.art",
+                            api_key="secret",
+                        )
 
         self.assertEqual(processed, 1)
+        upload.assert_called_once()
         self.assertEqual(len(service.messages.sent), 1)
         self.assertEqual(
             service.messages.modified,

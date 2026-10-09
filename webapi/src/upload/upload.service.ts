@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -71,6 +72,7 @@ export class UploadService {
     body: unknown,
     actor: UploadActor,
   ): Promise<Artwork> {
+    this.assertCanManageArtworks(actor.role);
     const artwork = this.parseArtworkPayload(body, domainId);
     return this.ingestArtwork(domainId, file, artwork, actor, "manual");
   }
@@ -82,6 +84,7 @@ export class UploadService {
     actor: UploadActor,
     forcedArtworkId?: string,
   ): Promise<Artwork> {
+    this.assertCanManageArtworks(actor.role);
     return this.ingestArtwork(
       domainId,
       file,
@@ -97,6 +100,7 @@ export class UploadService {
     file: ArtworkUploadFile,
     viewerRole: Role,
   ): Promise<Artwork> {
+    this.assertCanManageArtworks(viewerRole);
     this.blobService.validateImageFile(
       file as Parameters<BlobService["validateImageFile"]>[0],
     );
@@ -277,6 +281,18 @@ export class UploadService {
       throw new BadRequestException("Invalid artwork metadata payload");
     }
     return this.buildArtwork(domainId, (raw ?? {}) as Partial<Artwork>);
+  }
+
+  private assertCanManageArtworks(role: Role): void {
+    if (
+      role !== "global_admin" &&
+      role !== "domain_owner" &&
+      role !== "dealer"
+    ) {
+      throw new ForbiddenException(
+        "You are not authorized to manage artworks.",
+      );
+    }
   }
 
   private parseJson(value: string): unknown {

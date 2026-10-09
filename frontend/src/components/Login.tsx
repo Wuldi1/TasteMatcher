@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { apiClient, ApiError } from "../utils/api";
 import {
@@ -23,9 +23,12 @@ type UserIntent = "buy" | "sell" | null;
  */
 export function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { setUserFromUser } = useAuth();
 
-  const [email, setEmail] = useState<string>("");
+  const [email, setEmail] = useState<string>(() =>
+    (searchParams.get("email") ?? "").trim(),
+  );
   const [verificationCode, setVerificationCode] = useState<string>(
     window.location.hostname.includes("tastematcher.art") ? "" : "000000",
   );
@@ -64,7 +67,7 @@ export function Login() {
       .getHealth()
       .then((health) => {
         if (!isMounted) return;
-        setApiVersion(health.deploymentVersion);
+        setApiVersion(health.deploymentVersion ?? health.version);
         setApiCommit(health.commit);
       })
       .catch((err) => {
@@ -200,8 +203,8 @@ export function Login() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl p-6 sm:p-8 w-full max-w-md">
+    <div className="auth-shell min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="auth-card bg-white rounded-xl shadow-xl p-6 sm:p-8 w-full max-w-md">
         <div className="mb-4 flex flex-col items-center gap-2">
           <img src={logoSrc} alt="TasteMatcher logo" className="h-12 w-12" />
           <p
@@ -214,10 +217,10 @@ export function Login() {
         </div>
         <div className="text-center mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-            TasteMatcher
+            Art, considered.
           </h1>
           <p className="text-sm sm:text-base text-gray-600">
-            {phase === "email" && "Sign in to your account"}
+            {phase === "email" && "Enter your private gallery"}
             {phase === "code-entry" && "Enter verification code"}
             {phase === "user-not-found" && "Welcome to TasteMatcher"}
             {phase === "buyer-form" && "Request Customer Access"}
@@ -391,7 +394,9 @@ export function Login() {
               } catch (err) {
                 console.error("Failed to submit customer request:", err);
                 setError(
-                  err instanceof ApiError ? err.message : "Failed to submit request"
+                  err instanceof ApiError
+                    ? err.message
+                    : "Failed to submit request",
                 );
               } finally {
                 setIsLoading(false);

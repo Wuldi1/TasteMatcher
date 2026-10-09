@@ -20,7 +20,7 @@ import "./UploadPage.css";
  */
 export function UploadPage() {
   return (
-    <div className="upload-page">
+    <div className="operational-page upload-page">
       <ArtworkUpload />
     </div>
   );

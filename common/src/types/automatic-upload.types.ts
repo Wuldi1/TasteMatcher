@@ -298,3 +298,61 @@ export interface AutomaticUploadApprovalResponse {
   skipped: AutomaticUploadSkippedDraftResult[];
   failed: AutomaticUploadFailedDraftResult[];
 }
+
+export type AutomaticUploadPdfIntakeStatus =
+  | "ready_for_review"
+  | "needs_attention"
+  | "importing"
+  | "imported"
+  | "partially_imported"
+  | "failed";
+
+export interface AutomaticUploadPdfIntakeMissingSummary {
+  title: number;
+  artist: number;
+  price: number;
+  endDate: number;
+  image: number;
+}
+
+export interface AutomaticUploadPdfIntakeSummary {
+  artworkCount: number;
+  includedCount: number;
+  excludedCount: number;
+  warningCount: number;
+  missing: AutomaticUploadPdfIntakeMissingSummary;
+  warnings?: string[];
+  unparsed?: string[];
+}
+
+export interface AutomaticUploadPdfIntakeSource {
+  senderEmail: string;
+  gmailMessageId: string;
+  gmailThreadId?: string;
+  subject?: string;
+  originalFilename: string;
+}
+
+export interface AutomaticUploadPdfIntakeListItem {
+  id: string;
+  domainId: string;
+  status: AutomaticUploadPdfIntakeStatus;
+  source: AutomaticUploadPdfIntakeSource;
+  summary: AutomaticUploadPdfIntakeSummary;
+  createdAt: string;
+  updatedAt: string;
+  approvedAt?: string;
+  approvedBy?: string;
+}
+
+export interface AutomaticUploadPdfIntakeDetail
+  extends AutomaticUploadPdfIntakeListItem {
+  preview: AutomaticUploadPreviewResponse;
+  importResult?: AutomaticUploadApprovalResponse;
+}
+
+export interface AutomaticUploadPdfIntakeIngestResponse {
+  intakeId: string;
+  status: AutomaticUploadPdfIntakeStatus;
+  duplicate: boolean;
+}

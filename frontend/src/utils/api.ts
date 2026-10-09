@@ -16,6 +16,8 @@ import {
   ArtworkStats,
   AutomaticUploadApprovalRequest,
   AutomaticUploadApprovalResponse,
+  AutomaticUploadPdfIntakeDetail,
+  AutomaticUploadPdfIntakeListItem,
   AutomaticUploadPreviewRequest,
   AutomaticUploadPreviewResponse,
   CustomerRequest,
@@ -218,6 +220,22 @@ class BaseApiClient {
     }
 
     return performRequest();
+  }
+
+  protected async requestBlob(endpoint: string): Promise<Blob> {
+    const url = `${this.baseURL}${endpoint}`;
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: this.getHeaders(false),
+      });
+      if (!response.ok) await this.handleErrorResponse(response, url);
+      return response.blob();
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      console.error("Blob download network error", { url, error });
+      throw new ApiError("Download network error", 0);
+    }
   }
 
   /**
@@ -444,6 +462,56 @@ class ApiClient extends BaseApiClient {
         method: "POST",
         body: JSON.stringify(request),
       },
+    );
+  }
+
+  /** List private PDF intakes available to the current domain owner. */
+  async listAutomaticUploadPdfIntakes(
+    domainId: string,
+  ): Promise<AutomaticUploadPdfIntakeListItem[]> {
+    this.validateRequired(domainId, "Domain ID");
+    return this.request<AutomaticUploadPdfIntakeListItem[]>(
+      `/domains/${encodeURIComponent(domainId)}/automatic-uploads/pdf-intakes`,
+      { method: "GET" },
+    );
+  }
+
+  /** Load a stored PDF intake and its editable import preview. */
+  async getAutomaticUploadPdfIntake(
+    domainId: string,
+    intakeId: string,
+  ): Promise<AutomaticUploadPdfIntakeDetail> {
+    this.validateRequired(domainId, "Domain ID");
+    this.validateRequired(intakeId, "PDF intake ID");
+    return this.request<AutomaticUploadPdfIntakeDetail>(
+      `/domains/${encodeURIComponent(domainId)}/automatic-uploads/pdf-intakes/${encodeURIComponent(intakeId)}`,
+      { method: "GET" },
+    );
+  }
+
+  /** Approve edited drafts from a trusted stored PDF intake. */
+  async approveAutomaticUploadPdfIntake(
+    domainId: string,
+    intakeId: string,
+    request: AutomaticUploadApprovalRequest,
+  ): Promise<AutomaticUploadApprovalResponse> {
+    this.validateRequired(domainId, "Domain ID");
+    this.validateRequired(intakeId, "PDF intake ID");
+    return this.request<AutomaticUploadApprovalResponse>(
+      `/domains/${encodeURIComponent(domainId)}/automatic-uploads/pdf-intakes/${encodeURIComponent(intakeId)}/approve`,
+      { method: "POST", body: JSON.stringify(request) },
+    );
+  }
+
+  /** Download a private source PDF through the authenticated API. */
+  async downloadAutomaticUploadPdfIntakeSource(
+    domainId: string,
+    intakeId: string,
+  ): Promise<Blob> {
+    this.validateRequired(domainId, "Domain ID");
+    this.validateRequired(intakeId, "PDF intake ID");
+    return this.requestBlob(
+      `/domains/${encodeURIComponent(domainId)}/automatic-uploads/pdf-intakes/${encodeURIComponent(intakeId)}/source`,
     );
   }
 

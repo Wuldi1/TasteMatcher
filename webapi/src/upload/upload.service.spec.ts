@@ -1,4 +1,4 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { UploadService } from "./upload.service";
 
 describe("UploadService", () => {
@@ -132,5 +132,34 @@ describe("UploadService", () => {
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(blobService.uploadBlob).not.toHaveBeenCalled();
+  });
+
+  it("rejects customer ingestion before performing storage work", async () => {
+    await expect(
+      service.uploadManualArtwork(
+        "domain-1",
+        { buffer: Buffer.from("image"), mimetype: "image/jpeg", size: 5 },
+        { title: "Unauthorized work" },
+        { id: "customer-1", role: "customer" },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(blobService.validateImageFile).not.toHaveBeenCalled();
+    expect(blobService.uploadBlob).not.toHaveBeenCalled();
+    expect(items.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects customer image replacement before performing storage work", async () => {
+    await expect(
+      service.replaceArtworkImage(
+        "domain-1",
+        "artwork-1",
+        { buffer: Buffer.from("image"), mimetype: "image/jpeg", size: 5 },
+        "customer",
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(blobService.validateImageFile).not.toHaveBeenCalled();
+    expect(cosmosService.getArtworksContainer).not.toHaveBeenCalled();
   });
 });

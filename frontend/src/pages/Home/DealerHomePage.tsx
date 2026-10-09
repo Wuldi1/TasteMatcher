@@ -90,7 +90,7 @@ export function DealerHomePage() {
   }, [canViewActivitySummary, activityDomainId]);
 
   if (!user) {
-    return null;
+    return <AppLoadingState message="Preparing your gallery workspace..." />;
   }
 
   // Calculate stats
@@ -108,15 +108,15 @@ export function DealerHomePage() {
     <div className="dealer-home-page p-4 sm:p-6 md:p-8 space-y-8">
       {/* Welcome Header */}
       <header className="bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-lg p-6 shadow-md">
-        <h1 className="text-3xl font-bold">Hello, {user.name}!</h1>
+        <h1 className="text-3xl font-bold">A considered overview.</h1>
         <p className="text-lg mt-2">
-          Manage your gallery and customers effectively.
+          Welcome back, {user.name}. The gallery’s next decisions are ready.
         </p>
       </header>
 
       {/* Dealer Stats */}
       <section className="space-y-6">
-        <h2 className="text-xl font-semibold">Your Stats</h2>
+        <h2 className="text-xl font-semibold">Proposal portfolio</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="bg-white rounded-lg shadow-md p-4 flex flex-col items-center">
             <BarChart2 className="w-10 h-10 text-blue-500" />
@@ -138,16 +138,16 @@ export function DealerHomePage() {
 
       {/* Dealer Actions */}
       <section className="space-y-6">
-        <h2 className="text-xl font-semibold">Actions</h2>
+        <h2 className="text-xl font-semibold">Gallery work</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <Link
             to="/management"
             className="bg-blue-100 rounded-lg shadow-md p-4 flex flex-col items-center hover:bg-blue-200"
           >
             <Users className="w-10 h-10 text-blue-500" />
-            <h3 className="text-lg font-medium mt-2">Manage Users</h3>
+            <h3 className="text-lg font-medium mt-2">Collector directory</h3>
             <p className="text-sm text-gray-600 text-center">
-              Invite users, manage roles, and track activity.
+              Review relationships, invitations, roles, and access.
             </p>
           </Link>
           <Link
@@ -155,9 +155,9 @@ export function DealerHomePage() {
             className="bg-green-100 rounded-lg shadow-md p-4 flex flex-col items-center hover:bg-green-200"
           >
             <ShoppingCart className="w-10 h-10 text-green-500" />
-            <h3 className="text-lg font-medium mt-2">Manage Proposals</h3>
+            <h3 className="text-lg font-medium mt-2">Proposal studio</h3>
             <p className="text-sm text-gray-600 text-center">
-              Create and manage sales proposals for your customers.
+              Compose and refine private selections for collectors.
             </p>
           </Link>
           <Link
@@ -165,9 +165,9 @@ export function DealerHomePage() {
             className="bg-yellow-100 rounded-lg shadow-md p-4 flex flex-col items-center hover:bg-yellow-200"
           >
             <PlusCircle className="w-10 h-10 text-yellow-500" />
-            <h3 className="text-lg font-medium mt-2">Upload Artworks</h3>
+            <h3 className="text-lg font-medium mt-2">Add an artwork</h3>
             <p className="text-sm text-gray-600 text-center">
-              Add new artworks to your gallery.
+              Prepare a complete, carefully described catalog record.
             </p>
           </Link>
           {hasSubmittedProposal && (
@@ -187,7 +187,7 @@ export function DealerHomePage() {
 
       {/* Recent Activity */}
       <section className="space-y-6">
-        <h2 className="text-xl font-semibold">Recent Activity</h2>
+        <h2 className="text-xl font-semibold">Recent gallery activity</h2>
         <div className="bg-white rounded-lg shadow-md p-4 space-y-4">
           {/* Recent Artworks */}
           <div className="flex items-center justify-between">

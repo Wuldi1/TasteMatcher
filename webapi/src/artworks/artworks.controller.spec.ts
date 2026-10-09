@@ -1,9 +1,11 @@
 import { ForbiddenException } from "@nestjs/common";
+import { ROLES_KEY } from "../auth/utils/roles.decorator";
 import { ArtworksController } from "./artworks.controller";
 
 describe("ArtworksController", () => {
   const mockArtworksService = {
     getRecommendationsForUser: jest.fn(),
+    findOne: jest.fn(),
   };
 
   let controller: ArtworksController;
@@ -11,7 +13,51 @@ describe("ArtworksController", () => {
   beforeEach(() => {
     mockArtworksService.getRecommendationsForUser.mockReset();
     mockArtworksService.getRecommendationsForUser.mockResolvedValue([]);
+    mockArtworksService.findOne.mockReset();
+    mockArtworksService.findOne.mockResolvedValue({
+      id: "artwork-1",
+      domainId: "domain-1",
+      type: "artwork",
+      title: "Artwork",
+    });
     controller = new ArtworksController(mockArtworksService as never);
+  });
+
+  describe("findOne", () => {
+    it("passes customer visibility context to the service", async () => {
+      const req = {
+        user: {
+          id: "customer-1",
+          email: "collector@example.com",
+          role: "customer",
+          domainId: "domain-1",
+          invitedBy: "dealer-1",
+        },
+      };
+
+      await controller.findOne(req as never, "domain-1", "artwork-1");
+
+      expect(mockArtworksService.findOne).toHaveBeenCalledWith(
+        "domain-1",
+        "artwork-1",
+        {
+          id: "customer-1",
+          role: "customer",
+          invitedBy: "dealer-1",
+        },
+      );
+    });
+  });
+
+  describe("mutation authorization", () => {
+    it.each(["update", "remove"] as const)(
+      "restricts %s to artwork staff roles",
+      (method) => {
+        expect(
+          Reflect.getMetadata(ROLES_KEY, ArtworksController.prototype[method]),
+        ).toEqual(["global_admin", "domain_owner", "dealer"]);
+      },
+    );
   });
 
   describe("getRecommendations", () => {
@@ -33,14 +79,9 @@ describe("ArtworksController", () => {
         "true",
       );
 
-      expect(mockArtworksService.getRecommendationsForUser).toHaveBeenCalledWith(
-        "domain-1",
-        req.user,
-        "customer-1",
-        20,
-        0,
-        true,
-      );
+      expect(
+        mockArtworksService.getRecommendationsForUser,
+      ).toHaveBeenCalledWith("domain-1", req.user, "customer-1", 20, 0, true);
     });
 
     it("forces includeRated=false for customer requests", async () => {
@@ -61,14 +102,9 @@ describe("ArtworksController", () => {
         "true",
       );
 
-      expect(mockArtworksService.getRecommendationsForUser).toHaveBeenCalledWith(
-        "domain-1",
-        req.user,
-        undefined,
-        20,
-        0,
-        false,
-      );
+      expect(
+        mockArtworksService.getRecommendationsForUser,
+      ).toHaveBeenCalledWith("domain-1", req.user, undefined, 20, 0, false);
     });
 
     it("keeps existing authorization guard for customer requesting other user", async () => {

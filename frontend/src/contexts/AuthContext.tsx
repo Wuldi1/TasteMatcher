@@ -110,6 +110,7 @@ function parseToken(token: string): Partial<User> | null {
       email: payload.email,
       domainId: payload.domainId,
       role: payload.role,
+      invitedBy: payload.invitedBy,
       // Ensure all required fields from the common User type are mapped here
     };
 
@@ -168,6 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       personalQuestionnaire: userData.personalQuestionnaire,
       swipeCount: userData.swipeCount || 0,
       comments: userData.comments || [],
+      invitedBy: userData.invitedBy,
       sharedCollectionUploads: userData.sharedCollectionUploads ?? [],
     });
   }, []);
@@ -188,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: decoded.email,
             domainId: decoded.domainId,
             role: decoded.role,
+            invitedBy: decoded.invitedBy,
             name: decoded.name || decoded.email,
             onboardingStatus: decoded.onboardingStatus || "not_started",
             // personalQuestionnaire will be loaded when needed via refreshUser

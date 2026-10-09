@@ -543,7 +543,7 @@ export function ArtworkUpload() {
   }, []);
 
   return (
-    <section className="rounded-2xl bg-white p-6 shadow-xl sm:p-8">
+    <section className="artwork-upload-studio rounded-2xl bg-white p-6 shadow-xl sm:p-8">
       {showSuccessToast && (
         <div
           role="status"
@@ -553,7 +553,8 @@ export function ArtworkUpload() {
           Artwork uploaded successfully!
         </div>
       )}
-      <header className="space-y-1">
+      <header className="operational-header space-y-1">
+        <p className="operational-eyebrow">Artwork intake</p>
         <h2 className="text-2xl font-semibold text-gray-900">
           Upload new artwork
         </h2>

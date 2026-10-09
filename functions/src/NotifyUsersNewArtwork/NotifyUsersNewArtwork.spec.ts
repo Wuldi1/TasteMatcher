@@ -152,6 +152,50 @@ describe("NotifyUsersNewArtwork", () => {
         recipients: 1,
       }),
     );
+    expect(mockEmailClient.beginSend).toHaveBeenCalledTimes(1);
+    const sentMessage = mockEmailClient.beginSend.mock.calls[0][0];
+    expect(sentMessage.content.html).toContain("background:#f6f4ef");
+    expect(sentMessage.content.html).toContain("background:#23372d");
+    expect(sentMessage.content.html).toContain(
+      "https://tastematcher.art/catalog?artworkId=artwork-1",
+    );
+    expect(sentMessage.content.html).toContain("/privacy-policy");
+  });
+
+  it("escapes artwork content and formats visible prices", async () => {
+    mockArtworksContainer.item.mockReturnValue({
+      read: jest.fn().mockResolvedValue({
+        resource: {
+          id: "artwork-1",
+          domainId: "domain-1",
+          title: '<img src=x onerror="alert(1)">',
+          description: "A <script>private</script> work",
+          artist: "A & B",
+          filename: "javascript:alert(1)",
+          price: 12500,
+          vector: buildVector(1),
+          isPrivate: false,
+          shouldDisplayPrice: true,
+        },
+      }),
+    });
+
+    await notifyUsersNewArtwork(
+      {
+        messageId: "msg-safe",
+        artworkId: "artwork-1",
+        domainId: "domain-1",
+        uploadedAt: Date.now(),
+      },
+      context,
+    );
+
+    const sentMessage = mockEmailClient.beginSend.mock.calls[0][0];
+    expect(sentMessage.content.html).toContain(
+      "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;",
+    );
+    expect(sentMessage.content.html).toContain("$12,500");
+    expect(sentMessage.content.html).not.toContain("javascript:alert(1)");
   });
 
   it("skips notifications when the artwork vector is invalid", async () => {

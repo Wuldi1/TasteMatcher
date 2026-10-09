@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type {
   AutomaticUploadApprovalResponse,
+  AutomaticUploadPdfIntakeDetail,
   AutomaticUploadPreviewResponse,
   Domain,
   Role,
@@ -24,6 +25,10 @@ jest.mock("../../utils/api", () => ({
     previewAutomaticUploads: jest.fn(),
     previewAutomaticUploadImportFile: jest.fn(),
     approveAutomaticUploads: jest.fn(),
+    listAutomaticUploadPdfIntakes: jest.fn(),
+    getAutomaticUploadPdfIntake: jest.fn(),
+    approveAutomaticUploadPdfIntake: jest.fn(),
+    downloadAutomaticUploadPdfIntakeSource: jest.fn(),
   },
   ApiError: class ApiError extends Error {},
 }));
@@ -154,6 +159,27 @@ const importPreviewResponse: AutomaticUploadPreviewResponse = {
   ],
 };
 
+const pdfIntakeDetail: AutomaticUploadPdfIntakeDetail = {
+  id: "pdf-intake-1",
+  domainId: domain.id,
+  status: "ready_for_review",
+  source: {
+    senderEmail: "jaclynlavy@gmail.com",
+    gmailMessageId: "gmail-message-1",
+    originalFilename: "Summer Wave Price List.pdf",
+  },
+  summary: {
+    artworkCount: 2,
+    includedCount: 1,
+    excludedCount: 1,
+    warningCount: 1,
+    missing: { title: 0, artist: 0, price: 1, endDate: 0, image: 0 },
+  },
+  createdAt: "2026-10-09T10:00:00.000Z",
+  updatedAt: "2026-10-09T10:00:00.000Z",
+  preview: importPreviewResponse,
+};
+
 const renderPage = (role: Role = "domain_owner") => {
   const auth = createMockAuthContext({
     user: {
@@ -270,12 +296,41 @@ describe("AutomaticUploadsPage", () => {
     jest.mocked(apiClient.previewAutomaticUploads).mockReset();
     jest.mocked(apiClient.previewAutomaticUploadImportFile).mockReset();
     jest.mocked(apiClient.approveAutomaticUploads).mockReset();
+    jest.mocked(apiClient.listAutomaticUploadPdfIntakes).mockReset();
+    jest.mocked(apiClient.getAutomaticUploadPdfIntake).mockReset();
+    jest.mocked(apiClient.approveAutomaticUploadPdfIntake).mockReset();
+    jest.mocked(apiClient.downloadAutomaticUploadPdfIntakeSource).mockReset();
     jest
       .mocked(apiClient.previewAutomaticUploads)
       .mockResolvedValue(previewResponse);
     jest
       .mocked(apiClient.previewAutomaticUploadImportFile)
       .mockResolvedValue(importPreviewResponse);
+    jest
+      .mocked(apiClient.listAutomaticUploadPdfIntakes)
+      .mockResolvedValue([pdfIntakeDetail]);
+    jest
+      .mocked(apiClient.getAutomaticUploadPdfIntake)
+      .mockResolvedValue(pdfIntakeDetail);
+  });
+
+  it("lists emailed PDFs inside Automatic Uploads and opens their drafts", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("tab", { name: "PDFs" }));
+    expect(
+      await screen.findByText("Summer Wave Price List.pdf"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("jaclynlavy@gmail.com")).toBeInTheDocument();
+    expect(screen.getByText("Ready for review")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Review" }));
+    expect(await screen.findByText("Imported work")).toBeInTheDocument();
+    expect(apiClient.getAutomaticUploadPdfIntake).toHaveBeenCalledWith(
+      "domain-1",
+      "pdf-intake-1",
+    );
   });
 
   it("identifies supported and unsupported auction provider domains", async () => {
@@ -1042,7 +1097,7 @@ describe("AutomaticUploadsPage", () => {
 });
 
 describe("RoleProtectedRoute", () => {
-  it("redirects a dealer instead of rendering an owner-only route", () => {
+  it("shows a clear access state instead of rendering an owner-only route", () => {
     const auth = createMockAuthContext({
       user: {
         id: "dealer-1",
@@ -1076,7 +1131,13 @@ describe("RoleProtectedRoute", () => {
     expect(
       screen.queryByText("Restricted automatic uploads"),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Home route")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "This room is reserved." }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Return home" })).toHaveAttribute(
+      "href",
+      "/home",
+    );
   });
 
   it("exposes the navigation item only to owners and global admins", () => {

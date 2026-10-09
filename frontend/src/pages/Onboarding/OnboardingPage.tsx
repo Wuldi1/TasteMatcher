@@ -1,15 +1,11 @@
 import { PersonalQuestionnaire } from "@tastematcher/common";
-import {
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle,
-  Upload,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle, Upload } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiClient } from "../../utils/api";
 import { AppInlineLoader } from "../../components/Loading/AppLoadingState";
+import "./OnboardingPage.css";
 
 const BUDGET_CHOICES = [
   "Paintings",
@@ -19,6 +15,13 @@ const BUDGET_CHOICES = [
 ] as const;
 
 type InterestChoice = (typeof BUDGET_CHOICES)[number];
+
+const ONBOARDING_STEPS = [
+  "About you",
+  "Art interests",
+  "Your collection",
+  "Inspiration",
+] as const;
 
 function isInterestChoice(value: string): value is InterestChoice {
   return (BUDGET_CHOICES as readonly string[]).includes(value);
@@ -38,6 +41,10 @@ export function OnboardingPage() {
   }, [location.search]);
   const [step, setStep] = useState(derivedInitialStep);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<{
+    kind: "error" | "success";
+    text: string;
+  } | null>(null);
   const [uploadingTarget, setUploadingTarget] = useState<
     "aesthetic" | "collection" | null
   >(null);
@@ -118,16 +125,32 @@ export function OnboardingPage() {
   };
 
   const handleNext = async () => {
-    // Save progress on each step
+    if (isSubmitting || uploadingTarget !== null) return;
+    setIsSubmitting(true);
+    setMessage(null);
     try {
       await apiClient.updateQuestionnaire({ personalQuestionnaire: formData });
       if (step < 4) {
-        setStep(step + 1);
+        setStep((current) => current + 1);
+        setMessage({ kind: "success", text: "Your progress is saved." });
       } else {
-        await handleComplete();
+        if ((formData.aestheticAdmiration?.imageUrls?.length ?? 0) > 0) {
+          await apiClient.finalizePreferenceVectors();
+        }
+        if (user?.onboardingStatus !== "completed") {
+          await apiClient.completeOnboarding();
+        }
+        await refreshUser();
+        navigate("/taster");
       }
     } catch (error) {
       console.error("Failed to save progress", error);
+      setMessage({
+        kind: "error",
+        text: "We couldn’t save your profile. Your answers are still here. Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -135,20 +158,22 @@ export function OnboardingPage() {
     if (step > 1) setStep(step - 1);
   };
 
-  const handleComplete = async () => {
+  const handleSkip = async () => {
+    if (isSubmitting || uploadingTarget !== null) return;
     setIsSubmitting(true);
+    setMessage(null);
     try {
-      // Finalize vectors if images were uploaded
-      if ((formData.aestheticAdmiration?.imageUrls?.length ?? 0) > 0) {
-        await apiClient.finalizePreferenceVectors();
-      }
       if (user?.onboardingStatus !== "completed") {
-        await apiClient.completeOnboarding();
+        await apiClient.skipOnboarding();
       }
       await refreshUser();
-      navigate("/taster");
+      navigate("/home");
     } catch (error) {
-      console.error("Failed to complete onboarding", error);
+      console.error("Failed to skip onboarding", error);
+      setMessage({
+        kind: "error",
+        text: "We couldn’t leave the profile right now. Please try again.",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -161,6 +186,7 @@ export function OnboardingPage() {
     if (!e.target.files?.length) return;
 
     setUploadingTarget(target);
+    setMessage(null);
     const file = e.target.files[0];
 
     try {
@@ -187,6 +213,10 @@ export function OnboardingPage() {
       }
     } catch (error) {
       console.error("Failed to upload image", error);
+      setMessage({
+        kind: "error",
+        text: "That image could not be uploaded. Choose another image or try again.",
+      });
     } finally {
       setUploadingTarget(null);
       e.target.value = "";
@@ -201,10 +231,14 @@ export function OnboardingPage() {
             <h2 className="text-2xl font-bold text-gray-900">Basic Info</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="onboarding-name"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Full Name
                 </label>
                 <input
+                  id="onboarding-name"
                   type="text"
                   value={formData.fullName || ""}
                   onChange={(e) => updateFormData({ fullName: e.target.value })}
@@ -213,10 +247,14 @@ export function OnboardingPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="onboarding-email"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Email Address
                 </label>
                 <input
+                  id="onboarding-email"
                   type="email"
                   value={formData.emailAddress || ""}
                   onChange={(e) =>
@@ -227,10 +265,14 @@ export function OnboardingPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="onboarding-residence"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Primary Residence
                 </label>
                 <input
+                  id="onboarding-residence"
                   type="text"
                   value={formData.primaryResidence || ""}
                   onChange={(e) =>
@@ -257,14 +299,22 @@ export function OnboardingPage() {
                   <button
                     key={choice}
                     type="button"
-                    onClick={() => updateFormData({ mostInterestedInBuying: choice })}
+                    aria-pressed={formData.mostInterestedInBuying === choice}
+                    onClick={() =>
+                      updateFormData({ mostInterestedInBuying: choice })
+                    }
                     className={`p-4 border rounded-lg text-left transition-all ${
                       formData.mostInterestedInBuying === choice
                         ? "border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200"
                         : "border-gray-200 hover:border-indigo-200 hover:bg-indigo-50"
                     }`}
                   >
-                    <span className="font-medium">{choice}</span>
+                    <span className="flex items-center justify-between gap-3 font-medium">
+                      {choice}
+                      {formData.mostInterestedInBuying === choice ? (
+                        <CheckCircle className="h-5 w-5" aria-hidden="true" />
+                      ) : null}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -274,7 +324,7 @@ export function OnboardingPage() {
 
       case 3:
         return (
-          <div className="space-y-6">
+          <div id="collection-section" className="space-y-6" tabIndex={-1}>
             <h2 className="text-2xl font-bold text-gray-900">
               Your Relationship with Art
             </h2>
@@ -284,6 +334,8 @@ export function OnboardingPage() {
               </label>
               <div className="flex gap-4">
                 <button
+                  type="button"
+                  aria-pressed={formData.collectingStatus === "collector"}
                   onClick={() =>
                     updateFormData({
                       collectingStatus: "collector",
@@ -298,6 +350,8 @@ export function OnboardingPage() {
                   Yes
                 </button>
                 <button
+                  type="button"
+                  aria-pressed={formData.collectingStatus === "not_yet"}
                   onClick={() =>
                     updateFormData({
                       collectingStatus: "not_yet",
@@ -339,7 +393,7 @@ export function OnboardingPage() {
                             disabled={uploadingTarget !== null}
                           />
                         </label>
-                        <p className="pl-1">or drag and drop</p>
+                        <p className="pl-1">from your device</p>
                       </div>
                       <p className="text-xs text-gray-500">
                         PNG, JPG, GIF up to 10MB
@@ -378,11 +432,15 @@ export function OnboardingPage() {
               Aesthetic References
             </h2>
             <div className="space-y-4">
-              <label className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="aesthetic-description"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Are there any artists or designers you admire? Upload
                 screenshots or photos if helpful.
               </label>
               <textarea
+                id="aesthetic-description"
                 value={formData.aestheticAdmiration?.description || ""}
                 onChange={(e) =>
                   updateAesthetic({ description: e.target.value })
@@ -418,7 +476,7 @@ export function OnboardingPage() {
                         disabled={uploadingTarget !== null}
                       />
                     </label>
-                    <p className="pl-1">or drag and drop</p>
+                    <p className="pl-1">from your device</p>
                   </div>
                   <p className="text-xs text-gray-500">
                     PNG, JPG, GIF up to 10MB
@@ -449,8 +507,21 @@ export function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-50 via-white to-purple-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="onboarding-shell min-h-screen bg-gradient-to-b from-purple-50 via-white to-purple-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-2xl mx-auto">
+        <header className="onboarding-shell__header">
+          <p>Your private profile</p>
+          <h1>
+            {user?.onboardingStatus === "completed"
+              ? "Refine your taste profile."
+              : "Your eye. Your story."}
+          </h1>
+          <span>
+            {user?.onboardingStatus === "completed"
+              ? "Review or update the context shared with your art advisor."
+              : "A considered introduction helps us understand what moves you."}
+          </span>
+        </header>
         {/* Progress Bar */}
         <div className="mb-8">
           <div className="h-2 bg-gray-200 rounded-full">
@@ -459,19 +530,44 @@ export function OnboardingPage() {
               style={{ width: `${(step / 4) * 100}%` }}
             />
           </div>
-          <div className="mt-2 text-sm text-gray-500 text-right">
-            Step {step} of 4
+          <div className="onboarding-step-label mt-2 text-sm text-gray-500">
+            <span>{ONBOARDING_STEPS[step - 1]}</span>
+            <span>Step {step} of 4</span>
           </div>
         </div>
 
+        <ol className="onboarding-stepper" aria-label="Taste profile progress">
+          {ONBOARDING_STEPS.map((label, index) => (
+            <li
+              key={label}
+              aria-current={index + 1 === step ? "step" : undefined}
+              data-complete={index + 1 < step ? "true" : undefined}
+            >
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              {label}
+            </li>
+          ))}
+        </ol>
+
         {/* Content Card */}
-        <div className="bg-white shadow-sm rounded-xl p-6 sm:p-8">
+        <div className="onboarding-card bg-white shadow-sm rounded-xl p-6 sm:p-8">
           {renderStep()}
 
-          <div className="mt-8 flex justify-between pt-6 border-t border-gray-100">
+          {message ? (
+            <div
+              className={`onboarding-message onboarding-message--${message.kind}`}
+              role={message.kind === "error" ? "alert" : "status"}
+              aria-live="polite"
+            >
+              {message.text}
+            </div>
+          ) : null}
+
+          <div className="onboarding-actions mt-8 flex justify-between pt-6 border-t border-gray-100">
             <button
+              type="button"
               onClick={handleBack}
-              disabled={step === 1}
+              disabled={step === 1 || isSubmitting}
               className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 step === 1
                   ? "text-gray-300 cursor-not-allowed"
@@ -482,17 +578,20 @@ export function OnboardingPage() {
               Back
             </button>
 
-            <div className="flex items-center gap-3">
+            <div className="onboarding-actions__primary flex items-center gap-3">
               <button
+                type="button"
                 onClick={handleNext}
                 disabled={isSubmitting || uploadingTarget !== null}
                 className="flex items-center px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (
-                  <AppInlineLoader size="xs" theme="light" />
+                  <AppInlineLoader label="Saving" size="xs" theme="light" />
                 ) : step === 4 ? (
                   <>
-                    Complete
+                    {user?.onboardingStatus === "completed"
+                      ? "Save profile"
+                      : "Start discovering"}
                     <CheckCircle className="w-4 h-4 ml-2" />
                   </>
                 ) : (
@@ -504,20 +603,13 @@ export function OnboardingPage() {
               </button>
               <button
                 type="button"
-                onClick={async () => {
-                  try {
-                    if (user?.onboardingStatus !== "completed") {
-                      await apiClient.skipOnboarding();
-                    }
-                    await refreshUser();
-                    navigate("/home");
-                  } catch (error) {
-                    console.error("Failed to skip onboarding", error);
-                  }
-                }}
+                onClick={handleSkip}
+                disabled={isSubmitting || uploadingTarget !== null}
                 className="text-sm text-gray-500 hover:text-gray-700"
               >
-                Skip for now
+                {user?.onboardingStatus === "completed"
+                  ? "Return home"
+                  : "Skip for now"}
               </button>
             </div>
           </div>

@@ -737,13 +737,16 @@ export function Management() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-      <div className="mx-auto">
-        <div className="bg-white rounded-lg shadow-md">
+    <div className="operational-page management-page min-h-screen bg-gray-50 p-4 sm:p-6">
+      <div className="management-page__inner mx-auto">
+        <div className="management-page__surface bg-white rounded-lg shadow-md">
           {/* Tabs for global admin */}
           {isGlobalAdmin && (
-            <div className="border-b border-gray-200">
-              <nav className="flex -mb-px overflow-x-auto">
+            <div className="management-page__tabs border-b border-gray-200">
+              <nav
+                className="flex -mb-px overflow-x-auto"
+                aria-label="Management sections"
+              >
                 <button
                   onClick={() => setActiveTab("domains")}
                   className={`px-4 sm:px-6 py-3 sm:py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${

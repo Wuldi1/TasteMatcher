@@ -440,8 +440,9 @@ export const AISuggestionsPage = ({
       : null;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
-      <header className="mb-6 sm:mb-8">
+    <div className="operational-page suggestions-page mx-auto max-w-7xl px-4 py-6 sm:py-8">
+      <header className="operational-header mb-6 sm:mb-8">
+        <p className="operational-eyebrow">Personal curation</p>
         <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
           AI Suggestions
         </h1>

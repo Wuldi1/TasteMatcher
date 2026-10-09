@@ -59,21 +59,24 @@ export const Sidebar = () => {
 
   return (
     <aside
-      className={`h-screen flex-shrink-0 bg-white text-gray-800 flex flex-col transition-all duration-300 ease-in-out border-r border-gray-200 ${
+      className={`premium-sidebar h-screen flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out border-r ${
         isCollapsed ? "w-20" : "w-64"
       }`}
     >
       <div className="flex items-center justify-center h-20 border-b border-gray-200 relative flex-shrink-0">
         {!isCollapsed && (
-          <div className="flex items-center gap-3">
+          <div className="premium-sidebar__brand flex items-center gap-3">
             <img
               src={`${process.env.PUBLIC_URL}/tastematcher_icon_icon_64.png`}
               alt="TasteMatcher logo"
               className="h-8 w-8"
             />
-            <h1 className="text-2xl font-bold tracking-wider text-gray-800">
-              TasteMatcher
-            </h1>
+            <div>
+              <p className="premium-sidebar__name">TasteMatcher</p>
+              <p className="premium-sidebar__descriptor">
+                Private art advisory
+              </p>
+            </div>
           </div>
         )}
         {isCollapsed && (
@@ -86,6 +89,7 @@ export const Sidebar = () => {
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="absolute -right-3 top-6 bg-white border border-gray-200 text-gray-500 hover:bg-blue-50 hover:text-blue-600 rounded-full p-1.5 transition-colors"
+          aria-label={isCollapsed ? "Expand navigation" : "Collapse navigation"}
         >
           {isCollapsed ? (
             <ChevronsRight size={16} />
@@ -95,7 +99,10 @@ export const Sidebar = () => {
         </button>
       </div>
 
-      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+      <nav
+        className="premium-sidebar__nav flex-1 px-4 py-6 space-y-2 overflow-y-auto"
+        aria-label="Primary navigation"
+      >
         {filteredLinks.map((link) => {
           // Add dynamic check for submitted proposals
           if (link.id === "buying-proposal" && !hasSubmittedProposal) {
@@ -208,11 +215,11 @@ export const Sidebar = () => {
       <div className="p-4 border-t border-gray-200 flex-shrink-0">
         {!isCollapsed && (
           <div className="mb-4">
-            <ViewerPreferencesControls />
+            <ViewerPreferencesControls tone="inverse" />
           </div>
         )}
         <div
-          className={`relative flex items-center mb-4 ${isCollapsed ? "justify-center" : ""} ${
+          className={`premium-sidebar__account relative flex items-center mb-4 ${isCollapsed ? "justify-center" : ""} ${
             user && user.role === "customer" ? "cursor-pointer" : ""
           } group`}
           onClick={() => {
@@ -257,7 +264,7 @@ export const Sidebar = () => {
 
         <button
           onClick={logout}
-          className={`flex items-center w-full px-4 py-2.5 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors duration-200 font-medium ${
+          className={`premium-sidebar__logout flex items-center w-full px-4 py-2.5 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors duration-200 font-medium ${
             isCollapsed ? "justify-center" : ""
           }`}
           title={isCollapsed ? "Logout" : undefined}

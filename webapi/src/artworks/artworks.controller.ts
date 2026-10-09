@@ -216,7 +216,7 @@ export class ArtworksController {
     const viewerContext = {
       id: req.user.id,
       role: req.user.role as Role,
-      invitedBy: (req.user as any).invitedBy ?? null,
+      invitedBy: req.user.invitedBy ?? null,
     };
 
     let artworks: PaginatedResponse<Artwork>;
@@ -284,7 +284,11 @@ export class ArtworksController {
         "You are not authorized to access this domain.",
       );
     }
-    const artwork = await this.artworksService.findOne(domainId, artworkId);
+    const artwork = await this.artworksService.findOne(domainId, artworkId, {
+      id: req.user.id,
+      role: req.user.role,
+      invitedBy: req.user.invitedBy ?? null,
+    });
     return cleanupArtworkBeforeResponseToClient(
       artwork,
       req.user.role,
@@ -309,6 +313,7 @@ export class ArtworksController {
   }
 
   @Patch(":artworkId")
+  @Roles("global_admin", "domain_owner", "dealer")
   @ApiOperation({ summary: "Update artwork metadata" })
   @ApiResponse({ status: 200, description: "Artwork updated successfully" })
   @ApiResponse({ status: 404, description: "Artwork not found" })
@@ -336,6 +341,7 @@ export class ArtworksController {
   }
 
   @Delete(":artworkId")
+  @Roles("global_admin", "domain_owner", "dealer")
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: "Delete artwork" })
   @ApiResponse({ status: 204, description: "Artwork deleted successfully" })
@@ -350,7 +356,7 @@ export class ArtworksController {
         "You are not authorized to access this domain.",
       );
     }
-    await this.artworksService.remove(domainId, artworkId);
+    await this.artworksService.remove(domainId, artworkId, req.user);
   }
 
   @Get("untasted/:userId")
@@ -384,7 +390,7 @@ export class ArtworksController {
     const viewerContext = {
       id: req.user.id,
       role: req.user.role as Role,
-      invitedBy: (req.user as any).invitedBy ?? null,
+      invitedBy: req.user.invitedBy ?? null,
     };
     const untastedArtworks = await this.artworksService.getUntastedArtworks(
       domainId,

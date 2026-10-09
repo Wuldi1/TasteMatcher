@@ -1037,7 +1037,7 @@ export default function SaleProposal({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="sale-proposal space-y-8">
       {proposalId &&
         proposalStatus &&
         (() => {

@@ -46,27 +46,6 @@ export function BuyingProposalPage() {
       .catch((error) => console.error("Failed to record proposal open", error));
   }, [proposal]);
 
-  const handleStatusChange = async (
-    status: "accepted" | "rejected" | "submitted",
-  ) => {
-    if (!proposal) return;
-
-    try {
-      const updatedProposal = await apiClient.updateProposal(
-        user?.domainId!,
-        proposal.id,
-        { status },
-      );
-      setProposal(updatedProposal);
-      alert(
-        `Proposal ${status === "accepted" ? "accepted" : "rejected"} successfully!`,
-      );
-    } catch (err) {
-      console.error("Failed to update proposal status", err);
-      alert("Failed to update proposal status");
-    }
-  };
-
   if (loading) {
     return <AppLoadingState message="Loading your proposal..." />;
   }
@@ -77,11 +56,20 @@ export function BuyingProposalPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-4">Buying Proposal</h1>
+      <div className="mb-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
+          Your private viewing
+        </p>
+        <h1 className="mt-2 text-4xl font-normal md:text-6xl">
+          Art worth living with.
+        </h1>
+        <p className="mt-3 max-w-2xl text-gray-600">
+          Consider every work individually, leave a note, and update the
+          proposal when you are ready to continue the conversation.
+        </p>
+      </div>
       <ProposalView
         proposal={proposal}
-        // isDealerView={false} // TODO : Is this a mistake?
-        onStatusChange={handleStatusChange}
         onArtworkViewed={(artworkId) => {
           void apiClient
             .recordProposalEngagement(proposal.domainId, proposal.id, {

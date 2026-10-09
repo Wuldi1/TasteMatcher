@@ -14,6 +14,19 @@ export type SalesCustomerListItem = {
   proposalStatus: SalesCustomerProposalStatus;
 };
 
+/**
+ * Customer stats require a domain and a concrete customer. Global admins can
+ * select a gallery before selecting a customer, so their own cross-domain ID
+ * must never be used as an implicit stats target.
+ */
+export function canLoadSalesCustomerStats(
+  domainId: string | undefined,
+  customerId: string | undefined,
+  isGlobalAdmin: boolean,
+): boolean {
+  return Boolean(domainId && (!isGlobalAdmin || customerId));
+}
+
 const STATUS_ORDER: Record<SalesCustomerProposalStatus, number> = {
   submitted: 0,
   draft: 1,

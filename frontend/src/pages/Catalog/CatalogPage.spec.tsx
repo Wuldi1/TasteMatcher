@@ -12,10 +12,14 @@ import { CatalogPage } from "./CatalogPage";
 jest.mock("../../utils/api", () => ({
   apiClient: {
     getArtworks: jest.fn(),
+    getArtwork: jest.fn(),
+    getArtworkFeedback: jest.fn(),
   },
 }));
 
 const mockGetArtworks = jest.mocked(apiClient.getArtworks);
+const mockGetArtwork = jest.mocked(apiClient.getArtwork);
+const mockGetArtworkFeedback = jest.mocked(apiClient.getArtworkFeedback);
 
 const buildArtwork = (index: number): Artwork =>
   ({
@@ -51,7 +55,7 @@ class MockIntersectionObserver {
   readonly thresholds = [];
 }
 
-const renderPage = () => {
+const renderPage = (initialEntry: string = "/catalog") => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -74,7 +78,7 @@ const renderPage = () => {
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={authContext}>
         <ViewerPreferencesProvider>
-          <MemoryRouter>
+          <MemoryRouter initialEntries={[initialEntry]}>
             <CatalogPage />
           </MemoryRouter>
         </ViewerPreferencesProvider>
@@ -86,6 +90,13 @@ const renderPage = () => {
 describe("CatalogPage pagination", () => {
   beforeEach(() => {
     mockGetArtworks.mockReset();
+    mockGetArtwork.mockReset();
+    mockGetArtworkFeedback.mockReset();
+    mockGetArtworkFeedback.mockResolvedValue({
+      preferences: { total: 0, likes: 0, dislikes: 0, items: [] },
+      comments: { totalUsers: 0, totalComments: 0, items: [] },
+      proposals: { totalActive: 0, items: [] },
+    });
     globalThis.IntersectionObserver =
       MockIntersectionObserver as typeof IntersectionObserver;
     if (typeof window !== "undefined") {
@@ -154,5 +165,23 @@ describe("CatalogPage pagination", () => {
       screen.queryByRole("button", { name: "Load more artworks" }),
     ).toBeNull();
     expect(mockGetArtworks).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens an artwork supplied by an email deep link", async () => {
+    const linkedArtwork = buildArtwork(99);
+    mockGetArtworks.mockResolvedValue({
+      items: [],
+      continuationToken: undefined,
+      hasMore: false,
+    });
+    mockGetArtwork.mockResolvedValue(linkedArtwork);
+
+    renderPage("/catalog?artworkId=art-99");
+
+    await waitFor(() => {
+      expect(mockGetArtwork).toHaveBeenCalledWith("domain-1", "art-99");
+    });
+    expect(await screen.findByRole("dialog")).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "Artwork 99" })).not.toBeNull();
   });
 });

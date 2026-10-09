@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AppRoutes } from "./AppRoutes";
 
-describe("AppRoutes legal pages", () => {
+describe("AppRoutes public pages", () => {
   it("renders the privacy policy without authentication", () => {
     render(
       <MemoryRouter initialEntries={["/privacy-policy"]}>
@@ -29,7 +29,26 @@ describe("AppRoutes legal pages", () => {
       screen.getByRole("heading", { name: "Terms of Service" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Generated import files are intended for manual review/i),
+      screen.getByText(
+        /Generated import files are intended for manual review/i,
+      ),
     ).toBeInTheDocument();
+  });
+
+  it("renders a useful not-found state for unknown routes", () => {
+    render(
+      <MemoryRouter initialEntries={["/missing-private-room"]}>
+        <AppRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole("heading", {
+        name: "This room is not in the collection.",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Return to TasteMatcher" }),
+    ).toHaveAttribute("href", "/");
   });
 });

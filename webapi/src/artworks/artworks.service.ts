@@ -297,13 +297,21 @@ export class ArtworksService {
   /**
    * Get single artwork by ID
    */
-  async findOne(domainId: string, artworkId: string): Promise<Artwork> {
+  async findOne(
+    domainId: string,
+    artworkId: string,
+    viewer?: { id: string; role: Role; invitedBy?: string | null },
+  ): Promise<Artwork> {
     const container = await this.cosmosService.getArtworksContainer();
 
     try {
       const { resource } = await container.item(artworkId, domainId).read();
 
       if (!resource) {
+        throw new NotFoundException(`Artwork ${artworkId} not found`);
+      }
+
+      if (!this.canViewerSeeArtwork(resource as Artwork, viewer)) {
         throw new NotFoundException(`Artwork ${artworkId} not found`);
       }
 
@@ -324,8 +332,9 @@ export class ArtworksService {
     domainId: string,
     artworkId: string,
     updateDto: UpdateArtworkDto,
-    user?: { id: string; role?: Role },
+    user: { id: string; role: Role },
   ): Promise<Artwork> {
+    this.assertCanManageArtworks(user.role);
     const container = await this.cosmosService.getArtworksContainer();
 
     try {
@@ -382,7 +391,12 @@ export class ArtworksService {
   /**
    * Delete artwork
    */
-  async remove(domainId: string, artworkId: string): Promise<void> {
+  async remove(
+    domainId: string,
+    artworkId: string,
+    user: { id: string; role: Role },
+  ): Promise<void> {
+    this.assertCanManageArtworks(user.role);
     const container = await this.cosmosService.getArtworksContainer();
 
     try {
@@ -391,6 +405,18 @@ export class ArtworksService {
     } catch (error) {
       this.logger.error(`Failed to delete artwork ${artworkId}`, error);
       throw new NotFoundException(`Artwork ${artworkId} not found`);
+    }
+  }
+
+  private assertCanManageArtworks(role: Role): void {
+    if (
+      role !== "global_admin" &&
+      role !== "domain_owner" &&
+      role !== "dealer"
+    ) {
+      throw new ForbiddenException(
+        "You are not authorized to manage artworks.",
+      );
     }
   }
 

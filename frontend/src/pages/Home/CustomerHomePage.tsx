@@ -45,8 +45,7 @@ export function CustomerHomePage() {
     stats,
     answeredQuestions,
     totalQuestions,
-  } =
-    useAuth();
+  } = useAuth();
   const [newComment, setNewComment] = useState("");
   const [isSendingComment, setIsSendingComment] = useState(false);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
@@ -173,16 +172,16 @@ export function CustomerHomePage() {
     <div className="home-page p-4 sm:p-6 md:p-8 space-y-8">
       {/* Welcome Header */}
       <header className="bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg p-6 shadow-md">
-        <h1 className="text-3xl font-bold">Hello, {user.name}!</h1>
+        <h1 className="text-3xl font-bold">A collection, distinctly yours.</h1>
         {/* Domain name should be displayed here */}
         <p className="text-lg mt-2">
-          Welcome to your <strong>gallery</strong>.
+          Welcome back, {user.name}. Your private gallery is ready.
         </p>
       </header>
 
       {/* Journey Progress */}
       <section className="space-y-6">
-        <h2 className="text-xl font-semibold">Your Journey</h2>
+        <h2 className="text-xl font-semibold">Your private gallery</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <Link
             to="/onboarding"
@@ -191,22 +190,20 @@ export function CustomerHomePage() {
             <CheckCircle className="w-10 h-10 text-blue-500" />
             {user.onboardingStatus === "completed" ? (
               <>
-                <h3 className="text-lg font-medium mt-2">
-                  Onboarding completed
-                </h3>
+                <h3 className="text-lg font-medium mt-2">Your taste profile</h3>
                 <p className="text-sm text-gray-600 text-center">
                   {remainingQuestions > 0
-                    ? `You still have ${remainingQuestions} questions left unanswered. Add more details anytime.`
-                    : "Thanks for keeping your taste profile up to date."}
+                    ? `${remainingQuestions} details remain. Add them whenever the moment feels right.`
+                    : "Your preferences and collecting context are up to date."}
                 </p>
               </>
             ) : (
               <>
                 <h3 className="text-lg font-medium mt-2">
-                  'Complete onboarding'
+                  Begin your taste profile
                 </h3>
                 <p className="text-sm text-gray-600 text-center">
-                  Answer questions to help us understand your taste better.
+                  Share the context that helps your advisor understand your eye.
                 </p>
               </>
             )}
@@ -219,18 +216,20 @@ export function CustomerHomePage() {
             {totalSwiped >= 20 ? (
               <>
                 <h3 className="text-lg font-medium mt-2">
-                  Keep up Model training
+                  Continue discovering
                 </h3>
                 <p className="text-sm text-gray-600 text-center">
-                  The more you swipe, the better your model gets.
+                  Each instinct makes your future selections more personal.
                 </p>
               </>
             ) : (
               <>
-                <h3 className="text-lg font-medium mt-2">Train your Model</h3>
+                <h3 className="text-lg font-medium mt-2">
+                  Discover your taste
+                </h3>
                 <p className="text-sm text-gray-600 text-center">
-                  Swipe through artworks to refine your preferences. You need at
-                  least {20} artworks swiped to train your model effectively.
+                  Respond instinctively to {20 - totalSwiped} more works to open
+                  your first considered selection.
                 </p>
               </>
             )}
@@ -238,7 +237,7 @@ export function CustomerHomePage() {
           <Link
             to={{
               pathname: "/onboarding",
-              search: "?step=7",
+              search: "?step=3",
               hash: "#collection-section",
             }}
             className="bg-pink-100 rounded-lg shadow-md p-4 flex flex-col items-center hover:bg-pink-200"
@@ -248,8 +247,7 @@ export function CustomerHomePage() {
               Share Your Collection
             </h3>
             <p className="text-sm text-gray-600 text-center">
-              Upload inspiration shots or current pieces so our team can curate
-              more precisely.
+              Privately share current pieces or references with your advisor.
             </p>
           </Link>
           {hasSubmittedProposal && (
@@ -258,10 +256,9 @@ export function CustomerHomePage() {
               className="bg-purple-100 rounded-lg shadow-md p-4 flex flex-col items-center hover:bg-purple-200"
             >
               <FileText className="w-10 h-10 text-purple-500" />
-              <h3 className="text-lg font-medium mt-2">Review Proposal</h3>
+              <h3 className="text-lg font-medium mt-2">Private viewing</h3>
               <p className="text-sm text-gray-600 text-center">
-                Check your personalized art basket. Accept, reject or modify
-                your selections before finalizing your purchase.
+                Consider each work, leave notes, and continue the conversation.
               </p>
             </Link>
           )}
@@ -270,7 +267,7 @@ export function CustomerHomePage() {
 
       {/* Aggregated Stats */}
       <section className="space-y-6">
-        <h2 className="text-xl font-semibold">Your Profile Section</h2>
+        <h2 className="text-xl font-semibold">Your taste, in progress</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <Link
             to="/catalog?view=liked"
@@ -280,9 +277,9 @@ export function CustomerHomePage() {
             <h3 className="text-lg font-medium mt-2">
               {stats?.totalLikes || 0}
             </h3>
-            <p className="text-sm text-gray-600">Artworks Liked</p>
+            <p className="text-sm text-gray-600">Works that stayed with you</p>
             <span className="mt-2 text-xs text-blue-500">
-              View saved likes →
+              Revisit your selection →
             </span>
           </Link>
           <Link
@@ -293,20 +290,20 @@ export function CustomerHomePage() {
             <h3 className="text-lg font-medium mt-2">
               {stats?.totalDislikes || 0}
             </h3>
-            <p className="text-sm text-gray-600">Artworks Disliked</p>
+            <p className="text-sm text-gray-600">Works passed over</p>
             <span className="mt-2 text-xs text-blue-500">
-              Review dislikes →
+              Review your choices →
             </span>
           </Link>
           <div className="bg-white rounded-lg shadow-md p-4 flex flex-col items-center">
             <Sparkles className="w-10 h-10 text-yellow-500" />
             <h3 className="text-lg font-medium mt-2">{totalSwiped}</h3>
-            <p className="text-sm text-gray-600">Total Swipes</p>
+            <p className="text-sm text-gray-600">Works considered</p>
           </div>
         </div>
         {proposalMetadata && (
           <div className="bg-white rounded-lg shadow-md p-4">
-            <h3 className="text-lg font-medium">Proposal Status</h3>
+            <h3 className="text-lg font-medium">Private viewing status</h3>
             <p className="text-sm text-gray-600 mt-2">
               Suggested Artworks: {proposalMetadata.suggestedArtworks}
             </p>
@@ -333,7 +330,7 @@ export function CustomerHomePage() {
         <section className="space-y-6">
           <div className="flex items-center gap-2">
             <ImageIcon className="w-5 h-5 text-blue-500" />
-            <h2 className="text-xl font-semibold">Shared Gallery</h2>
+            <h2 className="text-xl font-semibold">Shared references</h2>
           </div>
           <p className="text-sm text-gray-500">
             These are the reference photos you have shared with your specialist
@@ -371,11 +368,13 @@ export function CustomerHomePage() {
 
       {/* Chat with Specialist */}
       <section className="space-y-6">
-        <h2 className="text-xl font-semibold">Contact Specialist</h2>
+        <h2 className="text-xl font-semibold">Your advisor</h2>
         <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-[500px]">
           <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-blue-500" />
-            <span className="font-medium text-gray-700">Messages</span>
+            <span className="font-medium text-gray-700">
+              A private conversation
+            </span>
           </div>
 
           <div
@@ -385,7 +384,7 @@ export function CustomerHomePage() {
             {!user.comments || user.comments.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-gray-400">
                 <MessageSquare className="w-12 h-12 mb-2 opacity-20" />
-                <p>No messages yet. Start a conversation!</p>
+                <p>Your conversation with the gallery begins here.</p>
               </div>
             ) : (
               user.comments.map((comment, idx) => {

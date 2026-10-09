@@ -112,6 +112,10 @@ export function CatalogPage() {
     }
     return undefined;
   }, [location.search]);
+  const linkedArtworkId = useMemo(() => {
+    const value = new URLSearchParams(location.search).get("artworkId");
+    return value?.trim() || undefined;
+  }, [location.search]);
 
   const effectiveDomainId = isGlobalAdmin ? selectedDomainId : user?.domainId;
   const sortedDomains = useMemo(
@@ -201,6 +205,25 @@ export function CatalogPage() {
     setFeedbackTab("preferences");
   }, [effectiveDomainId]);
 
+  const linkedArtworkQuery = useQuery({
+    queryKey: ["artwork-deep-link", effectiveDomainId, linkedArtworkId],
+    queryFn: async (): Promise<Artwork> => {
+      if (!effectiveDomainId || !linkedArtworkId) {
+        throw new Error("Missing domain or artwork");
+      }
+      return apiClient.getArtwork(effectiveDomainId, linkedArtworkId);
+    },
+    enabled: Boolean(effectiveDomainId && linkedArtworkId),
+    retry: 1,
+  });
+
+  useEffect(() => {
+    const linkedArtwork = linkedArtworkQuery.data;
+    if (!linkedArtwork || selectedArtwork?.id === linkedArtwork.id) return;
+    markViewed(linkedArtwork.id);
+    setSelectedArtwork(linkedArtwork);
+  }, [linkedArtworkQuery.data, markViewed, selectedArtwork?.id]);
+
   useEffect(() => {
     if (selectedArtwork) {
       setFeedbackTab("preferences");
@@ -213,7 +236,10 @@ export function CatalogPage() {
       if (!effectiveDomainId || !selectedArtwork) {
         throw new Error("Missing domain or artwork");
       }
-      return apiClient.getArtworkFeedback(effectiveDomainId, selectedArtwork.id);
+      return apiClient.getArtworkFeedback(
+        effectiveDomainId,
+        selectedArtwork.id,
+      );
     },
     enabled: Boolean(canViewFeedback && effectiveDomainId && selectedArtwork),
   });
@@ -305,9 +331,7 @@ export function CatalogPage() {
       items.sort((a, b) => {
         const statusValue = (value?: boolean) =>
           value === true ? 2 : value === false ? 1 : 0;
-        return (
-          (statusValue(a.liked) - statusValue(b.liked)) * direction
-        );
+        return (statusValue(a.liked) - statusValue(b.liked)) * direction;
       });
       return items;
     }
@@ -860,14 +884,15 @@ export function CatalogPage() {
 
   return (
     <div
-      className="p-4 sm:p-6 md:p-8"
+      className="operational-page catalog-workspace p-4 sm:p-6 md:p-8"
       // ensure page content and fixed toolbar are above mobile nav / home indicator
       style={{
         paddingBottom: "calc(env(safe-area-inset-bottom, 16px) + 160px)",
       }}
     >
       <div className="catalog-page">
-        <header className="catalog-header">
+        <header className="catalog-header operational-header">
+          <p className="operational-eyebrow">The collection</p>
           <h1 className="catalog-title">Artwork Catalog</h1>
 
           {/* Search and Filter Bar */}
@@ -1410,7 +1435,9 @@ export function CatalogPage() {
         {selectedArtwork && (
           <div
             className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-3 sm:p-4"
-            style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+            style={{
+              paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+            }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
@@ -1697,9 +1724,7 @@ export function CatalogPage() {
                         <div className="space-y-4">
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="rounded-lg border border-gray-100 p-3">
-                              <div className="text-xs text-gray-500">
-                                Total
-                              </div>
+                              <div className="text-xs text-gray-500">Total</div>
                               <div className="text-lg font-semibold text-gray-900">
                                 {feedbackData.preferences.total}
                               </div>
@@ -1727,7 +1752,9 @@ export function CatalogPage() {
                               onChange={(e) =>
                                 setPreferenceSort((prev) => ({
                                   ...prev,
-                                  field: e.target.value as "status" | "timestamp",
+                                  field: e.target.value as
+                                    | "status"
+                                    | "timestamp",
                                 }))
                               }
                               className="rounded-md border border-gray-200 px-2 py-1"
@@ -1764,7 +1791,9 @@ export function CatalogPage() {
                                 <div className="flex items-center gap-2">
                                   <User className="w-4 h-4 text-gray-400" />
                                   <span className="text-sm font-medium text-gray-900">
-                                    {pref.userName || pref.userEmail || pref.userId}
+                                    {pref.userName ||
+                                      pref.userEmail ||
+                                      pref.userId}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-3 text-sm text-gray-500">
@@ -1798,9 +1827,7 @@ export function CatalogPage() {
                         <div className="space-y-4">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="rounded-lg border border-gray-100 p-3">
-                              <div className="text-xs text-gray-500">
-                                Users
-                              </div>
+                              <div className="text-xs text-gray-500">Users</div>
                               <div className="text-lg font-semibold text-gray-900">
                                 {feedbackData.comments.totalUsers}
                               </div>
@@ -1822,7 +1849,9 @@ export function CatalogPage() {
                               onChange={(e) =>
                                 setCommentSort((prev) => ({
                                   ...prev,
-                                  field: e.target.value as "timestamp" | "username",
+                                  field: e.target.value as
+                                    | "timestamp"
+                                    | "username",
                                 }))
                               }
                               className="rounded-md border border-gray-200 px-2 py-1"
@@ -1867,7 +1896,9 @@ export function CatalogPage() {
                                   </div>
                                   <span className="text-xs text-gray-500">
                                     #{idx + 1} •{" "}
-                                    {new Date(comment.createdAt).toLocaleString()}
+                                    {new Date(
+                                      comment.createdAt,
+                                    ).toLocaleString()}
                                   </span>
                                 </div>
                                 <p className="text-sm text-gray-700">
@@ -1935,7 +1966,9 @@ export function CatalogPage() {
                                         <span className="text-gray-400">
                                           {" "}
                                           •{" "}
-                                          {new Date(c.createdAt).toLocaleString()}
+                                          {new Date(
+                                            c.createdAt,
+                                          ).toLocaleString()}
                                         </span>
                                         <div>{c.text}</div>
                                       </div>

@@ -15,19 +15,20 @@ import { Role } from "../types/user.types";
 
 export const cleanupArtworkBeforeResponseToClient = (
   artwork: Artwork,
-  role: Role
+  role: Role,
 ): Partial<Artwork> => {
   // create a shallow copy excluding vector and vectorModel via destructuring
   const { vector, vectorModel, recommendationScore, ...base } = artwork;
   const canViewRecommendationScore =
     role === "dealer" || role === "domain_owner" || role === "global_admin";
-  const response = canViewRecommendationScore && recommendationScore
-    ? { ...base, recommendationScore }
-    : base;
+  const response =
+    canViewRecommendationScore && recommendationScore
+      ? { ...base, recommendationScore }
+      : base;
 
-  // Conditionally omit price if shouldDisplayPrice is falsy or role is not customer
+  // Hide the complete price range from customers when pricing is private.
   if (!artwork.shouldDisplayPrice && role === "customer") {
-    const { price, ...withoutPrice } = response;
+    const { price, maxPrice, ...withoutPrice } = response;
     return withoutPrice as Partial<Artwork>;
   }
 
@@ -36,7 +37,7 @@ export const cleanupArtworkBeforeResponseToClient = (
 
 export const isAuctionEnded = (
   artwork: Pick<Artwork, "isAuction" | "endDate">,
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
 ): boolean => {
   if (artwork?.isAuction && artwork?.endDate) {
     return new Date(artwork.endDate).getTime() <= nowMs;

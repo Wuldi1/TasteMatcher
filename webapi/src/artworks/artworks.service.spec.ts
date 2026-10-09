@@ -1,10 +1,8 @@
+import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import type { Artwork, QueryParams } from "@tastematcher/common";
 import { ArtworksService } from "./artworks.service";
 
-const buildArtwork = (
-  id: string,
-  overrides: Partial<Artwork> = {},
-): Artwork =>
+const buildArtwork = (id: string, overrides: Partial<Artwork> = {}): Artwork =>
   ({
     id,
     domainId: "domain-1",
@@ -31,8 +29,9 @@ const setupService = () => {
     item: jest.fn(),
   };
 
-  (service as unknown as { cosmosService: Record<string, jest.Mock> })
-    .cosmosService = {
+  (
+    service as unknown as { cosmosService: Record<string, jest.Mock> }
+  ).cosmosService = {
     getArtworksContainer: jest.fn().mockResolvedValue(artworksContainer),
     getArtworkPreferencesContainer: jest.fn(),
   };
@@ -134,5 +133,106 @@ describe("ArtworksService.findAll", () => {
     expect(result.continuationToken).toBeUndefined();
     expect(result.hasMore).toBe(false);
     expect(artworksContainer.items.query).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ArtworksService mutation authorization", () => {
+  it("rejects customer updates before reading artwork data", async () => {
+    const { service, artworksContainer } = setupService();
+
+    await expect(
+      service.update(
+        "domain-1",
+        "artwork-1",
+        { title: "Unauthorized title" },
+        { id: "customer-1", role: "customer" },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(artworksContainer.item).not.toHaveBeenCalled();
+  });
+
+  it("rejects customer deletes before deleting artwork data", async () => {
+    const { service, artworksContainer } = setupService();
+
+    await expect(
+      service.remove("domain-1", "artwork-1", {
+        id: "customer-1",
+        role: "customer",
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(artworksContainer.item).not.toHaveBeenCalled();
+  });
+});
+
+describe("ArtworksService.findOne visibility", () => {
+  const arrangeArtwork = (artwork: Artwork) => {
+    const setup = setupService();
+    setup.artworksContainer.item.mockReturnValue({
+      read: jest.fn().mockResolvedValue({ resource: artwork }),
+    });
+    return setup;
+  };
+
+  it("returns public artwork to a customer", async () => {
+    const artwork = buildArtwork("public");
+    const { service } = arrangeArtwork(artwork);
+
+    await expect(
+      service.findOne("domain-1", artwork.id, {
+        id: "customer-1",
+        role: "customer",
+        invitedBy: "dealer-1",
+      }),
+    ).resolves.toEqual(artwork);
+  });
+
+  it("returns private artwork uploaded by the customer's inviter", async () => {
+    const artwork = buildArtwork("invited-private", {
+      isPrivate: true,
+      uploadedBy: "dealer-1",
+    });
+    const { service } = arrangeArtwork(artwork);
+
+    await expect(
+      service.findOne("domain-1", artwork.id, {
+        id: "customer-1",
+        role: "customer",
+        invitedBy: "dealer-1",
+      }),
+    ).resolves.toEqual(artwork);
+  });
+
+  it("hides private artwork uploaded by an unrelated dealer", async () => {
+    const artwork = buildArtwork("unrelated-private", {
+      isPrivate: true,
+      uploadedBy: "dealer-2",
+    });
+    const { service } = arrangeArtwork(artwork);
+
+    await expect(
+      service.findOne("domain-1", artwork.id, {
+        id: "customer-1",
+        role: "customer",
+        invitedBy: "dealer-1",
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("hides ended auctions from customers", async () => {
+    const artwork = buildArtwork("ended-auction", {
+      isAuction: true,
+      endDate: new Date(Date.now() - 60_000).toISOString(),
+    });
+    const { service } = arrangeArtwork(artwork);
+
+    await expect(
+      service.findOne("domain-1", artwork.id, {
+        id: "customer-1",
+        role: "customer",
+        invitedBy: "dealer-1",
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

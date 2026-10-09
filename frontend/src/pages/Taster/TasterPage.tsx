@@ -17,14 +17,19 @@ import { useAuth } from "../../contexts/AuthContext";
 import { Artwork } from "@tastematcher/common";
 import { ThumbsUp, ThumbsDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiClient } from "../../utils/api";
-import { getAIRecommendationsEligibility, isArtworkNew } from "../../utils/general";
+import {
+  getAIRecommendationsEligibility,
+  isArtworkNew,
+} from "../../utils/general";
 import { AppLoadingState } from "../../components/Loading/AppLoadingState";
 import "./TasterPage.css";
 
 type SwipeDirection = "left" | "right" | null;
 type DragPoint = { x: number; y: number };
+type DragAxis = "pending" | "horizontal" | "vertical";
 
 const SWIPE_THRESHOLD_PX = 100;
+const DRAG_AXIS_LOCK_PX = 10;
 
 /**
  * Taster page with Tinder-style swipe interface for artwork preferences.
@@ -43,7 +48,9 @@ export function TasterPage() {
   const cardRef = useRef<HTMLDivElement>(null);
   const activePointerIdRef = useRef<number | null>(null);
   const dragStartRef = useRef<DragPoint | null>(null);
+  const dragAxisRef = useRef<DragAxis>("pending");
   const latestDragOffsetRef = useRef<DragPoint>({ x: 0, y: 0 });
+  const swipeCommittedRef = useRef(false);
   const [showAiUnlockModal, setShowAiUnlockModal] = useState(false);
   const hasShownUnlockRef = useRef(false);
   const previousTotalSwipedRef = useRef<number | null>(null);
@@ -53,6 +60,7 @@ export function TasterPage() {
   const [isFetchingNextBatch, setIsFetchingNextBatch] = useState(false);
   const [hasMoreUntasted, setHasMoreUntasted] = useState(true);
   const [isCurrentImageReady, setIsCurrentImageReady] = useState(true);
+  const [swipeError, setSwipeError] = useState<string | null>(null);
 
   // Fetch untasted artworks for the user
   const { data: untastedData, isLoading } = useQuery({
@@ -60,7 +68,11 @@ export function TasterPage() {
     queryFn: async () => {
       if (!user?.domainId || !user?.id)
         throw new Error("User not authenticated");
-      return apiClient.fetchUntastedArtworks(user.domainId, user.id, BATCH_SIZE);
+      return apiClient.fetchUntastedArtworks(
+        user.domainId,
+        user.id,
+        BATCH_SIZE,
+      );
     },
     enabled: !!user?.domainId && !!user?.id,
     // Always refresh when entering Taster to avoid replaying previously swiped cards
@@ -240,24 +252,44 @@ export function TasterPage() {
   // Handle swipe decision
   const handleSwipe = useCallback(
     (direction: "left" | "right") => {
-      if (!currentArtwork || swipeDirection || !isCurrentImageReady) return;
+      if (
+        !currentArtwork ||
+        swipeDirection ||
+        swipeCommittedRef.current ||
+        !isCurrentImageReady
+      ) {
+        return;
+      }
 
+      swipeCommittedRef.current = true;
+      setSwipeError(null);
       activePointerIdRef.current = null;
       dragStartRef.current = null;
+      dragAxisRef.current = "pending";
       latestDragOffsetRef.current = { x: 0, y: 0 };
       setIsDragging(false);
       setSwipeDirection(direction);
-      savePreference.mutate({
-        artworkId: currentArtwork.id,
-        liked: direction === "right",
-        artworkDomainId: currentArtwork.domainId,
-      });
-
-      setTimeout(() => {
-        setCurrentIndex((prev) => prev + 1);
-        setSwipeDirection(null);
-        setDragOffset({ x: 0, y: 0 });
-      }, 300);
+      void (async () => {
+        try {
+          await Promise.all([
+            savePreference.mutateAsync({
+              artworkId: currentArtwork.id,
+              liked: direction === "right",
+              artworkDomainId: currentArtwork.domainId,
+            }),
+            new Promise<void>((resolve) => window.setTimeout(resolve, 300)),
+          ]);
+          setCurrentIndex((prev) => prev + 1);
+        } catch {
+          setSwipeError(
+            "We couldn’t save that choice. The artwork is still here—please try again.",
+          );
+        } finally {
+          setSwipeDirection(null);
+          setDragOffset({ x: 0, y: 0 });
+          swipeCommittedRef.current = false;
+        }
+      })();
     },
     [currentArtwork, swipeDirection, savePreference, isCurrentImageReady],
   );
@@ -265,6 +297,7 @@ export function TasterPage() {
   const resetDrag = useCallback(() => {
     activePointerIdRef.current = null;
     dragStartRef.current = null;
+    dragAxisRef.current = "pending";
     latestDragOffsetRef.current = { x: 0, y: 0 };
     setIsDragging(false);
     setDragOffset({ x: 0, y: 0 });
@@ -275,6 +308,7 @@ export function TasterPage() {
 
   const startDrag = useCallback((clientX: number, clientY: number) => {
     dragStartRef.current = { x: clientX, y: clientY };
+    dragAxisRef.current = "pending";
     latestDragOffsetRef.current = { x: 0, y: 0 };
     setDragOffset({ x: 0, y: 0 });
     setIsDragging(true);
@@ -288,6 +322,16 @@ export function TasterPage() {
       x: clientX - dragStart.x,
       y: clientY - dragStart.y,
     };
+
+    if (dragAxisRef.current === "pending") {
+      const absoluteX = Math.abs(nextOffset.x);
+      const absoluteY = Math.abs(nextOffset.y);
+      if (Math.max(absoluteX, absoluteY) < DRAG_AXIS_LOCK_PX) return;
+      dragAxisRef.current = absoluteX > absoluteY ? "horizontal" : "vertical";
+    }
+
+    if (dragAxisRef.current === "vertical") return;
+
     latestDragOffsetRef.current = nextOffset;
     setDragOffset(nextOffset);
   }, []);
@@ -296,10 +340,15 @@ export function TasterPage() {
     const finalOffset = latestDragOffsetRef.current;
     activePointerIdRef.current = null;
     dragStartRef.current = null;
+    const dragAxis = dragAxisRef.current;
+    dragAxisRef.current = "pending";
     latestDragOffsetRef.current = { x: 0, y: 0 };
     setIsDragging(false);
 
-    if (Math.abs(finalOffset.x) > SWIPE_THRESHOLD_PX) {
+    if (
+      dragAxis === "horizontal" &&
+      Math.abs(finalOffset.x) > SWIPE_THRESHOLD_PX
+    ) {
       handleSwipe(finalOffset.x > 0 ? "right" : "left");
       return;
     }
@@ -318,7 +367,6 @@ export function TasterPage() {
       return;
     }
 
-    e.preventDefault();
     activePointerIdRef.current = e.pointerId;
     startDrag(e.clientX, e.clientY);
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -326,14 +374,15 @@ export function TasterPage() {
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (activePointerIdRef.current !== e.pointerId) return;
-    e.preventDefault();
     updateDragOffset(e.clientX, e.clientY);
+    if (dragAxisRef.current === "horizontal") {
+      e.preventDefault();
+    }
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (activePointerIdRef.current !== e.pointerId) return;
 
-    e.preventDefault();
     updateDragOffset(e.clientX, e.clientY);
     const pointerId = e.pointerId;
     commitDrag();
@@ -388,8 +437,10 @@ export function TasterPage() {
     if (!dragStartRef.current || !touch) {
       return;
     }
-    e.preventDefault();
     updateDragOffset(touch.clientX, touch.clientY);
+    if (dragAxisRef.current === "horizontal") {
+      e.preventDefault();
+    }
   };
 
   const handleTouchEnd = () => {
@@ -475,17 +526,19 @@ export function TasterPage() {
   ]);
 
   const isInitialLoading = isLoading && artworks.length === 0;
-  const isQueueExhausted = artworks.length > 0 && currentIndex >= artworks.length;
-  const isWaitingForMore = isQueueExhausted && (isFetchingNextBatch || hasMoreUntasted);
+  const isQueueExhausted =
+    artworks.length > 0 && currentIndex >= artworks.length;
+  const isWaitingForMore =
+    isQueueExhausted && (isFetchingNextBatch || hasMoreUntasted);
 
   if (isInitialLoading || isWaitingForMore) {
     return (
-      <div
-        className="taster-page taster-page--loading"
-      >
+      <div className="taster-page taster-page--loading">
         <AppLoadingState
           message={
-            isInitialLoading ? "Loading artworks..." : "Loading more artworks..."
+            isInitialLoading
+              ? "Loading artworks..."
+              : "Loading more artworks..."
           }
           compact
         />
@@ -559,9 +612,21 @@ export function TasterPage() {
         </div>
       )}
       <header className="taster-header">
-        <h1 className="taster-title">Taster</h1>
-        <p className="taster-subtitle">Swipe right to like, left to dislike</p>
+        <p className="taster-eyebrow">Discover your taste</p>
+        <h1 className="taster-title">Follow your instinct.</h1>
+        <p className="taster-subtitle">
+          Swipe right when a work draws you in. Swipe left when it does not.
+        </p>
       </header>
+
+      {swipeError && (
+        <div className="taster-error" role="alert">
+          <span>{swipeError}</span>
+          <button type="button" onClick={() => setSwipeError(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <div className="taster-container">
         {/* Card stack */}
@@ -573,9 +638,7 @@ export function TasterPage() {
                 "taster-card",
                 isDragging ? "taster-card--dragging" : "",
                 dragDirection ? `taster-card--dragging-${dragDirection}` : "",
-                swipeDirection
-                  ? `taster-card--swiping-${swipeDirection}`
-                  : "",
+                swipeDirection ? `taster-card--swiping-${swipeDirection}` : "",
               ].join(" ")}
               style={{
                 transform: `translateX(${dragOffset.x}px) translateY(${dragOffset.y}px) rotate(${rotation}deg)`,
@@ -622,7 +685,10 @@ export function TasterPage() {
                   style={{ opacity: isCurrentImageReady ? 1 : 0 }}
                 />
                 {!isCurrentImageReady && (
-                  <div className="taster-card__image-loading" aria-live="polite">
+                  <div
+                    className="taster-card__image-loading"
+                    aria-live="polite"
+                  >
                     Loading image...
                   </div>
                 )}
@@ -633,11 +699,11 @@ export function TasterPage() {
                 {/* Swipe indicators moved inside image container */}
                 <div className="taster-card__indicator taster-card__indicator--like">
                   <ThumbsUp aria-hidden="true" />
-                  <span>LIKE</span>
+                  <span>DRAWN TO IT</span>
                 </div>
                 <div className="taster-card__indicator taster-card__indicator--dislike">
                   <ThumbsDown aria-hidden="true" />
-                  <span>NOPE</span>
+                  <span>NOT FOR ME</span>
                 </div>
               </div>
 
@@ -668,7 +734,9 @@ export function TasterPage() {
             type="button"
             className="taster-action taster-action--dislike"
             onClick={() => handleSwipe("left")}
-            disabled={!currentArtwork || !!swipeDirection || !isCurrentImageReady}
+            disabled={
+              !currentArtwork || !!swipeDirection || !isCurrentImageReady
+            }
             aria-label="Dislike this artwork (left arrow key)"
           >
             <ThumbsDown aria-hidden="true" />
@@ -678,7 +746,9 @@ export function TasterPage() {
             type="button"
             className="taster-action taster-action--like"
             onClick={() => handleSwipe("right")}
-            disabled={!currentArtwork || !!swipeDirection || !isCurrentImageReady}
+            disabled={
+              !currentArtwork || !!swipeDirection || !isCurrentImageReady
+            }
             aria-label="Like this artwork (right arrow key)"
           >
             <ThumbsUp aria-hidden="true" />

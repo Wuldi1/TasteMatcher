@@ -6,7 +6,7 @@ import { User } from "@tastematcher/common";
  */
 export type AuthenticatedUser = Pick<
   User,
-  "id" | "email" | "domainId" | "role"
+  "id" | "email" | "domainId" | "role" | "invitedBy"
 >;
 
 /**

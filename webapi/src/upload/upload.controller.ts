@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Logger,
   Param,
   Post,
@@ -15,6 +16,7 @@ import { Artwork } from "@tastematcher/common";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthenticatedRequest } from "../auth/types/authenticated-request.interface";
 import { JwtAuthGuard } from "../auth/utils/jwt-auth.guard";
+import { Roles } from "../auth/utils/roles.decorator";
 import {
   ArtworkIngestionError,
   ArtworkUploadFile,
@@ -29,6 +31,7 @@ export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
   @Post()
+  @Roles("global_admin", "domain_owner", "dealer")
   @UseInterceptors(FileInterceptor("file"))
   async uploadArtwork(
     @Request() req: AuthenticatedRequest,
@@ -77,6 +80,7 @@ export class UploadController {
   }
 
   @Post(":artworkId/image")
+  @Roles("global_admin", "domain_owner", "dealer")
   @UseInterceptors(FileInterceptor("file"))
   async replaceArtworkImage(
     @Request() req: AuthenticatedRequest,
@@ -105,7 +109,9 @@ export class UploadController {
     domainId: string,
   ): void {
     if (domainId !== req.user.domainId && req.user.role !== "global_admin") {
-      throw new BadRequestException("Unauthorized domain access");
+      throw new ForbiddenException(
+        "You are not authorized to access this domain.",
+      );
     }
   }
 }

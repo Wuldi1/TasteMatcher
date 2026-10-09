@@ -44,44 +44,53 @@ const renderWithProviders = (component: React.ReactElement) => {
 };
 
 describe("HomePage", () => {
-  it("renders a personalized welcome message", () => {
+  it("renders a personalized private-gallery welcome", () => {
     renderWithProviders(<HomePage />);
 
     expect(
-      screen.getByRole("heading", { name: "Hello, Test User!" }),
+      screen.getByRole("heading", { name: "A collection, distinctly yours." }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/welcome to your/i)).toHaveTextContent("gallery");
+    expect(screen.getByText(/welcome back, Test User/i)).toHaveTextContent(
+      "private gallery",
+    );
   });
 
   it("displays customer journey and profile statistics", () => {
     renderWithProviders(<HomePage />);
 
     expect(
-      screen.getByRole("heading", { name: "Your Journey" }),
+      screen.getByRole("heading", { name: "Your private gallery" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Your Profile Section" }),
+      screen.getByRole("heading", { name: "Your taste, in progress" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Artworks Liked")).toBeInTheDocument();
-    expect(screen.getByText("Artworks Disliked")).toBeInTheDocument();
-    expect(screen.getByText("Total Swipes")).toBeInTheDocument();
+    expect(screen.getByText("Works that stayed with you")).toBeInTheDocument();
+    expect(screen.getByText("Works passed over")).toBeInTheDocument();
+    expect(screen.getByText("Works considered")).toBeInTheDocument();
   });
 
   it("renders journey cards with proper links", () => {
     renderWithProviders(<HomePage />);
 
     const onboardingLink = screen.getByRole("link", {
-      name: /complete onboarding/i,
+      name: /begin your taste profile/i,
     });
     const tasterLink = screen.getByRole("link", {
-      name: /train your model/i,
+      name: /discover your taste/i,
+    });
+    const collectionLink = screen.getByRole("link", {
+      name: /share your collection/i,
     });
 
     expect(onboardingLink).toHaveAttribute("href", "/onboarding");
     expect(tasterLink).toHaveAttribute("href", "/taster");
+    expect(collectionLink).toHaveAttribute(
+      "href",
+      "/onboarding?step=3#collection-section",
+    );
   });
 
-  it("does not render when user is not authenticated", () => {
+  it("shows a loading state while the user record is unavailable", () => {
     const unauthContext = createMockAuthContext();
 
     render(
@@ -94,7 +103,9 @@ describe("HomePage", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.queryByText(/Welcome to/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Preparing your private gallery..."),
+    ).toBeInTheDocument();
   });
 
   it("provides an accessible logout control", () => {

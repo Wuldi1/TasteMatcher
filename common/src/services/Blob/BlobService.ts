@@ -227,6 +227,46 @@ export class BlobService {
     });
   }
 
+  /** Upload a non-public artifact and return its storage key. */
+  async uploadPrivateBlob(
+    containerName: string,
+    blobName: string,
+    fileBuffer: Buffer,
+    contentType: string,
+    metadata: Record<string, string> = {},
+  ): Promise<string> {
+    const containerClient =
+      this.blobStorageClient.getContainerClient(containerName);
+    await containerClient.createIfNotExists();
+    const blobClient = containerClient.getBlockBlobClient(blobName);
+
+    await retryWithBackoff<void>(
+      async () => {
+        await blobClient.uploadData(fileBuffer, {
+          blobHTTPHeaders: {
+            blobContentType: contentType,
+            blobCacheControl: "private, no-store",
+          },
+          metadata: {
+            uploadedAt: new Date().toISOString(),
+            originalSize: fileBuffer.length.toString(),
+            ...metadata,
+          },
+        });
+      },
+      {
+        maxAttempts: 3,
+        initialDelayMs: 500,
+        maxDelayMs: 5000,
+        backoffMultiplier: 2,
+      },
+      `uploadPrivateBlob-${containerName}-${blobName}`,
+      logger,
+    );
+
+    return blobName;
+  }
+
   /**
    * Delete blob if it exists
    */
@@ -343,8 +383,7 @@ export class BlobService {
     queueName?: string,
   ): Promise<void> {
     const targetQueue = queueName || this.appConfig.queue.name;
-    const queueClient =
-      this.queueServiceClient.getQueueClient(targetQueue);
+    const queueClient = this.queueServiceClient.getQueueClient(targetQueue);
     await queueClient.createIfNotExists();
 
     const messageText = Buffer.from(JSON.stringify(message)).toString("base64");

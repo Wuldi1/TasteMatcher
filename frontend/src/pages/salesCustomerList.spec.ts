@@ -1,5 +1,8 @@
 import type { Proposal } from "@tastematcher/common";
-import { buildSalesCustomerList } from "./salesCustomerList";
+import {
+  buildSalesCustomerList,
+  canLoadSalesCustomerStats,
+} from "./salesCustomerList";
 
 const makeProposal = (
   userId: string,
@@ -52,5 +55,21 @@ describe("buildSalesCustomerList", () => {
 
     expect(result.proposalStatus).toBe("draft");
     expect(result.proposal?.status).toBe("draft");
+  });
+});
+
+describe("canLoadSalesCustomerStats", () => {
+  it("waits for a customer before loading cross-domain global-admin stats", () => {
+    expect(canLoadSalesCustomerStats("domain-1", undefined, true)).toBe(false);
+    expect(canLoadSalesCustomerStats("domain-1", "customer-1", true)).toBe(
+      true,
+    );
+  });
+
+  it("allows a domain user to load their own implicit stats", () => {
+    expect(canLoadSalesCustomerStats("domain-1", undefined, false)).toBe(true);
+    expect(canLoadSalesCustomerStats(undefined, "customer-1", false)).toBe(
+      false,
+    );
   });
 });

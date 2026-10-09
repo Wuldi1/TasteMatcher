@@ -7,13 +7,17 @@ import type {
   AutomaticUploadEditableArtworkInput,
   AutomaticUploadIssue,
   AutomaticUploadPreviewResponse,
+  AutomaticUploadPdfIntakeDetail,
+  AutomaticUploadPdfIntakeListItem,
   Domain,
 } from "@tastematcher/common";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronLeft,
   ExternalLink,
   FileJson,
+  FileText,
   ImageOff,
   RefreshCw,
   Tag,
@@ -50,6 +54,19 @@ type AuctionUrlSupport =
   | { status: "supported"; message: string; displayName: string };
 
 type AutomaticUploadSourceMode = "url" | "import_file";
+type AutomaticUploadsView = "import" | "pdfs";
+
+const PDF_STATUS_LABELS: Record<
+  AutomaticUploadPdfIntakeListItem["status"],
+  string
+> = {
+  ready_for_review: "Ready for review",
+  needs_attention: "Needs attention",
+  importing: "Importing",
+  imported: "Imported",
+  partially_imported: "Partially imported",
+  failed: "Failed",
+};
 
 function issueForField(
   field: AutomaticUploadEditableArtworkField,
@@ -413,6 +430,8 @@ export function AutomaticUploadsPage() {
   const { user } = useAuth();
   const { currentDomain } = useDomain();
   const isGlobalAdmin = user?.role === "global_admin";
+  const isDomainOwner = user?.role === "domain_owner";
+  const [activeView, setActiveView] = useState<AutomaticUploadsView>("import");
   const [domains, setDomains] = useState<Domain[]>([]);
   const [domainsLoading, setDomainsLoading] = useState(false);
   const [selectedDomainId, setSelectedDomainId] = useState("");
@@ -432,6 +451,13 @@ export function AutomaticUploadsPage() {
   const [isApproving, setIsApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [pdfIntakes, setPdfIntakes] = useState<
+    AutomaticUploadPdfIntakeListItem[]
+  >([]);
+  const [selectedPdfIntake, setSelectedPdfIntake] =
+    useState<AutomaticUploadPdfIntakeDetail | null>(null);
+  const [isLoadingPdfIntakes, setIsLoadingPdfIntakes] = useState(false);
+  const [isOpeningPdf, setIsOpeningPdf] = useState(false);
 
   const effectiveDomainId = isGlobalAdmin
     ? selectedDomainId
@@ -468,6 +494,82 @@ export function AutomaticUploadsPage() {
       .finally(() => setDomainsLoading(false));
   }, [isGlobalAdmin]);
 
+  useEffect(() => {
+    if (activeView !== "pdfs" || !isDomainOwner || !effectiveDomainId) {
+      return;
+    }
+    setIsLoadingPdfIntakes(true);
+    setError(null);
+    apiClient
+      .listAutomaticUploadPdfIntakes(effectiveDomainId)
+      .then(setPdfIntakes)
+      .catch((loadError: unknown) => {
+        console.error("PDF intake inventory load failed", { error: loadError });
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load the PDF inventory.",
+        );
+      })
+      .finally(() => setIsLoadingPdfIntakes(false));
+  }, [activeView, effectiveDomainId, isDomainOwner]);
+
+  const applyPreviewDefaults = (response: AutomaticUploadPreviewResponse) => {
+    setPreview(response);
+    setBatchEndDate(toDateTimeInput(response.source.endsAt));
+    const firstDraft = response.drafts[0];
+    setBatchDisplayPrice(firstDraft?.artwork.shouldDisplayPrice ?? false);
+    setBatchUseForTaster(firstDraft?.artwork.useForTaster ?? true);
+    setBatchPrivate(firstDraft?.artwork.isPrivate ?? false);
+    setBatchTags("");
+  };
+
+  const openPdfIntake = async (intakeId: string) => {
+    if (!effectiveDomainId) return;
+    setIsPreviewing(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const detail = await apiClient.getAutomaticUploadPdfIntake(
+        effectiveDomainId,
+        intakeId,
+      );
+      setSelectedPdfIntake(detail);
+      applyPreviewDefaults(detail.preview);
+    } catch (loadError: unknown) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Unable to open this PDF intake.",
+      );
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
+  const openSourcePdf = async () => {
+    if (!effectiveDomainId || !selectedPdfIntake) return;
+    setIsOpeningPdf(true);
+    setError(null);
+    try {
+      const blob = await apiClient.downloadAutomaticUploadPdfIntakeSource(
+        effectiveDomainId,
+        selectedPdfIntake.id,
+      );
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (downloadError: unknown) {
+      setError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : "Unable to open the source PDF.",
+      );
+    } finally {
+      setIsOpeningPdf(false);
+    }
+  };
+
   const draftDetails = useMemo(
     () =>
       (preview?.drafts ?? []).map((draft) => ({
@@ -490,7 +592,9 @@ export function AutomaticUploadsPage() {
     requestActive ||
     !effectiveDomainId ||
     selectedCount === 0 ||
-    selectedBlockingCount > 0;
+    selectedBlockingCount > 0 ||
+    selectedPdfIntake?.status === "importing" ||
+    selectedPdfIntake?.status === "imported";
 
   const updateDraft = (
     draftId: string,
@@ -711,21 +815,34 @@ export function AutomaticUploadsPage() {
     let processedCount = 0;
     let requestFailure: unknown;
 
-    for (
-      let offset = 0;
-      offset < selectedDrafts.length;
-      offset += APPROVAL_CHUNK_SIZE
-    ) {
-      const drafts = selectedDrafts.slice(offset, offset + APPROVAL_CHUNK_SIZE);
-      try {
-        const chunkResult = await apiClient.approveAutomaticUploads(
-          effectiveDomainId,
-          {
-            provider: preview.provider,
-            sourceUrl: preview.source.sourceAuctionUrl,
-            drafts,
-          },
+    const approvalBatches = selectedPdfIntake
+      ? [selectedDrafts]
+      : Array.from(
+          { length: Math.ceil(selectedDrafts.length / APPROVAL_CHUNK_SIZE) },
+          (_, index) =>
+            selectedDrafts.slice(
+              index * APPROVAL_CHUNK_SIZE,
+              (index + 1) * APPROVAL_CHUNK_SIZE,
+            ),
         );
+
+    for (const drafts of approvalBatches) {
+      try {
+        const approvalRequest = {
+          provider: preview.provider,
+          sourceUrl: preview.source.sourceAuctionUrl,
+          drafts,
+        };
+        const chunkResult = selectedPdfIntake
+          ? await apiClient.approveAutomaticUploadPdfIntake(
+              effectiveDomainId,
+              selectedPdfIntake.id,
+              approvalRequest,
+            )
+          : await apiClient.approveAutomaticUploads(
+              effectiveDomainId,
+              approvalRequest,
+            );
         aggregate.created.push(...chunkResult.created);
         aggregate.skipped.push(...chunkResult.skipped);
         aggregate.failed.push(...chunkResult.failed);
@@ -795,6 +912,22 @@ export function AutomaticUploadsPage() {
       setError(
         `Upload stopped after ${processedCount} of ${selectedDrafts.length} drafts were processed. ${failureMessage}`,
       );
+    } else if (selectedPdfIntake) {
+      const completed = aggregate.created.length + aggregate.skipped.length;
+      const status: AutomaticUploadPdfIntakeListItem["status"] =
+        aggregate.failed.length === 0
+          ? "imported"
+          : completed > 0
+            ? "partially_imported"
+            : "needs_attention";
+      setSelectedPdfIntake((current) =>
+        current ? { ...current, status } : current,
+      );
+      setPdfIntakes((current) =>
+        current.map((item) =>
+          item.id === selectedPdfIntake.id ? { ...item, status } : item,
+        ),
+      );
     }
     setIsApproving(false);
   };
@@ -811,8 +944,9 @@ export function AutomaticUploadsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-5 pb-6">
-      <header className="border-b border-gray-200 pb-4">
+    <div className="operational-page automatic-uploads-page mx-auto w-full max-w-7xl space-y-5 pb-6">
+      <header className="operational-header border-b border-gray-200 pb-4">
+        <p className="operational-eyebrow">Auction intake</p>
         <h1 className="text-2xl font-semibold text-gray-900">
           Automatic Uploads
         </h1>
@@ -822,174 +956,386 @@ export function AutomaticUploadsPage() {
         </p>
       </header>
 
-      <div
-        className="border-y border-gray-200 bg-white px-4 py-4 sm:rounded-md sm:border"
+      <nav
+        className="flex border-b border-gray-300"
+        role="tablist"
+        aria-label="Automatic uploads sections"
       >
-        <div
-          className="mb-4 inline-flex rounded-md border border-gray-300 bg-white p-0.5"
-          role="tablist"
-          aria-label="Automatic upload source"
-        >
-          {[
-            ["url", "Auction URL"],
-            ["import_file", "Import file"],
-          ].map(([mode, label]) => (
-            <button
-              key={mode}
-              type="button"
-              role="tab"
-              aria-selected={sourceMode === mode}
-              onClick={() => {
-                setSourceMode(mode as AutomaticUploadSourceMode);
-                setPreview(null);
-                setError(null);
-                setNotice(null);
-              }}
-              disabled={requestActive}
-              className={`min-h-9 rounded px-3 text-sm font-medium ${
-                sourceMode === mode
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-600 hover:bg-gray-100"
-              } disabled:cursor-not-allowed disabled:opacity-50`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <form
-          onSubmit={
-            sourceMode === "url" ? handlePreview : handleImportFilePreview
-          }
-        >
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(14rem,20rem)_auto] lg:items-end">
-          {sourceMode === "url" ? (
-            <div>
-              <label
-                htmlFor="automatic-upload-source-url"
-                className={labelClass}
-              >
-                Auction URL
-              </label>
-              <input
-                id="automatic-upload-source-url"
-                type="url"
-                value={sourceUrl}
-                onChange={(event) => setSourceUrl(event.target.value)}
-                placeholder={
-                  AUTOMATIC_UPLOAD_PROVIDER_UI_DEFINITIONS[0].exampleUrl
-                }
-                className={fieldClass}
-                disabled={requestActive}
-                aria-describedby="automatic-upload-provider-status"
-              />
-              <span
-                id="automatic-upload-provider-status"
-                aria-live="polite"
-                className={`mt-1.5 flex min-h-4 items-center gap-1.5 text-xs font-normal ${
-                  auctionUrlSupport.status === "supported"
-                    ? "text-green-700"
-                    : auctionUrlSupport.status === "empty"
-                      ? "text-gray-500"
-                      : "text-red-700"
-                }`}
-              >
-                {auctionUrlSupport.status === "supported" ? (
-                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                ) : auctionUrlSupport.status !== "empty" ? (
-                  <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                ) : null}
-                {auctionUrlSupport.message}
-              </span>
-            </div>
-          ) : (
-            <div>
-              <label
-                htmlFor="automatic-upload-import-file"
-                className={labelClass}
-              >
-                Import file
-              </label>
-              <input
-                id="automatic-upload-import-file"
-                type="file"
-                accept="application/json,.json"
-                onChange={(event) => {
-                  setImportFile(event.target.files?.[0] ?? null);
-                  setPreview(null);
-                  setNotice(null);
-                }}
-                className={fieldClass}
-                disabled={requestActive}
-              />
-              <p className="mt-1.5 text-xs text-gray-500">
-                Upload the generated auction import JSON file.
-              </p>
-            </div>
-          )}
-          {isGlobalAdmin ? (
-            <div>
-              <label htmlFor="automatic-upload-domain" className={labelClass}>
-                Target gallery
-              </label>
-              <SearchableSelect
-                id="automatic-upload-domain"
-                ariaLabel="Target gallery"
-                value={selectedDomainId || undefined}
-                onChange={(value) => {
-                  setSelectedDomainId(value ?? "");
-                  setPreview(null);
-                  setNotice(null);
-                }}
-                options={domains.map((domain) => ({
-                  value: domain.id,
-                  label: domain.name,
-                }))}
-                placeholder={
-                  domainsLoading ? "Loading galleries..." : "Select gallery"
-                }
-                disabled={domainsLoading || requestActive}
-                className={fieldClass}
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Choose the gallery that will receive approved artwork.
-              </p>
-            </div>
-          ) : (
-            <div>
-              <span className={labelClass}>Target gallery</span>
-              <div className="mt-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
-                {targetDomainName || "Loading gallery..."}
-              </div>
-            </div>
-          )}
+        {[
+          ["import", "Import"],
+          ...(isDomainOwner ? [["pdfs", "PDFs"]] : []),
+        ].map(([view, label]) => (
           <button
-            type="submit"
-            disabled={
-              requestActive ||
-              !effectiveDomainId ||
-              (sourceMode === "url"
-                ? auctionUrlSupport.status !== "supported"
-                : !importFile)
-            }
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+            key={view}
+            type="button"
+            role="tab"
+            aria-selected={activeView === view}
+            onClick={() => {
+              setActiveView(view as AutomaticUploadsView);
+              setPreview(null);
+              setSelectedPdfIntake(null);
+              setError(null);
+              setNotice(null);
+            }}
+            className={`border-b-2 px-4 py-2.5 text-sm font-medium ${
+              activeView === view
+                ? "border-[#344d40] text-[#242a25]"
+                : "border-transparent text-gray-500 hover:text-gray-800"
+            }`}
           >
-            {isPreviewing ? (
-              <AppInlineLoader size="xs" theme="light" label="Reviewing..." />
-            ) : sourceMode === "import_file" ? (
-              <>
-                <FileJson className="h-4 w-4" aria-hidden="true" />
-                Review file
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                Review content
-              </>
-            )}
+            {label}
           </button>
+        ))}
+      </nav>
+
+      {activeView === "import" && (
+        <div className="automatic-uploads-page__source border-y border-gray-200 bg-white px-4 py-4 sm:rounded-md sm:border">
+          <div
+            className="mb-4 inline-flex rounded-md border border-gray-300 bg-white p-0.5"
+            role="tablist"
+            aria-label="Automatic upload source"
+          >
+            {[
+              ["url", "Auction URL"],
+              ["import_file", "Import file"],
+            ].map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                role="tab"
+                aria-selected={sourceMode === mode}
+                onClick={() => {
+                  setSourceMode(mode as AutomaticUploadSourceMode);
+                  setPreview(null);
+                  setError(null);
+                  setNotice(null);
+                }}
+                disabled={requestActive}
+                className={`min-h-9 rounded px-3 text-sm font-medium ${
+                  sourceMode === mode
+                    ? "bg-gray-900 text-white"
+                    : "text-gray-600 hover:bg-gray-100"
+                } disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <form
+            onSubmit={
+              sourceMode === "url" ? handlePreview : handleImportFilePreview
+            }
+          >
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(14rem,20rem)_auto] lg:items-end">
+              {sourceMode === "url" ? (
+                <div>
+                  <label
+                    htmlFor="automatic-upload-source-url"
+                    className={labelClass}
+                  >
+                    Auction URL
+                  </label>
+                  <input
+                    id="automatic-upload-source-url"
+                    type="url"
+                    value={sourceUrl ?? ""}
+                    onChange={(event) =>
+                      setSourceUrl(event.currentTarget.value ?? "")
+                    }
+                    placeholder={
+                      AUTOMATIC_UPLOAD_PROVIDER_UI_DEFINITIONS[0].exampleUrl
+                    }
+                    className={fieldClass}
+                    disabled={requestActive}
+                    aria-describedby="automatic-upload-provider-status"
+                  />
+                  <span
+                    id="automatic-upload-provider-status"
+                    aria-live="polite"
+                    className={`mt-1.5 flex min-h-4 items-center gap-1.5 text-xs font-normal ${
+                      auctionUrlSupport.status === "supported"
+                        ? "text-green-700"
+                        : auctionUrlSupport.status === "empty"
+                          ? "text-gray-500"
+                          : "text-red-700"
+                    }`}
+                  >
+                    {auctionUrlSupport.status === "supported" ? (
+                      <CheckCircle2
+                        className="h-3.5 w-3.5"
+                        aria-hidden="true"
+                      />
+                    ) : auctionUrlSupport.status !== "empty" ? (
+                      <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                    ) : null}
+                    {auctionUrlSupport.message}
+                  </span>
+                </div>
+              ) : (
+                <div>
+                  <label
+                    htmlFor="automatic-upload-import-file"
+                    className={labelClass}
+                  >
+                    Import file
+                  </label>
+                  <input
+                    id="automatic-upload-import-file"
+                    type="file"
+                    accept="application/json,.json"
+                    onChange={(event) => {
+                      setImportFile(event.target.files?.[0] ?? null);
+                      setPreview(null);
+                      setNotice(null);
+                    }}
+                    className={fieldClass}
+                    disabled={requestActive}
+                  />
+                  <p className="mt-1.5 text-xs text-gray-500">
+                    Upload the generated auction import JSON file.
+                  </p>
+                </div>
+              )}
+              {isGlobalAdmin ? (
+                <div>
+                  <label
+                    htmlFor="automatic-upload-domain"
+                    className={labelClass}
+                  >
+                    Target gallery
+                  </label>
+                  <SearchableSelect
+                    id="automatic-upload-domain"
+                    ariaLabel="Target gallery"
+                    value={selectedDomainId || undefined}
+                    onChange={(value) => {
+                      setSelectedDomainId(value ?? "");
+                      setPreview(null);
+                      setNotice(null);
+                    }}
+                    options={domains.map((domain) => ({
+                      value: domain.id,
+                      label: domain.name,
+                    }))}
+                    placeholder={
+                      domainsLoading ? "Loading galleries..." : "Select gallery"
+                    }
+                    disabled={domainsLoading || requestActive}
+                    className={fieldClass}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Choose the gallery that will receive approved artwork.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <span className={labelClass}>Target gallery</span>
+                  <div className="mt-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
+                    {targetDomainName || "Loading gallery..."}
+                  </div>
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={
+                  requestActive ||
+                  !effectiveDomainId ||
+                  (sourceMode === "url"
+                    ? auctionUrlSupport.status !== "supported"
+                    : !importFile)
+                }
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+              >
+                {isPreviewing ? (
+                  <AppInlineLoader
+                    size="xs"
+                    theme="light"
+                    label="Reviewing..."
+                  />
+                ) : sourceMode === "import_file" ? (
+                  <>
+                    <FileJson className="h-4 w-4" aria-hidden="true" />
+                    Review file
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                    Review content
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
-        </form>
-      </div>
+      )}
+
+      {activeView === "pdfs" && isDomainOwner && !selectedPdfIntake && (
+        <section
+          className="border-y border-gray-200 bg-white sm:border"
+          aria-labelledby="pdf-inventory-heading"
+        >
+          <div className="flex items-start justify-between border-b border-gray-200 px-4 py-4">
+            <div>
+              <h2
+                id="pdf-inventory-heading"
+                className="text-lg font-semibold text-[#242a25]"
+              >
+                PDF inventory
+              </h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Auction PDFs received by email and waiting for owner review.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (!effectiveDomainId) return;
+                setIsLoadingPdfIntakes(true);
+                apiClient
+                  .listAutomaticUploadPdfIntakes(effectiveDomainId)
+                  .then(setPdfIntakes)
+                  .catch((loadError: unknown) =>
+                    setError(
+                      loadError instanceof Error
+                        ? loadError.message
+                        : "Unable to refresh the PDF inventory.",
+                    ),
+                  )
+                  .finally(() => setIsLoadingPdfIntakes(false));
+              }}
+              disabled={isLoadingPdfIntakes}
+              className="inline-flex h-9 items-center gap-2 border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              Refresh
+            </button>
+          </div>
+          {isLoadingPdfIntakes ? (
+            <AppLoadingState
+              message="Loading PDF inventory..."
+              className="min-h-48"
+            />
+          ) : pdfIntakes.length === 0 ? (
+            <div className="px-4 py-16 text-center">
+              <FileText
+                className="mx-auto h-8 w-8 text-gray-400"
+                aria-hidden="true"
+              />
+              <p className="mt-3 text-sm font-medium text-gray-800">
+                No PDFs received yet
+              </p>
+              <p className="mt-1 text-sm text-gray-500">
+                New auction PDFs will appear here after email processing.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead className="bg-[#f0eee8] text-xs uppercase text-gray-600">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">PDF</th>
+                    <th className="px-4 py-3 font-semibold">Received</th>
+                    <th className="px-4 py-3 font-semibold">Artworks</th>
+                    <th className="px-4 py-3 font-semibold">Issues</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 text-right font-semibold">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {pdfIntakes.map((intake) => {
+                    const missingCount = Object.values(
+                      intake.summary.missing,
+                    ).reduce((total, value) => total + value, 0);
+                    return (
+                      <tr key={intake.id} className="hover:bg-[#faf9f6]">
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-gray-900">
+                            {intake.source.originalFilename}
+                          </div>
+                          <div className="mt-0.5 text-xs text-gray-500">
+                            {intake.source.senderEmail}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {new Date(intake.createdAt).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">
+                          {intake.summary.includedCount} included
+                          {intake.summary.excludedCount > 0
+                            ? `, ${intake.summary.excludedCount} excluded`
+                            : ""}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">
+                          {missingCount + intake.summary.warningCount}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700">
+                            {PDF_STATUS_LABELS[intake.status]}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => openPdfIntake(intake.id)}
+                            className="text-sm font-semibold text-[#344d40] hover:underline"
+                          >
+                            Review
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {activeView === "pdfs" && selectedPdfIntake && (
+        <section className="border-y border-gray-200 bg-white px-4 py-4 sm:border">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedPdfIntake(null);
+                  setPreview(null);
+                  setNotice(null);
+                }}
+                className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-[#344d40] hover:underline"
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                PDF inventory
+              </button>
+              <h2 className="text-lg font-semibold text-[#242a25]">
+                {selectedPdfIntake.source.originalFilename}
+              </h2>
+              <p className="mt-1 text-sm text-gray-600">
+                {selectedPdfIntake.summary.includedCount} included,{" "}
+                {selectedPdfIntake.summary.excludedCount} excluded,{" "}
+                {selectedPdfIntake.summary.warningCount} warnings
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700">
+                {PDF_STATUS_LABELS[selectedPdfIntake.status]}
+              </span>
+              <button
+                type="button"
+                onClick={openSourcePdf}
+                disabled={isOpeningPdf}
+                className="inline-flex h-9 items-center gap-2 border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                {isOpeningPdf ? "Opening..." : "Open source PDF"}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {error && (
         <div
@@ -1309,7 +1655,7 @@ export function AutomaticUploadsPage() {
                             Title
                             <input
                               aria-label="Title"
-                              value={draft.artwork.title}
+                              value={draft.artwork.title ?? ""}
                               onChange={(event) =>
                                 updateArtworkField(
                                   draft.draftId,
@@ -1324,7 +1670,7 @@ export function AutomaticUploadsPage() {
                             Artist
                             <input
                               aria-label="Artist"
-                              value={draft.artwork.artist}
+                              value={draft.artwork.artist ?? ""}
                               onChange={(event) =>
                                 updateArtworkField(
                                   draft.draftId,
@@ -1483,7 +1829,7 @@ export function AutomaticUploadsPage() {
                             <textarea
                               aria-label="Description"
                               rows={2}
-                              value={draft.artwork.description}
+                              value={draft.artwork.description ?? ""}
                               onChange={(event) =>
                                 updateArtworkField(
                                   draft.draftId,

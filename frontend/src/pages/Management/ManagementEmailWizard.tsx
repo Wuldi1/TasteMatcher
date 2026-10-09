@@ -44,18 +44,19 @@ const parseBulletLines = (value: string): string[] =>
     .map((line) => line.trim())
     .filter(Boolean);
 
-const buildSimpleEmailHtml = (draft: SimpleEmailDraft): string => {
+export const buildSimpleEmailHtml = (draft: SimpleEmailDraft): string => {
   const bullets = parseBulletLines(draft.bulletLines)
     .map((line) => `<li>${escapeHtml(line)}</li>`)
     .join("");
 
   return `<!doctype html>
 <html lang="en">
-  <body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#111827;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f6;padding:24px 12px;">
+  <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /></head>
+  <body style="margin:0;padding:0;background:#f6f4ef;font-family:Arial,Helvetica,sans-serif;color:#242a25;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f4ef;padding:24px 12px;">
       <tr>
         <td align="center">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e5e7eb;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#fffefa;border-radius:16px;overflow:hidden;border:1px solid #d9d5ca;">
             <tr>
               <td style="padding:24px 28px 0;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
@@ -64,8 +65,8 @@ const buildSimpleEmailHtml = (draft: SimpleEmailDraft): string => {
                       <img src="${escapeHtml(draft.logoUrl)}" alt="${escapeHtml(draft.brandName)}" width="40" height="40" style="display:block;border:0;" />
                     </td>
                     <td style="vertical-align:middle;padding-left:10px;">
-                      <div style="font-size:20px;font-weight:700;letter-spacing:0.2px;color:#111827;">${escapeHtml(draft.brandName)}</div>
-                      <div style="font-size:12px;color:#6b7280;">${escapeHtml(draft.brandTagline)}</div>
+                      <div style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:0.2px;color:#242a25;">${escapeHtml(draft.brandName)}</div>
+                      <div style="font-size:12px;color:#666a61;">${escapeHtml(draft.brandTagline)}</div>
                     </td>
                   </tr>
                 </table>
@@ -74,9 +75,9 @@ const buildSimpleEmailHtml = (draft: SimpleEmailDraft): string => {
 
             <tr>
               <td style="padding:20px 28px 0;">
-                <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#2563eb;">${escapeHtml(draft.sectionLabel)}</div>
-                <div style="margin-top:6px;font-size:26px;line-height:1.3;font-weight:700;color:#111827;">${escapeHtml(draft.headline)}</div>
-                <div style="margin-top:10px;font-size:15px;line-height:1.7;color:#374151;">
+                <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#8a6c3e;">${escapeHtml(draft.sectionLabel)}</div>
+                <div style="margin-top:6px;font-family:Georgia,'Times New Roman',serif;font-size:28px;line-height:1.25;font-weight:400;color:#242a25;">${escapeHtml(draft.headline)}</div>
+                <div style="margin-top:10px;font-size:15px;line-height:1.7;color:#666a61;">
                   ${escapeHtml(draft.intro)}
                 </div>
               </td>
@@ -84,11 +85,11 @@ const buildSimpleEmailHtml = (draft: SimpleEmailDraft): string => {
 
             <tr>
               <td style="padding:18px 28px 0;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0eee8;border:1px solid #d9d5ca;border-radius:12px;">
                   <tr>
                     <td style="padding:14px 16px;">
-                      <div style="font-size:13px;font-weight:700;color:#1f2937;margin-bottom:6px;">${escapeHtml(draft.bulletTitle)}</div>
-                      <ul style="margin:0;padding-left:18px;color:#4b5563;font-size:14px;line-height:1.6;">
+                      <div style="font-size:13px;font-weight:700;color:#242a25;margin-bottom:6px;">${escapeHtml(draft.bulletTitle)}</div>
+                      <ul style="margin:0;padding-left:18px;color:#666a61;font-size:14px;line-height:1.6;">
                         ${bullets}
                       </ul>
                     </td>
@@ -99,15 +100,18 @@ const buildSimpleEmailHtml = (draft: SimpleEmailDraft): string => {
 
             <tr>
               <td style="padding:24px 28px 0;">
-                <a href="${escapeHtml(draft.ctaUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:12px 22px;border-radius:10px;">${escapeHtml(draft.ctaLabel)}</a>
+                <a href="${escapeHtml(draft.ctaUrl)}" style="display:inline-block;background:#344d40;color:#fffefa;text-decoration:none;font-size:14px;font-weight:700;padding:14px 24px;letter-spacing:0.02em;">${escapeHtml(draft.ctaLabel)}</a>
               </td>
             </tr>
 
             <tr>
               <td style="padding:18px 28px 26px;">
-                <div style="font-size:13px;line-height:1.6;color:#6b7280;">
+                <div style="font-size:13px;line-height:1.6;color:#666a61;">
                   ${escapeHtml(draft.closingLine1)}<br />
                   ${escapeHtml(draft.closingLine2)}
+                </div>
+                <div style="margin-top:12px;font-size:12px;line-height:1.6;color:#666a61;">
+                  <a href="https://tastematcher.art/privacy-policy" style="color:#344d40;">Privacy Policy</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://tastematcher.art/terms-of-service" style="color:#344d40;">Terms of Service</a>
                 </div>
               </td>
             </tr>
@@ -120,7 +124,9 @@ const buildSimpleEmailHtml = (draft: SimpleEmailDraft): string => {
 };
 
 const buildSimpleEmailText = (draft: SimpleEmailDraft): string => {
-  const bullets = parseBulletLines(draft.bulletLines).map((line) => `- ${line}`);
+  const bullets = parseBulletLines(draft.bulletLines).map(
+    (line) => `- ${line}`,
+  );
 
   return [
     draft.headline,
@@ -137,7 +143,7 @@ const buildSimpleEmailText = (draft: SimpleEmailDraft): string => {
   ].join("\n");
 };
 
-const EMAIL_TEMPLATES: EmailTemplate[] = [
+export const EMAIL_TEMPLATES: EmailTemplate[] = [
   {
     id: "new_content_available",
     name: "New Content Available",
@@ -148,16 +154,16 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
       draft: {
         logoUrl: "https://tastematcher.art/tastematcher_icon_icon_64.png",
         brandName: "TasteMatcher",
-        brandTagline: "Curated art recommendations",
-        sectionLabel: "New Content",
-        headline: "Fresh Artworks Just Landed",
+        brandTagline: "Private art advisory",
+        sectionLabel: "A New Selection",
+        headline: "New works, considered for you",
         intro:
-          "We have published new curated artworks tailored for discovery and comparison. Your collection feed now includes new additions ready for your next swipe session.",
-        bulletTitle: "What is new",
+          "A considered group of new works is ready to discover. Each selection has been chosen to deepen our understanding of the art that speaks to you.",
+        bulletTitle: "Inside your private gallery",
         bulletLines: [
-          "New artworks added to the Taster experience",
-          "Fresh items available for AI Suggestions",
-          "Updated curation for your personal taste profile",
+          "New works ready to view in Taster",
+          "Fresh recommendations informed by your responses",
+          "A more personal view of your evolving taste",
         ].join("\n"),
         ctaLabel: "Open TasteMatcher",
         ctaUrl,
@@ -198,13 +204,17 @@ export function ManagementEmailWizard({
   const [templateId, setTemplateId] = useState(defaultTemplate.id);
   const [editorMode, setEditorMode] = useState<EditorMode>("simple");
   const [subject, setSubject] = useState("");
-  const [simpleDraft, setSimpleDraft] = useState<SimpleEmailDraft>(() =>
-    defaultTemplate.buildPreset({ ctaUrl: `${window.location.origin}/login` }).draft,
+  const [simpleDraft, setSimpleDraft] = useState<SimpleEmailDraft>(
+    () =>
+      defaultTemplate.buildPreset({ ctaUrl: `${window.location.origin}/login` })
+        .draft,
   );
   const [htmlBody, setHtmlBody] = useState("");
   const [textBody, setTextBody] = useState("");
   const [recipientQuery, setRecipientQuery] = useState("");
-  const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
+  const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>(
+    [],
+  );
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sendResult, setSendResult] = useState<{
@@ -224,7 +234,8 @@ export function ManagementEmailWizard({
     [simpleDraft],
   );
 
-  const effectiveHtmlBody = editorMode === "simple" ? generatedHtmlBody : htmlBody;
+  const effectiveHtmlBody =
+    editorMode === "simple" ? generatedHtmlBody : htmlBody;
   const effectiveTextBody =
     editorMode === "simple" ? generatedTextBody : textBody.trim();
 
@@ -316,7 +327,10 @@ export function ManagementEmailWizard({
     }
 
     setSelectedRecipientIds((prev) => [
-      ...new Set([...prev, ...filteredRecipients.map((recipient) => recipient.id)]),
+      ...new Set([
+        ...prev,
+        ...filteredRecipients.map((recipient) => recipient.id),
+      ]),
     ]);
   };
 
@@ -349,7 +363,9 @@ export function ManagementEmailWizard({
       });
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "Failed to send campaign emails.",
+        err instanceof ApiError
+          ? err.message
+          : "Failed to send campaign emails.",
       );
     } finally {
       setIsSending(false);
@@ -359,15 +375,22 @@ export function ManagementEmailWizard({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-2 sm:p-4">
-      <div className="mx-auto flex min-h-[100dvh] max-w-6xl items-start justify-center py-2 sm:items-center sm:py-4">
-        <div className="w-full max-h-[calc(100dvh-1rem)] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl sm:max-h-[94dvh]">
-          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+    <div className="campaign-studio fixed inset-0 z-50 overflow-y-auto bg-black/50 p-2 sm:p-4">
+      <div className="campaign-studio__positioner mx-auto flex min-h-[100dvh] max-w-6xl items-start justify-center py-2 sm:items-center sm:py-4">
+        <div className="campaign-studio__surface w-full max-h-[calc(100dvh-1rem)] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl sm:max-h-[94dvh]">
+          <div className="campaign-studio__header flex items-center justify-between border-b border-gray-200 px-6 py-4">
             <div>
               <h2 className="text-xl font-semibold text-gray-900">
                 Customer Email Campaign
               </h2>
-              <p className="text-sm text-gray-500">Step {step} of 3</p>
+              <p className="text-sm text-gray-500">
+                {step === 1
+                  ? "Compose"
+                  : step === 2
+                    ? "Recipients"
+                    : "Review & send"}{" "}
+                · Step {step} of 3
+              </p>
             </div>
             <button
               type="button"
@@ -378,7 +401,7 @@ export function ManagementEmailWizard({
             </button>
           </div>
 
-          <div className="max-h-[calc(100dvh-9.75rem)] overflow-y-auto px-4 py-4 sm:max-h-[calc(94dvh-150px)] sm:px-6 sm:py-5">
+          <div className="campaign-studio__body max-h-[calc(100dvh-9.75rem)] overflow-y-auto px-4 py-4 sm:max-h-[calc(94dvh-150px)] sm:px-6 sm:py-5">
             {step === 1 && (
               <div className="grid gap-5 lg:grid-cols-2">
                 <div className="space-y-4">
@@ -398,8 +421,10 @@ export function ManagementEmailWizard({
                       ))}
                     </select>
                     <p className="mt-1 text-xs text-gray-500">
-                      {EMAIL_TEMPLATES.find((item) => item.id === templateId)
-                        ?.description}
+                      {
+                        EMAIL_TEMPLATES.find((item) => item.id === templateId)
+                          ?.description
+                      }
                     </p>
                     <button
                       type="button"
@@ -455,8 +480,8 @@ export function ManagementEmailWizard({
                   {editorMode === "simple" ? (
                     <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/40 p-3">
                       <p className="text-xs text-blue-800">
-                        No HTML required. Edit the content fields below and we will
-                        generate the email design automatically.
+                        No HTML required. Edit the content fields below and we
+                        will generate the email design automatically.
                       </p>
 
                       <div>
@@ -533,7 +558,10 @@ export function ManagementEmailWizard({
                           <input
                             value={simpleDraft.closingLine1}
                             onChange={(event) =>
-                              updateSimpleDraft("closingLine1", event.target.value)
+                              updateSimpleDraft(
+                                "closingLine1",
+                                event.target.value,
+                              )
                             }
                             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                           />
@@ -545,7 +573,10 @@ export function ManagementEmailWizard({
                           <input
                             value={simpleDraft.closingLine2}
                             onChange={(event) =>
-                              updateSimpleDraft("closingLine2", event.target.value)
+                              updateSimpleDraft(
+                                "closingLine2",
+                                event.target.value,
+                              )
                             }
                             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                           />
@@ -570,8 +601,8 @@ export function ManagementEmailWizard({
                           Plain Text Body (Optional)
                         </label>
                         <p className="mb-1 text-xs text-gray-500">
-                          This version is used by email clients that block HTML and
-                          can improve deliverability/accessibility.
+                          This version is used by email clients that block HTML
+                          and can improve deliverability/accessibility.
                         </p>
                         <textarea
                           value={textBody}
@@ -588,9 +619,11 @@ export function ManagementEmailWizard({
                     Live Preview
                   </label>
                   <div className="max-h-[720px] overflow-auto rounded-xl border border-gray-200 bg-gray-50 p-3">
-                    <div
-                      className="rounded-lg bg-white"
-                      dangerouslySetInnerHTML={{ __html: effectiveHtmlBody }}
+                    <iframe
+                      title="Campaign email preview"
+                      sandbox=""
+                      srcDoc={effectiveHtmlBody}
+                      className="h-[680px] w-full rounded-lg border-0 bg-white"
                     />
                   </div>
                 </div>
@@ -609,7 +642,10 @@ export function ManagementEmailWizard({
                     </p>
                   </div>
                   <div className="text-sm text-gray-600">
-                    Selected: <span className="font-semibold text-gray-900">{selectedRecipientIds.length}</span>
+                    Selected:{" "}
+                    <span className="font-semibold text-gray-900">
+                      {selectedRecipientIds.length}
+                    </span>
                   </div>
                 </div>
 
@@ -632,10 +668,14 @@ export function ManagementEmailWizard({
 
                 <div className="max-h-[460px] overflow-y-auto rounded-xl border border-gray-200">
                   {filteredRecipients.length === 0 ? (
-                    <p className="p-4 text-sm text-gray-500">No customers found for this domain.</p>
+                    <p className="p-4 text-sm text-gray-500">
+                      No customers found for this domain.
+                    </p>
                   ) : (
                     filteredRecipients.map((recipient) => {
-                      const selected = selectedRecipientIds.includes(recipient.id);
+                      const selected = selectedRecipientIds.includes(
+                        recipient.id,
+                      );
                       return (
                         <label
                           key={recipient.id}
@@ -651,7 +691,9 @@ export function ManagementEmailWizard({
                             <div className="text-sm font-medium text-gray-900">
                               {recipient.name || "Unnamed Customer"}
                             </div>
-                            <div className="text-xs text-gray-500">{recipient.email}</div>
+                            <div className="text-xs text-gray-500">
+                              {recipient.email}
+                            </div>
                           </div>
                         </label>
                       );
@@ -664,7 +706,9 @@ export function ManagementEmailWizard({
             {step === 3 && (
               <div className="space-y-5">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Review & Send</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Review & Send
+                  </h3>
                   <p className="text-sm text-gray-500">
                     Confirm your recipients and content before sending.
                   </p>
@@ -673,27 +717,45 @@ export function ManagementEmailWizard({
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="space-y-3 rounded-xl border border-gray-200 p-4">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Subject</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Subject
+                      </p>
                       <p className="mt-1 text-sm text-gray-900">{subject}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Template</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Template
+                      </p>
                       <p className="mt-1 text-sm text-gray-900">
-                        {EMAIL_TEMPLATES.find((item) => item.id === templateId)?.name}
+                        {
+                          EMAIL_TEMPLATES.find((item) => item.id === templateId)
+                            ?.name
+                        }
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Editor</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Editor
+                      </p>
                       <p className="mt-1 text-sm text-gray-900">
-                        {editorMode === "simple" ? "Simple Editor" : "Advanced HTML"}
+                        {editorMode === "simple"
+                          ? "Simple Editor"
+                          : "Advanced HTML"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Recipients</p>
-                      <p className="mt-1 text-sm text-gray-900">{selectedRecipients.length} selected</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Recipients
+                      </p>
+                      <p className="mt-1 text-sm text-gray-900">
+                        {selectedRecipients.length} selected
+                      </p>
                       <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50 p-2">
                         {selectedRecipients.map((recipient) => (
-                          <div key={recipient.id} className="text-xs text-gray-700">
+                          <div
+                            key={recipient.id}
+                            className="text-xs text-gray-700"
+                          >
                             {recipient.name || "Unnamed"} - {recipient.email}
                           </div>
                         ))}
@@ -705,16 +767,19 @@ export function ManagementEmailWizard({
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
                       Email Preview
                     </p>
-                    <div
-                      className="max-h-[460px] overflow-auto rounded-lg bg-white"
-                      dangerouslySetInnerHTML={{ __html: effectiveHtmlBody }}
+                    <iframe
+                      title="Campaign email review preview"
+                      sandbox=""
+                      srcDoc={effectiveHtmlBody}
+                      className="h-[460px] w-full rounded-lg border-0 bg-white"
                     />
                   </div>
                 </div>
 
                 {sendResult && (
                   <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-                    Campaign sent. Requested: {sendResult.requestedRecipients}, Sent: {sendResult.sent}, Failed: {sendResult.failed}
+                    Campaign sent. Requested: {sendResult.requestedRecipients},
+                    Sent: {sendResult.sent}, Failed: {sendResult.failed}
                   </div>
                 )}
               </div>
@@ -729,7 +794,9 @@ export function ManagementEmailWizard({
 
           <div
             className="flex items-center justify-between border-t border-gray-200 px-4 py-3 sm:px-6 sm:py-4"
-            style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+            style={{
+              paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+            }}
           >
             <button
               type="button"
@@ -750,7 +817,10 @@ export function ManagementEmailWizard({
               <button
                 type="button"
                 onClick={handleContinue}
-                disabled={(step === 1 && !canProceedFromStep1) || (step === 2 && !canProceedFromStep2)}
+                disabled={
+                  (step === 1 && !canProceedFromStep1) ||
+                  (step === 2 && !canProceedFromStep2)
+                }
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
               >
                 Continue

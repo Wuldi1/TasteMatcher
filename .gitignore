@@ -42,6 +42,8 @@ logs/
 *.log
 npm-debug.log*
 pnpm-debug.log*
+__pycache__/
+*.py[cod]
 
 # Azure Functions
 bin/
@@ -57,3 +59,5 @@ azurite/
 !.env.example
 !**/.env.example
 functions/local.settings.json
+GMAIL_CLIENT_SECRET_JSON.json
+GMAIL_TOKEN_JSON.json

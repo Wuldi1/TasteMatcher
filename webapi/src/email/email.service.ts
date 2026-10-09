@@ -92,7 +92,10 @@ export class EmailService {
   }
 
   private getFrontendBaseUrl(): string {
-    return (process.env.FRONTEND_URL ?? "").replace(/\/+$/, "");
+    return (process.env.FRONTEND_URL || "https://tastematcher.art").replace(
+      /\/+$/,
+      "",
+    );
   }
 
   private getEmailIconUrl(): string | undefined {
@@ -102,61 +105,67 @@ export class EmailService {
   }
 
   private buildBrandedEmailHtml(params: BrandedEmailParams): string {
+    const baseUrl = this.getFrontendBaseUrl();
     const iconUrl = this.getEmailIconUrl();
     const escapedIconUrl = iconUrl ? this.escapeHtml(iconUrl) : undefined;
     const ctaHtml = params.cta
-      ? `<div style="margin-top:24px;">
-          <a href="${this.escapeHtml(params.cta.href)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:12px;padding:14px 22px;font-size:15px;font-weight:800;">${this.escapeHtml(params.cta.label)}</a>
+      ? `<div style="margin-top:28px;">
+          <a href="${this.escapeHtml(params.cta.href)}" style="display:inline-block;background:#344d40;color:#fffefa;text-decoration:none;padding:14px 24px;font-size:14px;font-weight:700;letter-spacing:0.02em;">${this.escapeHtml(params.cta.label)}</a>
         </div>
-        <p style="margin:18px 0 0;font-size:12px;line-height:1.5;color:#6b7280;">If the button does not work, copy this link:<br><span style="word-break:break-all;color:#374151;">${this.escapeHtml(params.cta.href)}</span></p>`
+        <p style="margin:18px 0 0;font-size:12px;line-height:1.6;color:#666a61;">If the button does not work, copy this link:<br><span style="word-break:break-all;color:#344d40;">${this.escapeHtml(params.cta.href)}</span></p>`
       : "";
     const footerNote =
       params.footerNote ??
       "TasteMatcher helps galleries and advisors curate art around a collector's real preferences.";
 
     return `
-      <div style="margin:0;padding:0;background:#f5f7fb;color:#111827;font-family:Arial,Helvetica,sans-serif;">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f7fb;margin:0;padding:32px 12px;">
+      <!doctype html>
+      <html lang="en">
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+      <body style="margin:0;padding:0;background:#f6f4ef;color:#242a25;font-family:Arial,Helvetica,sans-serif;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;background:#f6f4ef;margin:0;padding:32px 12px;">
           <tr>
             <td align="center">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(15,23,42,0.10);">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;max-width:640px;background:#fffefa;border:1px solid #d9d5ca;">
                 <tr>
-                  <td style="padding:26px 28px 22px;background:#111827;color:#ffffff;">
+                  <td style="padding:26px 28px 28px;background:#23372d;color:#fffefa;">
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                       <tr>
                         <td style="vertical-align:middle;">
                           <div style="display:inline-block;vertical-align:middle;">
                             ${
                               escapedIconUrl
-                                ? `<img src="${escapedIconUrl}" width="38" height="38" alt="TasteMatcher" style="display:inline-block;border:0;border-radius:10px;vertical-align:middle;margin-right:10px;background:#ffffff;" />`
-                                : `<span style="display:inline-block;width:38px;height:38px;line-height:38px;text-align:center;border-radius:10px;background:#2563eb;color:#ffffff;font-weight:800;margin-right:10px;vertical-align:middle;">TM</span>`
+                                ? `<img src="${escapedIconUrl}" width="38" height="38" alt="TasteMatcher" style="display:inline-block;border:0;vertical-align:middle;margin-right:10px;background:#fffefa;" />`
+                                : `<span style="display:inline-block;width:38px;height:38px;line-height:38px;text-align:center;background:#8a6c3e;color:#fffefa;font-family:Georgia,'Times New Roman',serif;font-weight:700;margin-right:10px;vertical-align:middle;">TM</span>`
                             }
-                            <span style="display:inline-block;vertical-align:middle;font-size:18px;font-weight:800;letter-spacing:0.01em;color:#ffffff;">TasteMatcher</span>
+                            <span style="display:inline-block;vertical-align:middle;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:400;letter-spacing:0.01em;color:#fffefa;">TasteMatcher</span>
                           </div>
                         </td>
                       </tr>
                     </table>
-                    <div style="margin-top:24px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#bfdbfe;font-weight:700;">${this.escapeHtml(params.eyebrow)}</div>
-                    <h1 style="margin:12px 0 0;font-size:28px;line-height:1.2;font-weight:800;color:#ffffff;">${this.escapeHtml(params.heading)}</h1>
-                    <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:#d1d5db;">${this.escapeHtml(params.intro)}</p>
+                    <div style="margin-top:26px;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#d6c19d;font-weight:700;">${this.escapeHtml(params.eyebrow)}</div>
+                    <h1 style="margin:12px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.2;font-weight:400;color:#fffefa;">${this.escapeHtml(params.heading)}</h1>
+                    <p style="margin:12px 0 0;font-size:15px;line-height:1.7;color:#e7ece8;">${this.escapeHtml(params.intro)}</p>
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:28px;">
+                  <td style="padding:30px 28px;">
                     ${params.contentHtml}
                     ${ctaHtml}
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:18px 28px;background:#f9fafb;border-top:1px solid #e5e7eb;">
-                    <div style="font-size:12px;color:#6b7280;line-height:1.5;">${this.escapeHtml(footerNote)}</div>
+                  <td style="padding:20px 28px;background:#f0eee8;border-top:1px solid #d9d5ca;">
+                    <div style="font-size:12px;color:#666a61;line-height:1.6;">${this.escapeHtml(footerNote)}</div>
+                    <div style="margin-top:8px;font-size:12px;line-height:1.6;color:#666a61;"><a href="${this.escapeHtml(`${baseUrl}/privacy-policy`)}" style="color:#344d40;">Privacy Policy</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="${this.escapeHtml(`${baseUrl}/terms-of-service`)}" style="color:#344d40;">Terms of Service</a></div>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
         </table>
-      </div>
+      </body>
+      </html>
     `;
   }
 
@@ -275,44 +284,44 @@ export class EmailService {
         : "Open the proposal to respond to each artwork and leave comments for the gallery team.";
 
     const contentHtml = `
-      <div style="border:1px solid #e5e7eb;border-radius:14px;padding:20px;background:#ffffff;">
-        <div style="font-size:13px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Private Viewing Room</div>
-        <h2 style="margin:8px 0 8px;font-size:22px;line-height:1.3;color:#111827;">${escapedTitle}</h2>
-        <p style="margin:0;font-size:15px;line-height:1.6;color:#4b5563;">${escapedIntro}</p>
+      <div style="border:1px solid #d9d5ca;border-radius:14px;padding:20px;background:#fffefa;">
+        <div style="font-size:13px;color:#666a61;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Private Viewing Room</div>
+        <h2 style="margin:8px 0 8px;font-size:22px;line-height:1.3;color:#242a25;">${escapedTitle}</h2>
+        <p style="margin:0;font-size:15px;line-height:1.6;color:#666a61;">${escapedIntro}</p>
       </div>
 
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:18px;">
         <tr>
           <td width="50%" style="padding:0 6px 12px 0;">
-            <div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px;background:#f9fafb;">
-              <div style="font-size:12px;color:#6b7280;font-weight:700;text-transform:uppercase;">Artworks</div>
-              <div style="margin-top:4px;font-size:24px;font-weight:800;color:#111827;">${summary.itemCount}</div>
+            <div style="border:1px solid #d9d5ca;border-radius:12px;padding:14px;background:#f0eee8;">
+              <div style="font-size:12px;color:#666a61;font-weight:700;text-transform:uppercase;">Artworks</div>
+              <div style="margin-top:4px;font-size:24px;font-weight:800;color:#242a25;">${summary.itemCount}</div>
             </div>
           </td>
           <td width="50%" style="padding:0 0 12px 6px;">
-            <div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px;background:#f9fafb;">
-              <div style="font-size:12px;color:#6b7280;font-weight:700;text-transform:uppercase;">Status</div>
-              <div style="margin-top:4px;font-size:20px;font-weight:800;color:#111827;">${this.escapeHtml(summary.statusLabel)}</div>
+            <div style="border:1px solid #d9d5ca;border-radius:12px;padding:14px;background:#f0eee8;">
+              <div style="font-size:12px;color:#666a61;font-weight:700;text-transform:uppercase;">Status</div>
+              <div style="margin-top:4px;font-size:20px;font-weight:800;color:#242a25;">${this.escapeHtml(summary.statusLabel)}</div>
             </div>
           </td>
         </tr>
       </table>
 
-      <div style="border:1px solid #dbeafe;border-radius:14px;background:#eff6ff;padding:16px;margin-top:6px;">
-        <div style="font-size:14px;line-height:1.7;color:#1f2937;">
+      <div style="border:1px solid #d9d5ca;border-radius:14px;background:#e7ece8;padding:16px;margin-top:6px;">
+        <div style="font-size:14px;line-height:1.7;color:#242a25;">
           <strong>Current responses:</strong>
           ${summary.approvedCount} accepted,
           ${summary.pendingCount} pending,
           ${summary.rejectedCount} declined.
         </div>
-        <div style="font-size:14px;line-height:1.7;color:#1f2937;">
+        <div style="font-size:14px;line-height:1.7;color:#242a25;">
           <strong>Comments:</strong>
           ${summary.itemCommentCount} artwork comments and
           ${summary.generalCommentCount} general comments.
         </div>
       </div>
 
-      <p style="margin:22px 0 0;font-size:15px;line-height:1.6;color:#4b5563;">${this.escapeHtml(contextLine)}</p>
+      <p style="margin:22px 0 0;font-size:15px;line-height:1.6;color:#666a61;">${this.escapeHtml(contextLine)}</p>
     `;
 
     return this.buildBrandedEmailHtml({
@@ -360,12 +369,12 @@ export class EmailService {
       heading: "Your verification code",
       intro: `Use this code to continue signing in to ${payload.domainName}.`,
       contentHtml: `
-        <div style="border:1px solid #dbeafe;border-radius:16px;background:#eff6ff;padding:22px;text-align:center;">
-          <div style="font-size:12px;color:#1d4ed8;font-weight:800;text-transform:uppercase;letter-spacing:0.12em;">Verification Code</div>
-          <div style="margin-top:12px;font-size:34px;line-height:1.1;font-weight:900;letter-spacing:0.22em;color:#111827;">${this.escapeHtml(payload.code)}</div>
-          <p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#4b5563;">This code expires at ${this.escapeHtml(new Date(payload.expiresAt).toLocaleString())}.</p>
+        <div style="border:1px solid #d9d5ca;border-radius:16px;background:#e7ece8;padding:22px;text-align:center;">
+          <div style="font-size:12px;color:#8a6c3e;font-weight:800;text-transform:uppercase;letter-spacing:0.12em;">Verification Code</div>
+          <div style="margin-top:12px;font-size:34px;line-height:1.1;font-weight:900;letter-spacing:0.22em;color:#242a25;">${this.escapeHtml(payload.code)}</div>
+          <p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#666a61;">This code expires at ${this.escapeHtml(new Date(payload.expiresAt).toLocaleString())}.</p>
         </div>
-        <p style="margin:22px 0 0;font-size:14px;line-height:1.6;color:#6b7280;">If you did not request this code, you can safely ignore this email.</p>
+        <p style="margin:22px 0 0;font-size:14px;line-height:1.6;color:#666a61;">If you did not request this code, you can safely ignore this email.</p>
       `,
       footerNote:
         "TasteMatcher sends verification codes to protect gallery and collector accounts.",
@@ -453,10 +462,10 @@ export class EmailService {
       heading: "You have been invited to TasteMatcher",
       intro: `${name}, your gallery team invited you to join their TasteMatcher workspace.`,
       contentHtml: `
-        <div style="border:1px solid #e5e7eb;border-radius:16px;background:#ffffff;padding:20px;">
-          <div style="font-size:13px;color:#6b7280;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;">Your role</div>
-          <div style="margin-top:8px;font-size:22px;font-weight:900;color:#111827;text-transform:capitalize;">${this.escapeHtml(role.replace(/_/g, " "))}</div>
-          <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:#4b5563;">Use TasteMatcher to review art, share preferences, and collaborate on curated proposals.</p>
+        <div style="border:1px solid #d9d5ca;border-radius:16px;background:#fffefa;padding:20px;">
+          <div style="font-size:13px;color:#666a61;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;">Your role</div>
+          <div style="margin-top:8px;font-size:22px;font-weight:900;color:#242a25;text-transform:capitalize;">${this.escapeHtml(role.replace(/_/g, " "))}</div>
+          <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:#666a61;">Use TasteMatcher to review art, share preferences, and collaborate on curated proposals.</p>
         </div>
       `,
       cta: {
@@ -533,7 +542,7 @@ export class EmailService {
       );
     }
 
-    const baseUrl = process.env.FRONTEND_URL ?? "";
+    const baseUrl = this.getFrontendBaseUrl();
     const proposalLink = `${baseUrl}/buying-proposal`;
     const copy = this.getProposalActionCopy(action);
     const summary = this.summarizeProposal(proposal);
@@ -643,7 +652,7 @@ export class EmailService {
       return;
     }
 
-    const baseUrl = process.env.FRONTEND_URL ?? "";
+    const baseUrl = this.getFrontendBaseUrl();
     const proposalLink =
       params.portalLink ?? `${baseUrl}/sales/proposals/${params.proposal.id}`;
 
@@ -656,6 +665,8 @@ export class EmailService {
       params.actorEmail || params.actorRole
         ? ` by ${params.actorEmail ?? params.actorRole}`
         : "";
+    const recipientContext =
+      params.actorRole === "customer" ? "team" : "customer";
     const summary = this.summarizeProposal(params.proposal);
 
     const textBody = [
@@ -681,7 +692,7 @@ export class EmailService {
       proposal: params.proposal,
       action: params.action,
       portalLink: proposalLink,
-      recipientContext: "team",
+      recipientContext,
       actorLine,
     });
 

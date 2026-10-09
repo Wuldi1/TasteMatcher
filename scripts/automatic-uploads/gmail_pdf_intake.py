@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Poll Gmail for auction PDF emails and reply with TasteMatcher import JSON.
-
-This script uses the Gmail API directly because the Codex Gmail connector cannot
-attach local files by path. Credentials are supplied outside the repository.
-"""
+"""Poll Gmail for auction PDFs, store private intakes, and reply with a summary."""
 
 from __future__ import annotations
 
@@ -16,6 +12,9 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from email.message import EmailMessage
 from email.utils import getaddresses, parseaddr
@@ -24,7 +23,7 @@ from typing import Any, Protocol
 
 
 PROCESSED_LABEL = "Alfred/Auction PDF Processed"
-DEFAULT_ALLOWED_SENDERS = ("galrubin15@gmail.com", "jaclynlavy@gmail.com")
+DEFAULT_ALLOWED_SENDERS = ("jaclynlavy@gmail.com",)
 DEFAULT_INTERVAL_MINUTES = 30
 DEFAULT_CONVERTER = (
     Path(__file__).resolve().parents[2]
@@ -60,6 +59,7 @@ class GmailMessage:
 
 @dataclass(frozen=True)
 class ConverterResult:
+    pdf_path: Path
     output_path: Path
     summary: dict[str, Any]
 
@@ -75,6 +75,8 @@ def main() -> int:
             allowed_senders=allowed_senders,
             converter=args.converter,
             temp_dir=args.temp_dir,
+            api_url=args.api_url,
+            api_key=args.api_key,
             dry_run=args.dry_run,
         )
 
@@ -91,7 +93,7 @@ def main() -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Poll Gmail for allowlisted auction PDFs and reply with import JSON.",
+        description="Poll Gmail for allowlisted auction PDFs and create private intakes.",
     )
     parser.add_argument(
         "--credentials",
@@ -130,6 +132,16 @@ def parse_args() -> argparse.Namespace:
         help="Polling interval when --loop is used.",
     )
     parser.add_argument("--loop", action="store_true", help="Poll forever.")
+    parser.add_argument(
+        "--api-url",
+        default=os.environ.get("TASTEMATCHER_API_URL"),
+        help="TasteMatcher API base URL. Defaults to TASTEMATCHER_API_URL.",
+    )
+    parser.add_argument(
+        "--api-key",
+        default=os.environ.get("AUTOMATIC_UPLOAD_INTAKE_API_KEY"),
+        help="Private intake API key. Defaults to AUTOMATIC_UPLOAD_INTAKE_API_KEY.",
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -193,6 +205,8 @@ def process_mailbox(
     allowed_senders: set[str],
     converter: Path,
     temp_dir: Path,
+    api_url: str | None = None,
+    api_key: str | None = None,
     dry_run: bool = False,
 ) -> int:
     label_id = ensure_label(service, PROCESSED_LABEL)
@@ -216,18 +230,28 @@ def process_mailbox(
                     converter=converter,
                     temp_dir=temp_dir,
                 )
+                if not dry_run:
+                    upload_pdf_intake(
+                        api_url=required_value(api_url, "TASTEMATCHER_API_URL"),
+                        api_key=required_value(
+                            api_key, "AUTOMATIC_UPLOAD_INTAKE_API_KEY"
+                        ),
+                        message=message,
+                        attachment=attachment,
+                        result=result,
+                    )
                 html = build_success_html(attachment.filename, result.summary)
-                attachment_path = result.output_path
+                succeeded = True
             except Exception as exc:
                 html = build_failure_html(attachment.filename, str(exc))
-                attachment_path = None
+                succeeded = False
             if dry_run:
                 print(
                     json.dumps(
                         {
                             "messageId": message.message_id,
                             "attachment": attachment.filename,
-                            "status": "parsed" if attachment_path else "failed",
+                            "status": "parsed" if succeeded else "failed",
                         },
                     ),
                 )
@@ -239,7 +263,6 @@ def process_mailbox(
                 thread_id=message.thread_id,
                 in_reply_to=message.rfc_message_id,
                 html=html,
-                attachment=attachment_path,
             )
             add_label(service, message.message_id, label_id)
             processed += 1
@@ -374,7 +397,85 @@ def process_attachment(
     )
     if not output_path.exists() or summary.get("includedCount", 0) < 1:
         raise RuntimeError(f"PDF did not produce a usable import file: {attachment.filename}")
-    return ConverterResult(output_path=output_path, summary=summary)
+    return ConverterResult(pdf_path=pdf_path, output_path=output_path, summary=summary)
+
+
+def upload_pdf_intake(
+    *,
+    api_url: str,
+    api_key: str,
+    message: GmailMessage,
+    attachment: PdfAttachment,
+    result: ConverterResult,
+) -> dict[str, Any]:
+    boundary = f"----TasteMatcherAlfred{uuid.uuid4().hex}"
+    body = build_multipart_body(
+        boundary,
+        {
+            "senderEmail": message.sender,
+            "gmailMessageId": message.message_id,
+            "gmailThreadId": message.thread_id,
+            "subject": message.subject,
+            "originalFilename": attachment.filename,
+            "summary": json.dumps(result.summary),
+        },
+        {
+            "pdf": (attachment.filename, "application/pdf", result.pdf_path.read_bytes()),
+            "importFile": (
+                result.output_path.name,
+                "application/json",
+                result.output_path.read_bytes(),
+            ),
+        },
+    )
+    request = urllib.request.Request(
+        f"{api_url.rstrip('/')}/internal/automatic-upload-pdf-intakes",
+        data=body,
+        method="POST",
+        headers={
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "X-Automatic-Upload-Intake-Key": api_key,
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"TasteMatcher intake API returned {exc.code}: {detail}") from exc
+
+
+def build_multipart_body(
+    boundary: str,
+    fields: dict[str, str],
+    files: dict[str, tuple[str, str, bytes]],
+) -> bytes:
+    chunks: list[bytes] = []
+    for name, value in fields.items():
+        chunks.extend(
+            [
+                f"--{boundary}\r\n".encode(),
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode(),
+                value.encode("utf-8"),
+                b"\r\n",
+            ]
+        )
+    for name, (filename, content_type, data) in files.items():
+        safe_filename = filename.replace('"', "-").replace("\r", "-").replace("\n", "-")
+        chunks.extend(
+            [
+                f"--{boundary}\r\n".encode(),
+                (
+                    f'Content-Disposition: form-data; name="{name}"; '
+                    f'filename="{safe_filename}"\r\n'
+                ).encode(),
+                f"Content-Type: {content_type}\r\n\r\n".encode(),
+                data,
+                b"\r\n",
+            ]
+        )
+    chunks.append(f"--{boundary}--\r\n".encode())
+    return b"".join(chunks)
 
 
 def run_converter(
@@ -401,13 +502,33 @@ def run_converter(
     return json.loads(completed.stdout)
 
 
+def premium_email_html(*, eyebrow: str, heading: str, intro: str, content: str) -> str:
+    """Wrap operational replies in the email-safe TasteMatcher visual system."""
+    return (
+        '<strong>[Alfred]</strong>'
+        '<div style="margin:0;background:#f6f4ef;color:#242a25;font-family:Arial,Helvetica,sans-serif;">'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+        'style="width:100%;background:#f6f4ef;padding:28px 12px;"><tr><td align="center">'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+        'style="width:100%;max-width:620px;background:#fffefa;border:1px solid #d9d5ca;">'
+        '<tr><td style="padding:26px 28px;background:#23372d;color:#fffefa;">'
+        f'<div style="font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#d6c19d;">{html_escape(eyebrow)}</div>'
+        f'<h1 style="margin:12px 0 0;font-family:Georgia,\'Times New Roman\',serif;font-size:30px;line-height:1.2;font-weight:400;color:#fffefa;">{html_escape(heading)}</h1>'
+        f'<p style="margin:12px 0 0;font-size:15px;line-height:1.7;color:#e7ece8;">{html_escape(intro)}</p>'
+        '</td></tr><tr><td style="padding:28px;font-size:14px;line-height:1.7;color:#666a61;">'
+        f'{content}</td></tr>'
+        '<tr><td style="padding:20px 28px;background:#f0eee8;border-top:1px solid #d9d5ca;font-size:12px;line-height:1.6;color:#666a61;">'
+        'TasteMatcher · Private art advisory<br>'
+        '<a href="https://tastematcher.art/privacy-policy" style="color:#344d40;">Privacy Policy</a>&nbsp;&nbsp;·&nbsp;&nbsp;'
+        '<a href="https://tastematcher.art/terms-of-service" style="color:#344d40;">Terms of Service</a>'
+        '</td></tr></table></td></tr></table></div>'
+    )
+
+
 def build_success_html(filename: str, summary: dict[str, Any]) -> str:
     missing = summary.get("missing", {})
-    return (
-        "<strong>[Alfred]</strong><br><br>"
-        "Alfred, Gal's AI agent, processed the attached auction PDF on Gal's behalf "
-        "and generated an Automatic Uploads import file for TasteMatcher.<br><br>"
-        "<strong>Process summary</strong><br>"
+    content = (
+        '<div style="font-weight:700;color:#242a25;">Process summary</div>'
         "<ul>"
         f"<li>PDF: {html_escape(filename)}</li>"
         f"<li>Artworks parsed: {summary.get('artworkCount', 0)}</li>"
@@ -420,22 +541,33 @@ def build_success_html(filename: str, summary: dict[str, Any]) -> str:
         f"<li>Missing image: {missing.get('image', 0)}</li>"
         f"<li>Warnings: {summary.get('warningCount', 0)}</li>"
         "</ul>"
-        "The attached JSON file can be uploaded from the Automatic Uploads Import file tab. "
-        "Please review the generated drafts before approving them."
+        '<div style="margin-top:18px;padding:16px;background:#e7ece8;border:1px solid #d9d5ca;color:#344d40;">'
+        "The PDF and its parsed artwork drafts are now available in "
+        "Automatic Uploads &gt; PDFs. Please review the drafts before approving them.</div>"
+    )
+    return premium_email_html(
+        eyebrow="Automatic uploads · Alfred",
+        heading="Your auction file is ready",
+        intro="The auction PDF has been stored privately and prepared for review in TasteMatcher.",
+        content=content,
     )
 
 
 def build_failure_html(filename: str, reason: str) -> str:
-    return (
-        "<strong>[Alfred]</strong><br><br>"
-        "Alfred, Gal's AI agent, tried to process the attached auction PDF on Gal's behalf, "
-        "but could not generate a usable Automatic Uploads import file.<br><br>"
-        "<strong>Failure summary</strong><br>"
+    content = (
+        '<div style="font-weight:700;color:#242a25;">What happened</div>'
         "<ul>"
         f"<li>PDF: {html_escape(filename)}</li>"
         f"<li>Reason: {html_escape(reason)}</li>"
         "</ul>"
-        "No upload was performed."
+        '<div style="margin-top:18px;padding:16px;background:#eee6d8;border:1px solid #d9d5ca;color:#6f5530;">'
+        "No upload was performed. The source file remains unchanged.</div>"
+    )
+    return premium_email_html(
+        eyebrow="Automatic uploads · Alfred",
+        heading="This file needs attention",
+        intro="The auction PDF could not be converted into a reviewable TasteMatcher import.",
+        content=content,
     )
 
 
@@ -447,7 +579,6 @@ def send_reply(
     thread_id: str,
     in_reply_to: str | None,
     html: str,
-    attachment: Path | None,
 ) -> str:
     message = EmailMessage()
     message["To"] = to
@@ -457,13 +588,6 @@ def send_reply(
         message["References"] = in_reply_to
     message.set_content(strip_html(html))
     message.add_alternative(html, subtype="html")
-    if attachment:
-        message.add_attachment(
-            attachment.read_bytes(),
-            maintype="application",
-            subtype="json",
-            filename=attachment.name,
-        )
     encoded = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii")
     sent = (
         service.users()
@@ -544,6 +668,12 @@ def html_escape(value: str) -> str:
         .replace(">", "&gt;")
         .replace('"', "&quot;")
     )
+
+
+def required_value(value: str | None, name: str) -> str:
+    if not value or not value.strip():
+        raise RuntimeError(f"{name} is required")
+    return value.strip()
 
 
 if __name__ == "__main__":

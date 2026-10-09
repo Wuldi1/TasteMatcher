@@ -1,4 +1,10 @@
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TasterPage } from "./TasterPage";
@@ -118,14 +124,14 @@ describe("TasterPage", () => {
     mockSavePreference.mockReset();
   });
 
-  it("renders taster title and subtitle", async () => {
+  it("renders the discovery title and swipe guidance", async () => {
     renderWithProviders(<TasterPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Taster")).toBeInTheDocument();
+      expect(screen.getByText("Follow your instinct.")).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/Swipe right to like/i)).toBeInTheDocument();
+    expect(screen.getByText(/Swipe right when a work/i)).toBeInTheDocument();
   });
 
   it("handles dislike button click", async () => {
@@ -250,6 +256,59 @@ describe("TasterPage", () => {
     });
   });
 
+  it("keeps vertical mobile gestures available for page scrolling", async () => {
+    renderWithProviders(<TasterPage />);
+
+    const card = await getCurrentArtworkCard();
+    fireEvent.touchStart(card, {
+      touches: [{ clientX: 160, clientY: 100 }],
+    });
+    fireEvent.touchMove(card, {
+      touches: [{ clientX: 170, clientY: 240 }],
+    });
+    fireEvent.touchEnd(card);
+
+    expect(mockSavePreference).not.toHaveBeenCalled();
+    expect(card).toHaveStyle({
+      transform: "translateX(0px) translateY(0px) rotate(0deg)",
+    });
+  });
+
+  it("submits only once when swipe inputs arrive before the card advances", async () => {
+    renderWithProviders(<TasterPage />);
+
+    await getCurrentArtworkCard();
+    const likeButton = screen.getByRole("button", {
+      name: /^Like this artwork/i,
+    });
+
+    fireEvent.click(likeButton);
+    fireEvent.click(likeButton);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+
+    await waitFor(() => {
+      expect(mockSavePreference).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("restores the artwork and shows a retry message when saving fails", async () => {
+    mockSavePreference.mockRejectedValueOnce(new Error("offline"));
+    renderWithProviders(<TasterPage />);
+
+    await getCurrentArtworkCard();
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Like this artwork/i }),
+    );
+
+    expect(
+      await screen.findByText(/couldn’t save that choice/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Artwork 1")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Like this artwork/i }),
+    ).not.toBeDisabled();
+  });
+
   it("does not save a preference for a short drag", async () => {
     renderWithProviders(<TasterPage />);
 
@@ -307,7 +366,10 @@ describe("TasterPage", () => {
   it("prefetches next batch when 10 artworks remain", async () => {
     mockFetchUntasted
       .mockResolvedValueOnce({ artworks: buildArtworks(11), hasMore: false })
-      .mockResolvedValueOnce({ artworks: buildArtworks(5, 100), hasMore: false });
+      .mockResolvedValueOnce({
+        artworks: buildArtworks(5, 100),
+        hasMore: false,
+      });
 
     renderWithProviders(<TasterPage />);
 

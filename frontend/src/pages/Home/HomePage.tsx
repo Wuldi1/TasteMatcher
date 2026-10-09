@@ -15,12 +15,13 @@ import { useAuth } from "../../contexts/AuthContext";
 import { CustomerHomePage } from "./CustomerHomePage";
 import { DealerHomePage } from "./DealerHomePage";
 import { LogOut } from "lucide-react";
+import { AppLoadingState } from "../../components/Loading/AppLoadingState";
 
 export function HomePage() {
   const { user, logout } = useAuth();
 
   if (!user) {
-    return null;
+    return <AppLoadingState message="Preparing your private gallery..." />;
   }
 
   const isCustomer = user.role === "customer";

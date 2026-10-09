@@ -1,0 +1,107 @@
+.onboarding-shell__header > span {
+  display: block;
+  max-width: 38rem;
+  margin: 1rem auto 0;
+  color: var(--tm-ink-soft);
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.onboarding-step-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.onboarding-step-label span:first-child {
+  color: var(--tm-ink);
+  font-weight: 600;
+}
+
+.onboarding-stepper {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: -0.75rem 0 1.25rem;
+  list-style: none;
+}
+
+.onboarding-stepper li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.65rem 0;
+  color: var(--tm-ink-soft);
+  border-top: 1px solid var(--tm-line);
+  font-size: 0.72rem;
+}
+
+.onboarding-stepper li > span {
+  color: var(--tm-brass);
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.onboarding-stepper li[aria-current="step"] {
+  color: var(--tm-ink);
+  border-top-color: var(--tm-brass);
+  font-weight: 700;
+}
+
+.onboarding-stepper li[data-complete="true"] {
+  color: var(--tm-moss);
+  border-top-color: var(--tm-moss);
+}
+
+.onboarding-message {
+  margin-top: 1.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.onboarding-message--error {
+  color: var(--tm-danger);
+  border-color: rgba(141, 67, 58, 0.35);
+  background: rgba(141, 67, 58, 0.06);
+}
+
+.onboarding-message--success {
+  color: var(--tm-success);
+  border-color: rgba(63, 102, 81, 0.3);
+  background: rgba(63, 102, 81, 0.06);
+}
+
+@media (max-width: 639px) {
+  .onboarding-shell {
+    padding-block: 2rem !important;
+  }
+
+  .onboarding-stepper {
+    display: none;
+  }
+
+  .onboarding-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+    gap: 0.75rem;
+  }
+
+  .onboarding-actions > button,
+  .onboarding-actions__primary,
+  .onboarding-actions__primary > button:first-child {
+    width: 100%;
+  }
+
+  .onboarding-actions__primary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .onboarding-actions__primary > button {
+    min-height: 46px;
+    justify-content: center;
+  }
+}

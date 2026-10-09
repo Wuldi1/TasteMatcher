@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import "./LegalPage.css";
 
 type LegalPageKind = "privacy" | "terms";
 
@@ -151,59 +152,104 @@ const contentByKind: Record<LegalPageKind, LegalContent> = {
   terms: termsContent,
 };
 
+const sectionId = (title: string) =>
+  `section-${title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")}`;
+
+function LegalParagraph({ children }: { readonly children: string }) {
+  const email = "admin@tastematcher.com";
+  const parts = children.split(email);
+
+  if (parts.length === 1) return <p>{children}</p>;
+
+  return (
+    <p>
+      {parts[0]}
+      <a href={`mailto:${email}`}>{email}</a>
+      {parts.slice(1).join(email)}
+    </p>
+  );
+}
+
 export function LegalPage({ kind }: { readonly kind: LegalPageKind }) {
   const content = contentByKind[kind];
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-8 text-gray-900 sm:px-6 lg:px-8">
-      <article className="mx-auto max-w-3xl">
+    <main className="legal-page">
+      <div className="legal-page__topbar">
         <Link
           to="/"
-          className="inline-flex text-sm font-medium text-blue-700 hover:text-blue-900"
+          className="legal-page__brand"
+          aria-label="TasteMatcher home"
         >
+          <span className="legal-page__monogram" aria-hidden="true">
+            TM
+          </span>
+          <span>
+            TasteMatcher
+            <small>Private art advisory</small>
+          </span>
+        </Link>
+        <Link to="/" className="legal-page__back">
           Back to TasteMatcher
         </Link>
+      </div>
 
-        <header className="mt-8 border-b border-gray-200 pb-8">
-          <p className="text-sm font-semibold text-blue-700">TasteMatcher</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-normal text-gray-950 sm:text-4xl">
-            {content.title}
-          </h1>
-          <p className="mt-4 text-base leading-7 text-gray-600">
-            {content.subtitle}
-          </p>
-          <p className="mt-4 text-sm text-gray-500">
+      <article className="legal-document">
+        <header className="legal-document__header">
+          <p className="legal-document__eyebrow">TasteMatcher</p>
+          <h1>{content.title}</h1>
+          <p className="legal-document__subtitle">{content.subtitle}</p>
+          <p className="legal-document__date">
             Effective date: {content.effectiveDate}
           </p>
         </header>
 
-        <div className="space-y-8 py-8">
-          {content.sections.map((section) => (
-            <section key={section.title}>
-              <h2 className="text-xl font-semibold text-gray-950">
+        <details className="legal-index legal-index--mobile">
+          <summary>On this page</summary>
+          <nav aria-label={`${content.title} sections`}>
+            {content.sections.map((section) => (
+              <a key={section.title} href={`#${sectionId(section.title)}`}>
                 {section.title}
-              </h2>
-              <div className="mt-3 space-y-3 text-sm leading-7 text-gray-700 sm:text-base">
-                {section.body.map((paragraph) => (
-                  <p key={paragraph}>{paragraph}</p>
-                ))}
-              </div>
-            </section>
-          ))}
+              </a>
+            ))}
+          </nav>
+        </details>
+
+        <div className="legal-document__layout">
+          <aside className="legal-index legal-index--desktop">
+            <p>On this page</p>
+            <nav aria-label={`${content.title} sections`}>
+              {content.sections.map((section) => (
+                <a key={section.title} href={`#${sectionId(section.title)}`}>
+                  {section.title}
+                </a>
+              ))}
+            </nav>
+          </aside>
+
+          <div className="legal-document__body">
+            {content.sections.map((section) => (
+              <section id={sectionId(section.title)} key={section.title}>
+                <h2>{section.title}</h2>
+                <div>
+                  {section.body.map((paragraph) => (
+                    <LegalParagraph key={paragraph}>{paragraph}</LegalParagraph>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
 
-        <footer className="border-t border-gray-200 py-6 text-sm text-gray-500">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span>TasteMatcher</span>
-            <nav className="flex gap-4" aria-label="Legal links">
-              <Link className="hover:text-gray-900" to="/privacy-policy">
-                Privacy Policy
-              </Link>
-              <Link className="hover:text-gray-900" to="/terms-of-service">
-                Terms of Service
-              </Link>
-            </nav>
-          </div>
+        <footer className="legal-document__footer">
+          <span>TasteMatcher · Private art advisory</span>
+          <nav aria-label="Legal links">
+            <Link to="/privacy-policy">Privacy Policy</Link>
+            <Link to="/terms-of-service">Terms of Service</Link>
+          </nav>
         </footer>
       </article>
     </main>

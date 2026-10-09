@@ -63,6 +63,7 @@ import { apiClient } from "../utils/api";
 import { AISuggestionsPage } from "./AISuggestions/AISuggestionsPage";
 import {
   buildSalesCustomerList,
+  canLoadSalesCustomerStats,
   type SalesCustomerProposalStatus,
 } from "./salesCustomerList";
 
@@ -283,8 +284,9 @@ export default function SalesPage() {
   const [proposalWizardSource, setProposalWizardSource] =
     useState<ProposalWizardSource>("ai");
   const [wizardProposalId, setWizardProposalId] = useState<string>();
-  const [generatedProposalMetadata, setGeneratedProposalMetadata] =
-    useState<Proposal["metadata"]>({});
+  const [generatedProposalMetadata, setGeneratedProposalMetadata] = useState<
+    Proposal["metadata"]
+  >({});
   const [viewingRoomMetadata, setViewingRoomMetadata] =
     useState<ViewingRoomMetadata>(DEFAULT_VIEWING_ROOM_METADATA);
   const [proposalWorkflow, setProposalWorkflow] =
@@ -357,7 +359,7 @@ export default function SalesPage() {
     // customer’s currently open proposal.
     const existing = wizardProposalId
       ? (proposalDetails?.metadata ?? {})
-      : generatedProposalMetadata ?? {};
+      : (generatedProposalMetadata ?? {});
     return {
       ...existing,
       viewingRoom: {
@@ -968,7 +970,14 @@ export default function SalesPage() {
 
   useEffect(() => {
     // Use effectiveDomainId (selectedDomainId for admins, user's domain otherwise)
-    if (!effectiveDomainId) {
+    if (
+      !effectiveDomainId ||
+      !canLoadSalesCustomerStats(
+        effectiveDomainId,
+        selectedUserId,
+        isGlobalAdmin,
+      )
+    ) {
       setStats(null);
       setStatsError(null);
       return;
@@ -990,7 +999,7 @@ export default function SalesPage() {
         setStatsLoading(false);
       }
     })();
-  }, [effectiveDomainId, selectedUserId]);
+  }, [effectiveDomainId, isGlobalAdmin, selectedUserId]);
 
   // Helper: render onboarding answers in readable form
   function renderQuestionnaire(q: Record<string, unknown>) {
@@ -1233,7 +1242,7 @@ export default function SalesPage() {
   );
 
   return (
-    <div className="min-h-full bg-gray-50 px-5 py-6 sm:px-8 lg:px-10">
+    <div className="operational-page sales-page min-h-full bg-gray-50 px-5 py-6 sm:px-8 lg:px-10">
       {/* Lightbox Modal */}
       {lightboxImage && (
         <div
@@ -1256,12 +1265,12 @@ export default function SalesPage() {
       )}
 
       {isProposalWizardOpen && (
-        <div className="fixed inset-0 z-[90] bg-white">
+        <div className="proposal-studio fixed inset-0 z-[90] bg-white">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="proposal-wizard-title"
-            className="flex h-[100dvh] w-full flex-col bg-white"
+            className="proposal-studio__dialog flex h-[100dvh] w-full flex-col bg-white"
           >
             <div className="border-b border-gray-200 bg-white px-5 py-4 sm:px-6">
               <div className="flex items-start justify-between gap-4">
@@ -1999,7 +2008,7 @@ export default function SalesPage() {
 
       {isSaleWorkspace && (
         <div>
-          <header className="mb-6 flex flex-col gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-end md:justify-between">
+          <header className="operational-header sales-page__workspace-header mb-6 flex flex-col gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
                 Sale
@@ -2141,8 +2150,8 @@ export default function SalesPage() {
       )}
 
       {!isSaleWorkspace && (
-        <section className="mb-6 border-y border-gray-200 bg-white py-5">
-          <header className="border-b border-gray-100 px-5 pb-5 lg:px-6">
+        <section className="sales-page__directory mb-6 border-y border-gray-200 bg-white py-5">
+          <header className="operational-header border-b border-gray-100 px-5 pb-5 lg:px-6">
             <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
               Sales
             </p>
