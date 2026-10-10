@@ -2,6 +2,7 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { NAVIGATION_LINKS } from "../../constants/navigation";
 import {
+  ChevronRight,
   FileText,
   HelpCircle,
   Lock,
@@ -101,18 +102,20 @@ export const MobileSidebar = () => {
 
   const mobileLabelById: Partial<Record<string, string>> = {
     "ai-suggestions": "AI",
-    "automatic-uploads": "Auto Upload",
+    "automatic-uploads": "Intake",
     management: "Manage",
     "buying-proposal": "Proposal",
   };
 
   const tabBaseClasses =
-    "flex h-[62px] min-w-0 flex-1 flex-col items-center justify-center rounded-xl px-1 text-[11px] leading-tight transition-colors";
+    "relative flex h-[64px] min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium leading-none transition-colors";
 
   const preferredPrimaryIds =
     user?.role === "customer"
       ? ["home", "taster", "ai-suggestions", "buying-proposal"]
-      : ["home", "catalog", "sales", "management"];
+      : user?.role === "domain_owner" || user?.role === "global_admin"
+        ? ["home", "catalog", "automatic-uploads", "sales"]
+        : ["home", "catalog", "upload", "sales"];
   const availableLinks = filteredLinks.filter(
     (link) => link.id !== "buying-proposal" || hasSubmittedProposal,
   );
@@ -122,163 +125,284 @@ export const MobileSidebar = () => {
   const secondaryLinks = availableLinks.filter(
     (link) => !primaryLinks.some((primary) => primary.id === link.id),
   );
+  const workspaceLinks = secondaryLinks.filter(
+    (link) => link.id !== "settings",
+  );
+  const settingsLink = secondaryLinks.find((link) => link.id === "settings");
+  const isMoreActive = secondaryLinks.some(
+    (link) =>
+      location.pathname === link.href ||
+      location.pathname.startsWith(`${link.href}/`),
+  );
 
   return (
     <>
       <nav
-        className="premium-mobile-nav fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white md:hidden"
+        className="premium-mobile-nav fixed inset-x-0 bottom-0 z-50 border-t border-gray-200 bg-white md:hidden"
         aria-label="Primary navigation"
       >
-        <div className="premium-mobile-nav__scroll relative h-[74px] px-2">
-          <div className="flex w-full items-center gap-1 py-1.5">
-            {primaryLinks.map((link) => {
-              const isLocked =
-                link.id === "ai-suggestions" &&
-                user?.role === "customer" &&
-                !getAIRecommendationsEligibility({
-                  swipeCount: stats?.totalSwiped ?? user?.swipeCount,
-                  onboardingStatus: user?.onboardingStatus,
-                }).isEligible;
-              const isActive =
-                location.pathname === link.href ||
-                location.pathname.startsWith(`${link.href}/`);
+        <div
+          className="premium-mobile-nav__bar grid h-[68px] px-1"
+          style={{
+            gridTemplateColumns: `repeat(${primaryLinks.length + 1}, minmax(0, 1fr))`,
+          }}
+        >
+          {primaryLinks.map((link) => {
+            const isLocked =
+              link.id === "ai-suggestions" &&
+              user?.role === "customer" &&
+              !getAIRecommendationsEligibility({
+                swipeCount: stats?.totalSwiped ?? user?.swipeCount,
+                onboardingStatus: user?.onboardingStatus,
+              }).isEligible;
+            const isActive =
+              location.pathname === link.href ||
+              location.pathname.startsWith(`${link.href}/`);
 
-              return (
-                <div key={link.id} className="relative">
-                  <NavLink
-                    to={isLocked ? "#" : link.href}
-                    aria-label={link.ariaLabel}
-                    className={() =>
-                      `${tabBaseClasses} ${
-                        isActive
-                          ? "bg-blue-50 text-blue-600"
-                          : "text-gray-500 hover:bg-gray-100 hover:text-blue-600"
-                      }`
-                    }
-                    aria-disabled={isLocked}
-                    onClick={(event) => {
-                      if (isLocked) {
-                        event.preventDefault();
-                        handleLockedClick();
-                      }
-                    }}
-                  >
-                    <div className="relative">
-                      <link.icon className="mb-1 h-5 w-5" strokeWidth={2} />
-                      {isLocked && (
-                        <Lock
-                          className="absolute -right-1 -top-1 h-3 w-3 text-gray-500"
-                          aria-hidden="true"
-                        />
-                      )}
-                    </div>
-                    <span className="whitespace-nowrap">
-                      {mobileLabelById[link.id] ?? link.name}
-                    </span>
-                  </NavLink>
+            return (
+              <NavLink
+                key={link.id}
+                to={isLocked ? "#" : link.href}
+                aria-label={link.ariaLabel}
+                className={() =>
+                  `${tabBaseClasses} ${
+                    isActive
+                      ? "text-[#344d40]"
+                      : "text-gray-500 hover:text-gray-800"
+                  }`
+                }
+                aria-disabled={isLocked}
+                onClick={(event) => {
+                  if (isLocked) {
+                    event.preventDefault();
+                    handleLockedClick();
+                  }
+                }}
+              >
+                {isActive && (
+                  <span
+                    className="absolute inset-x-3 top-0 h-0.5 bg-[#8a6c3e]"
+                    aria-hidden="true"
+                  />
+                )}
+                <div className="relative">
+                  <link.icon className="h-[21px] w-[21px]" strokeWidth={1.8} />
+                  {isLocked && (
+                    <Lock
+                      className="absolute -right-1.5 -top-1.5 h-3 w-3 text-gray-500"
+                      aria-hidden="true"
+                    />
+                  )}
                 </div>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setIsMoreModalOpen(true)}
-              className={`${tabBaseClasses} text-gray-500 hover:bg-gray-100 hover:text-blue-600`}
-              aria-label="Open more navigation"
-            >
-              <MoreHorizontal className="mb-1 h-5 w-5" strokeWidth={2} />
-              <span className="whitespace-nowrap">More</span>
-            </button>
-          </div>
+                <span className="max-w-full truncate">
+                  {mobileLabelById[link.id] ?? link.name}
+                </span>
+              </NavLink>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setIsMoreModalOpen(true)}
+            className={`${tabBaseClasses} ${
+              isMoreActive ? "text-[#344d40]" : "text-gray-500"
+            } hover:text-gray-800`}
+            aria-label="Open more navigation"
+          >
+            {isMoreActive && (
+              <span
+                className="absolute inset-x-3 top-0 h-0.5 bg-[#8a6c3e]"
+                aria-hidden="true"
+              />
+            )}
+            <MoreHorizontal className="h-[21px] w-[21px]" strokeWidth={1.8} />
+            <span>More</span>
+          </button>
         </div>
       </nav>
 
       {isMoreModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end bg-black/45 md:hidden">
+        <div
+          className="fixed inset-0 z-50 flex items-end bg-black/45 md:hidden"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setIsMoreModalOpen(false);
+          }}
+        >
           <div
             ref={activeDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="mobile-more-title"
             tabIndex={-1}
-            className="max-h-[88dvh] w-full overflow-y-auto border-t border-gray-200 bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] shadow-xl"
+            className="mobile-navigation-sheet max-h-[88dvh] w-full overflow-y-auto border-t border-gray-200 bg-white pb-[calc(1rem+env(safe-area-inset-bottom,0px))] shadow-xl"
           >
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">
-                  TasteMatcher
-                </p>
-                <h2
-                  id="mobile-more-title"
-                  className="mt-1 text-2xl font-normal"
-                >
-                  More
-                </h2>
+            <div
+              className="mx-auto mt-2 h-1 w-10 bg-gray-300"
+              aria-hidden="true"
+            />
+            <header className="flex items-center justify-between border-b border-gray-200 px-5 pb-4 pt-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <img
+                  src={`${process.env.PUBLIC_URL}/tastematcher_icon_icon_64.png`}
+                  alt=""
+                  className="h-10 w-10 flex-none"
+                />
+                <div className="min-w-0">
+                  <h2
+                    id="mobile-more-title"
+                    className="text-lg font-semibold text-gray-900"
+                  >
+                    Navigation
+                  </h2>
+                  <p className="truncate text-xs text-gray-500">
+                    {user?.name || user?.email}
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsMoreModalOpen(false)}
-                className="flex h-11 w-11 items-center justify-center border border-gray-200"
+                className="flex h-11 w-11 flex-none items-center justify-center border border-gray-200 text-gray-600"
                 aria-label="Close more navigation"
                 data-modal-initial-focus
               >
                 <X className="h-5 w-5" />
               </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {secondaryLinks.map((link) => (
-                <NavLink
-                  key={link.id}
-                  to={link.href}
-                  onClick={() => setIsMoreModalOpen(false)}
-                  className="flex min-h-14 items-center gap-3 border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
+            </header>
+
+            {workspaceLinks.length > 0 && (
+              <section
+                className="px-5 py-4"
+                aria-labelledby="mobile-workspace-title"
+              >
+                <h3
+                  id="mobile-workspace-title"
+                  className="mb-2 text-xs font-semibold uppercase text-gray-500"
                 >
-                  <link.icon className="h-5 w-5 text-green-700" />
-                  <span>{mobileLabelById[link.id] ?? link.name}</span>
-                </NavLink>
-              ))}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMoreModalOpen(false);
-                  setIsDisplayModalOpen(true);
-                }}
-                className="flex min-h-14 items-center gap-3 border border-gray-200 bg-white px-3 py-2 text-left text-sm text-gray-700"
+                  Workspace
+                </h3>
+                <div className="divide-y divide-gray-200 border-y border-gray-200">
+                  {workspaceLinks.map((link) => (
+                    <NavLink
+                      key={link.id}
+                      to={link.href}
+                      onClick={() => setIsMoreModalOpen(false)}
+                      className="flex min-h-14 items-center gap-3 py-2 text-sm font-medium text-gray-800"
+                    >
+                      <link.icon
+                        className="h-5 w-5 text-[#344d40]"
+                        strokeWidth={1.8}
+                      />
+                      <span className="flex-1">{link.name}</span>
+                      <ChevronRight
+                        className="h-4 w-4 text-gray-400"
+                        aria-hidden="true"
+                      />
+                    </NavLink>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section
+              className="px-5 pb-2"
+              aria-labelledby="mobile-account-title"
+            >
+              <h3
+                id="mobile-account-title"
+                className="mb-2 text-xs font-semibold uppercase text-gray-500"
               >
-                <SlidersHorizontal className="h-5 w-5 text-green-700" />
-                <span>Display settings</span>
-              </button>
-              <a
-                href="mailto:admin@tastematcher.com"
-                className="flex min-h-14 items-center gap-3 border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
-              >
-                <HelpCircle className="h-5 w-5 text-green-700" />
-                <span>Support</span>
-              </a>
-              <Link
-                to="/privacy-policy"
-                onClick={() => setIsMoreModalOpen(false)}
-                className="flex min-h-14 items-center gap-3 border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
-              >
-                <ShieldCheck className="h-5 w-5 text-green-700" />
-                <span>Privacy</span>
-              </Link>
-              <Link
-                to="/terms-of-service"
-                onClick={() => setIsMoreModalOpen(false)}
-                className="flex min-h-14 items-center gap-3 border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
-              >
-                <FileText className="h-5 w-5 text-green-700" />
-                <span>Terms</span>
-              </Link>
+                Account & support
+              </h3>
+              <div className="divide-y divide-gray-200 border-y border-gray-200">
+                {settingsLink && (
+                  <NavLink
+                    to={settingsLink.href}
+                    onClick={() => setIsMoreModalOpen(false)}
+                    className="flex min-h-14 items-center gap-3 py-2 text-sm text-gray-700"
+                  >
+                    <settingsLink.icon
+                      className="h-5 w-5 text-[#344d40]"
+                      strokeWidth={1.8}
+                    />
+                    <span className="flex-1">Settings</span>
+                    <ChevronRight
+                      className="h-4 w-4 text-gray-400"
+                      aria-hidden="true"
+                    />
+                  </NavLink>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMoreModalOpen(false);
+                    setIsDisplayModalOpen(true);
+                  }}
+                  className="flex min-h-14 w-full items-center gap-3 py-2 text-left text-sm text-gray-700"
+                >
+                  <SlidersHorizontal
+                    className="h-5 w-5 text-[#344d40]"
+                    strokeWidth={1.8}
+                  />
+                  <span className="flex-1">Display settings</span>
+                  <ChevronRight
+                    className="h-4 w-4 text-gray-400"
+                    aria-hidden="true"
+                  />
+                </button>
+                <a
+                  href="mailto:admin@tastematcher.com"
+                  className="flex min-h-14 items-center gap-3 py-2 text-sm text-gray-700"
+                >
+                  <HelpCircle
+                    className="h-5 w-5 text-[#344d40]"
+                    strokeWidth={1.8}
+                  />
+                  <span className="flex-1">Support</span>
+                  <ChevronRight
+                    className="h-4 w-4 text-gray-400"
+                    aria-hidden="true"
+                  />
+                </a>
+                <Link
+                  to="/privacy-policy"
+                  onClick={() => setIsMoreModalOpen(false)}
+                  className="flex min-h-14 items-center gap-3 py-2 text-sm text-gray-700"
+                >
+                  <ShieldCheck
+                    className="h-5 w-5 text-[#344d40]"
+                    strokeWidth={1.8}
+                  />
+                  <span className="flex-1">Privacy</span>
+                  <ChevronRight
+                    className="h-4 w-4 text-gray-400"
+                    aria-hidden="true"
+                  />
+                </Link>
+                <Link
+                  to="/terms-of-service"
+                  onClick={() => setIsMoreModalOpen(false)}
+                  className="flex min-h-14 items-center gap-3 py-2 text-sm text-gray-700"
+                >
+                  <FileText
+                    className="h-5 w-5 text-[#344d40]"
+                    strokeWidth={1.8}
+                  />
+                  <span className="flex-1">Terms</span>
+                  <ChevronRight
+                    className="h-4 w-4 text-gray-400"
+                    aria-hidden="true"
+                  />
+                </Link>
+              </div>
               <button
                 type="button"
                 onClick={logout}
-                className="flex min-h-14 items-center gap-3 border border-red-200 bg-white px-3 py-2 text-left text-sm text-red-700"
+                className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700"
               >
                 <LogOut className="h-5 w-5" />
                 <span>Log out</span>
               </button>
-            </div>
+            </section>
           </div>
         </div>
       )}

@@ -44,11 +44,13 @@ describe("MobileSidebar", () => {
     moreButton.focus();
     await user.click(moreButton);
 
-    expect(screen.getByRole("dialog", { name: "More" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Navigation" }),
+    ).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
     expect(
-      screen.queryByRole("dialog", { name: "More" }),
+      screen.queryByRole("dialog", { name: "Navigation" }),
     ).not.toBeInTheDocument();
     expect(moreButton).toHaveFocus();
 
@@ -80,5 +82,43 @@ describe("MobileSidebar", () => {
     await user.click(moreButton);
     await user.click(screen.getByRole("button", { name: "Log out" }));
     expect(logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("promotes automatic uploads into the admin mobile dock", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/automatic-uploads"]}>
+        <AuthContext.Provider
+          value={createMockAuthContext({
+            user: {
+              id: "admin-1",
+              email: "admin@example.com",
+              role: "global_admin",
+              domainId: "gallery-1",
+            },
+            isAuthenticated: true,
+            refreshUser: jest.fn().mockResolvedValue(null),
+          })}
+        >
+          <ViewerPreferencesProvider>
+            <MobileSidebar />
+          </ViewerPreferencesProvider>
+        </AuthContext.Provider>
+      </MemoryRouter>,
+    );
+
+    const automaticUploads = screen.getByRole("link", {
+      name: "Navigate to automatic uploads page",
+    });
+    expect(automaticUploads).toBeInTheDocument();
+    expect(automaticUploads).toHaveAttribute("aria-current", "page");
+
+    await user.click(
+      screen.getByRole("button", { name: "Open more navigation" }),
+    );
+    expect(screen.getByRole("link", { name: "Upload" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Management" }),
+    ).toBeInTheDocument();
   });
 });
