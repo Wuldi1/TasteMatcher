@@ -84,7 +84,9 @@ def main() -> int:
         )
 
     if not args.loop:
-        return run_once()
+        processed = run_once()
+        print(json.dumps({"processed": processed}))
+        return 0
 
     while True:
         try:

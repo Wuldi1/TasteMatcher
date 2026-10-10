@@ -318,14 +318,46 @@ describe("AutomaticUploadsPage", () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole("tab", { name: "PDFs" }));
+    await user.click(screen.getByRole("tab", { name: "PDFs shared by email" }));
     expect(
       await screen.findByText("Summer Wave Price List.pdf"),
     ).toBeInTheDocument();
     expect(screen.getByText("jaclynlavy@gmail.com")).toBeInTheDocument();
     expect(screen.getByText("Ready for review")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open Summer Wave Price List.pdf" }),
+    ).toBeInTheDocument();
+    jest
+      .mocked(apiClient.downloadAutomaticUploadPdfIntakeSource)
+      .mockResolvedValue(new Blob(["pdf"], { type: "application/pdf" }));
+    const createObjectUrl = jest.fn(() => "blob:pdf-intake");
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectUrl,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: jest.fn(),
+    });
+    const openWindow = jest.spyOn(window, "open").mockReturnValue(null);
 
-    await user.click(screen.getByRole("button", { name: "Review" }));
+    await user.click(
+      screen.getByRole("button", { name: "Open Summer Wave Price List.pdf" }),
+    );
+    await waitFor(() =>
+      expect(
+        apiClient.downloadAutomaticUploadPdfIntakeSource,
+      ).toHaveBeenCalledWith("domain-1", "pdf-intake-1"),
+    );
+    expect(createObjectUrl).toHaveBeenCalled();
+    expect(openWindow).toHaveBeenCalledWith(
+      "blob:pdf-intake",
+      "_blank",
+      "noopener,noreferrer",
+    );
+    openWindow.mockRestore();
+
+    await user.click(screen.getByRole("button", { name: "Review content" }));
     expect(await screen.findByText("Imported work")).toBeInTheDocument();
     expect(apiClient.getAutomaticUploadPdfIntake).toHaveBeenCalledWith(
       "domain-1",
@@ -368,23 +400,19 @@ describe("AutomaticUploadsPage", () => {
     expect(reviewButton).toBeEnabled();
   });
 
-  it("previews generated import files from the import tab", async () => {
-    const user = userEvent.setup();
+  it("uses Auction URL and PDFs shared by email as its two primary tabs", () => {
     renderPage();
 
-    await user.click(screen.getByRole("tab", { name: "Import file" }));
-    const file = new File(["{}"], "auction-import.json", {
-      type: "application/json",
-    });
-    await user.upload(screen.getByLabelText("Import file"), file);
-    await user.click(screen.getByRole("button", { name: "Review file" }));
-
-    expect(await screen.findByText("Example PDF Sale")).toBeInTheDocument();
-    expect(screen.getByText("Imported work")).toBeInTheDocument();
-    expect(apiClient.previewAutomaticUploadImportFile).toHaveBeenCalledWith(
-      "domain-1",
-      file,
-    );
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    expect(
+      screen.getByRole("tab", { name: "Auction URL" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: "PDFs shared by email" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: "Import file" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the TasteMatcher loading state while preparing a preview", async () => {

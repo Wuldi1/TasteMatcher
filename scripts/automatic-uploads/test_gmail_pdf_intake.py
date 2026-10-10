@@ -126,6 +126,36 @@ def raw_gmail_message(
 
 
 class GmailPdfIntakeTests(unittest.TestCase):
+    def test_main_returns_success_after_processing_messages(self):
+        args = mock.Mock(
+            credentials=None,
+            token=None,
+            scopes=[],
+            allowed_sender=["galrubin15@gmail.com"],
+            converter=Path("converter.py"),
+            temp_dir=Path("/private/tmp"),
+            api_url="https://api.tastematcher.art",
+            api_key="secret",
+            dry_run=False,
+            loop=False,
+        )
+        with mock.patch.object(gmail_pdf_intake, "parse_args", return_value=args):
+            with mock.patch.object(
+                gmail_pdf_intake,
+                "build_gmail_service",
+                return_value=mock.Mock(),
+            ):
+                with mock.patch.object(
+                    gmail_pdf_intake,
+                    "process_mailbox",
+                    return_value=1,
+                ):
+                    with mock.patch("builtins.print") as print_output:
+                        exit_code = gmail_pdf_intake.main()
+
+        self.assertEqual(exit_code, 0)
+        print_output.assert_called_once_with(json.dumps({"processed": 1}))
+
     def test_default_allowlist_includes_gal_and_jaclyn(self):
         self.assertEqual(
             set(gmail_pdf_intake.DEFAULT_ALLOWED_SENDERS),

@@ -16,15 +16,14 @@ No new Azure infrastructure or Functions changes are required.
 ## User Flow
 
 1. Open `/automatic-uploads` from the `Automatic Uploads` navigation item.
-2. Choose `Auction URL` or `Import file`.
+2. Choose the `Auction URL` or `PDFs shared by email` primary tab.
 3. For `Auction URL`, enter an auction URL. The page identifies its provider and shows whether the
    domain is supported before enabling preview. A `global_admin` must also
    select the target gallery; a `domain_owner` uses their own domain.
-4. For `Import file`, upload a generated JSON import package. This temporary
-   path is intended for PDFs processed outside the application, such as
-   email-assisted catalog imports.
-5. Select `Review content` or `Review file`. The API returns provisional drafts held in frontend
-   state only.
+4. For `PDFs shared by email`, review the row-per-PDF inventory after Alfred
+   has parsed and stored each attachment. The filename opens the authenticated
+   source PDF; `Review content` loads its parsed drafts.
+5. The URL and email-PDF paths use the same artwork draft review experience.
 6. Review images and issues, edit artwork fields, and include or exclude lots.
    Title, artist, source image, and an auction end date are blocking requirements.
 7. Use the bulk editor to set auction end date, price visibility, Taster usage,
@@ -87,9 +86,10 @@ The preview response is provisional and is not persisted server-side.
 
 `POST /domains/:domainId/automatic-uploads/preview-import-file`
 
-This multipart endpoint accepts a JSON file under the `file` field. It is for
-generated import packages, not raw PDFs. Raw PDFs are processed outside the app
-into the package format below, then uploaded in the `Import file` tab.
+This multipart endpoint accepts a JSON file under the `file` field. It remains
+an internal package-preview primitive used by the private PDF intake workflow;
+there is no manual import-file tab. Raw PDFs are parsed by the Gmail worker,
+stored privately, and exposed to owners through `PDFs shared by email`.
 
 The current temporary package format embeds images as JPEG or PNG data URLs and
 is limited to 2 MiB total:
