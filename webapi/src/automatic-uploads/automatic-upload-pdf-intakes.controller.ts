@@ -72,7 +72,7 @@ export class AutomaticUploadPdfIntakesInternalController {
 
 @Controller("domains/:domainId/automatic-uploads/pdf-intakes")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles("domain_owner")
+@Roles("domain_owner", "global_admin")
 export class AutomaticUploadPdfIntakesController {
   constructor(private readonly service: AutomaticUploadPdfIntakesService) {}
 
@@ -81,7 +81,7 @@ export class AutomaticUploadPdfIntakesController {
     @Request() req: AuthenticatedRequest,
     @Param("domainId") domainId: string,
   ): Promise<AutomaticUploadPdfIntakeListItem[]> {
-    this.assertDomainOwner(req, domainId);
+    this.assertDomainAccess(req, domainId);
     return this.service.list(domainId);
   }
 
@@ -91,7 +91,7 @@ export class AutomaticUploadPdfIntakesController {
     @Param("domainId") domainId: string,
     @Param("intakeId") intakeId: string,
   ): Promise<AutomaticUploadPdfIntakeDetail> {
-    this.assertDomainOwner(req, domainId);
+    this.assertDomainAccess(req, domainId);
     return this.service.get(domainId, intakeId, req.user);
   }
 
@@ -102,7 +102,7 @@ export class AutomaticUploadPdfIntakesController {
     @Param("intakeId") intakeId: string,
     @Res() response: Response,
   ): Promise<void> {
-    this.assertDomainOwner(req, domainId);
+    this.assertDomainAccess(req, domainId);
     const source = await this.service.downloadSource(domainId, intakeId);
     const filename = source.filename.replace(/["\r\n]/gu, "-");
     response.set({
@@ -120,12 +120,15 @@ export class AutomaticUploadPdfIntakesController {
     @Param("intakeId") intakeId: string,
     @Body() body: unknown,
   ): Promise<AutomaticUploadApprovalResponse> {
-    this.assertDomainOwner(req, domainId);
+    this.assertDomainAccess(req, domainId);
     return this.service.approve(domainId, intakeId, req.user, body);
   }
 
-  private assertDomainOwner(req: AuthenticatedRequest, domainId: string): void {
-    if (req.user.role !== "domain_owner" || req.user.domainId !== domainId) {
+  private assertDomainAccess(
+    req: AuthenticatedRequest,
+    domainId: string,
+  ): void {
+    if (req.user.role !== "global_admin" && req.user.domainId !== domainId) {
       throw new ForbiddenException(
         "You are not authorized to access this domain's PDF inventory.",
       );

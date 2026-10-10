@@ -56,29 +56,28 @@ describe("AutomaticUploadPdfIntakesController", () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it("allows only domain owners at the role guard boundary", () => {
+  it("allows domain owners and global administrators at the role guard boundary", () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, AutomaticUploadPdfIntakesController),
-    ).toEqual(["domain_owner"]);
+    ).toEqual(["domain_owner", "global_admin"]);
   });
 
-  it("rejects another domain and global administrators", () => {
+  it("allows global administrators and rejects owners of another domain", async () => {
     const controller = new AutomaticUploadPdfIntakesController(
       service as never,
     );
-    expect(() =>
-      controller.list(
-        {
-          user: {
-            id: "admin",
-            email: "admin@example.test",
-            role: "global_admin",
-            domainId: "domain-1",
-          },
-        } as never,
-        "domain-1",
-      ),
-    ).toThrow(ForbiddenException);
+    await controller.list(
+      {
+        user: {
+          id: "admin",
+          email: "admin@example.test",
+          role: "global_admin",
+          domainId: "admin-domain",
+        },
+      } as never,
+      "domain-1",
+    );
+    expect(service.list).toHaveBeenCalledWith("domain-1");
     expect(() =>
       controller.list(
         {

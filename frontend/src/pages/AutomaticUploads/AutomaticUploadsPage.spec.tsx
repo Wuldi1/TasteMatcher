@@ -365,6 +365,28 @@ describe("AutomaticUploadsPage", () => {
     );
   });
 
+  it("lets a global admin select a gallery and review its emailed PDFs", async () => {
+    jest.mocked(apiClient.getAllDomains).mockResolvedValue([domain]);
+    const user = userEvent.setup();
+    renderPage("global_admin");
+
+    await user.click(screen.getByRole("tab", { name: "PDFs shared by email" }));
+    const gallerySelect = await screen.findByRole("combobox", {
+      name: "PDF inventory target gallery",
+    });
+    expect(screen.getByText("Select a target gallery")).toBeInTheDocument();
+
+    await user.click(gallerySelect);
+    await user.click(screen.getByRole("option", { name: "North Gallery" }));
+
+    expect(
+      await screen.findByText("Summer Wave Price List.pdf"),
+    ).toBeInTheDocument();
+    expect(apiClient.listAutomaticUploadPdfIntakes).toHaveBeenCalledWith(
+      "domain-1",
+    );
+  });
+
   it("identifies supported and unsupported auction provider domains", async () => {
     const user = userEvent.setup();
     renderPage();

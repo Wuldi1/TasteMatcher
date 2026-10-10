@@ -429,6 +429,7 @@ export function AutomaticUploadsPage() {
   const { currentDomain } = useDomain();
   const isGlobalAdmin = user?.role === "global_admin";
   const isDomainOwner = user?.role === "domain_owner";
+  const canAccessPdfIntakes = isDomainOwner || isGlobalAdmin;
   const [activeView, setActiveView] = useState<AutomaticUploadsView>("url");
   const [domains, setDomains] = useState<Domain[]>([]);
   const [domainsLoading, setDomainsLoading] = useState(false);
@@ -494,7 +495,7 @@ export function AutomaticUploadsPage() {
   }, [isGlobalAdmin]);
 
   useEffect(() => {
-    if (activeView !== "pdfs" || !isDomainOwner || !effectiveDomainId) {
+    if (activeView !== "pdfs" || !canAccessPdfIntakes || !effectiveDomainId) {
       return;
     }
     setIsLoadingPdfIntakes(true);
@@ -511,7 +512,7 @@ export function AutomaticUploadsPage() {
         );
       })
       .finally(() => setIsLoadingPdfIntakes(false));
-  }, [activeView, effectiveDomainId, isDomainOwner]);
+  }, [activeView, canAccessPdfIntakes, effectiveDomainId]);
 
   const applyPreviewDefaults = (response: AutomaticUploadPreviewResponse) => {
     setPreview(response);
@@ -918,7 +919,7 @@ export function AutomaticUploadsPage() {
       >
         {[
           ["url", "Auction URL"],
-          ...(isDomainOwner ? [["pdfs", "PDFs shared by email"]] : []),
+          ...(canAccessPdfIntakes ? [["pdfs", "PDFs shared by email"]] : []),
         ].map(([view, label]) => (
           <button
             key={view}
@@ -1053,7 +1054,7 @@ export function AutomaticUploadsPage() {
         </div>
       )}
 
-      {activeView === "pdfs" && isDomainOwner && !selectedPdfIntake && (
+      {activeView === "pdfs" && canAccessPdfIntakes && !selectedPdfIntake && (
         <section
           className="border-y border-gray-200 bg-white sm:border"
           aria-labelledby="pdf-inventory-heading"
@@ -1094,7 +1095,54 @@ export function AutomaticUploadsPage() {
               Refresh
             </button>
           </div>
-          {isLoadingPdfIntakes ? (
+          {isGlobalAdmin && (
+            <div className="border-b border-gray-200 px-4 py-4">
+              <label
+                htmlFor="automatic-upload-pdf-domain"
+                className={labelClass}
+              >
+                Target gallery
+              </label>
+              <SearchableSelect
+                id="automatic-upload-pdf-domain"
+                ariaLabel="PDF inventory target gallery"
+                value={selectedDomainId || undefined}
+                onChange={(value) => {
+                  setSelectedDomainId(value ?? "");
+                  setPdfIntakes([]);
+                  setError(null);
+                  setNotice(null);
+                }}
+                options={domains.map((domain) => ({
+                  value: domain.id,
+                  label: domain.name,
+                }))}
+                placeholder={
+                  domainsLoading ? "Loading galleries..." : "Select gallery"
+                }
+                disabled={domainsLoading || requestActive}
+                className={`${fieldClass} max-w-md`}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Choose the gallery whose emailed PDF inventory you want to
+                review.
+              </p>
+            </div>
+          )}
+          {!effectiveDomainId ? (
+            <div className="px-4 py-16 text-center">
+              <FileText
+                className="mx-auto h-8 w-8 text-gray-400"
+                aria-hidden="true"
+              />
+              <p className="mt-3 text-sm font-medium text-gray-800">
+                Select a target gallery
+              </p>
+              <p className="mt-1 text-sm text-gray-500">
+                Its emailed PDFs will appear here after processing.
+              </p>
+            </div>
+          ) : isLoadingPdfIntakes ? (
             <AppLoadingState
               message="Loading PDF inventory..."
               className="min-h-48"
